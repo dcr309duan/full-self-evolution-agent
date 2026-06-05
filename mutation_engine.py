@@ -3,6 +3,7 @@ import random
 import copy
 from typing import Any, Dict, List, Optional, Tuple
 from static_validator import validate_mutation
+from mutation_validator import MutationValidator
 
 class MutationEngine:
     """
@@ -10,9 +11,9 @@ class MutationEngine:
     Supports: refactor_architecture, delete_dead_code, optimize_performance.
     """
 
-    def __init__(self, objective_weights: Optional[Dict[str, float]] = None):
+    def __init__(self, objective_weights: Optional[Dict[str, float]] = None, enable_validation: bool = True):
         """
-        Initialize mutation engine with optional objective weights.
+        Initialize mutation engine with optional objective weights and validation flag.
         Default weights are equal for all objectives.
         """
         self.objective_weights = objective_weights or {
@@ -76,6 +77,10 @@ class MutationEngine:
             'reduce_mutation_rate': self.reduce_mutation_rate,
             'switch_to_single_gene_mutation': self.switch_to_single_gene_mutation
         }
+
+        # Initialize MutationValidator
+        self.validator = MutationValidator()
+        self.enable_validation = enable_validation
 
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
@@ -216,7 +221,26 @@ class MutationEngine:
                 mutated_ast = tree
                 mutated_code = ast.unparse(mutated_ast)
                 
-                # Validate the mutated AST
+                # Validate the mutated AST using MutationValidator
+                if self.enable_validation:
+                    is_valid, failure_reason = self.validator.validate(mutated_ast)
+                    if not is_valid:
+                        # Track discarded mutation for this operator
+                        self.discarded_mutations[mutation_type] += 1
+                        # Log the failure reason with operator and specific check
+                        failure_entry = {
+                            'operator': mutation_type,
+                            'failure_reason': failure_reason,
+                            'retry_count': retry_count + 1
+                        }
+                        self.validation_failures.append(failure_entry)
+                        print(f"Mutation validation failed: operator={mutation_type}, reason={failure_reason}")
+                        retry_count += 1
+                        # Select a different mutation operator
+                        mutation_type = self._choose_mutation()
+                        continue
+                
+                # Validate using existing validate_mutation function
                 is_valid, failure_reason = validate_mutation(mutated_ast)
                 if is_valid:
                     return mutated_code
@@ -434,6 +458,37 @@ class MutationEngine:
         try:
             # Apply the selected template
             result = template_func(source_code)
+            
+            # Validate the result using MutationValidator
+            if self.enable_validation:
+                result_tree = ast.parse(result)
+                is_valid, failure_reason = self.validator.validate(result_tree)
+                if not is_valid:
+                    # Track failure
+                    self.template_failure[template_number] += 1
+                    # Track discarded mutation for grammar guided mutation
+                    self.discarded_mutations['grammar_guided_mutation'] += 1
+                    # Log validation failure for grammar mutation
+                    failure_entry = {
+                        'operator': 'grammar_guided_mutation',
+                        'failure_reason': f"Template {template_number} validation failed: {failure_reason}",
+                        'template_number': template_number
+                    }
+                    self.validation_failures.append(failure_entry)
+                    # Check if all templates have failed
+                    if all(self.template_failure[t] > 0 for t in range(1, 4)):
+                        # Generate failure report
+                        self.failure_report = {
+                            'failure_reasons': f"All 3 templates failed. Last template {template_number} failed with validation error: {failure_reason}",
+                            'template_used': template_number,
+                            'code_state': source_code,
+                            'template_success_counts': dict(self.template_success),
+                            'template_failure_counts': dict(self.template_failure)
+                        }
+                        # Set paused flag
+                        self.paused = True
+                    return source_code
+            
             # Track success
             self.template_success[template_number] += 1
             return result
@@ -696,6 +751,6 @@ class MutationEngine:
             return False, subsystem_code
 
 
-def create_mutation_engine(objective_weights: Optional[Dict[str, float]] = None) -> MutationEngine:
-    """Factory function to create a MutationEngine with optional weights."""
-    return MutationEngine(objective_weights)
+def create_mutation_engine(objective_weights: Optional[Dict[str, float]] = None, enable_validation: bool = True) -> MutationEngine:
+    """Factory function to create a MutationEngine with optional weights and validation flag."""
+    return MutationEngine(objective_weights, enable_validation)

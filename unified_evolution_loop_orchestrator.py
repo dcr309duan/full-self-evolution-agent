@@ -37,6 +37,7 @@ class UnifiedEvolutionLoopOrchestrator:
         self.redesign_orchestrator = redesign_orchestrator
         self.max_retries = max_retries
         self._loop_active = False
+        self.validation_failure_count = 0
 
     def run_evolution_loop(self) -> None:
         """Main evolution loop that integrates redesign when needed."""
@@ -68,6 +69,10 @@ class UnifiedEvolutionLoopOrchestrator:
             failure_analysis = self.failure_analyzer.analyze_failure(goal, result)
             logger.warning(f"Goal {goal_id} failed: {failure_analysis.get('reason', 'unknown')}")
 
+            # Check if mutation was rejected by validator
+            if self._is_validation_failure(result):
+                self._log_validation_failure(goal_id, result)
+
             # Check if redesign is needed based on failure analysis
             if self._should_redesign(failure_analysis):
                 logger.info(f"Redesign triggered for goal {goal_id}")
@@ -82,6 +87,18 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _is_validation_failure(self, result: Dict[str, Any]) -> bool:
+        """Check if the failure was due to validation rejection."""
+        failure_type = result.get("failure_type", "")
+        return failure_type == "validation_rejection" or result.get("validation_failed", False)
+
+    def _log_validation_failure(self, goal_id: str, result: Dict[str, Any]) -> None:
+        """Log validation failure details and increment counter."""
+        reason = result.get("validation_reason", "unknown")
+        logger.warning(f"Validation failure for goal {goal_id}: {reason}")
+        self.validation_failure_count += 1
+        logger.info(f"Validation failure count incremented to {self.validation_failure_count}")
 
     def _should_redesign(self, failure_analysis: Dict[str, Any]) -> bool:
         """Determine if redesign is needed based on failure analysis."""
@@ -182,4 +199,5 @@ class UnifiedEvolutionLoopOrchestrator:
             "goals_completed": self.goal_manager.get_completed_goal_count(),
             "goals_failed": self.goal_manager.get_failed_goal_count(),
             "components": self.component_registry.get_component_count(),
+            "validation_failure_count": self.validation_failure_count,
         }
