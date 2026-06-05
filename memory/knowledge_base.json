@@ -1,21 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified test_snapshot_manager.py to: Create tests for snapshot management: (1) test that snapshot is captured after mutation promotion; (2) test that get_latest_stable returns correct snapshot; (3) test that multiple snapshots are stored and indexed correctly; (4) test snapshot pruning (only last 10 kept); (5) test that snapshot contains correct AST, hash, and timestamp; (6) test that snapshot can be used to restore module to exact state",
-      "timestamp": 1780645513.0422277,
-      "cycle": 114
-    },
-    {
-      "content": "Successfully modified system_health_audit.py to: Add conflict resolution metrics to health audit: (1) report number of conflicts detected in last 30 cycles; (2) report conflict resolution success rate (auto-merged vs reverted); (3) report number of snapshots stored per critical module; (4) flag if any module has >3 unresolved conflicts; (5) include conflict log summary in health report",
-      "timestamp": 1780645533.3980894,
-      "cycle": 114
-    },
-    {
-      "content": "Self-reflection: The evolution process is exhibiting a classic complexity trap: each successful capability adds a module, but the integration cost grows superlinearly. The real bottleneck is not the number of capabili",
-      "timestamp": 1780645587.4232085,
-      "cycle": 115
-    },
-    {
       "content": "Successfully modified orchestrator.py to: Add atomic file write with rollback: (1) import tempfile, os, shutil, and snapshot_manager; (2) create a helper function _atomic_write(file_path, content) that writes to a temp file in same directory, then os.rename() to atomically replace; (3) wrap all existing file write operations in try/except blocks that call _atomic_write; (4) on any exception, call snapshot_manager.get_latest_stable() to restore original file, log the failure as an integration insight with full traceback; (5) ensure all write paths (mutation application, config updates, etc.) use this helper.",
       "timestamp": 1780645633.6783624,
       "cycle": 115
@@ -999,6 +984,21 @@
       "content": "Successfully modified core/accumulated_knowledge.py to: Add capability tracking fields: 1) For each capability entry, maintain times_called counter, last_active_cycle, dependency_count, 2) Add method get_usage_stats(cycle, window=20) that returns usage scores for all capabilities, 3) Add method remove_capability(name) that safely deletes a capability entry.",
       "timestamp": 1780653254.0363364,
       "cycle": 148
+    },
+    {
+      "content": "Successfully modified core/failure_pattern_learner.py to: Add a public method `get_recent_failures(count=10)` that returns the last `count` failure records with their associated module names and error contexts. Ensure this method is accessible from mutation_engine.",
+      "timestamp": 1780653355.1541212,
+      "cycle": 149
+    },
+    {
+      "content": "Successfully modified tests/test_mutation_engine.py to: Add integration test: mock failure_pattern_learner to return failures involving a specific module, then verify that module's selection probability is reduced and a rationale is logged. Test edge case where no failures exist (no penalty applied).",
+      "timestamp": 1780653369.4462783,
+      "cycle": 149
+    },
+    {
+      "content": "Successfully modified core/evolution_orchestrator.py to: Update the mutation execution flow to pass the failure_pattern_learner reference to mutation_engine during initialization or as a parameter to the mutation selection method.",
+      "timestamp": 1780653420.887165,
+      "cycle": 149
     }
   ],
   "learned_patterns": [],
@@ -1672,6 +1672,11 @@
       "approach": "modify core/goal_generator.py: Add awareness of capability bankruptcy: 1) When generating goals, exclude capabilities that are flagged for removal (to avoid generating goals that depend on soon-to-be-removed modules), 2) Add a meta-goal type 'CONSOLIDATE' that suggests merging two similar capabilities when overlap is detected.",
       "reason": "Syntax error: expected an indented block after 'if' statement on line 920 (<unknown>, line 920)",
       "timestamp": 1780653237.8350496
+    },
+    {
+      "approach": "modify core/mutation_engine.py: Add import for failure_pattern_learner and modify mutation selection logic: before selecting a mutation target, query failure_pattern_learner for the most recent 10 failures. For each candidate module, check if it appears in any failure context. If so, apply a penalty multiplier (e.g., 0.3) to its selection probability and log a rationale string explaining the penalty.",
+      "reason": "Syntax error: unterminated triple-quoted string literal (detected at line 968) (<unknown>, line 968)",
+      "timestamp": 1780653346.8913362
     }
   ],
   "successful_strategies": [
@@ -6109,6 +6114,26 @@
       "strategy": "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usage score (times called, last active cycle, dependency count) over the last 20 cycles, and automatically remove or merge any capability with score below threshold. Enforce every 5 cycles with a rollback mechanism if critical tests fail.",
       "outcome": "3/5 steps succeeded",
       "timestamp": 1780653254.0566463
+    },
+    {
+      "strategy": "modify core/failure_pattern_learner.py: Add a public method `get_recent_failures(count=10)` that returns the last `count` failure records with their associated module names and error contexts. Ensure this method is accessible from mutation_engine.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780653355.133509
+    },
+    {
+      "strategy": "modify tests/test_mutation_engine.py: Add integration test: mock failure_pattern_learner to return failures involving a specific module, then verify that module's selection probability is reduced and a rationale is logged. Test edge case where no failures exist (no penalty applied).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780653369.426905
+    },
+    {
+      "strategy": "modify core/evolution_orchestrator.py: Update the mutation execution flow to pass the failure_pattern_learner reference to mutation_engine during initialization or as a parameter to the mutation selection method.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780653420.8554552
+    },
+    {
+      "strategy": "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the failure_pattern_learner for the most recent 10 failures, and if the target module appears in any failure, apply a penalty to the mutation probability and log a rationale. This closes the gap between analysis and action.",
+      "outcome": "3/4 steps succeeded",
+      "timestamp": 1780653420.9196346
     }
   ],
   "capabilities_developed": []

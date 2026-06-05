@@ -366,7 +366,8 @@ class EvolutionOrchestrator:
 
         logger.info("Evolving subsystem '%s'...", subsystem_name)
         try:
-            success = self.mutation_engine.evolve(target)
+            # Pass failure_pattern_learner reference to mutation_engine during evolution
+            success = self.mutation_engine.evolve(target, failure_pattern_learner=self.failure_analysis)
             if success:
                 logger.info("Subsystem '%s' evolved successfully.", subsystem_name)
             else:
@@ -861,7 +862,4 @@ class EvolutionOrchestrator:
         self.cycle_count += 1
 
         # Save old scores for logging
-        old_scores = self.subsystem_scores.copy()
-
-        # 1) Score each subsystem
-        self.score_subs
+        old

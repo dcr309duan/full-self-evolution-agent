@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the failure_pattern_learner for the most recent 10 failures, and if the target module appears in any failure, apply a penalty to the mutation probability and log a rationale. This closes the gap between analysis and action.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780653063.238052
-    },
-    {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
       "priority": 8,
       "status": "pending",
@@ -935,6 +929,13 @@
       "status": "completed",
       "created_at": 1780653063.235105,
       "completed_at": 1780653254.0687993
+    },
+    {
+      "description": "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the failure_pattern_learner for the most recent 10 failures, and if the target module appears in any failure, apply a penalty to the mutation probability and log a rationale. This closes the gap between analysis and action.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780653063.238052,
+      "completed_at": 1780653420.9383974
     }
   ],
   "generated_goals": []
