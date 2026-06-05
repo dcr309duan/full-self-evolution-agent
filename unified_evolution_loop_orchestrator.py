@@ -7,9 +7,11 @@ then retries the original goal with the modified component.
 Also integrates integration_test_suite execution after successful mutations.
 Integrates meta_mutation_engine to check for meta-mutations after each evolution cycle.
 Integrates rollback_manager to verify and rollback after each mutation application.
+Integrates curiosity_module to inject exploration tasks with configurable probability.
 """
 
 import logging
+import random
 from typing import Any, Dict, List, Optional, Tuple
 
 from proactive_redesign_orchestrator import ProactiveRedesignOrchestrator
@@ -20,6 +22,7 @@ from execution_engine import ExecutionEngine
 from integration_test_suite import IntegrationTestSuite
 from meta_mutation_engine import MetaMutationEngine
 from rollback_manager import RollbackManager
+from curiosity_module import CuriosityModule
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,10 @@ class UnifiedEvolutionLoopOrchestrator:
         integration_test_suite: IntegrationTestSuite,
         meta_mutation_engine: MetaMutationEngine,
         rollback_manager: RollbackManager,
+        curiosity_module: CuriosityModule,
         max_retries: int = 3,
+        curiosity_enabled: bool = True,
+        curiosity_probability: float = 0.3,
     ):
         self.goal_manager = goal_manager
         self.failure_analyzer = failure_analyzer
@@ -47,7 +53,10 @@ class UnifiedEvolutionLoopOrchestrator:
         self.integration_test_suite = integration_test_suite
         self.meta_mutation_engine = meta_mutation_engine
         self.rollback_manager = rollback_manager
+        self.curiosity_module = curiosity_module
         self.max_retries = max_retries
+        self.curiosity_enabled = curiosity_enabled
+        self.curiosity_probability = curiosity_probability
         self._loop_active = False
         self.validation_failure_count = 0
         self.degraded_cycles = 0
@@ -147,6 +156,17 @@ class UnifiedEvolutionLoopOrchestrator:
         for attempt in range(1, self.max_retries + 1):
             logger.info(f"Attempt {attempt}/{self.max_retries} for goal {goal_id}")
 
+            # Check goal feasibility before mutation execution
+            feasibility_check = self._check_goal_feasibility(goal)
+            if not feasibility_check.get("feasible", True):
+                logger.warning(f"Goal {goal_id} is not feasible: {feasibility_check.get('reason', 'unknown')}")
+                self.goal_manager.mark_goal_failed(goal_id, "not_feasible")
+                return
+
+            # Inject exploration tasks after feasibility check and before mutation execution
+            if self.curiosity_enabled and random.random() < self.curiosity_probability:
+                self._inject_exploration_tasks(goal_id)
+
             result = self.execution_engine.execute_goal(goal)
 
             if result.get("success", False):
@@ -201,6 +221,59 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _check_goal_feasibility(self, goal: Dict[str, Any]) -> Dict[str, Any]:
+        """Check if a goal is feasible before execution."""
+        try:
+            # Basic feasibility checks
+            goal_type = goal.get("type", "")
+            target_component = goal.get("target_component")
+            
+            if not goal_type:
+                return {"feasible": False, "reason": "Goal has no type"}
+            
+            if not target_component:
+                return {"feasible": False, "reason": "Goal has no target component"}
+            
+            # Check if target component exists in registry
+            if not self.component_registry.has_component(target_component):
+                return {"feasible": False, "reason": f"Target component {target_component} not found"}
+            
+            # Check if goal type is supported
+            supported_types = ["mutation", "redesign", "exploration", "optimization"]
+            if goal_type not in supported_types:
+                return {"feasible": False, "reason": f"Unsupported goal type: {goal_type}"}
+            
+            return {"feasible": True}
+            
+        except Exception as e:
+            logger.error(f"Error checking goal feasibility: {e}")
+            return {"feasible": False, "reason": str(e)}
+
+    def _inject_exploration_tasks(self, goal_id: str) -> None:
+        """Inject exploration tasks from curiosity module with lower priority."""
+        try:
+            logger.info(f"Injecting exploration tasks for goal {goal_id}")
+            
+            # Get exploration tasks from curiosity module
+            exploration_tasks = self.curiosity_module.inject_exploration_tasks()
+            
+            if not exploration_tasks:
+                logger.debug(f"No exploration tasks generated for goal {goal_id}")
+                return
+            
+            # Assign lower priority to exploration tasks
+            for task in exploration_tasks:
+                task["priority"] = "low"
+                task["parent_goal_id"] = goal_id
+                task["type"] = "exploration"
+                
+                # Add to goal manager with low priority
+                self.goal_manager.add_goal(task, priority="low")
+                logger.info(f"Added exploration task: {task.get('id', 'unknown')} with low priority")
+                
+        except Exception as e:
+            logger.error(f"Error injecting exploration tasks for goal {goal_id}: {e}")
 
     def _pause_for_rollback_processing(self, goal_id: str, rollback_result: Dict[str, Any]) -> None:
         """Pause the evolution loop to allow goal generator to process rollback failure insight."""
@@ -386,4 +459,6 @@ class UnifiedEvolutionLoopOrchestrator:
             "recent_failures": self.recent_failures,
             "consecutive_successes": self.consecutive_successes,
             "max_retries": self.max_retries,
+            "curiosity_enabled": self.curiosity_enabled,
+            "curiosity_probability": self.curiosity_probability,
         }

@@ -21,6 +21,7 @@ class Task:
         self.priority = priority
         self.retry_count = retry_count
         self.failure_pattern: List[float] = []  # Timestamps of recent failures
+        self.injection_time = time.time()  # Track when task was added
         
     def to_dict(self) -> Dict[str, Any]:
         """Serialize task to dictionary for JSON persistence."""
@@ -35,7 +36,8 @@ class Task:
             'total_execution_time': self.total_execution_time,
             'priority': self.priority,
             'retry_count': self.retry_count,
-            'failure_pattern': self.failure_pattern
+            'failure_pattern': self.failure_pattern,
+            'injection_time': self.injection_time
         }
     
     @classmethod
@@ -52,6 +54,7 @@ class Task:
         task.priority = data.get('priority', 0)
         task.retry_count = data.get('retry_count', 0)
         task.failure_pattern = data.get('failure_pattern', [])
+        task.injection_time = data.get('injection_time', time.time())
         return task
 
 class Scheduler:
@@ -67,6 +70,10 @@ class Scheduler:
         self._scheduler_thread: Optional[threading.Thread] = None
         self._start_time = 0.0
         self._retry_goals: Dict[str, Task] = {}  # Store retry goal tasks
+        self._exploration_tasks: Dict[str, Task] = {}  # Store exploration tasks
+        self._exploration_completed_count = 0
+        self._exploration_failed_count = 0
+        self._exploration_total_time = 0.0
         
     def register_function(self, func: Callable, name: Optional[str] = None) -> None:
         """Register a function for deserialization from JSON."""
@@ -78,6 +85,8 @@ class Scheduler:
         with self._lock:
             task = Task(func=func, interval=interval, task_id=task_id, enabled=enabled, priority=priority)
             self._tasks[task.id] = task
+            if priority == 1:  # Exploration priority
+                self._exploration_tasks[task.id] = task
             if enabled and self._running:
                 self._schedule_task(task)
             self._save_tasks()
@@ -127,8 +136,31 @@ class Scheduler:
             if task._timer:
                 task._timer.cancel()
             self._retry_goals.pop(task_id, None)
+            self._exploration_tasks.pop(task_id, None)
             self._save_tasks()
             return True
+    
+    def get_exploration_tasks(self) -> List[Task]:
+        """Return all pending exploration tasks sorted by injection time."""
+        with self._lock:
+            pending_exploration = [
+                task for task in self._exploration_tasks.values()
+                if task.enabled and task._timer is not None
+            ]
+            return sorted(pending_exploration, key=lambda t: t.injection_time)
+    
+    def get_exploration_metrics(self) -> Dict[str, Any]:
+        """Get metrics for exploration tasks."""
+        with self._lock:
+            total = self._exploration_completed_count + self._exploration_failed_count
+            completion_rate = self._exploration_completed_count / total if total > 0 else 0.0
+            avg_time = self._exploration_total_time / self._exploration_completed_count if self._exploration_completed_count > 0 else 0.0
+            return {
+                'completion_rate': completion_rate,
+                'average_time_to_completion': avg_time,
+                'completed_count': self._exploration_completed_count,
+                'failed_count': self._exploration_failed_count
+            }
     
     def start(self) -> None:
         """Start the scheduler in a background thread."""
@@ -167,6 +199,7 @@ class Scheduler:
         - Queue length (number of tasks)
         - Scheduler uptime
         - Retry goal health (penalty for excessive retries)
+        - Exploration task health
         
         Returns a float between 0.0 (unhealthy) and 1.0 (healthy).
         """
@@ -215,13 +248,18 @@ class Scheduler:
             else:
                 retry_health = 1.0
             
+            # Exploration task health factor
+            exploration_metrics = self.get_exploration_metrics()
+            exploration_health = exploration_metrics['completion_rate'] if exploration_metrics['completed_count'] > 0 else 1.0
+            
             # Weighted combination
             health_score = (
-                0.35 * completion_ratio +
-                0.25 * time_score +
-                0.1 * queue_factor +
+                0.30 * completion_ratio +
+                0.20 * time_score +
+                0.10 * queue_factor +
                 0.15 * uptime_score +
-                0.15 * retry_health
+                0.15 * retry_health +
+                0.10 * exploration_health
             )
             
             return max(0.0, min(1.0, health_score))
@@ -242,6 +280,18 @@ class Scheduler:
             with self._lock:
                 if not self._running or not task.enabled:
                     return
+                
+                # Check if there are higher priority tasks pending
+                if task.priority == 1:  # Exploration task
+                    higher_priority_tasks = [
+                        t for t in self._tasks.values()
+                        if t.enabled and t.priority < 1 and t.priority != -2
+                    ]
+                    if higher_priority_tasks:
+                        # Reschedule exploration task to avoid blocking critical tasks
+                        self._schedule_task(task)
+                        return
+                
                 try:
                     start_time = time.time()
                     task.func()
@@ -250,6 +300,11 @@ class Scheduler:
                     task.total_execution_time += execution_time
                     # Clear failure pattern on success
                     task.failure_pattern = []
+                    
+                    # Track exploration metrics
+                    if task.priority == 1:
+                        self._exploration_completed_count += 1
+                        self._exploration_total_time += execution_time
                 except Exception as e:
                     print(f"Task {task.id} failed: {e}")
                     task.failed_count += 1
@@ -258,6 +313,10 @@ class Scheduler:
                     # Keep only last 10 failures
                     if len(task.failure_pattern) > 10:
                         task.failure_pattern = task.failure_pattern[-10:]
+                    
+                    # Track exploration failures
+                    if task.priority == 1:
+                        self._exploration_failed_count += 1
                 task.last_run = time.time()
                 self._save_tasks()
                 if task.enabled:
@@ -293,6 +352,9 @@ class Scheduler:
                     # Restore retry goals based on priority
                     if task.priority == -2:
                         self._retry_goals[task.id] = task
+                    # Restore exploration tasks based on priority
+                    if task.priority == 1:
+                        self._exploration_tasks[task.id] = task
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -306,9 +368,13 @@ if __name__ == "__main__":
     def retry_goal_task():
         print("Retry goal executed at:", time.time())
     
+    def exploration_task():
+        print("Exploration task executed at:", time.time())
+    
     scheduler = Scheduler("example_tasks.json")
     scheduler.register_function(example_task)
     scheduler.register_function(retry_goal_task)
+    scheduler.register_function(exploration_task)
     
     # Add a normal task that runs every 5 seconds
     task_id = scheduler.add_task(example_task, 5.0)
@@ -319,12 +385,18 @@ if __name__ == "__main__":
     if retry_id:
         print(f"Added retry goal: {retry_id}")
     
+    # Add an exploration task
+    exploration_id = scheduler.add_task(exploration_task, 10.0, priority=1)
+    print(f"Added exploration task: {exploration_id}")
+    
     scheduler.start()
     
     try:
         time.sleep(15)
         print(f"Health score: {scheduler.get_health_score():.2f}")
         print(f"Tasks: {scheduler.list_tasks()}")
+        print(f"Exploration tasks: {scheduler.get_exploration_tasks()}")
+        print(f"Exploration metrics: {scheduler.get_exploration_metrics()}")
     finally:
         scheduler.stop()
         print("Scheduler stopped")

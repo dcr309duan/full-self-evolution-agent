@@ -261,5 +261,49 @@
         "timestamp": 1780628669.9694777
       }
     ]
+  },
+  {
+    "timestamp": 1780630778.1685584,
+    "results": [
+      {
+        "parent_a": "retry_fibonacci",
+        "parent_b": "memoized_sorted_primes",
+        "operator": "crossover",
+        "code": "def memoized_retry_fibonacci(limit, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    def fibonacci(n):\n        if n in cache:\n            return cache[n]\n        if n < 2:\n            cache[n] = n\n            return n\n        a, b = 0, 1\n        for _ in range(2, n + 1):\n            a, b = b, a + b\n        cache[n] = b\n        return b\n    result = []\n    for x in range(limit):\n        for attempt in range(max_attempts):\n            try:\n                result.append(fibonacci(x))\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n                cache.clear()\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: memoized_retry_fibonacci\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780630774.0264113
+      },
+      {
+        "parent_a": "is_prime",
+        "parent_b": "flatten",
+        "operator": "crossover",
+        "code": "def is_prime_list(nested):\n    def flatten(lst):\n        result = []\n        for item in lst:\n            if isinstance(item, list):\n                result.extend(flatten(item))\n            else:\n                result.append(item)\n        return result\n    flat = flatten(nested)\n    primes = []\n    for n in flat:\n        if isinstance(n, int) and n >= 2:\n            prime = True\n            for i in range(2, int(n**0.5)+1):\n                if n % i == 0:\n                    prime = False\n                    break\n            if prime:\n                primes.append(n)\n    return primes",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.2,
+          "stdout": "FUNCTION: is_prime_list\nSCORE: 1/5\n"
+        },
+        "timestamp": 1780630775.64265
+      },
+      {
+        "parent_a": "quicksorted_primes",
+        "parent_b": "is_prime",
+        "operator": "hybrid",
+        "code": "def quicksorted_prime_factors(n):\n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    def get_factors(x):\n        factors = []\n        d = 2\n        while d * d <= x:\n            while x % d == 0:\n                factors.append(d)\n                x //= d\n            d += 1\n        if x > 1:\n            factors.append(x)\n        return factors\n    factors = get_factors(n)\n    if not factors:\n        return []\n    if len(factors) <= 1:\n        return factors\n    pivot = factors[len(factors)//2]\n    left = [x for x in factors if x < pivot]\n    mid = [x for x in factors if x == pivot]\n    right = [x for x in factors if x > pivot]\n    sorted_primes = quicksorted_prime_factors(pivot) if isinstance(left, int) else quicksorted_prime_factors(factors[0] if factors else 2)\n    return left + mid + right",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: quicksorted_prime_factors\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780630778.1589763
+      }
+    ]
   }
 ]

@@ -1,0 +1,52 @@
+{
+  "domains": [
+    {
+      "domain": "natural_language_interaction",
+      "template": "Implement a function that takes a string input and returns a sentiment score between -1 and 1 using keyword matching",
+      "required_capabilities": [],
+      "success_criteria": "function returns float between -1 and 1",
+      "difficulty": 2,
+      "knowledge_gain": "high"
+    },
+    {
+      "domain": "data_analysis",
+      "template": "Write a script that reads a CSV file and outputs the mean, median, and standard deviation of each numeric column",
+      "required_capabilities": [],
+      "success_criteria": "output contains three statistics per numeric column",
+      "difficulty": 3,
+      "knowledge_gain": "medium"
+    },
+    {
+      "domain": "web_scraping",
+      "template": "Create a function that fetches a URL and extracts all hyperlinks (href attributes) from the HTML",
+      "required_capabilities": [],
+      "success_criteria": "returns list of absolute URLs",
+      "difficulty": 3,
+      "knowledge_gain": "medium"
+    },
+    {
+      "domain": "algorithm_design",
+      "template": "Implement a sorting algorithm that sorts a list of integers in ascending order without using built-in sort functions",
+      "required_capabilities": [],
+      "success_criteria": "output list is sorted and contains same elements as input",
+      "difficulty": 4,
+      "knowledge_gain": "high"
+    },
+    {
+      "domain": "api_integration",
+      "template": "Write a function that sends a GET request to a REST API endpoint and parses the JSON response into a Python dictionary",
+      "required_capabilities": [],
+      "success_criteria": "returns dictionary with expected keys",
+      "difficulty": 2,
+      "knowledge_gain": "medium"
+    },
+    {
+      "domain": "error_handling",
+      "template": "Create a robust function that divides two numbers and handles division by zero, invalid input types, and overflow errors gracefully",
+      "required_capabilities": [],
+      "success_criteria": "function never raises unhandled exception",
+      "difficulty": 3,
+      "knowledge_gain": "low"
+    }
+  ]
+}

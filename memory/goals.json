@@ -2,13 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780623633.2473752,
-      "consecutive_failures": 0
-    },
-    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -215,6 +208,14 @@
       "status": "completed",
       "created_at": 1780629627.2822556,
       "completed_at": 1780630548.8396795
+    },
+    {
+      "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780623633.2473752,
+      "consecutive_failures": 0,
+      "completed_at": 1780630771.8504424
     }
   ],
   "generated_goals": []
