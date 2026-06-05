@@ -22,19 +22,36 @@ class GoalGenerator:
         self.blocked_goal_counts: Dict[GoalType, int] = {}
         self.deprioritized_goal_types: set = set()
         self.goal_candidates: List[Goal] = []
+        self.blocked_categories: set = set()
 
     def add_goal_candidates(self, goals: List[Goal]) -> None:
         """Add a list of candidate goals to the generator."""
         self.goal_candidates.extend(goals)
 
+    def set_blocked_categories(self, blocked_categories: set) -> None:
+        """Set the blocked categories from meta_monitor."""
+        self.blocked_categories = blocked_categories
+
     def generate_goals(self) -> List[Goal]:
         """
         Generate goals by filtering candidates through feasibility estimation.
         Deprioritizes goal types that are repeatedly blocked.
+        Respects blocked categories by generating root_cause_analysis goals instead.
         Returns a list of feasible goals.
         """
         feasible_goals = []
         for goal in self.goal_candidates:
+            # Check if goal's category is blocked
+            if goal.goal_type in self.blocked_categories:
+                # Generate root_cause_analysis goal instead
+                root_cause_goal = Goal(
+                    goal_type=GoalType.ROOT_CAUSE_ANALYSIS,
+                    description=f"Root cause analysis for blocked category: {goal.goal_type}",
+                    priority='critical'
+                )
+                feasible_goals.append(root_cause_goal)
+                continue
+
             if goal.goal_type in self.deprioritized_goal_types:
                 logger.info(f"Skipping deprioritized goal type: {goal.goal_type}")
                 continue

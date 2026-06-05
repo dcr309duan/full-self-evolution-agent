@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a meta-level monitor that detects when 3+ consecutive goals fail in the same category (e.g., 'file creation', 'integration test'), triggers a full reprioritization, and forces the agent to generate a root cause hypothesis before retrying any goal in that category.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780635587.1011393
-    },
-    {
       "description": "Create a 'capability fitness function' that measures the number of downstream tasks each capability enables and automatically deprecates capabilities with fitness below a configurable threshold (e.g., < 2 downstream uses) after a set number of cycles. Implement a dashboard that displays fitness scores per capability.",
       "priority": 8,
       "status": "pending",
@@ -424,6 +418,13 @@
       "status": "completed",
       "created_at": 1780636043.9281054,
       "completed_at": 1780636276.5927548
+    },
+    {
+      "description": "Add a meta-level monitor that detects when 3+ consecutive goals fail in the same category (e.g., 'file creation', 'integration test'), triggers a full reprioritization, and forces the agent to generate a root cause hypothesis before retrying any goal in that category.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780635587.1011393,
+      "completed_at": 1780636428.0207138
     }
   ],
   "generated_goals": []

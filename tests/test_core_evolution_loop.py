@@ -17,6 +17,9 @@ from core.test_runner import TestRunner
 from core.promotion import PromotionLogic
 from core.orchestrator import Orchestrator
 from core.triage import TriageEngine
+from core.meta_monitor import MetaMonitor
+from core.reprioritization import ReprioritizationEngine
+from core.hypothesis_generator import HypothesisGenerator
 
 
 class TestCoreEvolutionLoop(unittest.TestCase):
@@ -49,10 +52,16 @@ class TestCoreEvolutionLoop(unittest.TestCase):
         self.test_runner = TestRunner(sandbox_path=self.sandbox_path)
         self.promotion_logic = PromotionLogic(sandbox_path=self.sandbox_path)
         self.triage_engine = TriageEngine(sandbox_path=self.sandbox_path)
+        self.meta_monitor = MetaMonitor(sandbox_path=self.sandbox_path)
+        self.reprioritization_engine = ReprioritizationEngine(sandbox_path=self.sandbox_path)
+        self.hypothesis_generator = HypothesisGenerator(sandbox_path=self.sandbox_path)
         self.orchestrator = Orchestrator(
             sandbox_path=self.sandbox_path,
             triage_engine=self.triage_engine,
-            triage_interval=1  # Short interval for testing
+            triage_interval=1,  # Short interval for testing
+            meta_monitor=self.meta_monitor,
+            reprioritization_engine=self.reprioritization_engine,
+            hypothesis_generator=self.hypothesis_generator
         )
 
     def tearDown(self):
@@ -361,6 +370,205 @@ def test_broken_function():
                 )
             
             print("✓ Triage integration test passed - broken module correctly archived after 3 cycles")
+            
+        finally:
+            # Ensure sandbox directory is cleaned up even if test fails
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_file_creation_failure_pattern_detection(self):
+        """Integration test that verifies the meta_monitor detects a pattern of 3 consecutive
+        failing goals in the 'file_creation' category, triggers reprioritization to block
+        file_creation goals, generates a root cause hypothesis, and allows a new file_creation
+        goal after hypothesis generation."""
+        try:
+            # Step 1: Create 3 consecutive failing goals in 'file_creation' category
+            for i in range(3):
+                goal_data = {
+                    "goal_id": f"file_creation_goal_{i+1}",
+                    "category": "file_creation",
+                    "description": f"Test file creation goal {i+1}",
+                    "status": "failed",
+                    "failure_reason": "Test failure for pattern detection"
+                }
+                self.meta_monitor.record_goal(goal_data)
+            
+            # Step 2: Verify meta_monitor detects the pattern
+            pattern_detected = self.meta_monitor.detect_pattern(
+                category="file_creation",
+                pattern_type="consecutive_failures",
+                threshold=3
+            )
+            self.assertTrue(
+                pattern_detected,
+                "MetaMonitor should detect pattern of 3 consecutive failures in file_creation category"
+            )
+            
+            # Verify the pattern is recorded in the meta_monitor's state
+            pattern_state = self.meta_monitor.get_pattern_state("file_creation")
+            self.assertIsNotNone(
+                pattern_state,
+                "Pattern state should exist for file_creation category"
+            )
+            self.assertEqual(
+                pattern_state["consecutive_failures"],
+                3,
+                f"Expected 3 consecutive failures, got {pattern_state['consecutive_failures']}"
+            )
+            print("✓ Pattern detection verified - 3 consecutive failures detected")
+            
+            # Step 3: Verify reprioritization blocks file_creation goals
+            reprioritization_result = self.reprioritization_engine.evaluate(
+                category="file_creation",
+                pattern_state=pattern_state
+            )
+            self.assertIsNotNone(
+                reprioritization_result,
+                "Reprioritization should return a result"
+            )
+            self.assertTrue(
+                reprioritization_result["blocked"],
+                "Reprioritization should block file_creation goals after 3 consecutive failures"
+            )
+            self.assertEqual(
+                reprioritization_result["blocked_category"],
+                "file_creation",
+                f"Blocked category should be 'file_creation', got '{reprioritization_result['blocked_category']}'"
+            )
+            self.assertIn(
+                "reason",
+                reprioritization_result,
+                "Reprioritization result should include a reason"
+            )
+            
+            # Verify that attempting to create a new file_creation goal is blocked
+            new_goal_data = {
+                "goal_id": "blocked_file_creation_goal",
+                "category": "file_creation",
+                "description": "This goal should be blocked"
+            }
+            is_blocked = self.reprioritization_engine.is_goal_blocked(new_goal_data)
+            self.assertTrue(
+                is_blocked,
+                "New file_creation goal should be blocked by reprioritization"
+            )
+            print("✓ Reprioritization verified - file_creation goals are blocked")
+            
+            # Step 4: Verify a root cause hypothesis is generated
+            hypothesis = self.hypothesis_generator.generate_hypothesis(
+                category="file_creation",
+                pattern_state=pattern_state,
+                reprioritization_result=reprioritization_result
+            )
+            self.assertIsNotNone(
+                hypothesis,
+                "Hypothesis generator should produce a hypothesis"
+            )
+            self.assertIn(
+                "hypothesis_text",
+                hypothesis,
+                "Hypothesis should contain 'hypothesis_text' key"
+            )
+            self.assertIn(
+                "root_cause",
+                hypothesis,
+                "Hypothesis should contain 'root_cause' key"
+            )
+            self.assertIn(
+                "confidence",
+                hypothesis,
+                "Hypothesis should contain 'confidence' key"
+            )
+            self.assertGreater(
+                hypothesis["confidence"],
+                0,
+                "Hypothesis confidence should be greater than 0"
+            )
+            self.assertLessEqual(
+                hypothesis["confidence"],
+                1.0,
+                "Hypothesis confidence should be less than or equal to 1.0"
+            )
+            
+            # Verify the hypothesis is logged
+            hypothesis_log = self.sandbox_path / "logs" / "hypothesis.log"
+            self.assertTrue(
+                hypothesis_log.exists(),
+                "Hypothesis log should exist after hypothesis generation"
+            )
+            with open(hypothesis_log, 'r') as f:
+                log_content = f.read()
+                self.assertIn(
+                    "file_creation",
+                    log_content,
+                    "Hypothesis log should mention file_creation category"
+                )
+                self.assertIn(
+                    hypothesis["hypothesis_text"],
+                    log_content,
+                    "Hypothesis log should contain the generated hypothesis text"
+                )
+            print("✓ Root cause hypothesis generated and logged")
+            
+            # Step 5: Verify that after hypothesis generation, a new file_creation goal can be attempted
+            # Simulate hypothesis resolution
+            resolution_result = self.hypothesis_generator.resolve_hypothesis(hypothesis["hypothesis_id"])
+            self.assertTrue(
+                resolution_result["resolved"],
+                "Hypothesis should be resolvable"
+            )
+            
+            # Clear the pattern state to allow new attempts
+            self.meta_monitor.clear_pattern_state("file_creation")
+            
+            # Verify the reprioritization is updated
+            updated_reprioritization = self.reprioritization_engine.evaluate(
+                category="file_creation",
+                pattern_state=self.meta_monitor.get_pattern_state("file_creation")
+            )
+            self.assertFalse(
+                updated_reprioritization["blocked"],
+                "After hypothesis resolution, file_creation goals should no longer be blocked"
+            )
+            
+            # Attempt a new file_creation goal
+            new_goal_data = {
+                "goal_id": "new_file_creation_goal",
+                "category": "file_creation",
+                "description": "New file creation goal after hypothesis resolution"
+            }
+            is_blocked = self.reprioritization_engine.is_goal_blocked(new_goal_data)
+            self.assertFalse(
+                is_blocked,
+                "New file_creation goal should be allowed after hypothesis resolution"
+            )
+            
+            # Verify the goal can be processed
+            goal_accepted = self.goal_generator.accept_goal(new_goal_data)
+            self.assertTrue(
+                goal_accepted,
+                "Goal generator should accept the new file_creation goal"
+            )
+            
+            # Verify the orchestrator can process the new goal
+            cycle_result = self.orchestrator.process_goal(new_goal_data)
+            self.assertIsNotNone(
+                cycle_result,
+                "Orchestrator should process the new file_creation goal"
+            )
+            self.assertIn(
+                "status",
+                cycle_result,
+                "Cycle result should include a status"
+            )
+            self.assertEqual(
+                cycle_result["status"],
+                "processed",
+                f"Expected status 'processed', got '{cycle_result['status']}'"
+            )
+            
+            print("✓ New file_creation goal successfully attempted after hypothesis generation")
+            print("\n✓ Complete file_creation failure pattern detection integration test passed")
             
         finally:
             # Ensure sandbox directory is cleaned up even if test fails

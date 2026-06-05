@@ -19,6 +19,80 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+class MetaMonitor:
+    """Monitors goal execution and manages reprioritization based on failures."""
+    
+    def __init__(self):
+        self.consecutive_failures: Dict[str, int] = {}
+        self.failure_categories: Dict[str, List[str]] = {}
+        self.reprioritization_triggered: bool = False
+        
+    def record_failure(self, category: str, goal_id: str) -> None:
+        """
+        Record a failure for a specific category.
+        
+        Args:
+            category: The category of the failure
+            goal_id: The ID of the failed goal
+        """
+        if category not in self.consecutive_failures:
+            self.consecutive_failures[category] = 0
+            self.failure_categories[category] = []
+        
+        self.consecutive_failures[category] += 1
+        self.failure_categories[category].append(goal_id)
+        logger.info(f"Recorded failure for category '{category}' (goal {goal_id}), consecutive failures: {self.consecutive_failures[category]}")
+        
+    def check_consecutive_failures(self, category: str, threshold: int = 3) -> bool:
+        """
+        Check if a category has reached the consecutive failure threshold.
+        
+        Args:
+            category: The category to check
+            threshold: Number of consecutive failures to trigger reprioritization
+            
+        Returns:
+            True if threshold is reached, False otherwise
+        """
+        failures = self.consecutive_failures.get(category, 0)
+        return failures >= threshold
+    
+    def trigger_reprioritization(self) -> None:
+        """Trigger reprioritization of the goal queue."""
+        self.reprioritization_triggered = True
+        logger.info("Reprioritization triggered due to consecutive failures")
+        
+    def generate_root_cause_hypothesis(self, category: str) -> str:
+        """
+        Generate a root cause hypothesis for failures in a category.
+        
+        Args:
+            category: The category to analyze
+            
+        Returns:
+            A hypothesis string explaining the likely root cause
+        """
+        failed_goals = self.failure_categories.get(category, [])
+        hypothesis = f"Root cause hypothesis for category '{category}': "
+        
+        if len(failed_goals) >= 3:
+            hypothesis += f"Multiple failures detected in goals: {', '.join(failed_goals[-3:])}. "
+            hypothesis += "Likely systemic issue in dependency chain or environment configuration."
+        elif len(failed_goals) >= 1:
+            hypothesis += f"Single failure detected in goal: {failed_goals[-1]}. "
+            hypothesis += "Possible isolated issue requiring further investigation."
+        else:
+            hypothesis += "No failures recorded yet."
+            
+        logger.info(f"Generated hypothesis: {hypothesis}")
+        return hypothesis
+    
+    def reset_category(self, category: str) -> None:
+        """Reset the consecutive failure count for a category."""
+        self.consecutive_failures[category] = 0
+        logger.info(f"Reset consecutive failures for category '{category}'")
+
+
 class DependencyAwareFeasibilityEstimator:
     """Estimates feasibility of goals based on dependency awareness."""
     
@@ -77,8 +151,9 @@ class DependencyAwareFeasibilityEstimator:
         return unblocked_goals
 
 
-# Global instance of the feasibility estimator
+# Global instances
 feasibility_estimator = DependencyAwareFeasibilityEstimator()
+meta_monitor = MetaMonitor()
 
 
 def check_primitive_validation(sandbox_mode: bool = False) -> None:
@@ -212,6 +287,41 @@ def process_mutation_result(mutation_id: str, success: bool, sandbox_mode: bool 
             schedule_goal(goal, sandbox_mode)
 
 
+def run_meta_monitor(goal: Dict[str, Any], success: bool, meta_monitor_enabled: bool = False) -> None:
+    """
+    Run meta monitor after goal completion.
+    
+    Args:
+        goal: The completed goal
+        success: Whether the goal was successful
+        meta_monitor_enabled: Whether meta monitor is enabled
+    """
+    global meta_monitor
+    
+    if not meta_monitor_enabled:
+        return
+    
+    goal_id = goal.get('id', 'unknown')
+    category = goal.get('category', 'default')
+    
+    if success:
+        logger.info(f"Goal {goal_id} completed successfully")
+        # Reset consecutive failures for this category on success
+        meta_monitor.reset_category(category)
+    else:
+        logger.info(f"Goal {goal_id} failed")
+        meta_monitor.record_failure(category, goal_id)
+        
+        # Check for 3+ consecutive failures
+        if meta_monitor.check_consecutive_failures(category, threshold=3):
+            logger.warning(f"3+ consecutive failures detected in category '{category}', triggering reprioritization")
+            meta_monitor.trigger_reprioritization()
+            
+            # Update goal queue (simulated)
+            # In a real implementation, this would modify the actual goal queue
+            logger.info("Goal queue updated based on reprioritization")
+
+
 def run_triage(sandbox_mode: bool = False) -> None:
     """
     Execute the triage module scan and prune operation.
@@ -229,7 +339,7 @@ def run_triage(sandbox_mode: bool = False) -> None:
         logger.error(f"Triage step failed: {e}")
 
 
-def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5) -> None:
+def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, meta_monitor_enabled: bool = False) -> None:
     """
     Main evolution loop that checks primitive validation before proceeding.
     
@@ -237,9 +347,11 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5) -> 
         sandbox_mode: If True, use temporary directory for all file operations
                       to avoid modifying production code
         triage_interval: Number of evolution cycles between triage runs
+        meta_monitor_enabled: Whether meta monitor is enabled
     """
     global PRIMITIVE_VALIDATION_FAILED
     global feasibility_estimator
+    global meta_monitor
 
     # Initial validation check
     check_primitive_validation(sandbox_mode)
@@ -269,7 +381,8 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5) -> 
         example_goal = {
             'id': 'goal_001',
             'dependencies': ['mutation_001', 'mutation_002'],
-            'description': 'Example goal with dependencies'
+            'description': 'Example goal with dependencies',
+            'category': 'test_category'
         }
         
         # Try to schedule a goal
@@ -278,6 +391,25 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5) -> 
             # This is where actual execution would happen
             process_mutation_result('mutation_001', True, sandbox_mode)
             process_mutation_result('mutation_002', True, sandbox_mode)
+            
+            # Run meta monitor after goal completion
+            run_meta_monitor(example_goal, True, meta_monitor_enabled)
+            
+            # Example of failure scenario
+            failed_goal = {
+                'id': 'goal_002',
+                'dependencies': [],
+                'description': 'Example failed goal',
+                'category': 'test_category'
+            }
+            run_meta_monitor(failed_goal, False, meta_monitor_enabled)
+            
+            # Check if reprioritization was triggered
+            if meta_monitor.reprioritization_triggered and meta_monitor_enabled:
+                # Before retrying any goal in a blocked category, generate hypothesis
+                hypothesis = meta_monitor.generate_root_cause_hypothesis('test_category')
+                logger.info(f"Root cause hypothesis for blocked category: {hypothesis}")
+                meta_monitor.reprioritization_triggered = False
         
         cycle_count += 1
         
@@ -304,10 +436,20 @@ def parse_arguments() -> argparse.Namespace:
         default=True,
         help="Run in sandbox mode (default: True)"
     )
+    parser.add_argument(
+        "--meta-monitor-enabled",
+        action="store_true",
+        default=False,
+        help="Enable meta monitor for failure tracking and reprioritization (default: False)"
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
     # Default to sandbox mode for safety
-    run_evolution_loop(sandbox_mode=args.sandbox_mode, triage_interval=args.triage_interval)
+    run_evolution_loop(
+        sandbox_mode=args.sandbox_mode,
+        triage_interval=args.triage_interval,
+        meta_monitor_enabled=args.meta_monitor_enabled
+    )

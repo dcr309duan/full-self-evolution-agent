@@ -525,5 +525,49 @@
         "timestamp": 1780635704.5243874
       }
     ]
+  },
+  {
+    "timestamp": 1780636433.6434245,
+    "results": [
+      {
+        "parent_a": "flatten",
+        "parent_b": "memoized_prime_factorization",
+        "operator": "mutate",
+        "code": "def flatten_prime_factors(n, flatten_lists=False):\n    memo = {}\n    def factorize(m):\n        if m in memo:\n            return memo[m]\n        original = m\n        factors = []\n        d = 2\n        while d * d <= m:\n            while m % d == 0:\n                factors.append(d)\n                m //= d\n            d += 1\n        if m > 1:\n            factors.append(m)\n        memo[original] = factors\n        return factors\n    result = factorize(n)\n    if flatten_lists and isinstance(result, list):\n        flat = []\n        for item in result:\n            if isinstance(item, list):\n                flat.extend(flatten_prime_factors(item, flatten_lists=True))\n            else:\n                flat.append(item)\n        return flat\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: flatten_prime_factors\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780636429.8366523
+      },
+      {
+        "parent_a": "retry_is_prime",
+        "parent_b": "memoized_prime_factorization",
+        "operator": "crossover",
+        "code": "def memoized_is_prime_with_factors(n, memo={}):\n    if n in memo:\n        return memo[n][0]\n    if n < 2:\n        memo[n] = (False, [])\n        return False\n    original = n\n    factors = []\n    is_prime = True\n    d = 2\n    while d * d <= n:\n        while n % d == 0:\n            factors.append(d)\n            n //= d\n            is_prime = False\n        d += 1\n    if n > 1:\n        factors.append(n)\n        if len(factors) == 1 and original == factors[0]:\n            is_prime = True\n        else:\n            is_prime = False\n    memo[original] = (is_prime, factors)\n    return is_prime",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: memoized_is_prime_with_factors\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780636431.728441
+      },
+      {
+        "parent_a": "retry_memoized_prime_check",
+        "parent_b": "prime_fibonacci_check",
+        "operator": "mutate",
+        "code": "def retry_fibonacci_prime_check(limit, max_attempts=3, delay=1):\n    import time\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    cache = {}\n    a, b = 0, 1\n    results = []\n    \n    for _ in range(limit):\n        a, b = b, a + b\n        for attempt in range(max_attempts):\n            try:\n                if a in cache:\n                    is_prime_result = cache[a]\n                else:\n                    is_prime_result = is_prime(a)\n                    cache[a] = is_prime_result\n                results.append((a, is_prime_result))\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n                cache.clear()\n    return results",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: retry_fibonacci_prime_check\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780636433.6293728
+      }
+    ]
   }
 ]
