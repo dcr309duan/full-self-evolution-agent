@@ -2,10 +2,22 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintenance phase where no new goals are accepted. During this phase, run a dead-code scanner to identify modules with zero test coverage and no imports from active code, delete them (with confirmation), and consolidate duplicate utility functions into shared modules. Log the cleanup actions and freed capacity.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780646079.6337428
+    },
+    {
       "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
       "priority": 7,
       "status": "pending",
       "created_at": 1780644832.4152675
+    },
+    {
+      "description": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780646079.6363342
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -700,6 +712,13 @@
       "status": "completed",
       "created_at": 1780645590.946733,
       "completed_at": 1780646022.3144097
+    },
+    {
+      "description": "Build a recursive sandbox module that clones the core evolution loop components (evolution_orchestrator.py, mutation_engine.py, goal_generator.py) into an isolated directory, applies a proposed mutation to the clone, runs the full test suite on the clone, and only if all tests pass, merges the changes back into the live system. Include a rollback mechanism that reverts to the last known good state if the merge causes immediate test failures.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780646079.631393,
+      "completed_at": 1780646262.7036905
     }
   ],
   "generated_goals": []

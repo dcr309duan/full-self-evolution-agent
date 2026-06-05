@@ -5,6 +5,8 @@ Provides meta-cognitive health metrics for an evolving system.
 Tracks mutation rate, acceptance threshold, brittleness, parameter adjustment frequency,
 flags stuck-at-extreme parameters, and includes conflict resolution metrics.
 Also includes atomic write failure metrics and auto-generated fix success rate metrics.
+Also tracks sandboxed mutation metrics: number of sandboxed mutations attempted,
+number that passed tests, number that failed tests, number that required rollback.
 """
 
 import time
@@ -25,8 +27,8 @@ FIX_EFFECTIVENESS_WINDOW = 30  # cycles for fix effectiveness tracking
 class SystemHealthAudit:
     """
     Tracks and reports meta-cognitive health metrics for an evolving system.
-    Includes conflict resolution metrics, atomic write failure metrics, and
-    auto-generated fix effectiveness metrics for health audit.
+    Includes conflict resolution metrics, atomic write failure metrics,
+    auto-generated fix effectiveness metrics, and sandboxed mutation metrics.
     """
 
     def __init__(self, mutation_rate: float = DEFAULT_MUTATION_RATE,
@@ -53,6 +55,12 @@ class SystemHealthAudit:
         self.fixes_last_30: deque = deque(maxlen=FIX_EFFECTIVENESS_WINDOW)
         self.total_fixes_applied: int = 0
         self.fixes_prevented_failures: int = 0
+
+        # Sandboxed mutation tracking
+        self.sandboxed_mutations_attempted: int = 0
+        self.sandboxed_mutations_passed: int = 0
+        self.sandboxed_mutations_failed: int = 0
+        self.sandboxed_mutations_rollback: int = 0
 
     def record_adjustment(self, parameter_name: str, old_value: float, new_value: float) -> None:
         """Record a parameter adjustment with timestamp."""
@@ -151,6 +159,24 @@ class SystemHealthAudit:
         self.total_fixes_applied += 1
         if prevented_failure:
             self.fixes_prevented_failures += 1
+
+    def record_sandboxed_mutation(self, outcome: str) -> None:
+        """
+        Record a sandboxed mutation attempt and its outcome.
+        
+        Args:
+            outcome: The outcome of the sandboxed mutation.
+                     Must be one of: 'passed', 'failed', 'rollback'
+        """
+        self.sandboxed_mutations_attempted += 1
+        if outcome == 'passed':
+            self.sandboxed_mutations_passed += 1
+        elif outcome == 'failed':
+            self.sandboxed_mutations_failed += 1
+        elif outcome == 'rollback':
+            self.sandboxed_mutations_rollback += 1
+        else:
+            raise ValueError(f"Invalid outcome: {outcome}. Must be 'passed', 'failed', or 'rollback'.")
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter."""
@@ -405,11 +431,22 @@ class SystemHealthAudit:
         
         return list(summary.values())
 
+    def get_sandboxed_mutation_metrics(self) -> Dict:
+        """
+        Return sandboxed mutation metrics.
+        """
+        return {
+            'sandboxed_mutations_attempted': self.sandboxed_mutations_attempted,
+            'sandboxed_mutations_passed': self.sandboxed_mutations_passed,
+            'sandboxed_mutations_failed': self.sandboxed_mutations_failed,
+            'sandboxed_mutations_rollback': self.sandboxed_mutations_rollback
+        }
+
     def generate_health_report(self) -> Dict:
         """
         Generate a comprehensive health report with all meta-cognitive metrics
-        including conflict resolution metrics, atomic write failure metrics, and
-        auto-generated fix effectiveness metrics.
+        including conflict resolution metrics, atomic write failure metrics,
+        auto-generated fix effectiveness metrics, and sandboxed mutation metrics.
         """
         conflict_count = self.get_conflict_count_last_30()
         resolution_rate = self.get_conflict_resolution_success_rate()
@@ -423,6 +460,8 @@ class SystemHealthAudit:
         fix_success_rate = self.get_fix_success_rate()
         fix_success_rate_last_30 = self.get_fix_success_rate_last_30()
         modules_with_high_fix_failures = self.get_modules_with_high_fix_failures()
+        
+        sandboxed_metrics = self.get_sandboxed_mutation_metrics()
         
         report = {
             'mutation_rate': self.mutation_rate,
@@ -450,7 +489,12 @@ class SystemHealthAudit:
             'total_fixes_applied': self.total_fixes_applied,
             'fixes_prevented_failures': self.fixes_prevented_failures,
             'modules_with_high_fix_failures': modules_with_high_fix_failures,
-            'fix_log_summary': self.get_fix_log_summary()
+            'fix_log_summary': self.get_fix_log_summary(),
+            # Sandboxed mutation metrics
+            'sandboxed_mutations_attempted': sandboxed_metrics['sandboxed_mutations_attempted'],
+            'sandboxed_mutations_passed': sandboxed_metrics['sandboxed_mutations_passed'],
+            'sandboxed_mutations_failed': sandboxed_metrics['sandboxed_mutations_failed'],
+            'sandboxed_mutations_rollback': sandboxed_metrics['sandboxed_mutations_rollback']
         }
         return report
 
@@ -499,6 +543,11 @@ if __name__ == "__main__":
             auditor.record_fix('module_a', 'parameter_adjustment', prevented_failure=(i % 4 == 0))
         if i % 3 == 0:
             auditor.record_fix('module_b', 'conflict_resolution', prevented_failure=(i % 5 == 0))
+        # Simulate some sandboxed mutations
+        if i % 2 == 0:
+            auditor.record_sandboxed_mutation('passed' if i % 3 != 0 else 'failed')
+        if i % 5 == 0:
+            auditor.record_sandboxed_mutation('rollback')
     
     # Generate and print report
     report = auditor.generate_health_report()
