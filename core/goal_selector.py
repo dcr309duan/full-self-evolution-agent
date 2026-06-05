@@ -6,6 +6,7 @@ class GoalType(Enum):
     NEW_CAPABILITY = "new_capability"
     TEST_HARNESS = "test_harness"
     META_OPTIMIZATION = "meta_optimization"
+    ECOLOGICAL_PRESSURE = "ecological_pressure"
 
 class Goal:
     """Represents a goal with its type, dependencies, and priority."""
@@ -32,6 +33,8 @@ class GoalSelector:
     
     When consolidation_priority is True and a high-confidence consolidation plan is detected,
     consolidation goals are elevated above new capability goals.
+    
+    Ecological pressure goals have the highest priority and are processed before any other goal type.
     """
     
     def __init__(self, test_mode: bool = False, consolidation_priority: bool = False):
@@ -43,6 +46,7 @@ class GoalSelector:
         self.pending_new_goals: List[Goal] = []
         self.pending_consolidation_goals: List[Goal] = []
         self.pending_meta_optimization_goals: List[Goal] = []
+        self.pending_ecological_pressure_goals: List[Goal] = []
         self.stagnation_counter = 0
         self.last_fitness_improvement = True
 
@@ -54,6 +58,8 @@ class GoalSelector:
             self.pending_new_goals.append(goal)
         elif goal.goal_type == GoalType.META_OPTIMIZATION:
             self.pending_meta_optimization_goals.append(goal)
+        elif goal.goal_type == GoalType.ECOLOGICAL_PRESSURE:
+            self.pending_ecological_pressure_goals.append(goal)
         else:
             self.goals.append(goal)
 
@@ -148,6 +154,35 @@ class GoalSelector:
 
         return sorted_goals
 
+    def _get_ecological_pressure_goals_in_dependency_order(self) -> List[Goal]:
+        """
+        Return ecological pressure goals sorted by dependency order.
+        Uses topological sort to ensure dependencies are processed first.
+        """
+        if not self.pending_ecological_pressure_goals:
+            return []
+
+        # Build dependency graph
+        goal_map = {g.goal_id: g for g in self.pending_ecological_pressure_goals}
+        visited = set()
+        sorted_goals = []
+
+        def dfs(goal_id: str) -> None:
+            if goal_id in visited:
+                return
+            visited.add(goal_id)
+            goal = goal_map.get(goal_id)
+            if goal:
+                for dep_id in goal.dependencies:
+                    if dep_id in goal_map:
+                        dfs(dep_id)
+                sorted_goals.append(goal)
+
+        for goal in self.pending_ecological_pressure_goals:
+            dfs(goal.goal_id)
+
+        return sorted_goals
+
     def check_stagnation(self, fitness_improved: bool) -> Optional[Goal]:
         """
         Check for stagnation in meta-parameter evolution.
@@ -194,6 +229,7 @@ class GoalSelector:
         """
         Select the next goal to process based on current mode and feasibility score.
         
+        Ecological pressure goals have the highest priority and are processed first.
         In test_mode, repair goals are prioritized and processed in dependency order.
         When consolidation_priority is True and consolidation goals exist, they are 
         prioritized over new capability goals.
@@ -209,6 +245,17 @@ class GoalSelector:
             threshold = getattr(system_state, 'goal_acceptance_threshold', 0.0)
             feasibility = goal.metadata.get('feasibility_score', 0.0)
             return feasibility > threshold
+
+        # Process ecological pressure goals first (highest priority)
+        if self.pending_ecological_pressure_goals:
+            eco_goals = self._get_ecological_pressure_goals_in_dependency_order()
+            if eco_goals:
+                for goal in eco_goals:
+                    if all(dep in [g.goal_id for g in self.completed_goals] 
+                           for dep in goal.dependencies) and is_goal_acceptable(goal):
+                        self.pending_ecological_pressure_goals.remove(goal)
+                        return goal
+                return None
 
         if self.test_mode:
             # Process repair goals first, in dependency order
@@ -280,7 +327,8 @@ class GoalSelector:
     def get_pending_goals(self) -> List[Goal]:
         """Get all pending goals."""
         return (self.goals + self.pending_repair_goals + self.pending_new_goals + 
-                self.pending_consolidation_goals + self.pending_meta_optimization_goals)
+                self.pending_consolidation_goals + self.pending_meta_optimization_goals +
+                self.pending_ecological_pressure_goals)
 
     def has_pending_repair_goals(self) -> bool:
         """Check if there are any pending repair goals."""
@@ -294,6 +342,10 @@ class GoalSelector:
         """Check if there are any pending meta-optimization goals."""
         return len(self.pending_meta_optimization_goals) > 0
 
+    def has_pending_ecological_pressure_goals(self) -> bool:
+        """Check if there are any pending ecological pressure goals."""
+        return len(self.pending_ecological_pressure_goals) > 0
+
     def clear(self) -> None:
         """Clear all goals and reset state."""
         self.goals.clear()
@@ -302,6 +354,7 @@ class GoalSelector:
         self.pending_new_goals.clear()
         self.pending_consolidation_goals.clear()
         self.pending_meta_optimization_goals.clear()
+        self.pending_ecological_pressure_goals.clear()
         self.stagnation_counter = 0
         self.last_fitness_improvement = True
 
