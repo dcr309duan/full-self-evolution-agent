@@ -4,6 +4,7 @@ system_health_audit.py
 Provides meta-cognitive health metrics for an evolving system.
 Tracks mutation rate, acceptance threshold, brittleness, parameter adjustment frequency,
 flags stuck-at-extreme parameters, and includes conflict resolution metrics.
+Also includes atomic write failure metrics.
 """
 
 import time
@@ -18,11 +19,12 @@ EXTREME_LOW = 0.01
 EXTREME_HIGH = 0.99
 ADJUSTMENT_WINDOW = 30  # cycles
 CONFLICT_WINDOW = 30  # cycles for conflict tracking
+WRITE_FAILURE_WINDOW = 30  # cycles for write failure tracking
 
 class SystemHealthAudit:
     """
     Tracks and reports meta-cognitive health metrics for an evolving system.
-    Includes conflict resolution metrics for health audit.
+    Includes conflict resolution metrics and atomic write failure metrics for health audit.
     """
 
     def __init__(self, mutation_rate: float = DEFAULT_MUTATION_RATE,
@@ -37,6 +39,12 @@ class SystemHealthAudit:
         self.conflicts_last_30: deque = deque(maxlen=CONFLICT_WINDOW)
         self.snapshots_per_module: Dict[str, int] = {}
         self.unresolved_conflicts: Dict[str, int] = {}
+
+        # Atomic write failure tracking
+        self.write_failure_log: deque = deque(maxlen=1000)  # Store recent write failures
+        self.write_failures_last_30: deque = deque(maxlen=WRITE_FAILURE_WINDOW)
+        self.rollback_attempts: int = 0
+        self.rollback_successes: int = 0
 
     def record_adjustment(self, parameter_name: str, old_value: float, new_value: float) -> None:
         """Record a parameter adjustment with timestamp."""
@@ -81,6 +89,33 @@ class SystemHealthAudit:
     def record_snapshot(self, module: str) -> None:
         """Record a snapshot stored for a module."""
         self.snapshots_per_module[module] = self.snapshots_per_module.get(module, 0) + 1
+
+    def record_write_failure(self, module: str, failure_type: str, rollback_successful: bool = False) -> None:
+        """
+        Record an atomic write failure event.
+        
+        Args:
+            module: The module where write failure occurred
+            failure_type: Type of write failure (e.g., 'disk_full', 'permission_denied', 'corruption')
+            rollback_successful: Whether the rollback was successful
+        """
+        failure_entry = {
+            'module': module,
+            'type': failure_type,
+            'rollback_successful': rollback_successful,
+            'cycle': self.cycle_count,
+            'timestamp': time.time()
+        }
+        self.write_failure_log.append(failure_entry)
+        
+        # Track in last 30 cycles
+        if self.cycle_count > 0:
+            self.write_failures_last_30.append(failure_entry)
+        
+        # Track rollback statistics
+        self.rollback_attempts += 1
+        if rollback_successful:
+            self.rollback_successes += 1
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter."""
@@ -183,14 +218,87 @@ class SystemHealthAudit:
         
         return list(summary.values())
 
+    def get_write_failure_count_last_30(self) -> int:
+        """Return number of write failures in last 30 cycles."""
+        cutoff_cycle = self.cycle_count - WRITE_FAILURE_WINDOW
+        return sum(1 for f in self.write_failure_log if f['cycle'] >= cutoff_cycle)
+
+    def get_rollback_success_rate(self) -> float:
+        """
+        Calculate rollback success rate.
+        Returns a float between 0 and 1, or 0 if no rollback attempts.
+        """
+        if self.rollback_attempts == 0:
+            return 0.0
+        return self.rollback_successes / self.rollback_attempts
+
+    def get_modules_with_high_write_failures(self) -> List[str]:
+        """
+        Return list of modules with >2 write failures in last 30 cycles.
+        """
+        cutoff_cycle = self.cycle_count - WRITE_FAILURE_WINDOW
+        recent_failures = [f for f in self.write_failure_log if f['cycle'] >= cutoff_cycle]
+        
+        module_failure_count = {}
+        for failure in recent_failures:
+            module = failure['module']
+            module_failure_count[module] = module_failure_count.get(module, 0) + 1
+        
+        return [module for module, count in module_failure_count.items() if count > 2]
+
+    def get_write_failure_log_summary(self) -> List[Dict]:
+        """Return a summary of recent write failure log entries."""
+        cutoff_cycle = self.cycle_count - WRITE_FAILURE_WINDOW
+        recent_failures = [f for f in self.write_failure_log if f['cycle'] >= cutoff_cycle]
+        
+        # Group by module and failure type
+        summary = {}
+        for failure in recent_failures:
+            module = failure['module']
+            if module not in summary:
+                summary[module] = {
+                    'module': module,
+                    'total_failures': 0,
+                    'disk_full': 0,
+                    'permission_denied': 0,
+                    'corruption': 0,
+                    'other': 0,
+                    'rollback_successful': 0,
+                    'rollback_failed': 0,
+                    'last_failure': None
+                }
+            summary[module]['total_failures'] += 1
+            if failure['type'] == 'disk_full':
+                summary[module]['disk_full'] += 1
+            elif failure['type'] == 'permission_denied':
+                summary[module]['permission_denied'] += 1
+            elif failure['type'] == 'corruption':
+                summary[module]['corruption'] += 1
+            else:
+                summary[module]['other'] += 1
+            
+            if failure['rollback_successful']:
+                summary[module]['rollback_successful'] += 1
+            else:
+                summary[module]['rollback_failed'] += 1
+            
+            if summary[module]['last_failure'] is None or failure['timestamp'] > summary[module]['last_failure']['timestamp']:
+                summary[module]['last_failure'] = failure
+        
+        return list(summary.values())
+
     def generate_health_report(self) -> Dict:
         """
         Generate a comprehensive health report with all meta-cognitive metrics
-        including conflict resolution metrics.
+        including conflict resolution metrics and atomic write failure metrics.
         """
         conflict_count = self.get_conflict_count_last_30()
         resolution_rate = self.get_conflict_resolution_success_rate()
         modules_with_high_unresolved = self.get_modules_with_unresolved_conflicts()
+        
+        write_failure_count = self.get_write_failure_count_last_30()
+        rollback_success_rate = self.get_rollback_success_rate()
+        modules_with_high_write_failures = self.get_modules_with_high_write_failures()
         
         report = {
             'mutation_rate': self.mutation_rate,
@@ -205,7 +313,12 @@ class SystemHealthAudit:
             'conflict_resolution_success_rate': resolution_rate,
             'snapshots_per_module': self.get_snapshots_per_module(),
             'modules_with_high_unresolved_conflicts': modules_with_high_unresolved,
-            'conflict_log_summary': self.get_conflict_log_summary()
+            'conflict_log_summary': self.get_conflict_log_summary(),
+            # Atomic write failure metrics
+            'write_failures_last_30_cycles': write_failure_count,
+            'rollback_success_rate': rollback_success_rate,
+            'modules_with_high_write_failures': modules_with_high_write_failures,
+            'write_failure_log_summary': self.get_write_failure_log_summary()
         }
         return report
 
@@ -244,6 +357,11 @@ if __name__ == "__main__":
             auditor.record_snapshot('module_a')
         if i % 6 == 0:
             auditor.record_snapshot('module_b')
+        # Simulate some write failures
+        if i % 5 == 0:
+            auditor.record_write_failure('module_a', 'disk_full', rollback_successful=(i % 3 != 0))
+        if i % 8 == 0:
+            auditor.record_write_failure('module_b', 'corruption', rollback_successful=(i % 2 == 0))
     
     # Generate and print report
     report = auditor.generate_health_report()

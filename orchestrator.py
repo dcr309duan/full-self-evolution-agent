@@ -3,12 +3,34 @@
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 import logging
+import tempfile
+import os
+import shutil
+import traceback
+import json
+from datetime import datetime
 
 from goal_feasibility_estimator import GoalFeasibilityEstimator
 from goal_generator import GoalGenerator
 from failure_analysis import FailureAnalysis
+from snapshot_manager import SnapshotManager
 
 logger = logging.getLogger(__name__)
+
+def _atomic_write(file_path: str, content: str) -> None:
+    """
+    Write content to a file atomically by writing to a temporary file first,
+    then renaming to replace the original file.
+    
+    Args:
+        file_path: Path to the target file
+        content: Content to write to the file
+    """
+    dir_path = os.path.dirname(file_path)
+    with tempfile.NamedTemporaryFile(mode='w', dir=dir_path, delete=False) as temp_file:
+        temp_file.write(content)
+        temp_path = temp_file.name
+    os.rename(temp_path, file_path)
 
 @dataclass
 class Goal:
@@ -37,6 +59,7 @@ class Orchestrator:
         self.estimator = GoalFeasibilityEstimator()
         self.goal_generator = GoalGenerator()
         self.failure_analysis = FailureAnalysis()
+        self.snapshot_manager = SnapshotManager()
         self.capabilities = capabilities
         self.history = history
         self.execution_queue: List[Goal] = []
@@ -47,6 +70,44 @@ class Orchestrator:
         self.cycle_count = 0
         self.generated_goals: List[Goal] = []  # Track generated goals to avoid duplicates
         self.failure_patterns: Dict[str, int] = {}  # Track failure patterns
+
+    def _log_write_failure(self, mutation_id: str, file_path: str, error: Exception) -> None:
+        """
+        Log a write failure to a structured log file for meta-cognitive monitoring.
+
+        Args:
+            mutation_id: The ID of the mutation that failed
+            file_path: The file path that was being written to
+            error: The exception that occurred
+        """
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "mutation_id": mutation_id,
+            "file_path": file_path,
+            "error_message": str(error),
+            "stack_trace": traceback.format_exc()
+        }
+        
+        log_file_path = "write_failures.json"
+        existing_logs = []
+        
+        # Read existing logs if file exists
+        if os.path.exists(log_file_path):
+            try:
+                with open(log_file_path, 'r') as f:
+                    existing_logs = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                existing_logs = []
+        
+        # Append new log entry
+        existing_logs.append(log_entry)
+        
+        # Write back to file
+        try:
+            with open(log_file_path, 'w') as f:
+                json.dump(existing_logs, f, indent=2)
+        except IOError as e:
+            logger.error(f"Failed to write to write_failures.json: {e}")
 
     def generate_and_prioritize_goals(self, failure_analysis_instance: Optional[FailureAnalysis] = None) -> Optional[Goal]:
         """
@@ -267,13 +328,31 @@ class Orchestrator:
                     logger.error(f"Sub-goal '{sub_goal.id}' failed")
                     return False
 
-        # Update history with execution result
-        self.history.append({
-            "goal_id": goal.id,
-            "description": goal.description,
-            "complexity": goal.complexity,
-            "status": "executed"
-        })
+        # Update history with execution result using atomic write
+        try:
+            history_entry = {
+                "goal_id": goal.id,
+                "description": goal.description,
+                "complexity": goal.complexity,
+                "status": "executed"
+            }
+            history_file_path = "history.json"
+            _atomic_write(history_file_path, str(history_entry))
+            self.history.append(history_entry)
+        except Exception as e:
+            logger.error(f"Failed to write history for goal '{goal.id}': {e}")
+            # Restore original file from snapshot
+            try:
+                stable_content = self.snapshot_manager.get_latest_stable()
+                if stable_content:
+                    _atomic_write(history_file_path, stable_content)
+            except Exception as restore_error:
+                logger.error(f"Failed to restore history file: {restore_error}")
+            # Log integration insight
+            logger.error(f"Integration insight: Failed to write history for goal '{goal.id}': {traceback.format_exc()}")
+            # Log write failure for meta-cognitive monitoring
+            self._log_write_failure(goal.id, history_file_path, e)
+            return False
 
         return True
 
@@ -485,13 +564,31 @@ class Orchestrator:
                 logger.error(f"Multi-file refactoring sub-goal '{sub_goal.id}' failed")
                 return False
         
-        # Update history with multi-file refactoring result
-        self.history.append({
-            "goal_id": goal.id,
-            "description": goal.description,
-            "type": "multi_file_refactoring",
-            "status": "completed",
-            "sub_goals": [sg.id for sg in refactoring_sub_goals]
-        })
+        # Update history with multi-file refactoring result using atomic write
+        try:
+            history_entry = {
+                "goal_id": goal.id,
+                "description": goal.description,
+                "type": "multi_file_refactoring",
+                "status": "completed",
+                "sub_goals": [sg.id for sg in refactoring_sub_goals]
+            }
+            history_file_path = "history.json"
+            _atomic_write(history_file_path, str(history_entry))
+            self.history.append(history_entry)
+        except Exception as e:
+            logger.error(f"Failed to write multi-file refactoring history for goal '{goal.id}': {e}")
+            # Restore original file from snapshot
+            try:
+                stable_content = self.snapshot_manager.get_latest_stable()
+                if stable_content:
+                    _atomic_write(history_file_path, stable_content)
+            except Exception as restore_error:
+                logger.error(f"Failed to restore history file: {restore_error}")
+            # Log integration insight
+            logger.error(f"Integration insight: Failed to write multi-file refactoring history for goal '{goal.id}': {traceback.format_exc()}")
+            # Log write failure for meta-cognitive monitoring
+            self._log_write_failure(goal.id, history_file_path, e)
+            return False
         
         return True
