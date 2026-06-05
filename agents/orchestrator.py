@@ -6,6 +6,7 @@ from enum import Enum
 from agents.feasibility_estimator import FeasibilityEstimator, FeasibilityResult
 from agents.goal_manager import GoalManager
 from agents.execution_logger import ExecutionLogger
+from agents.clone_and_promote import clone_and_promote_integration_test
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,35 @@ class Orchestrator:
         self.feasibility_estimator = feasibility_estimator
         self.execution_logger = execution_logger
         self.feasibility_threshold = feasibility_threshold
+        self._mutation_operations_halted = False
+        
+        # Run clone_and_promote integration test during initialization
+        self._verify_clone_and_promote()
+
+    def _verify_clone_and_promote(self) -> None:
+        """
+        Run the clone_and_promote integration test to verify the mechanism is working.
+        If the test fails, log a critical error and halt mutation operations.
+        """
+        try:
+            test_result = clone_and_promote_integration_test()
+            if not test_result:
+                logger.critical(
+                    "Clone and promote integration test FAILED. "
+                    "Mutation operations are halted to prevent data corruption."
+                )
+                self._mutation_operations_halted = True
+            else:
+                logger.info(
+                    "Clone and promote integration test PASSED. "
+                    "Mutation operations are enabled."
+                )
+        except Exception as e:
+            logger.critical(
+                f"Clone and promote integration test raised an exception: {e}. "
+                "Mutation operations are halted to prevent data corruption."
+            )
+            self._mutation_operations_halted = True
 
     def execute_goal(self, goal_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -44,6 +74,18 @@ class Orchestrator:
         Returns:
             Dictionary containing execution log with feasibility_check field.
         """
+        # Check if mutation operations are halted
+        if self._mutation_operations_halted:
+            execution_log = {
+                "goal_id": goal_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "status": ExecutionStatus.BLOCKED.value,
+                "message": "Mutation operations are halted due to failed clone_and_promote integration test"
+            }
+            logger.error(f"Goal {goal_id} blocked: Mutation operations halted")
+            self.execution_logger.log(execution_log)
+            return execution_log
+
         goal = self.goal_manager.get_goal(goal_id)
         if not goal:
             raise ValueError(f"Goal {goal_id} not found")

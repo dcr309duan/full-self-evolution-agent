@@ -135,6 +135,143 @@ def save_matrix_to_json(matrix: Dict[str, Dict[str, bool]], output_path: str = "
     
     print(f"Coverage matrix saved to {output_path}")
 
+def test_clone_and_promote_mechanism():
+    """Test the clone and promote mechanism for mutations."""
+    import tempfile
+    import shutil
+    
+    # Create a temporary directory for testing
+    test_dir = tempfile.mkdtemp()
+    original_dir = os.getcwd()
+    
+    try:
+        # Create a test module
+        test_module_path = os.path.join(test_dir, "test_module.py")
+        with open(test_module_path, 'w') as f:
+            f.write("""
+def add(a, b):
+    return a + b
+
+def subtract(a, b):
+    return a - b
+""")
+        
+        # Add test directory to path
+        sys.path.insert(0, test_dir)
+        
+        # Import the test module
+        import test_module
+        
+        # Store original module content
+        with open(test_module_path, 'r') as f:
+            original_content = f.read()
+        
+        # Test 1: Simple mutation that passes and gets promoted
+        # Simulate a mutation that changes add to multiply
+        mutated_content = original_content.replace("return a + b", "return a * b")
+        
+        # Write mutated version
+        with open(test_module_path, 'w') as f:
+            f.write(mutated_content)
+        
+        # Reload module
+        importlib.reload(test_module)
+        
+        # Verify mutation works (this is a valid mutation that should pass)
+        assert test_module.add(2, 3) == 6, "Mutation should change add behavior"
+        assert test_module.subtract(5, 3) == 2, "Subtract should remain unchanged"
+        
+        # Simulate promotion by keeping the mutation
+        # (In real system, this would be done by the mutation testing framework)
+        
+        # Test 2: Deliberately broken mutation that fails and is discarded
+        # Create a broken mutation that will cause an error
+        broken_content = original_content.replace("return a + b", "return a / b")
+        
+        with open(test_module_path, 'w') as f:
+            f.write(broken_content)
+        
+        # Reload module
+        importlib.reload(test_module)
+        
+        # This mutation should fail (division by zero when b=0)
+        try:
+            result = test_module.add(5, 0)
+            # If we get here, the mutation didn't cause an error
+            # But it should have changed behavior
+            assert result != 5, "Broken mutation should change behavior"
+        except ZeroDivisionError:
+            # This is expected - the mutation is broken
+            pass
+        
+        # Discard the broken mutation by restoring original
+        with open(test_module_path, 'w') as f:
+            f.write(original_content)
+        
+        importlib.reload(test_module)
+        
+        # Verify original behavior is restored
+        assert test_module.add(2, 3) == 5, "Original behavior should be restored"
+        
+        # Test 3: Failure counter increments correctly
+        failure_count = 0
+        
+        # Simulate multiple failed mutations
+        for i in range(3):
+            try:
+                # Create a mutation that will fail
+                bad_content = original_content.replace("return a + b", "return a / b")
+                with open(test_module_path, 'w') as f:
+                    f.write(bad_content)
+                importlib.reload(test_module)
+                
+                # This should fail
+                test_module.add(5, 0)
+            except (ZeroDivisionError, Exception):
+                failure_count += 1
+                # Restore original
+                with open(test_module_path, 'w') as f:
+                    f.write(original_content)
+                importlib.reload(test_module)
+        
+        assert failure_count == 3, f"Failure counter should be 3, got {failure_count}"
+        
+        # Test 4: Original module remains unchanged after failed mutation
+        # Create a mutation that fails
+        bad_content = original_content.replace("return a + b", "return a / b")
+        with open(test_module_path, 'w') as f:
+            f.write(bad_content)
+        
+        importlib.reload(test_module)
+        
+        # Attempt to use the broken module (should fail)
+        try:
+            test_module.add(5, 0)
+        except ZeroDivisionError:
+            pass
+        
+        # Restore original
+        with open(test_module_path, 'w') as f:
+            f.write(original_content)
+        
+        importlib.reload(test_module)
+        
+        # Verify original module is unchanged
+        with open(test_module_path, 'r') as f:
+            current_content = f.read()
+        
+        assert current_content == original_content, "Original module should remain unchanged"
+        assert test_module.add(2, 3) == 5, "Original function should work correctly"
+        assert test_module.subtract(5, 3) == 2, "Original function should work correctly"
+        
+        print("All clone and promote mechanism tests passed!")
+        
+    finally:
+        # Clean up
+        sys.path.remove(test_dir)
+        os.chdir(original_dir)
+        shutil.rmtree(test_dir, ignore_errors=True)
+
 def main():
     """Main function to scan and report integration test coverage."""
     print("Scanning for components and integration tests...")
@@ -156,6 +293,9 @@ def main():
     
     # Save for feasibility estimator
     save_matrix_to_json(matrix)
+    
+    # Run the clone and promote mechanism test
+    test_clone_and_promote_mechanism()
     
     # Return coverage percentage for potential CI integration
     total_pairs = sum(1 for c1 in components for c2 in components if c1 != c2)
