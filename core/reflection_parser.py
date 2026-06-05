@@ -9,6 +9,22 @@ class SimulationPrediction(str, Enum):
     FAIL = "fail"
 
 
+class CuriosityInsights(BaseModel):
+    """Schema for curiosity engine insights analysis."""
+    most_failed_task_types: List[str] = Field(
+        default_factory=list,
+        description="List of task types that fail most often based on curiosity engine results."
+    )
+    missing_capabilities: List[str] = Field(
+        default_factory=list,
+        description="List of capabilities that are missing or underperforming."
+    )
+    suggested_template_expansions: List[str] = Field(
+        default_factory=list,
+        description="Suggestions for expanding the template library in areas of weakness."
+    )
+
+
 class FitnessTrendAnalysis(BaseModel):
     """Schema for fitness trend analysis fields."""
     fitness_scores: deque = Field(
@@ -136,6 +152,10 @@ class GoalTriageResults(BaseModel):
     fitness_trend_analysis: FitnessTrendAnalysis = Field(
         default_factory=FitnessTrendAnalysis,
         description="Analysis of fitness score trends over the last 10 cycles, identifying declining areas and suggesting improvements."
+    )
+    curiosity_insights: CuriosityInsights = Field(
+        default_factory=CuriosityInsights,
+        description="Analysis of curiosity engine results: which task types fail most often, which capabilities are missing, and suggests expanding the template library in areas of weakness."
     )
 
     @validator("triage_quality_score", always=True)
@@ -307,6 +327,27 @@ class SchemaAlignmentLayer:
                                 }
                             },
                             "description": "Analysis of fitness score trends over the last 10 cycles."
+                        },
+                        "curiosity_insights": {
+                            "type": "object",
+                            "properties": {
+                                "most_failed_task_types": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of task types that fail most often based on curiosity engine results."
+                                },
+                                "missing_capabilities": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of capabilities that are missing or underperforming."
+                                },
+                                "suggested_template_expansions": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Suggestions for expanding the template library in areas of weakness."
+                                }
+                            },
+                            "description": "Analysis of curiosity engine results: which task types fail most often, which capabilities are missing, and suggests expanding the template library in areas of weakness."
                         }
                     },
                     "required": ["goals_triaged", "goals_flagged_stale", "goals_decomposed", "goals_archived"],

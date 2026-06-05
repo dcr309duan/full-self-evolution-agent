@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class GoalPriority(Enum):
     """Priority levels for generated goals."""
+    CRITICAL = 0
     HIGH = 1
     MEDIUM = 2
     LOW = 3
@@ -27,7 +28,8 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', or 'challenge'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', or 'curiosity'
+    source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
     dependencies: List[str] = field(default_factory=list)  # List of sub-goal descriptions this goal depends on
@@ -54,14 +56,16 @@ knowledge_base: Dict[str, str] = {}
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
-    coverage_weight: float = 0.5
+    coverage_weight: float = 0.5,
+    curiosity_goals: Optional[List[Goal]] = None
 ) -> List[Goal]:
-    """Generate goals based on simulation metrics and knowledge base fitness scores.
+    """Generate goals based on simulation metrics, knowledge base fitness scores, and curiosity engine input.
 
     Args:
         metrics_list: List of simulation metrics for different modules.
         accuracy_threshold: Threshold below which accuracy goals are generated.
         coverage_weight: Weight for coverage in priority calculation (0-1).
+        curiosity_goals: Optional list of high-priority goals from the curiosity engine.
 
     Returns:
         List of generated goals, sorted by priority (highest first).
@@ -72,6 +76,13 @@ def generate_goals(
     challenge_goals = _generate_challenge_goals_from_knowledge_base()
     goals.extend(challenge_goals)
 
+    # Add curiosity goals if provided
+    if curiosity_goals:
+        for goal in curiosity_goals:
+            goal.source = "curiosity"
+            goal.tags.append("curiosity")
+        goals.extend(curiosity_goals)
+
     for metrics in metrics_list:
         # Generate accuracy improvement goals if accuracy is below threshold
         if metrics.accuracy < accuracy_threshold:
@@ -79,7 +90,8 @@ def generate_goals(
                 description=f"Improve simulation accuracy for {metrics.module}",
                 priority=_calculate_priority(metrics, coverage_weight),
                 module=metrics.module,
-                goal_type="accuracy"
+                goal_type="accuracy",
+                source="fitness"
             )
             goals.append(goal)
             logger.debug(
@@ -93,7 +105,8 @@ def generate_goals(
                 description=f"Add dependency tracking for {metrics.module}",
                 priority=_calculate_priority(metrics, coverage_weight),
                 module=metrics.module,
-                goal_type="dependency_tracking"
+                goal_type="dependency_tracking",
+                source="fitness"
             )
             goals.append(goal)
             logger.debug(
@@ -101,8 +114,13 @@ def generate_goals(
                 metrics.module
             )
 
-    # Sort goals by priority (HIGH first) to prioritize coverage expansion
-    goals.sort(key=lambda g: (g.priority.value, -_coverage_score(g, metrics_list)))
+    # Sort goals by priority (CRITICAL first, then HIGH, MEDIUM, LOW)
+    # Within same priority, curiosity goals come before routine goals
+    goals.sort(key=lambda g: (
+        g.priority.value,
+        0 if g.source == "curiosity" else 1,
+        -_coverage_score(g, metrics_list)
+    ))
 
     return goals
 
@@ -133,6 +151,7 @@ def _generate_challenge_goals_from_knowledge_base() -> List[Goal]:
                         priority=GoalPriority.HIGH,
                         module=challenge_name,
                         goal_type="challenge",
+                        source="fitness",
                         tags=["challenge", "low_score"]
                     )
                     challenge_goals.append(goal)
@@ -187,7 +206,8 @@ def _coverage_score(goal: Goal, metrics_list: List[SimulationMetrics]) -> float:
 def generate_goals_from_report(
     report: Dict,
     accuracy_threshold: float = 0.8,
-    coverage_weight: float = 0.5
+    coverage_weight: float = 0.5,
+    curiosity_goals: Optional[List[Goal]] = None
 ) -> List[Goal]:
     """Generate goals from a simulation report dictionary.
 
@@ -208,6 +228,7 @@ def generate_goals_from_report(
         report: Dictionary containing simulation report data.
         accuracy_threshold: Threshold for accuracy goals.
         coverage_weight: Weight for coverage in priority.
+        curiosity_goals: Optional list of high-priority goals from the curiosity engine.
 
     Returns:
         List of generated goals.
@@ -224,7 +245,7 @@ def generate_goals_from_report(
         )
         metrics_list.append(metrics)
 
-    return generate_goals(metrics_list, accuracy_threshold, coverage_weight)
+    return generate_goals(metrics_list, accuracy_threshold, coverage_weight, curiosity_goals)
 
 
 def prioritize_goals(goals: List[Goal]) -> List[Goal]:
@@ -232,6 +253,7 @@ def prioritize_goals(goals: List[Goal]) -> List[Goal]:
 
     This function sorts goals so that those related to modules with
     lower coverage come first, within the same priority level.
+    Curiosity-sourced goals are prioritized above routine goals but below critical failures.
 
     Args:
         goals: List of goals to prioritize.
@@ -239,9 +261,12 @@ def prioritize_goals(goals: List[Goal]) -> List[Goal]:
     Returns:
         Re-prioritized list of goals.
     """
-    # Sort by priority first, then by coverage (lower coverage first)
-    # This assumes goals have been generated with coverage info
-    return sorted(goals, key=lambda g: (g.priority.value, g.description))
+    # Sort by priority first, then by source (curiosity before routine), then by coverage
+    return sorted(goals, key=lambda g: (
+        g.priority.value,
+        0 if g.source == "curiosity" else 1,
+        g.description
+    ))
 
 
 def generate_sub_goals(
@@ -269,19 +294,22 @@ def generate_sub_goals(
             description=f"Analyze accuracy gaps in {parent_goal.module}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type="accuracy"
+            goal_type="accuracy",
+            source=parent_goal.source
         )
         implement_goal = Goal(
             description=f"Implement targeted fixes for {parent_goal.module}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type="accuracy"
+            goal_type="accuracy",
+            source=parent_goal.source
         )
         validate_goal = Goal(
             description=f"Validate accuracy improvements for {parent_goal.module}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type="accuracy"
+            goal_type="accuracy",
+            source=parent_goal.source
         )
         
         if decomposition_strategy == "sequential":
@@ -309,13 +337,15 @@ def generate_sub_goals(
             description=f"Identify dependencies for {parent_goal.module}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type="dependency_tracking"
+            goal_type="dependency_tracking",
+            source=parent_goal.source
         )
         implement_goal = Goal(
             description=f"Implement dependency tracking for {parent_goal.module}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type="dependency_tracking"
+            goal_type="dependency_tracking",
+            source=parent_goal.source
         )
         
         if decomposition_strategy == "sequential":
@@ -339,13 +369,15 @@ def generate_sub_goals(
             description=f"Research requirements for {parent_goal.description}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type=parent_goal.goal_type
+            goal_type=parent_goal.goal_type,
+            source=parent_goal.source
         )
         implement_goal = Goal(
             description=f"Implement solution for {parent_goal.description}",
             priority=parent_goal.priority,
             module=parent_goal.module,
-            goal_type=parent_goal.goal_type
+            goal_type=parent_goal.goal_type,
+            source=parent_goal.source
         )
         
         if decomposition_strategy == "sequential":
@@ -423,6 +455,7 @@ def generate_blocker_resolution_goals(module: str) -> List[Goal]:
             priority=GoalPriority.HIGH,
             module=module,
             goal_type="blocker_resolution",
+            source="fitness",
             tags=["blocker_resolution"]
         )
         resolution_goals.append(goal)
@@ -498,15 +531,35 @@ if __name__ == "__main__":
     knowledge_base["fitness_score:BinarySearch"] = "0.85"
     knowledge_base["fitness_score:QuickSort"] = "0.0"
 
-    generated = generate_goals(example_metrics)
+    # Example curiosity goals
+    curiosity_goals = [
+        Goal(
+            description="Explore novel interaction patterns in module_a",
+            priority=GoalPriority.HIGH,
+            module="module_a",
+            goal_type="curiosity",
+            source="curiosity",
+            tags=["curiosity", "exploration"]
+        ),
+        Goal(
+            description="Investigate emergent behavior in module_c",
+            priority=GoalPriority.MEDIUM,
+            module="module_c",
+            goal_type="curiosity",
+            source="curiosity",
+            tags=["curiosity", "emergent"]
+        )
+    ]
+
+    generated = generate_goals(example_metrics, curiosity_goals=curiosity_goals)
     print("Generated goals:")
     for goal in generated:
-        print(f"  {goal}")
+        print(f"  {goal} (source: {goal.source})")
 
     print("\nPrioritized goals:")
     prioritized = prioritize_goals(generated)
     for goal in prioritized:
-        print(f"  {goal}")
+        print(f"  {goal} (source: {goal.source})")
 
     # Test sub-goal generation with different strategies
     print("\nSub-goals for first goal (sequential):")

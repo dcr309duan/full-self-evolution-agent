@@ -14,6 +14,7 @@ from core.reflection import analyze_result
 from core.simulation_engine import simulate_change, SimulationResult
 from core.goal_triage import triage_pending_goals
 from core.fitness_evaluator import FitnessEvaluator
+from core.curiosity_engine import CuriosityEngine
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -61,6 +62,13 @@ simulation_history: List[Dict[str, Any]] = []
 
 # Knowledge base to store fitness scores and other data
 knowledge_base: List[Dict[str, Any]] = []
+
+# Curiosity engine instance
+curiosity_engine = CuriosityEngine()
+
+# Cycle counter for curiosity engine interval
+cycle_counter = 0
+CURIOSITY_INTERVAL = 5  # Configurable interval for curiosity engine activation
 
 def update_simulation_accuracy(sim_result: SimulationResult, actual_test_result: Dict[str, Any]) -> None:
     """Update simulation accuracy tracking based on actual test results."""
@@ -191,6 +199,51 @@ def verify_prerequisites(goal: Dict[str, Any], dependency_graph: Dict[str, Any])
     
     return unmet_prerequisites
 
+def run_curiosity_cycle() -> None:
+    """Execute curiosity engine cycle and handle results."""
+    global cycle_counter, knowledge_base
+    
+    cycle_counter += 1
+    
+    if cycle_counter % CURIOSITY_INTERVAL == 0:
+        # Log curiosity cycle initiation
+        knowledge_base.append({
+            "type": "curiosity_event",
+            "event": "cycle_initiated",
+            "cycle_number": cycle_counter,
+            "interval": CURIOSITY_INTERVAL
+        })
+        
+        # Generate and attempt task
+        task_result = curiosity_engine.generate_and_attempt_task()
+        
+        # Log the curiosity event
+        knowledge_base.append({
+            "type": "curiosity_event",
+            "event": "task_attempted",
+            "cycle_number": cycle_counter,
+            "task_result": task_result,
+            "success": task_result.get("success", False)
+        })
+        
+        # If task failed, inject the resulting goal into the goal queue with high priority
+        if not task_result.get("success", False):
+            failed_goal = task_result.get("goal", {})
+            failed_goal["priority"] = "high"
+            
+            # Inject into goal queue (assuming there's a global goal queue or mechanism)
+            # For this implementation, we'll add it to the knowledge base for processing
+            knowledge_base.append({
+                "type": "curiosity_event",
+                "event": "goal_injected",
+                "cycle_number": cycle_counter,
+                "injected_goal": failed_goal,
+                "priority": "high"
+            })
+            
+            # Log the injection
+            print(f"Curiosity engine: Injected failed goal '{failed_goal.get('name', 'unknown')}' with high priority")
+
 def run_smoke_test() -> Dict[str, Any]:
     """
     Execute the evolution smoke test in an isolated temporary directory.
@@ -198,6 +251,7 @@ def run_smoke_test() -> Dict[str, Any]:
     Integrates goal triage to avoid re-generating archived goals.
     Integrates prerequisite verification to check dependencies before execution.
     Integrates fitness evaluator to assess code quality before and after mutation.
+    Integrates curiosity engine for autonomous exploration.
 
     Returns:
         A structured dictionary containing:
@@ -212,6 +266,9 @@ def run_smoke_test() -> Dict[str, Any]:
     fitness_evaluator = FitnessEvaluator()
 
     try:
+        # Run curiosity engine cycle
+        run_curiosity_cycle()
+        
         # Step 1: Create isolated environment
         temp_dir = tempfile.mkdtemp(prefix="smoke_test_")
         logs.append({
