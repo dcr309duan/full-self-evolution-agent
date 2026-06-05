@@ -1,7 +1,7 @@
 {
-  "cycle_count": 25,
-  "current_generation": 2,
-  "last_evolution_time": 1780626400.5938618,
+  "cycle_count": 26,
+  "current_generation": 3,
+  "last_evolution_time": 1780626609.7615833,
   "capabilities": [
     "Develop web scraping capability to gather knowledge from the internet",
     "Create a task scheduler for autonomous background processing",
@@ -14,7 +14,8 @@
     "Build an API server to expose agent capabilities externally",
     "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the",
     "Integrate the mutation engine with the existing testing framework to create a closed evolutionary lo",
-    "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the f"
+    "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the f",
+    "Create a 'successful mutation pattern extractor' that, whenever a mutation attempt passes all tests,"
   ],
   "history": [
     {
@@ -142,6 +143,12 @@
       "goal": "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the failure type (syntax, semantic, test timeout, assertion error) into a structured failure history. After each failure, the selector probabilistically chooses from a pool of 3 mutation strategies (random AST splicing, template-based replacement, LLM-guided rewrite) with probabilities updated via a simple bandit algorithm (e.g., epsilon-greedy) favoring strategies that have produced successful mutations in the past 10 attempts. This directly couples failure analysis with adaptive mutation, breaking the cycle of repeated failures.",
       "success": true,
       "timestamp": 1780626575.9940236
+    },
+    {
+      "cycle": 26,
+      "goal": "Create a 'successful mutation pattern extractor' that, whenever a mutation attempt passes all tests, extracts the AST diff (before/after) and stores it as a reusable pattern in a 'mutation corpus'. The corpus is indexed by code context (e.g., function with loop, if-statement, variable assignment). The mutation engine then queries this corpus to find analogous patterns when mutating similar code structures, enabling analogy-based mutation generation. This leverages the 39 successful strategies to bootstrap future success.",
+      "success": true,
+      "timestamp": 1780626720.1386135
     }
   ],
   "status": "evolving"

@@ -87,10 +87,10 @@ The code should be a complete, executable script."""
         
         log_cycle(state["cycle_count"], f"  Step: {action} -> {target}: {description}")
         
-        if action == "create_file" or action == "modify_file":
+        if action in ("create_file", "modify_file", "create", "modify"):
             result = self_modify(target, description)
             results.append(result)
-        elif action == "execute":
+        elif action in ("execute", "run", "run_command"):
             code = generate_code(description)
             exec_result = safe_execute(code, timeout=60)
             results.append(exec_result)
@@ -102,9 +102,13 @@ The code should be a complete, executable script."""
             cap_result = add_capability(target or action, cap_code, description)
             results.append(cap_result)
         else:
-            code = generate_code(f"{action}: {description}")
-            exec_result = safe_execute(code, timeout=60)
-            results.append(exec_result)
+            if target and (target.endswith('.py') or target.endswith('.json') or target.endswith('.md')):
+                result = self_modify(target, description)
+                results.append(result)
+            else:
+                code = generate_code(f"{action}: {description}")
+                exec_result = safe_execute(code, timeout=60)
+                results.append(exec_result)
     
     successes = sum(1 for r in results if r.get("success", False))
     total = len(results)

@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a 'successful mutation pattern extractor' that, whenever a mutation attempt passes all tests, extracts the AST diff (before/after) and stores it as a reusable pattern in a 'mutation corpus'. The corpus is indexed by code context (e.g., function with loop, if-statement, variable assignment). The mutation engine then queries this corpus to find analogous patterns when mutating similar code structures, enabling analogy-based mutation generation. This leverages the 39 successful strategies to bootstrap future success.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780626426.745552
-    },
-    {
       "description": "Implement a 'strategy switch' mechanism in the mutation engine: when the engine logs its 4th consecutive failure (including the 3 existing ones), it automatically shifts from random crossover mutation to a grammar-guided mutation approach. Specifically, define 3 template-based mutation patterns (e.g., 'wrap function body in try-except', 'add logging call at function entry', 'replace constant with parameter') sourced from the 34 successful strategies in the knowledge base. Apply these templates instead of random AST splicing. If this also fails, the engine should log a detailed report and pause mutation activity until the failure analysis module produces a new recommended strategy.",
       "priority": 8,
       "status": "pending",
@@ -128,6 +122,13 @@
       "status": "completed",
       "created_at": 1780626426.744684,
       "completed_at": 1780626557.1800725
+    },
+    {
+      "description": "Create a 'successful mutation pattern extractor' that, whenever a mutation attempt passes all tests, extracts the AST diff (before/after) and stores it as a reusable pattern in a 'mutation corpus'. The corpus is indexed by code context (e.g., function with loop, if-statement, variable assignment). The mutation engine then queries this corpus to find analogous patterns when mutating similar code structures, enabling analogy-based mutation generation. This leverages the 39 successful strategies to bootstrap future success.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780626426.745552,
+      "completed_at": 1780626720.1356485
     }
   ],
   "generated_goals": []

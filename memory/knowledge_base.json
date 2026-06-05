@@ -449,6 +449,11 @@
       "strategy": "mutation:hybrid(memoized_is_prime,quicksort)",
       "outcome": "Created quicksorted_primes, score=0.4",
       "timestamp": 1780626572.0530512
+    },
+    {
+      "strategy": "Create a 'successful mutation pattern extractor' that, whenever a mutation attempt passes all tests, extracts the AST diff (before/after) and stores it as a reusable pattern in a 'mutation corpus'. The corpus is indexed by code context (e.g., function with loop, if-statement, variable assignment). The mutation engine then queries this corpus to find analogous patterns when mutating similar code structures, enabling analogy-based mutation generation. This leverages the 39 successful strategies to bootstrap future success.",
+      "outcome": "2/6 steps succeeded",
+      "timestamp": 1780626720.134049
     }
   ],
   "capabilities_developed": []
