@@ -34,6 +34,9 @@ PROBLEM_SUITE = [
     {"name": "flatten_nested", "input": "[[1,[2,3]],[4,[5,[6]]]]", "expected": "[1,2,3,4,5,6]", "test": "assert result == [1,2,3,4,5,6]"},
 ]
 
+# Configuration flag for simulation mode
+simulation_mode = True
+
 
 def get_function_pool():
     """Get all available functions for mutation."""
@@ -134,6 +137,49 @@ else:
     return {"valid": True, "reason": "OK", "score": score, "stdout": stdout[:200]}
 
 
+def simulate_mutation(module_path, old_ast, new_ast):
+    """Simulate a mutation proposal and return validation results.
+    
+    Args:
+        module_path: Path to the module being mutated
+        old_ast: The original AST before mutation
+        new_ast: The proposed new AST after mutation
+        
+    Returns:
+        dict with keys:
+            - valid: bool indicating if mutation is safe
+            - reason: string explanation
+            - score: float score from simulation
+    """
+    # Convert AST back to code for validation
+    try:
+        new_code = ast.unparse(new_ast)
+    except Exception as e:
+        return {"valid": False, "reason": f"Failed to unparse AST: {str(e)}", "score": 0}
+    
+    # Validate the new code
+    valid, error = validate_python(new_code)
+    if not valid:
+        return {"valid": False, "reason": f"Syntax error in proposed mutation: {error}", "score": 0}
+    
+    # Run simulation tests
+    test_result = test_mutation(new_code)
+    
+    if test_result["valid"]:
+        return {
+            "valid": True,
+            "reason": "Mutation simulation passed",
+            "score": test_result["score"],
+            "stdout": test_result.get("stdout", "")
+        }
+    else:
+        return {
+            "valid": False,
+            "reason": test_result.get("reason", "Unknown simulation failure"),
+            "score": 0
+        }
+
+
 def run_mutation_cycle(num_mutations=3):
     """Run a complete mutation cycle."""
     pool = get_function_pool()
@@ -149,6 +195,30 @@ def run_mutation_cycle(num_mutations=3):
         
         try:
             new_code = mutate(func_a, func_b, operator)
+            
+            # Optional pre-validation step using simulation
+            if simulation_mode:
+                try:
+                    new_ast = ast.parse(new_code)
+                    # Create a mock module path for simulation
+                    sim_path = f"simulated_mutation_{i}"
+                    sim_result = simulate_mutation(sim_path, None, new_ast)
+                    if not sim_result["valid"]:
+                        mutation_record = {
+                            "parent_a": func_a["name"],
+                            "parent_b": func_b["name"],
+                            "operator": operator,
+                            "code": new_code,
+                            "test_result": {"valid": False, "reason": f"Simulation rejected: {sim_result['reason']}", "score": 0},
+                            "timestamp": time.time(),
+                            "simulated": True
+                        }
+                        results.append(mutation_record)
+                        continue
+                except Exception as e:
+                    # If simulation fails, fall through to normal testing
+                    pass
+            
             test_result = test_mutation(new_code)
             
             mutation_record = {
