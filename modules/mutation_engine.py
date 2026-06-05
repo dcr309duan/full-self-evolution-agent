@@ -2,6 +2,43 @@ from typing import Dict, Any, List, Optional
 import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+import os
+import tempfile
+import logging
+
+logger = logging.getLogger(__name__)
+
+def atomic_write(filepath: str, content: str) -> None:
+    """
+    Atomically write content to a file using a temporary file and os.rename().
+    
+    Args:
+        filepath: Path to the target file
+        content: Content to write to the file
+    """
+    # Log git status before write
+    logger.info(f"Git status before atomic write to {filepath}")
+    os.system("git status")
+    
+    # Get directory of target file
+    directory = os.path.dirname(filepath) or "."
+    
+    # Create temporary file in the same directory
+    with tempfile.NamedTemporaryFile(
+        mode='w',
+        dir=directory,
+        delete=False,
+        suffix='.tmp'
+    ) as tmp_file:
+        tmp_path = tmp_file.name
+        tmp_file.write(content)
+    
+    # Atomic rename
+    os.replace(tmp_path, filepath)
+    
+    # Log git status after write
+    logger.info(f"Git status after atomic write to {filepath}")
+    os.system("git status")
 
 @dataclass
 class MutationRecord:

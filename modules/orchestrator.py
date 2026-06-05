@@ -1,5 +1,7 @@
 from typing import Dict, List, Any
 import logging
+import subprocess
+import os
 from modules.failure_pattern_learner import FailurePatternLearner
 from modules.mutation_engine import MutationEngine
 from modules.ecology_engine import EcologyEngine
@@ -22,15 +24,88 @@ class Orchestrator:
         self.injected_tests = set()
         self.injection_log = []
 
+    def _init_git_repo(self) -> None:
+        """Initialize git repository if not already exists."""
+        if not os.path.exists('.git'):
+            subprocess.run(['git', 'init'], check=True, capture_output=True)
+            logger.info("Initialized new git repository")
+        
+        # Ensure we have an initial commit if repo is empty
+        result = subprocess.run(['git', 'rev-list', '--max-parents=0', 'HEAD'], 
+                              capture_output=True, text=True)
+        if result.returncode != 0:
+            # Create initial commit
+            subprocess.run(['git', 'add', '-A'], check=True, capture_output=True)
+            subprocess.run(['git', 'commit', '-m', 'Initial commit'], 
+                         check=True, capture_output=True)
+            logger.info("Created initial commit")
+
+    def _stage_all_changes(self) -> None:
+        """Stage all changes in the working directory."""
+        subprocess.run(['git', 'add', '-A'], check=True, capture_output=True)
+
+    def _create_pre_mutation_commit(self, goal_id: str) -> None:
+        """Create a pre-mutation commit."""
+        self._stage_all_changes()
+        commit_message = f'pre-mutation: {goal_id}'
+        subprocess.run(['git', 'commit', '-m', commit_message], 
+                      check=True, capture_output=True)
+        logger.debug(f"Created pre-mutation commit: {commit_message}")
+
+    def _create_success_commit(self, goal_id: str) -> None:
+        """Create a success commit after mutation."""
+        self._stage_all_changes()
+        commit_message = f'mutation: {goal_id} - success'
+        subprocess.run(['git', 'commit', '-m', commit_message], 
+                      check=True, capture_output=True)
+        logger.debug(f"Created success commit: {commit_message}")
+
+    def git_rollback(self) -> None:
+        """Revert to previous state and confirm clean working tree."""
+        try:
+            # Revert the last commit
+            result = subprocess.run(['git', 'revert', 'HEAD', '--no-edit'], 
+                                  check=True, capture_output=True, text=True)
+            logger.info(f"Git revert completed: {result.stdout.strip()}")
+            
+            # Verify working tree is clean
+            status_result = subprocess.run(['git', 'status', '--porcelain'], 
+                                         capture_output=True, text=True)
+            if status_result.stdout.strip():
+                logger.warning(f"Working tree not clean after revert: {status_result.stdout}")
+            else:
+                logger.info("Working tree is clean after revert")
+                
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git rollback failed: {e.stderr}")
+            raise
+
     def run_evolution_cycle(self, mutation_attempts: List[Dict[str, Any]]) -> None:
         """Execute one evolution cycle with failure tracking, weight adjustment, and ecology pressure."""
+        # Initialize git repo at start
+        self._init_git_repo()
+        
         for attempt in mutation_attempts:
+            goal_id = attempt.get("goal_id", f"cycle_{self.cycle_count}")
+            
             try:
-                # Simulate mutation attempt (replace with actual logic)
+                # Create pre-mutation commit
+                self._create_pre_mutation_commit(goal_id)
+                
+                # Perform mutation
                 success = self._perform_mutation(attempt)
-                if not success:
+                
+                if success:
+                    # Create success commit
+                    self._create_success_commit(goal_id)
+                else:
+                    # Rollback on failure
+                    self.git_rollback()
                     self._handle_mutation_failure(attempt)
+                    
             except Exception as e:
+                # Rollback on any exception
+                self.git_rollback()
                 self._handle_mutation_failure(attempt, error=str(e))
 
         self.cycle_count += 1

@@ -1,7 +1,7 @@
 """Evolution Orchestrator - Integrates static predictor into mutation pipeline."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class OrchestratorConfig:
 
 
 class EvolutionOrchestrator:
-    """Orchestrates mutation pipeline with predictive filtering."""
+    """Orchestrates mutation pipeline with predictive filtering and git workflow."""
 
     def __init__(self, config: Optional[OrchestratorConfig] = None):
         self.config = config or OrchestratorConfig()
@@ -27,10 +27,15 @@ class EvolutionOrchestrator:
         self.failure_insights: list = []
         self._predictor = None
         self._cycle_count = 0
+        self._git_orchestrator = None
 
     def set_predictor(self, predictor: Any) -> None:
         """Set the static predictor instance."""
         self._predictor = predictor
+
+    def set_git_orchestrator(self, git_orchestrator: Any) -> None:
+        """Set the git orchestrator instance."""
+        self._git_orchestrator = git_orchestrator
 
     def should_execute_mutation(self, mutation: Any) -> bool:
         """Check if mutation should be executed based on predictor analysis.
@@ -63,8 +68,8 @@ class EvolutionOrchestrator:
 
         return True
 
-    def execute_mutation_pipeline(self, mutation: Any, executor_func: callable) -> Any:
-        """Execute a mutation through the pipeline with predictive filtering.
+    def execute_mutation_pipeline(self, mutation: Any, executor_func: Callable) -> Any:
+        """Execute a mutation through the pipeline with predictive filtering and git workflow.
 
         Args:
             mutation: The mutation to potentially execute.
@@ -76,14 +81,55 @@ class EvolutionOrchestrator:
         self.total_mutations_attempted += 1
         self._cycle_count += 1
 
+        # Safety check: abort if git working tree is dirty at start of cycle
+        if self._git_orchestrator is not None:
+            try:
+                if self._git_orchestrator.is_working_tree_dirty():
+                    logger.warning("Git working tree is dirty at start of mutation cycle. Aborting.")
+                    return None
+            except Exception as e:
+                logger.warning("Failed to check git working tree status: %s", e)
+
         if not self.should_execute_mutation(mutation):
             return None
 
+        # Pre-mutation git operations
+        if self._git_orchestrator is not None:
+            try:
+                self._git_orchestrator.git_stash()
+            except Exception as e:
+                logger.warning("Git stash failed, attempting pre-mutation commit: %s", e)
+                try:
+                    self._git_orchestrator.git_commit_pre_mutation()
+                except Exception as e2:
+                    logger.error("Pre-mutation git operations failed: %s", e2)
+                    return None
+
         try:
             result = executor_func(mutation)
+            
+            # Post-mutation validation and git operations
+            if self._git_orchestrator is not None:
+                try:
+                    self._git_orchestrator.git_commit_mutation()
+                except Exception as e:
+                    logger.warning("Post-mutation git commit failed, rolling back: %s", e)
+                    try:
+                        self._git_orchestrator.git_rollback()
+                    except Exception as e2:
+                        logger.error("Git rollback failed: %s", e2)
+                    return None
+            
             return result
+            
         except Exception as e:
             logger.error("Mutation execution failed: %s", e)
+            # Rollback on failure
+            if self._git_orchestrator is not None:
+                try:
+                    self._git_orchestrator.git_rollback()
+                except Exception as e2:
+                    logger.error("Git rollback after mutation failure failed: %s", e2)
             raise
 
     def get_stats(self) -> Dict[str, Any]:

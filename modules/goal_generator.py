@@ -27,6 +27,7 @@ class GoalGenerator:
             "auto_generate": True,
             "priority_mode": "balanced"
         }
+        self.rollback_counter: int = 0  # Tracks consecutive rollbacks
 
     def get_serialized_state(self) -> Dict[str, Any]:
         """
@@ -40,6 +41,7 @@ class GoalGenerator:
             "completed_goals": [asdict(goal) for goal in self.completed_goals],
             "goal_templates": self.goal_templates,
             "generation_parameters": self.generation_parameters.copy(),
+            "rollback_counter": self.rollback_counter,
             "version": 1  # For future compatibility
         }
 
@@ -69,6 +71,9 @@ class GoalGenerator:
         
         # Restore generation parameters
         instance.generation_parameters = state.get("generation_parameters", {}).copy()
+        
+        # Restore rollback counter
+        instance.rollback_counter = state.get("rollback_counter", 0)
         
         # Restore pending goals
         instance.pending_goals = []
@@ -126,3 +131,49 @@ class GoalGenerator:
         )
         self.pending_goals.append(goal)
         return goal
+
+    def generate_infrastructure_goal(self, rollback_count: int) -> Goal:
+        """
+        Generates a new INFRASTRUCTURE goal when repeated rollbacks are detected.
+        
+        Args:
+            rollback_count: Number of consecutive rollbacks detected
+            
+        Returns:
+            A new Goal object with INFRASTRUCTURE type and HIGH priority
+        """
+        import uuid
+        goal = Goal(
+            id=str(uuid.uuid4()),
+            description=f"Improve mutation stability: analyze last {rollback_count} rollbacks and identify common failure patterns",
+            template="INFRASTRUCTURE",
+            created_at=datetime.now().isoformat(),
+            parameters={
+                "rollback_count": rollback_count,
+                "goal_type": "INFRASTRUCTURE",
+                "priority": "HIGH"
+            }
+        )
+        self.pending_goals.append(goal)
+        return goal
+
+    def process_rollback(self, is_rollback: bool) -> Optional[Goal]:
+        """
+        Processes a rollback event and generates an INFRASTRUCTURE goal if needed.
+        
+        Args:
+            is_rollback: Whether the current event is a rollback
+            
+        Returns:
+            A Goal object if a new INFRASTRUCTURE goal was generated, None otherwise
+        """
+        if is_rollback:
+            self.rollback_counter += 1
+            if self.rollback_counter > 3:
+                # Generate INFRASTRUCTURE goal for repeated rollbacks
+                return self.generate_infrastructure_goal(self.rollback_counter)
+        else:
+            # Reset counter on successful operation
+            self.rollback_counter = 0
+        
+        return None

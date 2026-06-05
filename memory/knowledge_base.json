@@ -1,36 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/integration/test_evolution_loop_file_io_failures.py to: Create a focused test for file I/O failure scenarios: (1) Permission denied on critical files, (2) Concurrent write conflicts, (3) Corrupted file reads, (4) Network filesystem timeouts, (5) Partial write failures, (6) Verifies atomic write guarantees and rollback correctness.",
-      "timestamp": 1780641080.314844,
-      "cycle": 96
-    },
-    {
-      "content": "Successfully modified system_config.json to: Add configuration for integration test scenarios: ENABLE_FAILURE_SIMULATION=true, FAILURE_SIMULATION_SEED=42 (for reproducibility), INTEGRATION_TEST_TIMEOUT=300, MAX_FAILURE_INJECTIONS_PER_TEST=10, RECOVERY_VALIDATION_LEVEL='strict'.",
-      "timestamp": 1780641085.050602,
-      "cycle": 96
-    },
-    {
-      "content": "Self-reflection: The agent's evolution has been trapped in a cycle of adding verification layers (tests, schema checks, dependency analyzers) because those tasks are straightforward to generate and measure, but they d",
-      "timestamp": 1780641164.3636022,
-      "cycle": 97
-    },
-    {
-      "content": "Successfully modified core/health_audit.py to: Create the SystemHealthAudit class with methods: score_capability(cap_name) -> float (0-1 per dimension), compute_average_score() -> float, identify_bottom_10_percent() -> list, merge_duplicates() -> list of merged pairs. Scoring: novelty = min(1.0, days_since_mod/30), necessity = min(1.0, dependents/5), integration = interface_alignment_score (from schema checker). Store scores in a JSON file for persistence.",
-      "timestamp": 1780641194.2714124,
-      "cycle": 97
-    },
-    {
-      "content": "Successfully modified core/orchestrator.py to: Add a post-mutation hook that calls health_audit.compute_average_score(). If score < 0.4, trigger pruning cycle: (1) log warning, (2) call identify_bottom_10%, (3) for each low-scorer, check if duplicate exists (same description prefix), (4) merge duplicates by keeping the most recent or most complete version, (5) remove truly redundant capabilities, (6) update system model and dependency graph.",
-      "timestamp": 1780641241.434194,
-      "cycle": 97
-    },
-    {
-      "content": "Successfully modified system_config.json to: Add health audit configuration: HEALTH_AUDIT_INTERVAL=10 (cycles between audits), PRUNING_THRESHOLD=0.4, BOTTOM_PERCENT=10, ENABLE_AUTO_MERGE=true, MAX_MERGE_CANDIDATES=5.",
-      "timestamp": 1780641245.4553692,
-      "cycle": 97
-    },
-    {
       "content": "Successfully modified tests/unit/test_health_audit.py to: Create unit tests for health audit: (1) test scoring logic with known inputs, (2) test bottom 10% identification with 20 capabilities, (3) test duplicate detection (same prefix 'Implement a canonical schema alignment layer'), (4) test merge preserves functionality, (5) test pruning doesn't remove critical dependencies.",
       "timestamp": 1780641267.1581254,
       "cycle": 97
@@ -999,6 +969,36 @@
       "content": "Successfully modified modules/goal_generator.py to: Add a new goal type 'ECOLOGY' to the goal generator: when the Ecology Engine generates a new benchmark or stress test, create a corresponding goal to 'Adapt to new environmental pressure: [test description]'. This ensures the agent not only creates new tests but also actively works to pass them, closing the evolution loop.",
       "timestamp": 1780647273.6490207,
       "cycle": 123
+    },
+    {
+      "content": "Self-reflection: The evolution process shows a classic pattern of 'complexity creep': each new capability is added to solve a previous problem, but the addition itself introduces new sources of failure and cognitive l",
+      "timestamp": 1780647343.1813996,
+      "cycle": 124
+    },
+    {
+      "content": "Successfully modified modules/orchestrator.py to: Add git initialization and commit logic to the orchestrator. Before any mutation, create a git repo if not exists, stage all changes, and create a pre-mutation commit with message 'pre-mutation: [goal_id]'. After mutation and validation, create a success commit with message 'mutation: [goal_id] - success'. On failure, execute 'git revert HEAD' to rollback atomically. Add a git_rollback() method that handles the revert and confirms the working tree is clean.",
+      "timestamp": 1780647378.5670464,
+      "cycle": 124
+    },
+    {
+      "content": "Successfully modified modules/mutation_engine.py to: Refactor all file write operations to use a new atomic_write() helper that: (1) writes to a temporary file in the same directory, (2) uses os.rename() for atomic replacement, (3) logs the git status before and after. Remove all try/except manual rollback logic - delegate rollback entirely to the orchestrator's git revert.",
+      "timestamp": 1780647395.8770301,
+      "cycle": 124
+    },
+    {
+      "content": "Successfully modified modules/evolution_orchestrator.py to: Integrate the git workflow into the main evolution loop: (1) Before each mutation cycle, call orchestrator.git_stash() or git_commit_pre_mutation(). (2) After mutation + validation, if success -> git_commit_mutation(). (3) If any step fails (mutation, test, validation) -> orchestrator.git_rollback(). (4) Add a safety check: if git working tree is dirty at start of cycle, abort and log warning.",
+      "timestamp": 1780647413.1952176,
+      "cycle": 124
+    },
+    {
+      "content": "Successfully modified tests/test_git_workflow.py to: Create an integration test that validates the git-based workflow: (1) Initialize a temp directory with a git repo and test modules. (2) Simulate a successful mutation and verify a 'mutation: success' commit exists. (3) Simulate a failed mutation and verify the working tree is reverted to pre-mutation state. (4) Test that multiple rollbacks in sequence work correctly. (5) Test that the git stash mechanism handles dirty working trees.",
+      "timestamp": 1780647443.7716875,
+      "cycle": 124
+    },
+    {
+      "content": "Successfully modified modules/goal_generator.py to: Add a new goal type 'INFRASTRUCTURE' with priority HIGH. When the git workflow detects repeated rollbacks (>3 in a row), generate a goal to 'Improve mutation stability: analyze last N rollbacks and identify common failure patterns'. This closes the loop - the system will self-improve its mutation reliability.",
+      "timestamp": 1780647456.268579,
+      "cycle": 124
     }
   ],
   "learned_patterns": [],
@@ -1442,6 +1442,11 @@
       "approach": "modify modules/ecology_engine.py: Create a new Ecology Engine module that: (1) generates novel synthetic test suites by combining existing test patterns in new ways (e.g., cross-module integration tests, performance stress tests, adversarial edge cases), (2) introduces 'environmental stressors' such as simulated latency, resource constraints, or data corruption to test robustness, (3) creates benchmarks from real-world programming challenges (e.g., implement a sorting algorithm, parse a file format, solve a logic puzzle) that are outside the current test suite, and (4) tracks which new tests produce the most capability growth (measured by downstream fitness improvements). Include a method 'generate_ecology_pressure()' that runs every 10 cycles and injects 1-3 new tests into the test suite.",
       "reason": "Syntax error: unterminated f-string literal (detected at line 420) (<unknown>, line 420)",
       "timestamp": 1780647196.715586
+    },
+    {
+      "approach": "modify modules/self_healing.py: Update the self-healing retry mechanism to use git rollback instead of manual file restoration. When a mutation fails validation, the retry should: (1) execute git revert to undo the failed mutation, (2) log the failure with the git commit hash that was reverted, (3) then attempt the mutation again with adjusted parameters.",
+      "reason": "Safety check failed",
+      "timestamp": 1780647429.6789656
     }
   ],
   "successful_strategies": [
@@ -5194,6 +5199,36 @@
       "strategy": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
       "outcome": "5/6 steps succeeded",
       "timestamp": 1780647273.667541
+    },
+    {
+      "strategy": "modify modules/orchestrator.py: Add git initialization and commit logic to the orchestrator. Before any mutation, create a git repo if not exists, stage all changes, and create a pre-mutation commit with message 'pre-mutation: [goal_id]'. After mutation and validation, create a success commit with message 'mutation: [goal_id] - success'. On failure, execute 'git revert HEAD' to rollback atomically. Add a git_rollback() method that handles the revert and confirms the working tree is clean.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647378.5500412
+    },
+    {
+      "strategy": "modify modules/mutation_engine.py: Refactor all file write operations to use a new atomic_write() helper that: (1) writes to a temporary file in the same directory, (2) uses os.rename() for atomic replacement, (3) logs the git status before and after. Remove all try/except manual rollback logic - delegate rollback entirely to the orchestrator's git revert.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647395.854244
+    },
+    {
+      "strategy": "modify modules/evolution_orchestrator.py: Integrate the git workflow into the main evolution loop: (1) Before each mutation cycle, call orchestrator.git_stash() or git_commit_pre_mutation(). (2) After mutation + validation, if success -> git_commit_mutation(). (3) If any step fails (mutation, test, validation) -> orchestrator.git_rollback(). (4) Add a safety check: if git working tree is dirty at start of cycle, abort and log warning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647413.1735225
+    },
+    {
+      "strategy": "modify tests/test_git_workflow.py: Create an integration test that validates the git-based workflow: (1) Initialize a temp directory with a git repo and test modules. (2) Simulate a successful mutation and verify a 'mutation: success' commit exists. (3) Simulate a failed mutation and verify the working tree is reverted to pre-mutation state. (4) Test that multiple rollbacks in sequence work correctly. (5) Test that the git stash mechanism handles dirty working trees.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647443.7535512
+    },
+    {
+      "strategy": "modify modules/goal_generator.py: Add a new goal type 'INFRASTRUCTURE' with priority HIGH. When the git workflow detects repeated rollbacks (>3 in a row), generate a goal to 'Improve mutation stability: analyze last N rollbacks and identify common failure patterns'. This closes the loop - the system will self-improve its mutation reliability.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647456.2434862
+    },
+    {
+      "strategy": "Implement a git-based workflow for mutation application: each mutation creates a commit, and rollback is a simple revert. This will bypass file-system race conditions and enable reliable recovery from any failure without manual intervention. Integrate this into the core evolution loop so that all file modifications use atomic git operations.",
+      "outcome": "5/6 steps succeeded",
+      "timestamp": 1780647456.2865186
     }
   ],
   "capabilities_developed": []
