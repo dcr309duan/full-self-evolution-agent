@@ -34,6 +34,12 @@ class ModuleInteractionTracker:
         self.in_equilibrium: bool = False
         self.equilibrium_pairs: List[Tuple[int, int]] = []
         
+        # Logging and metrics
+        self.total_cycles: int = 0
+        self.cycles_in_equilibrium: int = 0
+        self.total_multi_module_perturbations_attempted: int = 0
+        self.successful_multi_module_perturbations: int = 0
+        
     def record_interaction(self, module_i: int, module_j: int, success: bool) -> None:
         """Record an interaction between two modules."""
         interaction_key = (min(module_i, module_j), max(module_i, module_j))
@@ -178,6 +184,19 @@ class ModuleInteractionTracker:
             "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
             "equilibrium_pairs": self.equilibrium_pairs,
             "in_equilibrium": self.in_equilibrium
+        }
+    
+    def get_logging_metrics(self) -> Dict[str, Any]:
+        """Get logging and metrics data."""
+        return {
+            "total_cycles": self.total_cycles,
+            "cycles_in_equilibrium": self.cycles_in_equilibrium,
+            "total_multi_module_perturbations_attempted": self.total_multi_module_perturbations_attempted,
+            "successful_multi_module_perturbations": self.successful_multi_module_perturbations,
+            "multi_module_perturbation_success_rate": (
+                self.successful_multi_module_perturbations / self.total_multi_module_perturbations_attempted
+                if self.total_multi_module_perturbations_attempted > 0 else 0.0
+            )
         }
 
 
@@ -556,6 +575,9 @@ class NashDetectorAndForcer:
             self.dependency_matrix
         )
         
+        # Track that a multi-module perturbation was attempted
+        self.interaction_tracker.total_multi_module_perturbations_attempted += 1
+        
         return mutation_plan
 
     def _select_interdependent_modules(self, num_modules: int) -> List[int]:
@@ -632,6 +654,9 @@ class NashDetectorAndForcer:
         self.equilibrium_detected = False
         self.consecutive_no_improvement = 0
         
+        # Track successful multi-module perturbation
+        self.interaction_tracker.successful_multi_module_perturbations += 1
+        
         return execution_record
 
     def run_equilibrium_cycle(self, max_iterations: int = 100) -> Dict[str, Any]:
@@ -652,7 +677,8 @@ class NashDetectorAndForcer:
             "equilibria_detected": 0,
             "coordinated_changes_forced": 0,
             "final_scores": [],
-            "history": []
+            "history": [],
+            "logging_metrics": {}
         }
         
         for iteration in range(max_iterations):
@@ -665,9 +691,13 @@ class NashDetectorAndForcer:
                     interaction_success = random.random() > 0.3  # 70% success rate
                     self.record_interaction(i, j, interaction_success)
             
+            # Update total cycles and equilibrium tracking
+            self.interaction_tracker.total_cycles += 1
+            
             # Check for equilibrium using enhanced detection
             if self.detect_nash_equilibrium():
                 results["equilibria_detected"] += 1
+                self.interaction_tracker.cycles_in_equilibrium += 1
                 
                 # Generate coordinated change plan (always 3 modules)
                 num_to_change = 3
@@ -686,6 +716,7 @@ class NashDetectorAndForcer:
             results["iterations"] = iteration + 1
         
         results["final_scores"] = self.module_scores.copy()
+        results["logging_metrics"] = self.interaction_tracker.get_logging_metrics()
         return results
 
     def get_orchestrator_api(self) -> Dict[str, Any]:
@@ -748,7 +779,8 @@ class NashDetectorAndForcer:
             "interaction_frequencies": {str(k): v for k, v in self.interaction_tracker.interaction_frequencies.items()},
             "interaction_success_rates": {str(k): v for k, v in self.interaction_tracker.interaction_success_rates.items()},
             "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
-            "equilibrium_pairs": [list(pair) for pair in self.equilibrium_pairs]
+            "equilibrium_pairs": [list(pair) for pair in self.equilibrium_pairs],
+            "logging_metrics": self.interaction_tracker.get_logging_metrics()
         }
         return json.dumps(state, indent=2)
 
@@ -793,6 +825,14 @@ class NashDetectorAndForcer:
         # Restore equilibrium pairs
         instance.equilibrium_pairs = [tuple(pair) for pair in state.get("equilibrium_pairs", [])]
         
+        # Restore logging metrics if available
+        if "logging_metrics" in state:
+            metrics = state["logging_metrics"]
+            instance.interaction_tracker.total_cycles = metrics.get("total_cycles", 0)
+            instance.interaction_tracker.cycles_in_equilibrium = metrics.get("cycles_in_equilibrium", 0)
+            instance.interaction_tracker.total_multi_module_perturbations_attempted = metrics.get("total_multi_module_perturbations_attempted", 0)
+            instance.interaction_tracker.successful_multi_module_perturbations = metrics.get("successful_multi_module_perturbations", 0)
+        
         return instance
 
     def get_system_summary(self) -> Dict[str, Any]:
@@ -816,7 +856,8 @@ class NashDetectorAndForcer:
             "interaction_frequencies": dict(self.interaction_tracker.interaction_frequencies),
             "interaction_success_rates": dict(self.interaction_tracker.interaction_success_rates),
             "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
-            "equilibrium_pairs": self.equilibrium_pairs
+            "equilibrium_pairs": self.equilibrium_pairs,
+            "logging_metrics": self.interaction_tracker.get_logging_metrics()
         }
 
     def detect_nash_equilibrium_with_pairs(self) -> Tuple[bool, List[Tuple[int, int]]]:
@@ -845,64 +886,4 @@ class NashDetectorAndForcer:
                 return False, []
         
         # Use interaction tracker for equilibrium detection
-        is_equilibrium, equilibrium_pairs = self.interaction_tracker.detect_nash_equilibrium(
-            self.module_scores, self.dependency_matrix
-        )
-        
-        if is_equilibrium:
-            self.in_equilibrium = True
-            self.equilibrium_iterations += 1
-            self.equilibrium_detected = True
-            self.equilibrium_pairs = equilibrium_pairs
-            return True, equilibrium_pairs
-        
-        return False, []
-
-    def update_module_improvement(self, module_idx: int, improved: bool) -> None:
-        """
-        Update the improvement history for a specific module.
-        
-        Args:
-            module_idx: Index of the module
-            improved: Whether the module improved in this cycle
-        """
-        self.module_improvement_history[module_idx].append(improved)
-        self.interaction_tracker.update_module_improvement(module_idx, improved)
-
-    def detect_nash_equilibrium_with_stats(self, module_stats: Dict[Tuple[int, int], Dict[str, int]]) -> List[Tuple[int, int]]:
-        """
-        Nash equilibrium detection function that tracks module interaction frequencies and success rates.
-        
-        Accepts a dictionary of module interaction stats (module_pair -> {attempts, successes, failures}),
-        identifies pairs where no single module change improves the success rate by more than 5%
-        over the last 10 attempts, and returns a list of module pairs at equilibrium.
-        
-        Args:
-            module_stats: Dictionary mapping module pairs (i, j) to their interaction stats.
-                         Each stat dict must have 'attempts', 'successes', and 'failures' keys.
-                         Example: {(0, 1): {'attempts': 10, 'successes': 8, 'failures': 2}}
-        
-        Returns:
-            List of module pairs (tuples) that are at Nash equilibrium
-        """
-        equilibrium_pairs = []
-        
-        # Process each module pair
-        for pair_key, stats in module_stats.items():
-            # Validate stats
-            if 'attempts' not in stats or 'successes' not in stats or 'failures' not in stats:
-                continue
-            
-            attempts = stats['attempts']
-            successes = stats['successes']
-            failures = stats['failures']
-            
-            # Need at least 10 attempts to evaluate equilibrium
-            if attempts < 10:
-                continue
-            
-            # Calculate current success rate
-            current_success_rate = successes / attempts if attempts > 0 else 0.0
-            
-            # Check if no single module change improves the success rate by more than 5%
-            # We simulate changes by considering what happens
+        is_equilibrium, equilibrium_pairs = self.interaction_tracker.detect_nash

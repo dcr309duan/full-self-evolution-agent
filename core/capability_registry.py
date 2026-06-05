@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import json
 from datetime import datetime
 from pathlib import Path
@@ -270,6 +270,52 @@ class CapabilityRegistry:
     def count(self) -> int:
         """Get the number of registered capabilities."""
         return len(self._capabilities)
+
+    def consolidate_duplicates(self, base_name: str, status: str = "enabled") -> int:
+        """
+        Consolidate duplicate entries with a common base name into a single tracked capability.
+        
+        This method scans all registered capabilities for entries whose names start with
+        the given base_name (case-insensitive), removes all duplicates, and registers a single
+        consolidated entry with the specified status.
+        
+        Args:
+            base_name: The base name to match (e.g., '[GAME_THEORY]').
+            status: The status for the consolidated entry ('enabled' or 'disabled').
+            
+        Returns:
+            The number of duplicate entries removed.
+        """
+        # Normalize base name for matching
+        base_lower = base_name.lower()
+        duplicates: List[str] = []
+        
+        # Find all entries that match the base name (case-insensitive)
+        for name in list(self._capabilities.keys()):
+            if name.lower().startswith(base_lower):
+                duplicates.append(name)
+        
+        if not duplicates:
+            return 0
+        
+        # Remove all duplicate entries
+        removed_count = 0
+        for dup_name in duplicates:
+            del self._capabilities[dup_name]
+            removed_count += 1
+        
+        # Register a single consolidated entry with proper status
+        enabled = status.lower() == "enabled"
+        self._capabilities[base_name] = {
+            "name": base_name,
+            "enabled": enabled,
+            "last_benchmarked": None,
+            "benchmark_score": None,
+            "age": 0.0
+        }
+        
+        self._save()
+        return removed_count
 
     def __contains__(self, name: str) -> bool:
         """Check if a capability exists in the registry."""

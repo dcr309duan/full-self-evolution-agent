@@ -189,6 +189,65 @@ class TestNashEquilibriumMinimal(unittest.TestCase):
         self.assertTrue(is_nash_equilibrium(original_modules) or 
                        not is_nash_equilibrium(original_modules))
 
+    def test_minimal_integration_nash_scenario(self):
+        """Minimal integration test: (1) Sets up mock dependency graph with 3 modules,
+        (2) Simulates Nash equilibrium where no single module change improves system,
+        (3) Verifies detector identifies this state, (4) Tests coordinated forcer generates appropriate multi-module changes."""
+        # (1) Set up mock dependency graph with 3 modules
+        mock_graph = {
+            "mod_1": {"score": 0.80, "interactions": {"mod_2": -0.15, "mod_3": -0.10}},
+            "mod_2": {"score": 0.80, "interactions": {"mod_1": -0.15, "mod_3": -0.10}},
+            "mod_3": {"score": 0.80, "interactions": {"mod_1": -0.10, "mod_2": -0.10}}
+        }
+        
+        # (2) Simulate Nash equilibrium scenario - no single module change improves system
+        # All modules have equal scores and balanced negative interactions
+        # Changing any single module's score would break the balance and reduce overall performance
+        self.assertTrue(is_nash_equilibrium(mock_graph))
+        
+        # Verify that changing any single module would not improve the system
+        for mod_name in mock_graph:
+            # Try increasing score
+            test_graph = {
+                "mod_1": {"score": 0.80, "interactions": {"mod_2": -0.15, "mod_3": -0.10}},
+                "mod_2": {"score": 0.80, "interactions": {"mod_1": -0.15, "mod_3": -0.10}},
+                "mod_3": {"score": 0.80, "interactions": {"mod_1": -0.10, "mod_2": -0.10}}
+            }
+            test_graph[mod_name]["score"] = 0.85
+            # Higher score with same interactions would break equilibrium
+            self.assertFalse(is_nash_equilibrium(test_graph))
+            
+            # Try decreasing score
+            test_graph[mod_name]["score"] = 0.75
+            self.assertFalse(is_nash_equilibrium(test_graph))
+        
+        # (3) Verify detector identifies this state as equilibrium
+        self.assertTrue(is_nash_equilibrium(mock_graph))
+        
+        # (4) Test coordinated forcer generates appropriate multi-module changes
+        plan = force_multi_module_change(mock_graph)
+        
+        # Verify plan is valid
+        self.assertIsInstance(plan, dict)
+        self.assertEqual(len(plan), 3)
+        
+        # Verify all modules are included
+        for mod_name in mock_graph:
+            self.assertIn(mod_name, plan)
+        
+        # Verify changes are coordinated and maintain balance
+        scores = [plan[m]["new_score"] for m in mock_graph]
+        score_range = max(scores) - min(scores)
+        self.assertLessEqual(score_range, 0.1)  # Scores should be very close
+        
+        # Verify each change is valid
+        for mod_name, change in plan.items():
+            self.assertIn("module", change)
+            self.assertEqual(change["module"], mod_name)
+            self.assertIn("new_score", change)
+            self.assertGreaterEqual(change["new_score"], 0)
+            self.assertLessEqual(change["new_score"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

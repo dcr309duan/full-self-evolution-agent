@@ -265,6 +265,39 @@ class ModuleRegistry:
         self._modules.clear()
         self._loaded.clear()
         self._initialized = False
+    
+    def check_module_registry_interface(self) -> bool:
+        """Check if module_registry exists and has the required interface for tracking module interactions.
+        
+        The required interface includes:
+        - register method
+        - get_interaction_data method
+        - update_interaction_data method
+        - is_registered method
+        - get_registered_modules method
+        
+        Returns:
+            True if the registry has the required interface, False otherwise
+        """
+        required_methods = [
+            'register',
+            'get_interaction_data',
+            'update_interaction_data',
+            'is_registered',
+            'get_registered_modules'
+        ]
+        
+        for method_name in required_methods:
+            if not hasattr(self, method_name):
+                logger.error(f"ModuleRegistry missing required method: {method_name}")
+                return False
+            method = getattr(self, method_name)
+            if not callable(method):
+                logger.error(f"ModuleRegistry attribute '{method_name}' is not callable")
+                return False
+        
+        logger.info("ModuleRegistry has the required interface for tracking module interactions")
+        return True
 
 
 # Global registry instance
@@ -355,3 +388,13 @@ def update_module_interaction_data(module_name: str, interaction_data: Dict[str,
     """
     registry = get_registry()
     registry.update_interaction_data(module_name, interaction_data)
+
+
+def check_registry_interface() -> bool:
+    """Convenience function to check if the global registry has the required interface.
+    
+    Returns:
+        True if the registry has the required interface, False otherwise
+    """
+    registry = get_registry()
+    return registry.check_module_registry_interface()
