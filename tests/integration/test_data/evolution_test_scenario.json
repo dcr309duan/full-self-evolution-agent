@@ -1,0 +1,121 @@
+{
+  "scenario_name": "Evolution Test Scenario",
+  "description": "Minimal realistic codebase with interdependent modules, mutation goals, failure injection, and recovery checks.",
+  "codebase": {
+    "modules": {
+      "data_processor": {
+        "file": "data_processor.py",
+        "dependencies": ["config_manager", "logger"],
+        "code": "class DataProcessor:\n    def __init__(self, config):\n        self.config = config\n    def process(self, data):\n        return [x * self.config['multiplier'] for x in data]"
+      },
+      "config_manager": {
+        "file": "config_manager.py",
+        "dependencies": [],
+        "code": "class ConfigManager:\n    def __init__(self):\n        self.config = {'multiplier': 2}\n    def get_config(self):\n        return self.config"
+      },
+      "logger": {
+        "file": "logger.py",
+        "dependencies": [],
+        "code": "class Logger:\n    def log(self, message):\n        print(f'LOG: {message}')"
+      },
+      "api_handler": {
+        "file": "api_handler.py",
+        "dependencies": ["data_processor", "logger"],
+        "code": "class APIHandler:\n    def __init__(self, processor, logger):\n        self.processor = processor\n        self.logger = logger\n    def handle_request(self, data):\n        result = self.processor.process(data)\n        self.logger.log('Processed request')\n        return result"
+      },
+      "main": {
+        "file": "main.py",
+        "dependencies": ["api_handler", "config_manager"],
+        "code": "from api_handler import APIHandler\nfrom config_manager import ConfigManager\n\nif __name__ == '__main__':\n    config_mgr = ConfigManager()\n    config = config_mgr.get_config()\n    handler = APIHandler(config)\n    result = handler.handle_request([1, 2, 3])\n    print(result)"
+      }
+    }
+  },
+  "goals": [
+    {
+      "id": "goal_1",
+      "description": "Change multiplier in config_manager to 3",
+      "target_module": "config_manager",
+      "mutation": {"type": "modify_value", "path": ["config", "multiplier"], "new_value": 3},
+      "trigger": "after_first_successful_request"
+    },
+    {
+      "id": "goal_2",
+      "description": "Add error handling in data_processor for non-numeric data",
+      "target_module": "data_processor",
+      "mutation": {"type": "add_code", "location": "process_method_start", "code": "if not all(isinstance(x, (int, float)) for x in data): raise ValueError('Non-numeric data')"},
+      "trigger": "after_goal_1_completion"
+    },
+    {
+      "id": "goal_3",
+      "description": "Introduce a new dependency 'cache' in api_handler",
+      "target_module": "api_handler",
+      "mutation": {"type": "add_import", "import": "from cache import Cache", "location": "top"},
+      "trigger": "after_goal_2_completion"
+    }
+  ],
+  "failure_injection_schedule": [
+    {
+      "id": "failure_1",
+      "operation": "import_module",
+      "module": "data_processor",
+      "stage": "during_goal_1_mutation",
+      "error": "ImportError: No module named 'data_processor'",
+      "expected_behavior": "System should catch ImportError, log error, and retry import after 2 seconds. If retry fails, abort goal and revert to previous state."
+    },
+    {
+      "id": "failure_2",
+      "operation": "write_file",
+      "module": "config_manager",
+      "stage": "during_goal_1_mutation",
+      "error": "IOError: Permission denied",
+      "expected_behavior": "System should catch IOError, log error, and attempt to write to backup location. If backup fails, abort goal and revert config to original."
+    },
+    {
+      "id": "failure_3",
+      "operation": "execute_code",
+      "module": "data_processor",
+      "stage": "during_goal_2_mutation",
+      "error": "SyntaxError: invalid syntax",
+      "expected_behavior": "System should catch SyntaxError, log error, and discard mutation. Goal should be marked as failed with reason 'syntax error'."
+    },
+    {
+      "id": "failure_4",
+      "operation": "resolve_dependency",
+      "module": "api_handler",
+      "stage": "during_goal_3_mutation",
+      "error": "ModuleNotFoundError: No module named 'cache'",
+      "expected_behavior": "System should catch ModuleNotFoundError, log error, and attempt to install missing dependency via pip. If installation fails, abort goal and revert api_handler to previous state."
+    }
+  ],
+  "post_recovery_consistency_checks": [
+    {
+      "id": "check_1",
+      "description": "After any failure, verify that config_manager's multiplier is still 2 (original value)",
+      "check_type": "value_equality",
+      "module": "config_manager",
+      "path": ["config", "multiplier"],
+      "expected_value": 2
+    },
+    {
+      "id": "check_2",
+      "description": "After any failure, verify that data_processor.process method still works with numeric data",
+      "check_type": "functional_test",
+      "module": "data_processor",
+      "test_input": [1, 2, 3],
+      "expected_output": [2, 4, 6]
+    },
+    {
+      "id": "check_3",
+      "description": "After any failure, verify that logger module is unchanged",
+      "check_type": "module_integrity",
+      "module": "logger",
+      "expected_hash": "sha256:abc123def456"
+    },
+    {
+      "id": "check_4",
+      "description": "After successful goal completion, verify that all modules are consistent (no circular dependencies, all imports resolve)",
+      "check_type": "dependency_graph_consistency",
+      "expected_result": "valid"
+    }
+  ]
+}

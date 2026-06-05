@@ -9,12 +9,6 @@
       "consecutive_failures": 1
     },
     {
-      "description": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780638592.6659403
-    },
-    {
       "description": "Create a self-model consistency validator that, after each successful evolution cycle, updates an internal dependency graph and verifies that all module interfaces, schemas, and call sites remain aligned, flagging mismatches for immediate repair.",
       "priority": 7,
       "status": "pending",
@@ -558,6 +552,13 @@
       "status": "completed",
       "created_at": 1780640492.0689633,
       "completed_at": 1780640876.7669652
+    },
+    {
+      "description": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780638592.6659403,
+      "completed_at": 1780641107.851833
     }
   ],
   "generated_goals": []

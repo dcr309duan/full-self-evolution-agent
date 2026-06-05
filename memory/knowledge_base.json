@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Create a comprehensive end-to-end integration test suite with three scenarios: (1) successful mutation → test → promote flow with valid data, (2) mutation with format mismatch that schema alignment layer catches, (3) mutation with partial schema compliance that triggers validation warnings. Each scenario should exercise the full pipeline including mutation engine, testing framework, schema alignment, and promotion logic.",
-      "timestamp": 1780635504.3882632,
-      "cycle": 68
-    },
-    {
-      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Rewrite test_end_to_end_pipeline.py to contain exactly three minimal, focused test scenarios: (1) Happy path: valid mutation output → schema validation passes → tests pass → promotion succeeds. (2) Format mismatch: mutation output has wrong schema version/format → schema alignment layer catches and blocks it → promotion fails with clear error. (3) Partial compliance: mutation output has valid schema but missing optional fields → schema alignment warns but allows (configurable). Each test should mock only the necessary components and assert clear outcomes.",
-      "timestamp": 1780635526.2672567,
-      "cycle": 69
-    },
-    {
-      "content": "Successfully modified tests/__init__.py to: Add a test runner function `run_pre_generation_tests()` that executes test_end_to_end_pipeline.py and returns success/failure status, so the evolution loop can call it before each generation.",
-      "timestamp": 1780635530.2984834,
-      "cycle": 69
-    },
-    {
-      "content": "Successfully modified config/evolution_config.py to: Add configuration options: PRE_GENERATION_TEST_SUITE_ENABLED (default True), PRE_GENERATION_TEST_TIMEOUT (default 30 seconds), PRE_GENERATION_TEST_ABORT_ON_FAILURE (default True).",
-      "timestamp": 1780635535.343937,
-      "cycle": 69
-    },
-    {
       "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Add test fixtures and helper functions: (a) mock mutation generator that produces test mutations with known schemas, (b) mock test runner that simulates test results, (c) schema alignment validator that can be configured to accept/reject based on format, (d) promotion tracker that logs whether mutations were promoted.",
       "timestamp": 1780635539.5981836,
       "cycle": 69
@@ -999,6 +979,26 @@
       "content": "Successfully modified system_config.json to: Add configuration parameters: FAILURE_LOG_MAX_ENTRIES=1000, PATTERN_MIN_OCCURRENCES=3 (minimum failures to form a pattern), RULE_AUTO_ACTIVATE=true, RULE_DECAY_DAYS=30 (rules without hits auto-archive), ENABLE_FORBIDDEN_SPACE=true.",
       "timestamp": 1780640876.743321,
       "cycle": 95
+    },
+    {
+      "content": "Successfully modified tests/integration/test_data/evolution_test_scenario.json to: Create test scenario configuration that defines: (1) A minimal but realistic codebase structure with 3-5 interdependent modules, (2) Predefined goals that trigger mutations in specific modules, (3) Failure injection schedule (which operations to fail, at what stage, with what error), (4) Expected system behavior for each failure scenario, (5) Post-recovery consistency checks.",
+      "timestamp": 1780641012.1246743,
+      "cycle": 96
+    },
+    {
+      "content": "Successfully modified tests/integration/__init__.py to: Update the integration test package to export the new test modules and ensure proper test discovery.",
+      "timestamp": 1780641015.8829696,
+      "cycle": 96
+    },
+    {
+      "content": "Successfully modified tests/integration/test_evolution_loop_file_io_failures.py to: Create a focused test for file I/O failure scenarios: (1) Permission denied on critical files, (2) Concurrent write conflicts, (3) Corrupted file reads, (4) Network filesystem timeouts, (5) Partial write failures, (6) Verifies atomic write guarantees and rollback correctness.",
+      "timestamp": 1780641080.314844,
+      "cycle": 96
+    },
+    {
+      "content": "Successfully modified system_config.json to: Add configuration for integration test scenarios: ENABLE_FAILURE_SIMULATION=true, FAILURE_SIMULATION_SEED=42 (for reproducibility), INTEGRATION_TEST_TIMEOUT=300, MAX_FAILURE_INJECTIONS_PER_TEST=10, RECOVERY_VALIDATION_LEVEL='strict'.",
+      "timestamp": 1780641085.050602,
+      "cycle": 96
     }
   ],
   "learned_patterns": [],
@@ -1287,6 +1287,26 @@
       "approach": "modify integration_test_suite.py: Add an end-to-end integration test 'test_failure_pattern_learning_loop' that: (1) creates a scenario guaranteed to fail (e.g., mutation that introduces an import error), (2) verifies the failure is recorded, (3) runs the miner, (4) verifies a rule is generated, (5) attempts a similar mutation and verifies it's blocked.",
       "reason": "Safety check failed",
       "timestamp": 1780640872.7186103
+    },
+    {
+      "approach": "modify tests/integration/test_full_evolution_loop_with_failures.py: Create comprehensive end-to-end integration test that: (1) Sets up a realistic codebase with multiple interdependent modules, (2) Runs the full evolution loop (goal selection → mutation → validation → test → promote/rollback), (3) Injects simulated file I/O failures (permission errors, disk full, concurrent write conflicts) at strategic points, (4) Injects resource exhaustion scenarios (memory limits, CPU throttling, file descriptor exhaustion), (5) Verifies the system correctly handles each failure type, (6) Validates that rollback mechanisms trigger appropriately, (7) Ensures the system maintains consistency after recovery.",
+      "reason": "Syntax error: invalid syntax (<unknown>, line 526)",
+      "timestamp": 1780640970.4305787
+    },
+    {
+      "approach": "modify tests/integration/failure_simulation_harness.py: Build a failure simulation harness that provides: (1) A mock filesystem layer that can be configured to fail on specific operations (read, write, delete) with configurable error types, (2) Resource exhaustion simulators that can limit available memory, CPU time, or file descriptors, (3) A state tracker that records system behavior during failures, (4) A recovery validator that checks system integrity after failure handling, (5) Configurable failure injection points mapped to the evolution loop stages.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 449)",
+      "timestamp": 1780640996.0247521
+    },
+    {
+      "approach": "modify tests/integration/test_evolution_loop_resource_exhaustion.py: Create a focused test that specifically validates system behavior under resource exhaustion: (1) Memory exhaustion during mutation generation, (2) Disk space exhaustion during file writes, (3) File descriptor leaks during test execution, (4) CPU throttling during validation phase, (5) Verifies graceful degradation and recovery.",
+      "reason": "Safety check failed",
+      "timestamp": 1780641050.2813585
+    },
+    {
+      "approach": "modify docs/integration_test_guide.md: Document the integration test framework including: (1) How to add new failure scenarios, (2) How to interpret test results, (3) How to extend the simulation harness, (4) Expected coverage metrics, (5) Troubleshooting guide for flaky tests.",
+      "reason": "Syntax error: invalid character '├' (U+251C) (<unknown>, line 89)",
+      "timestamp": 1780641107.829151
     }
   ],
   "successful_strategies": [
@@ -4069,6 +4089,31 @@
       "strategy": "mutation:hybrid(memoized_is_prime,quicksort)",
       "outcome": "Created sorted_prime_list, score=0.4",
       "timestamp": 1780640881.183524
+    },
+    {
+      "strategy": "modify tests/integration/test_data/evolution_test_scenario.json: Create test scenario configuration that defines: (1) A minimal but realistic codebase structure with 3-5 interdependent modules, (2) Predefined goals that trigger mutations in specific modules, (3) Failure injection schedule (which operations to fail, at what stage, with what error), (4) Expected system behavior for each failure scenario, (5) Post-recovery consistency checks.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641012.1104352
+    },
+    {
+      "strategy": "modify tests/integration/__init__.py: Update the integration test package to export the new test modules and ensure proper test discovery.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641015.8644485
+    },
+    {
+      "strategy": "modify tests/integration/test_evolution_loop_file_io_failures.py: Create a focused test for file I/O failure scenarios: (1) Permission denied on critical files, (2) Concurrent write conflicts, (3) Corrupted file reads, (4) Network filesystem timeouts, (5) Partial write failures, (6) Verifies atomic write guarantees and rollback correctness.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641080.3016562
+    },
+    {
+      "strategy": "modify system_config.json: Add configuration for integration test scenarios: ENABLE_FAILURE_SIMULATION=true, FAILURE_SIMULATION_SEED=42 (for reproducibility), INTEGRATION_TEST_TIMEOUT=300, MAX_FAILURE_INJECTIONS_PER_TEST=10, RECOVERY_VALIDATION_LEVEL='strict'.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641085.0386314
+    },
+    {
+      "strategy": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
+      "outcome": "4/8 steps succeeded",
+      "timestamp": 1780641107.8430088
     }
   ],
   "capabilities_developed": []
