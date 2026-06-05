@@ -263,6 +263,30 @@ class SimulationResult(BaseModel):
         return v
 
 
+class FsAbstractionStats(BaseModel):
+    """Schema for filesystem abstraction usage statistics."""
+    atomic_writes: int = Field(
+        default=0,
+        ge=0,
+        description="Number of atomic write operations performed."
+    )
+    retries_triggered: int = Field(
+        default=0,
+        ge=0,
+        description="Number of retries triggered during filesystem operations."
+    )
+    permission_failures: int = Field(
+        default=0,
+        ge=0,
+        description="Number of permission failures caught during filesystem operations."
+    )
+    average_write_latency: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Average write latency in milliseconds."
+    )
+
+
 class SchemaAlignmentLayer:
     """
     Schema alignment layer that integrates simulation result fields
@@ -273,6 +297,7 @@ class SchemaAlignmentLayer:
         self.base_schema = base_schema or {}
         self.simulation_fields = SimulationResult.schema()
         self.goal_triage_fields = GoalTriageResults.schema()
+        self.fs_abstraction_fields = FsAbstractionStats.schema()
 
     def align_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -352,12 +377,22 @@ class SchemaAlignmentLayer:
                     },
                     "required": ["goals_triaged", "goals_flagged_stale", "goals_decomposed", "goals_archived"],
                     "description": "Triage results for goals in this reflection cycle."
+                },
+                "fs_abstraction_stats": {
+                    "type": "object",
+                    "properties": {
+                        "atomic_writes": self.fs_abstraction_fields["properties"]["atomic_writes"],
+                        "retries_triggered": self.fs_abstraction_fields["properties"]["retries_triggered"],
+                        "permission_failures": self.fs_abstraction_fields["properties"]["permission_failures"],
+                        "average_write_latency": self.fs_abstraction_fields["properties"]["average_write_latency"]
+                    },
+                    "description": "Filesystem abstraction usage statistics for infrastructure health monitoring."
                 }
             }
         )
         # Ensure required fields are present
         required = aligned.get("required", [])
-        for field in ["simulation_prediction", "simulation_confidence", "goal_triage_results"]:
+        for field in ["simulation_prediction", "simulation_confidence", "goal_triage_results", "fs_abstraction_stats"]:
             if field not in required:
                 required.append(field)
         aligned["required"] = required
@@ -392,3 +427,18 @@ class SchemaAlignmentLayer:
             ValidationError: If data does not conform to the schema.
         """
         return GoalTriageResults(**data)
+
+    def validate_fs_abstraction_data(self, data: Dict[str, Any]) -> FsAbstractionStats:
+        """
+        Validate and return a FsAbstractionStats instance from raw data.
+
+        Args:
+            data: Dictionary containing filesystem abstraction statistics.
+
+        Returns:
+            FsAbstractionStats instance if validation passes.
+
+        Raises:
+            ValidationError: If data does not conform to the schema.
+        """
+        return FsAbstractionStats(**data)

@@ -15,6 +15,7 @@ from core.simulation_engine import simulate_change, SimulationResult
 from core.goal_triage import triage_pending_goals
 from core.fitness_evaluator import FitnessEvaluator
 from core.curiosity_engine import CuriosityEngine
+from core.fs_abstraction import FileSystemAbstraction
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -57,6 +58,13 @@ if __name__ == '__main__':
     unittest.main()
 """
 
+# Configuration for retry parameters
+RETRY_CONFIG = {
+    "max_retries": 3,
+    "base_delay": 1.0,
+    "max_delay": 10.0
+}
+
 # Track simulation accuracy over time
 simulation_history: List[Dict[str, Any]] = []
 
@@ -69,6 +77,9 @@ curiosity_engine = CuriosityEngine()
 # Cycle counter for curiosity engine interval
 cycle_counter = 0
 CURIOSITY_INTERVAL = 5  # Configurable interval for curiosity engine activation
+
+# File system abstraction instance
+fs_abstraction = FileSystemAbstraction()
 
 def update_simulation_accuracy(sim_result: SimulationResult, actual_test_result: Dict[str, Any]) -> None:
     """Update simulation accuracy tracking based on actual test results."""
@@ -176,9 +187,8 @@ def verify_prerequisites(goal: Dict[str, Any], dependency_graph: Dict[str, Any])
                     "reason": f"Required capability '{prereq_value}' is not available"
                 })
         elif prereq_type == "file":
-            # Check if the file exists
-            file_path = Path(prereq_value)
-            if not file_path.exists():
+            # Check if the file exists using fs_abstraction
+            if not fs_abstraction.file_exists(prereq_value):
                 unmet_prerequisites.append({
                     "prerequisite": prereq_name,
                     "reason": f"Required file '{prereq_value}' does not exist"
@@ -269,8 +279,8 @@ def run_smoke_test() -> Dict[str, Any]:
         # Run curiosity engine cycle
         run_curiosity_cycle()
         
-        # Step 1: Create isolated environment
-        temp_dir = tempfile.mkdtemp(prefix="smoke_test_")
+        # Step 1: Create isolated environment using fs_abstraction
+        temp_dir = fs_abstraction.create_temp_directory(prefix="smoke_test_")
         logs.append({
             "step": 1,
             "action": "create_isolated_environment",
@@ -278,11 +288,11 @@ def run_smoke_test() -> Dict[str, Any]:
             "details": f"Created temporary directory: {temp_dir}"
         })
 
-        # Write minimal counter.py and test file
+        # Write minimal counter.py and test file using fs_abstraction
         counter_path = Path(temp_dir) / "counter.py"
         test_path = Path(temp_dir) / "test_counter.py"
-        counter_path.write_text(MINIMAL_COUNTER_PY)
-        test_path.write_text(MINIMAL_TEST_PY)
+        fs_abstraction.write_file(str(counter_path), MINIMAL_COUNTER_PY)
+        fs_abstraction.write_file(str(test_path), MINIMAL_TEST_PY)
         logs.append({
             "step": 1.1,
             "action": "write_source_files",
@@ -357,8 +367,8 @@ def run_smoke_test() -> Dict[str, Any]:
             "details": "All prerequisites are met"
         })
 
-        # Step 3: Run simulation before mutation
-        original_code = counter_path.read_text()
+        # Step 3: Run simulation before mutation using fs_abstraction
+        original_code = fs_abstraction.read_file(str(counter_path))
         sim_result = simulate_change(original_code, selected_goal)
         simulation_confidence = sim_result.confidence
         logs.append({
@@ -389,8 +399,8 @@ def run_smoke_test() -> Dict[str, Any]:
             }
             return result
 
-        # Step 3.5: Run fitness evaluator before mutation
-        pre_mutation_fitness = fitness_evaluator.run_fitness_test(counter_path)
+        # Step 3.5: Run fitness evaluator before mutation using fs_abstraction
+        pre_mutation_fitness = fitness_evaluator.run_fitness_test(str(counter_path))
         logs.append({
             "step": 2.7,
             "action": "run_fitness_evaluation_pre_mutation",
@@ -415,8 +425,8 @@ def run_smoke_test() -> Dict[str, Any]:
             "details": f"Mutation applied to {counter_path}"
         })
 
-        # Write mutated code back to file
-        counter_path.write_text(mutated_code)
+        # Write mutated code back to file using fs_abstraction
+        fs_abstraction.write_file(str(counter_path), mutated_code)
         logs.append({
             "step": 3.1,
             "action": "write_mutated_code",
@@ -424,8 +434,8 @@ def run_smoke_test() -> Dict[str, Any]:
             "details": "Mutated code written back to counter.py"
         })
 
-        # Step 4.5: Run fitness evaluator after mutation
-        post_mutation_fitness = fitness_evaluator.run_fitness_test(counter_path)
+        # Step 4.5: Run fitness evaluator after mutation using fs_abstraction
+        post_mutation_fitness = fitness_evaluator.run_fitness_test(str(counter_path))
         logs.append({
             "step": 3.5,
             "action": "run_fitness_evaluation_post_mutation",
@@ -452,8 +462,8 @@ def run_smoke_test() -> Dict[str, Any]:
                     "details": f"Fitness score dropped by {fitness_drop*100:.1f}% (>20%). Rolling back mutation."
                 })
                 
-                # Rollback the mutation by restoring original code
-                counter_path.write_text(original_code)
+                # Rollback the mutation by restoring original code using fs_abstraction
+                fs_abstraction.write_file(str(counter_path), original_code)
                 logs.append({
                     "step": 3.7,
                     "action": "rollback_mutation",
@@ -583,9 +593,9 @@ def run_smoke_test() -> Dict[str, Any]:
         }
 
     finally:
-        # Cleanup temporary directory
-        if temp_dir and Path(temp_dir).exists():
-            shutil.rmtree(temp_dir)
+        # Cleanup temporary directory using fs_abstraction
+        if temp_dir and fs_abstraction.directory_exists(temp_dir):
+            fs_abstraction.remove_directory(temp_dir)
             logs.append({
                 "step": "cleanup",
                 "action": "remove_temp_directory",

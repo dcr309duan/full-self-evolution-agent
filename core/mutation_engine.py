@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.llm import call_deepseek, evaluate_code
 from core.memory import add_insight, record_success, record_failure, get_knowledge_base, save_knowledge_base
 from core.self_modify import validate_python, safe_execute
+from core.fs_abstraction import FileSystemAbstraction, get_fs
 from config import PROJECT_ROOT, MEMORY_DIR
 
 
@@ -42,11 +43,12 @@ def get_function_pool():
     """Get all available functions for mutation."""
     pool = list(SEED_FUNCTIONS)
     mutations_path = os.path.join(MEMORY_DIR, "successful_mutations.json")
+    fs = get_fs()
     try:
-        with open(mutations_path, 'r') as f:
-            saved = json.load(f)
-            pool.extend(saved)
-    except (FileNotFoundError, json.JSONDecodeError):
+        content = fs.read_file(mutations_path)
+        saved = json.loads(content)
+        pool.extend(saved)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
         pass
     return pool
 
@@ -255,37 +257,51 @@ def run_mutation_cycle(num_mutations=3):
 
 
 def save_successful_mutation(name, code):
-    """Save a successful mutation to the pool."""
+    """Save a successful mutation to the pool using atomic writes."""
     path = os.path.join(MEMORY_DIR, "successful_mutations.json")
+    fs = get_fs()
+    
+    # Check write permission before attempting mutation
+    if not fs.check_permission(path, 'write'):
+        print(f"Warning: No write permission for {path}, skipping mutation save")
+        return
+    
     try:
-        with open(path, 'r') as f:
-            mutations = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        content = fs.read_file(path)
+        mutations = json.loads(content)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
         mutations = []
     
     mutations.append({"name": name, "code": code, "created": time.time()})
     if len(mutations) > 50:
         mutations = mutations[-50:]
     
-    with open(path, 'w') as f:
-        json.dump(mutations, f, indent=2, ensure_ascii=False)
+    # Use atomic write to prevent partial file states
+    fs.atomic_write(path, json.dumps(mutations, indent=2, ensure_ascii=False))
 
 
 def log_mutations(results):
-    """Log mutation results."""
+    """Log mutation results using atomic writes."""
     path = os.path.join(MEMORY_DIR, "mutation_log.json")
+    fs = get_fs()
+    
+    # Check write permission before attempting mutation
+    if not fs.check_permission(path, 'write'):
+        print(f"Warning: No write permission for {path}, skipping mutation log")
+        return
+    
     try:
-        with open(path, 'r') as f:
-            log = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        content = fs.read_file(path)
+        log = json.loads(content)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
         log = []
     
     log.append({"timestamp": time.time(), "results": results})
     if len(log) > 100:
         log = log[-100:]
     
-    with open(path, 'w') as f:
-        json.dump(log, f, indent=2, ensure_ascii=False)
+    # Use atomic write to prevent partial file states
+    fs.atomic_write(path, json.dumps(log, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

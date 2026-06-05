@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', or 'curiosity'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', or 'infrastructure_hardening'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -46,6 +46,8 @@ class SimulationMetrics:
     accuracy: float  # 0.0 to 1.0
     has_unexpected_side_effects: bool = False
     coverage: float = 0.0  # 0.0 to 1.0, how much of the module is covered
+    fs_abstraction_retry_rate: float = 0.0  # 0.0 to 1.0, retry rate for fs_abstraction
+    permission_failure_spike: bool = False  # Whether permission failures have spiked
 
 
 # Global registries for goals and knowledge
@@ -57,7 +59,9 @@ def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
     coverage_weight: float = 0.5,
-    curiosity_goals: Optional[List[Goal]] = None
+    curiosity_goals: Optional[List[Goal]] = None,
+    retry_rate_threshold: float = 0.3,
+    permission_failure_threshold: int = 5
 ) -> List[Goal]:
     """Generate goals based on simulation metrics, knowledge base fitness scores, and curiosity engine input.
 
@@ -66,6 +70,8 @@ def generate_goals(
         accuracy_threshold: Threshold below which accuracy goals are generated.
         coverage_weight: Weight for coverage in priority calculation (0-1).
         curiosity_goals: Optional list of high-priority goals from the curiosity engine.
+        retry_rate_threshold: Threshold for fs_abstraction retry rate to trigger infrastructure hardening.
+        permission_failure_threshold: Number of permission failures to trigger infrastructure hardening.
 
     Returns:
         List of generated goals, sorted by priority (highest first).
@@ -113,6 +119,38 @@ def generate_goals(
                 "Generated dependency tracking goal for %s (side effects detected)",
                 metrics.module
             )
+
+        # Generate infrastructure hardening goals for fs_abstraction
+        if metrics.module == "fs_abstraction":
+            if metrics.fs_abstraction_retry_rate > retry_rate_threshold:
+                goal = Goal(
+                    description=f"Improve fs_abstraction resilience: retry rate {metrics.fs_abstraction_retry_rate:.2f} exceeds threshold {retry_rate_threshold}",
+                    priority=GoalPriority.HIGH,
+                    module=metrics.module,
+                    goal_type="infrastructure_hardening",
+                    source="fitness",
+                    tags=["infrastructure_hardening", "retry_rate"]
+                )
+                goals.append(goal)
+                logger.debug(
+                    "Generated infrastructure hardening goal for %s (retry rate=%.2f, threshold=%.2f)",
+                    metrics.module, metrics.fs_abstraction_retry_rate, retry_rate_threshold
+                )
+            
+            if metrics.permission_failure_spike:
+                goal = Goal(
+                    description=f"Improve fs_abstraction permission handling: permission failures spiked",
+                    priority=GoalPriority.HIGH,
+                    module=metrics.module,
+                    goal_type="infrastructure_hardening",
+                    source="fitness",
+                    tags=["infrastructure_hardening", "permission_failure"]
+                )
+                goals.append(goal)
+                logger.debug(
+                    "Generated infrastructure hardening goal for %s (permission failure spike detected)",
+                    metrics.module
+                )
 
     # Sort goals by priority (CRITICAL first, then HIGH, MEDIUM, LOW)
     # Within same priority, curiosity goals come before routine goals
@@ -207,7 +245,9 @@ def generate_goals_from_report(
     report: Dict,
     accuracy_threshold: float = 0.8,
     coverage_weight: float = 0.5,
-    curiosity_goals: Optional[List[Goal]] = None
+    curiosity_goals: Optional[List[Goal]] = None,
+    retry_rate_threshold: float = 0.3,
+    permission_failure_threshold: int = 5
 ) -> List[Goal]:
     """Generate goals from a simulation report dictionary.
 
@@ -218,7 +258,9 @@ def generate_goals_from_report(
                 "name": "module_name",
                 "accuracy": 0.95,
                 "has_unexpected_side_effects": False,
-                "coverage": 0.8
+                "coverage": 0.8,
+                "fs_abstraction_retry_rate": 0.0,
+                "permission_failure_spike": False
             },
             ...
         ]
@@ -229,6 +271,8 @@ def generate_goals_from_report(
         accuracy_threshold: Threshold for accuracy goals.
         coverage_weight: Weight for coverage in priority.
         curiosity_goals: Optional list of high-priority goals from the curiosity engine.
+        retry_rate_threshold: Threshold for fs_abstraction retry rate.
+        permission_failure_threshold: Threshold for permission failures.
 
     Returns:
         List of generated goals.
@@ -241,11 +285,13 @@ def generate_goals_from_report(
             has_unexpected_side_effects=module_data.get(
                 "has_unexpected_side_effects", False
             ),
-            coverage=module_data.get("coverage", 0.0)
+            coverage=module_data.get("coverage", 0.0),
+            fs_abstraction_retry_rate=module_data.get("fs_abstraction_retry_rate", 0.0),
+            permission_failure_spike=module_data.get("permission_failure_spike", False)
         )
         metrics_list.append(metrics)
 
-    return generate_goals(metrics_list, accuracy_threshold, coverage_weight, curiosity_goals)
+    return generate_goals(metrics_list, accuracy_threshold, coverage_weight, curiosity_goals, retry_rate_threshold, permission_failure_threshold)
 
 
 def prioritize_goals(goals: List[Goal]) -> List[Goal]:
@@ -363,6 +409,48 @@ def generate_sub_goals(
             # Default to sequential for unknown strategies
             implement_goal.dependencies.append(identify_goal.description)
             sub_goals = [identify_goal, implement_goal]
+    elif parent_goal.goal_type == "infrastructure_hardening":
+        # Break infrastructure hardening into smaller steps
+        diagnose_goal = Goal(
+            description=f"Diagnose infrastructure issues in {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="infrastructure_hardening",
+            source=parent_goal.source
+        )
+        implement_goal = Goal(
+            description=f"Implement hardening fixes for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="infrastructure_hardening",
+            source=parent_goal.source
+        )
+        test_goal = Goal(
+            description=f"Test hardening improvements for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="infrastructure_hardening",
+            source=parent_goal.source
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: diagnose -> implement -> test
+            implement_goal.dependencies.append(diagnose_goal.description)
+            test_goal.dependencies.append(implement_goal.description)
+            sub_goals = [diagnose_goal, implement_goal, test_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [diagnose_goal, implement_goal, test_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: diagnose is independent, implement depends on diagnose, test depends on implement
+            implement_goal.dependencies.append(diagnose_goal.description)
+            test_goal.dependencies.append(implement_goal.description)
+            sub_goals = [diagnose_goal, implement_goal, test_goal]
+        else:
+            # Default to sequential for unknown strategies
+            implement_goal.dependencies.append(diagnose_goal.description)
+            test_goal.dependencies.append(implement_goal.description)
+            sub_goals = [diagnose_goal, implement_goal, test_goal]
     else:
         # Generic breakdown for unknown goal types
         research_goal = Goal(
@@ -496,6 +584,11 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
         fitness_key = f"fitness_score:{goal.module}"
         knowledge_base[fitness_key] = "1.0"  # Mark as resolved
     
+    # If this was an infrastructure hardening goal, store the improvement
+    if "infrastructure_hardening" in goal.tags:
+        hardening_key = f"hardening:{goal.module}:{goal.description}"
+        knowledge_base[hardening_key] = f"Improved: {lesson}"
+    
     logger.info(
         "Archived goal '%s' with lesson: %s",
         goal.description, lesson
@@ -523,6 +616,14 @@ if __name__ == "__main__":
             accuracy=0.75,
             has_unexpected_side_effects=True,
             coverage=0.5
+        ),
+        SimulationMetrics(
+            module="fs_abstraction",
+            accuracy=0.85,
+            has_unexpected_side_effects=False,
+            coverage=0.7,
+            fs_abstraction_retry_rate=0.45,
+            permission_failure_spike=True
         ),
     ]
 
@@ -554,12 +655,12 @@ if __name__ == "__main__":
     generated = generate_goals(example_metrics, curiosity_goals=curiosity_goals)
     print("Generated goals:")
     for goal in generated:
-        print(f"  {goal} (source: {goal.source})")
+        print(f"  {goal} (source: {goal.source}, type: {goal.goal_type})")
 
     print("\nPrioritized goals:")
     prioritized = prioritize_goals(generated)
     for goal in prioritized:
-        print(f"  {goal} (source: {goal.source})")
+        print(f"  {goal} (source: {goal.source}, type: {goal.goal_type})")
 
     # Test sub-goal generation with different strategies
     print("\nSub-goals for first goal (sequential):")
