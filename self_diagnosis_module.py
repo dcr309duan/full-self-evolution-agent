@@ -1,20 +1,117 @@
 import logging
 from collections import defaultdict
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+class PerformanceMonitor:
+    """
+    Tracks performance metrics and correlates them with failure patterns.
+    """
+    
+    def __init__(self):
+        self._performance_data: Dict[str, List[Tuple[datetime, float]]] = defaultdict(list)
+        self._failure_performance_correlations: Dict[str, Dict] = {}
+        
+    def record_performance_metric(self, module_name: str, throughput: float) -> None:
+        """Record a performance metric for a module."""
+        self._performance_data[module_name].append((datetime.now(), throughput))
+        logger.debug(f"Recorded performance metric for module {module_name}: {throughput}")
+        
+    def get_performance_trend(self, module_name: str, time_window_hours: int = 24) -> Optional[float]:
+        """
+        Get the performance trend for a module over a time window.
+        Returns the average throughput or None if no data.
+        """
+        if module_name not in self._performance_data:
+            return None
+            
+        cutoff = datetime.now() - timedelta(hours=time_window_hours)
+        recent_data = [(t, v) for t, v in self._performance_data[module_name] if t >= cutoff]
+        
+        if not recent_data:
+            return None
+            
+        return sum(v for _, v in recent_data) / len(recent_data)
+    
+    def correlate_failure_with_performance(self, module_name: str, failure_type: str, 
+                                          before_window_hours: int = 1, after_window_hours: int = 1) -> Dict:
+        """
+        Correlate a failure event with performance changes.
+        Returns correlation data including throughput change percentage.
+        """
+        # Get performance before failure
+        before_cutoff = datetime.now() - timedelta(hours=before_window_hours)
+        before_data = [(t, v) for t, v in self._performance_data.get(module_name, []) 
+                      if before_cutoff <= t <= datetime.now()]
+        
+        # Get performance after failure (if available)
+        after_data = [(t, v) for t, v in self._performance_data.get(module_name, [])
+                     if datetime.now() <= t <= datetime.now() + timedelta(hours=after_window_hours)]
+        
+        correlation = {
+            "module": module_name,
+            "failure_type": failure_type,
+            "timestamp": datetime.now(),
+            "before_throughput": sum(v for _, v in before_data) / len(before_data) if before_data else None,
+            "after_throughput": sum(v for _, v in after_data) / len(after_data) if after_data else None,
+            "throughput_change_pct": None
+        }
+        
+        if correlation["before_throughput"] and correlation["after_throughput"]:
+            change = ((correlation["after_throughput"] - correlation["before_throughput"]) 
+                     / correlation["before_throughput"]) * 100
+            correlation["throughput_change_pct"] = round(change, 2)
+            
+        # Store correlation
+        key = f"{module_name}:{failure_type}"
+        if key not in self._failure_performance_correlations:
+            self._failure_performance_correlations[key] = []
+        self._failure_performance_correlations[key].append(correlation)
+        
+        return correlation
+    
+    def get_performance_impact_summary(self, module_name: str = None) -> List[Dict]:
+        """
+        Get summary of performance impacts correlated with failures.
+        """
+        summaries = []
+        
+        for key, correlations in self._failure_performance_correlations.items():
+            mod, fail_type = key.split(":")
+            if module_name and mod != module_name:
+                continue
+                
+            avg_change = sum(c["throughput_change_pct"] for c in correlations 
+                           if c["throughput_change_pct"] is not None)
+            count_with_data = sum(1 for c in correlations if c["throughput_change_pct"] is not None)
+            
+            if count_with_data > 0:
+                summary = {
+                    "module": mod,
+                    "failure_type": fail_type,
+                    "correlation_count": len(correlations),
+                    "avg_throughput_change_pct": round(avg_change / count_with_data, 2),
+                    "last_correlation": correlations[-1]
+                }
+                summaries.append(summary)
+                
+        return sorted(summaries, key=lambda x: x["correlation_count"], reverse=True)
+
 
 class FragilityHotspotMiner:
     """
     Tracks module pairs that are becoming hotspots over time,
     detects trends, and prioritizes refactoring goals.
+    Integrated with performance monitoring for correlation analysis.
     """
 
     def __init__(self, recurrence_threshold: int = 3, time_window_days: int = 30):
         self._pair_failures: Dict[Tuple[str, str], Dict[str, List[datetime]]] = defaultdict(lambda: defaultdict(list))
         self._recurrence_threshold = recurrence_threshold
         self._time_window_days = time_window_days
+        self._performance_monitor = PerformanceMonitor()
 
     def record_pair_failure(self, module_a: str, module_b: str, failure_type: str) -> None:
         """Record a failure for a module pair with a specific failure type."""
@@ -134,8 +231,77 @@ class FragilityHotspotMiner:
             "hotspot_pairs": self.get_hotspot_pairs(),
             "trends": self.detect_trends(),
             "refactoring_goals": self.prioritize_refactoring_goals(),
-            "total_pairs_tracked": len(self._pair_failures)
+            "total_pairs_tracked": len(self._pair_failures),
+            "performance_correlations": self._performance_monitor.get_performance_impact_summary()
         }
+
+    def correlate_failure_patterns_with_performance(self) -> List[Dict]:
+        """
+        Correlate failure patterns with performance trends.
+        Returns correlation data showing how failures impact system throughput.
+        """
+        correlations = []
+        
+        for pair_key, failure_types in self._pair_failures.items():
+            for module in pair_key:
+                for failure_type in failure_types.keys():
+                    # Record performance metric before correlation
+                    current_throughput = self._performance_monitor.get_performance_trend(module)
+                    if current_throughput:
+                        self._performance_monitor.record_performance_metric(module, current_throughput)
+                    
+                    # Correlate failure with performance
+                    correlation = self._performance_monitor.correlate_failure_with_performance(
+                        module, failure_type
+                    )
+                    
+                    if correlation["throughput_change_pct"] is not None:
+                        correlations.append({
+                            "module_pair": pair_key,
+                            "module": module,
+                            "failure_type": failure_type,
+                            "throughput_change_pct": correlation["throughput_change_pct"],
+                            "description": f"When module {module} fails with {failure_type}, "
+                                         f"throughput changes by {correlation['throughput_change_pct']}%"
+                        })
+        
+        return correlations
+
+    def get_optimization_recommendations(self) -> List[Dict]:
+        """
+        Generate optimization recommendations based on failure-performance correlations.
+        """
+        recommendations = []
+        correlations = self.correlate_failure_patterns_with_performance()
+        
+        # Group by module pair
+        pair_correlations = defaultdict(list)
+        for corr in correlations:
+            pair_correlations[corr["module_pair"]].append(corr)
+        
+        for pair, corrs in pair_correlations.items():
+            avg_impact = sum(c["throughput_change_pct"] for c in corrs) / len(corrs)
+            
+            if avg_impact < -10:  # Significant negative impact
+                recommendations.append({
+                    "pair": pair,
+                    "avg_throughput_impact_pct": round(avg_impact, 2),
+                    "failure_count": len(corrs),
+                    "recommendation": f"High priority: Module pair {pair} causes average "
+                                    f"{abs(avg_impact):.1f}% throughput decrease when failing. "
+                                    f"Consider immediate refactoring."
+                })
+            elif avg_impact < -5:  # Moderate negative impact
+                recommendations.append({
+                    "pair": pair,
+                    "avg_throughput_impact_pct": round(avg_impact, 2),
+                    "failure_count": len(corrs),
+                    "recommendation": f"Medium priority: Module pair {pair} causes average "
+                                    f"{abs(avg_impact):.1f}% throughput decrease when failing. "
+                                    f"Plan refactoring in next sprint."
+                })
+        
+        return sorted(recommendations, key=lambda x: x["avg_throughput_impact_pct"])
 
 
 class DependencyFailureTracker:
@@ -239,6 +405,11 @@ class DependencyFailureTracker:
         for trend in trends:
             issues.append(f"Trend detected: {trend['description']}")
 
+        # Add performance correlation insights
+        correlations = self._hotspot_miner.correlate_failure_patterns_with_performance()
+        for corr in correlations[:5]:  # Top 5 correlations
+            issues.append(f"Performance correlation: {corr['description']}")
+
         return issues
 
     def get_hotspot_miner(self) -> FragilityHotspotMiner:
@@ -263,7 +434,8 @@ class DependencyFailureTracker:
             "non_existent_total": self.get_non_existent_rejection_count(),
             "failure_ratio": self.get_failure_ratio(),
             "systemic_issues": self.identify_systemic_issues(),
-            "hotspot_miner": self._hotspot_miner.get_summary()
+            "hotspot_miner": self._hotspot_miner.get_summary(),
+            "optimization_recommendations": self._hotspot_miner.get_optimization_recommendations()
         }
 
 # Global instance for use across the self-diagnosis module

@@ -40,12 +40,16 @@ class MetaCognitiveEvaluator:
     WINDOW_SIZE = 30
     BRITTLENESS_CORE_THRESHOLD = 0.6  # 60%
     BRITTLENESS_CONSECUTIVE_FAILURES = 3
+    PERFORMANCE_DEGRADATION_THRESHOLD = 0.15  # 15% degradation
+    PERFORMANCE_DEGRADATION_CYCLES = 20  # over 20 cycles
 
     def __init__(self, window_size: int = WINDOW_SIZE):
         self.window_size = window_size
         self._records: deque = deque(maxlen=window_size)
         self._all_records: List[MutationRecord] = []  # full history
         self._core_consecutive_failures = 0
+        self._performance_history: List[float] = []  # stores overall success rates over time
+        self._baseline_performance: Optional[float] = None  # historical baseline
 
     # --- Recording ---
 
@@ -94,18 +98,46 @@ class MetaCognitiveEvaluator:
             return True
         return False
 
+    def _update_performance_history(self) -> None:
+        """Update performance history with current overall success rate."""
+        overall_rate = self._compute_success_rate()
+        self._performance_history.append(overall_rate)
+        # Keep only last PERFORMANCE_DEGRADATION_CYCLES records for comparison
+        if len(self._performance_history) > self.PERFORMANCE_DEGRADATION_CYCLES:
+            self._performance_history = self._performance_history[-self.PERFORMANCE_DEGRADATION_CYCLES:]
+
+    def _set_baseline_performance(self) -> None:
+        """Set baseline performance from the first available data point."""
+        if self._baseline_performance is None and self._performance_history:
+            self._baseline_performance = self._performance_history[0]
+
+    def _check_performance_degradation(self) -> bool:
+        """Check if performance is degrading compared to baseline over last 20 cycles."""
+        if self._baseline_performance is None or len(self._performance_history) < self.PERFORMANCE_DEGRADATION_CYCLES:
+            return False
+        
+        current_performance = self._performance_history[-1]
+        # Calculate degradation percentage
+        if self._baseline_performance > 0:
+            degradation = (self._baseline_performance - current_performance) / self._baseline_performance
+            return degradation > self.PERFORMANCE_DEGRADATION_THRESHOLD
+        return False
+
     def _recommend_adjustments(self) -> Dict[str, float]:
         """Generate recommended parameter adjustments based on trend state."""
         adjustments = {}
         core_rate = self._compute_success_rate('core')
         peripheral_rate = self._compute_success_rate('peripheral')
         is_brittle = self._detect_brittleness()
+        performance_degraded = self._check_performance_degradation()
 
-        if is_brittle:
+        if is_brittle or performance_degraded:
             # Reduce mutation aggressiveness for core parameters
             adjustments['core_mutation_rate'] = 0.5  # reduce by half
             adjustments['core_mutation_scale'] = 0.7  # smaller steps
             adjustments['exploration_rate'] = 0.3     # more exploitation
+            if performance_degraded:
+                adjustments['trigger_optimization_engine'] = 1.0  # flag for optimization
         else:
             # Normal adjustments based on success rates
             if core_rate < 0.7:
@@ -131,6 +163,10 @@ class MetaCognitiveEvaluator:
 
     def get_trend_state(self) -> TrendState:
         """Return current trend analysis state."""
+        # Update performance tracking before returning state
+        self._update_performance_history()
+        self._set_baseline_performance()
+        
         return TrendState(
             core_success_rate=self._compute_success_rate('core'),
             peripheral_success_rate=self._compute_success_rate('peripheral'),
@@ -144,6 +180,8 @@ class MetaCognitiveEvaluator:
 
     def get_recommended_adjustments(self) -> Dict[str, float]:
         """Return recommended parameter adjustments based on current trends."""
+        self._update_performance_history()
+        self._set_baseline_performance()
         return self._recommend_adjustments()
 
     def is_brittle(self) -> bool:
@@ -201,6 +239,8 @@ class MetaCognitiveEvaluator:
         self._records.clear()
         self._all_records.clear()
         self._core_consecutive_failures = 0
+        self._performance_history.clear()
+        self._baseline_performance = None
 
     def __repr__(self) -> str:
         state = self.get_trend_state()

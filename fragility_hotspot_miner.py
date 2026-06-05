@@ -161,9 +161,70 @@ def identify_hotspots(
     return hotspots
 
 
-def generate_refactoring_goal(hotspots: List[Tuple[str, str, int]]) -> str:
+def calculate_performance_impact(
+    hotspots: List[Tuple[str, str, int]],
+    events: List[dict],
+    failures: List[dict]
+) -> List[Tuple[str, str, int, float]]:
+    """
+    Calculate performance impact for each hotspot.
+    Impact = failure_frequency * estimated_recovery_time
+    Returns list of (caller, callee, count, impact_score) sorted by impact descending.
+    """
+    # Estimate recovery time per failure type (in seconds)
+    recovery_time_estimates = {
+        "rollback": 30,  # Rollback recovery time
+        "timeout": 60,   # Timeout recovery time
+        "crash": 120,    # Crash recovery time
+        "error": 45,     # General error recovery time
+        "default": 50    # Default recovery time
+    }
+    
+    # Collect failure types for each hotspot
+    hotspot_failure_types = defaultdict(list)
+    for failure in failures:
+        pairs = extract_module_pairs_from_failure(failure)
+        failure_type = failure.get("failure_type", "error")
+        for pair in pairs:
+            if pair in [h[:2] for h in hotspots]:
+                hotspot_failure_types[pair].append(failure_type)
+    
+    # Also check events for rollback types
+    for event in events:
+        pairs = extract_module_pairs_from_event(event)
+        event_type = event.get("event_type", "rollback")
+        for pair in pairs:
+            if pair in [h[:2] for h in hotspots]:
+                hotspot_failure_types[pair].append(event_type)
+    
+    # Calculate impact scores
+    hotspot_impacts = []
+    for caller, callee, count in hotspots:
+        pair = (caller, callee)
+        failure_types = hotspot_failure_types.get(pair, ["default"])
+        
+        # Calculate weighted average recovery time
+        total_weight = 0
+        weighted_time = 0
+        for ft in failure_types:
+            recovery_time = recovery_time_estimates.get(ft, recovery_time_estimates["default"])
+            weighted_time += recovery_time
+            total_weight += 1
+        
+        avg_recovery_time = weighted_time / max(total_weight, 1)
+        impact_score = count * avg_recovery_time
+        
+        hotspot_impacts.append((caller, callee, count, round(impact_score, 2)))
+    
+    # Sort by impact score descending
+    hotspot_impacts.sort(key=lambda x: x[3], reverse=True)
+    return hotspot_impacts
+
+
+def generate_refactoring_goal(hotspots: List[Tuple[str, str, int]], impacts: List[Tuple[str, str, int, float]] = None) -> str:
     """
     Auto-generate a refactoring goal targeting the identified integration points.
+    Includes performance impact estimates if available.
     """
     if not hotspots:
         return "No fragile integration points detected. System is stable."
@@ -175,10 +236,22 @@ def generate_refactoring_goal(hotspots: List[Tuple[str, str, int]]) -> str:
         "modules to improve stability and reduce coupling."
     )
     lines.append("")
-    lines.append("Target Integration Points (caller -> callee, failure count):")
-    for caller, callee, count in hotspots:
-        lines.append(f"  - {caller} -> {callee} ({count} failures)")
-    lines.append("")
+    
+    if impacts:
+        lines.append("Target Integration Points (caller -> callee, failure count, performance impact score):")
+        for caller, callee, count, impact in impacts:
+            lines.append(f"  - {caller} -> {callee} ({count} failures, impact: {impact})")
+        lines.append("")
+        lines.append("Performance Impact Legend:")
+        lines.append("  - Score = failure_frequency * estimated_recovery_time")
+        lines.append("  - Higher scores indicate greater system performance degradation")
+        lines.append("")
+    else:
+        lines.append("Target Integration Points (caller -> callee, failure count):")
+        for caller, callee, count in hotspots:
+            lines.append(f"  - {caller} -> {callee} ({count} failures)")
+        lines.append("")
+    
     lines.append("Suggested Actions:")
     lines.append(
         "1. Introduce a stable API or interface between each pair to decouple implementations."
@@ -203,7 +276,7 @@ def mine_fragility_hotspots(
 ) -> Dict:
     """
     Main function: parse logs, extract pairs, count frequencies, identify hotspots,
-    and generate a refactoring goal.
+    calculate performance impact, and generate a refactoring goal.
     Returns a dictionary with results.
     """
     # Load logs
@@ -220,14 +293,18 @@ def mine_fragility_hotspots(
     # Identify hotspots
     hotspots = identify_hotspots(pair_frequencies, threshold)
 
-    # Generate refactoring goal
-    refactoring_goal = generate_refactoring_goal(hotspots)
+    # Calculate performance impact for hotspots
+    hotspot_impacts = calculate_performance_impact(hotspots, recent_events, recent_failures)
+
+    # Generate refactoring goal with impact estimates
+    refactoring_goal = generate_refactoring_goal(hotspots, hotspot_impacts)
 
     return {
         "total_events_parsed": len(recent_events),
         "total_failures_parsed": len(recent_failures),
         "unique_module_pairs": len(pair_frequencies),
         "hotspot_pairs": hotspots,
+        "hotspot_impacts": hotspot_impacts,
         "refactoring_goal": refactoring_goal,
     }
 
@@ -242,4 +319,7 @@ if __name__ == "__main__":
     print(f"Hotspot pairs (>{HOTSPOT_THRESHOLD} occurrences):")
     for caller, callee, count in result["hotspot_pairs"]:
         print(f"  {caller} -> {callee}: {count}")
+    print("\nPerformance Impact Estimates (sorted by impact):")
+    for caller, callee, count, impact in result["hotspot_impacts"]:
+        print(f"  {caller} -> {callee}: count={count}, impact={impact}")
     print("\n" + result["refactoring_goal"])

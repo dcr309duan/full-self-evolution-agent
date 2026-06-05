@@ -18,13 +18,6 @@
       "priority": 8,
       "status": "pending",
       "created_at": 1780653063.2412038
-    },
-    {
-      "description": "Create a performance monitoring and optimization system",
-      "priority": 6,
-      "status": "pending",
-      "created_at": 1780623346.3657625,
-      "consecutive_failures": 0
     }
   ],
   "completed_goals": [
@@ -950,6 +943,14 @@
       "status": "completed",
       "created_at": 1780652325.9069374,
       "completed_at": 1780653888.2217264
+    },
+    {
+      "description": "Create a performance monitoring and optimization system",
+      "priority": 6,
+      "status": "completed",
+      "created_at": 1780623346.3657625,
+      "consecutive_failures": 0,
+      "completed_at": 1780654153.0534441
     }
   ],
   "generated_goals": []
