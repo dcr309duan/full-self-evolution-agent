@@ -6,32 +6,34 @@ class TestNashDetector(unittest.TestCase):
     def setUp(self):
         self.detector = NashEquilibriumDetector()
         
-    def test_equilibrium_detection_and_coordinated_change(self):
-        # Simulate module scores
+    def test_detect_equilibrium_with_mock_scenario(self):
+        # Create a simple mock scenario with module scores
         module_scores = {
             'module_a': 0.8,
             'module_b': 0.6,
             'module_c': 0.9
         }
         
-        # Test equilibrium detection
-        is_equilibrium, deviations = self.detector.check_equilibrium(module_scores)
-        self.assertIsInstance(is_equilibrium, bool)
-        self.assertIsInstance(deviations, list)
+        # Test detect_equilibrium method
+        result = self.detector.detect_equilibrium(module_scores)
         
-        # Test coordinated change forcing
-        new_scores = self.detector.force_coordinated_change(module_scores)
-        self.assertIsInstance(new_scores, dict)
-        self.assertEqual(len(new_scores), len(module_scores))
+        # Verify result is a dictionary
+        self.assertIsInstance(result, dict)
         
-        # Verify all modules are present in new scores
-        for module in module_scores:
-            self.assertIn(module, new_scores)
-            
-        # Verify scores are within valid range
-        for score in new_scores.values():
-            self.assertGreaterEqual(score, 0.0)
-            self.assertLessEqual(score, 1.0)
+        # Verify result contains expected keys
+        self.assertIn('is_equilibrium', result)
+        self.assertIn('deviations', result)
+        
+        # Verify types of values
+        self.assertIsInstance(result['is_equilibrium'], bool)
+        self.assertIsInstance(result['deviations'], list)
+        
+        # Verify deviations contain expected structure
+        for deviation in result['deviations']:
+            self.assertIn('module', deviation)
+            self.assertIn('current_score', deviation)
+            self.assertIn('suggested_score', deviation)
+            self.assertIn('reason', deviation)
 
 
 if __name__ == '__main__':

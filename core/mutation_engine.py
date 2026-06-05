@@ -596,6 +596,64 @@ def get_enabled_capabilities():
     return list(ENABLED_CAPABILITIES)
 
 
+def pre_mutation_hook(func_a, func_b, operator, goal_context=None):
+    """Pre-mutation hook that checks if a proposed mutation would improve test coverage.
+    
+    Queries ecology_engine to determine if the mutation targets an untested area.
+    If so, increases the priority score by 20% to create evolutionary pressure toward better testing.
+    
+    Args:
+        func_a: First parent function dict
+        func_b: Second parent function dict
+        operator: Mutation operator to use
+        goal_context: Optional goal context for tracking
+        
+    Returns:
+        dict with keys:
+            - priority_boost: float multiplier (1.0 for no boost, 1.2 for boost)
+            - reason: string explanation
+            - targets_untested: bool indicating if mutation targets untested area
+    """
+    try:
+        # Import ecology_engine dynamically to avoid circular imports
+        from core.ecology_engine import query_test_coverage
+        
+        # Get the code from both parents to analyze
+        parent_code = func_a.get("code", "") + "\n" + func_b.get("code", "")
+        
+        # Query ecology_engine for test coverage information
+        coverage_info = query_test_coverage(parent_code)
+        
+        # Check if the mutation targets an untested area
+        if coverage_info and coverage_info.get("untested_lines"):
+            # Mutation targets untested code - apply priority boost
+            return {
+                "priority_boost": 1.2,
+                "reason": f"Mutation targets untested area: {coverage_info.get('untested_lines', [])}",
+                "targets_untested": True
+            }
+        else:
+            return {
+                "priority_boost": 1.0,
+                "reason": "Mutation does not target untested area",
+                "targets_untested": False
+            }
+    except ImportError:
+        # ecology_engine not available, return default
+        return {
+            "priority_boost": 1.0,
+            "reason": "ecology_engine not available",
+            "targets_untested": False
+        }
+    except Exception as e:
+        # Log error and return default
+        return {
+            "priority_boost": 1.0,
+            "reason": f"Error querying ecology_engine: {str(e)}",
+            "targets_untested": False
+        }
+
+
 def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=None):
     """Run a complete mutation cycle.
     
@@ -666,9 +724,19 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
         func_a, func_b = random.sample(pool, 2)
         operator = random.choice(operators)
         
+        # Apply pre-mutation hook to check test coverage impact
+        hook_result = pre_mutation_hook(func_a, func_b, operator, goal_context=goal_context)
+        priority_boost = hook_result.get("priority_boost", 1.0)
+        
         # Handle dry run mode
         if dry_run_mode:
             dry_result = dry_run_mutation(func_a, func_b, operator, goal_context=goal_context)
+            # Apply priority boost to score if applicable
+            if hook_result.get("targets_untested", False):
+                dry_result["score"] = dry_result.get("score", 0) * priority_boost
+                dry_result["priority_boost"] = priority_boost
+                dry_result["hook_reason"] = hook_result.get("reason", "")
+            
             results.append({
                 "parent_a": func_a["name"],
                 "parent_b": func_b["name"],
@@ -680,7 +748,9 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
                 "code": dry_result["code"],
                 "score": dry_result["score"],
                 "reason": dry_result["reason"],
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "priority_boost": priority_boost,
+                "hook_result": hook_result
             })
             continue
         
@@ -715,6 +785,12 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
                 # Test the mutation against the generated test
                 test_result = test_mutation_with_generated_test(new_code, test_spec)
                 
+                # Apply priority boost to test result if mutation targets untested area
+                if hook_result.get("targets_untested", False) and test_result.get("passed", False):
+                    test_result["priority_boosted"] = True
+                    test_result["original_score"] = test_result.get("score", 0)
+                    test_result["score"] = test_result.get("score", 0) * priority_boost
+                
                 mutation_record = {
                     "parent_a": func_a["name"],
                     "parent_b": func_b["name"],
@@ -723,7 +799,9 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
                     "test_result": test_result,
                     "generated_test": test_spec,
                     "timestamp": time.time(),
-                    "test_driven": True
+                    "test_driven": True,
+                    "priority_boost": priority_boost,
+                    "hook_result": hook_result
                 }
                 results.append(mutation_record)
                 
@@ -770,7 +848,9 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
                             "code": new_code,
                             "test_result": {"valid": False, "reason": f"Simulation rejected: {sim_result['reason']}", "score": 0},
                             "timestamp": time.time(),
-                            "simulated": True
+                            "simulated": True,
+                            "priority_boost": priority_boost,
+                            "hook_result": hook_result
                         }
                         results.append(mutation_record)
                         record_mutation_outcome(False, capability="simulation")
@@ -781,13 +861,21 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
             
             test_result = test_mutation(new_code)
             
+            # Apply priority boost to test result if mutation targets untested area
+            if hook_result.get("targets_untested", False) and test_result.get("valid", False):
+                test_result["priority_boosted"] = True
+                test_result["original_score"] = test_result.get("score", 0)
+                test_result["score"] = test_result.get("score", 0) * priority_boost
+            
             mutation_record = {
                 "parent_a": func_a["name"],
                 "parent_b": func_b["name"],
                 "operator": operator,
                 "code": new_code,
                 "test_result": test_result,
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "priority_boost": priority_boost,
+                "hook_result": hook_result
             }
             results.append(mutation_record)
             
@@ -795,7 +883,12 @@ def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=
             if goal_context:
                 track_provenance(goal_context, mutation_record)
             
-            if test_result["valid"] and test_result["score"] >= 0.4:
+            # Use boosted score for acceptance threshold
+            acceptance_score = test_result.get("score", 0)
+            if hook_result.get("targets_untested", False):
+                acceptance_score = acceptance_score / priority_boost  # Use original score for acceptance
+            
+            if test_result["valid"] and acceptance_score >= 0.4:
                 func_name = "unknown"
                 try:
                     tree = ast.parse(new_code)
@@ -846,145 +939,4 @@ def save_successful_mutation(name, code):
     if len(mutations) > 50:
         mutations = mutations[-50:]
     
-    # Use atomic write to prevent partial file states
-    fs.atomic_write(path, json.dumps(mutations, indent=2, ensure_ascii=False))
-
-
-def log_mutations(results):
-    """Log mutation results using atomic writes."""
-    # Skip logging in dry run mode
-    if dry_run_mode:
-        return
-    
-    path = os.path.join(MEMORY_DIR, "mutation_log.json")
-    fs = get_fs()
-    
-    # Check write permission before attempting mutation
-    if not fs.check_permission(path, 'write'):
-        print(f"Warning: No write permission for {path}, skipping mutation log")
-        return
-    
-    try:
-        content = fs.read_file(path)
-        log = json.loads(content)
-    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
-        log = []
-    
-    log.append({"timestamp": time.time(), "results": results})
-    if len(log) > 100:
-        log = log[-100:]
-    
-    # Use atomic write to prevent partial file states
-    fs.atomic_write(path, json.dumps(log, indent=2, ensure_ascii=False))
-
-
-def get_mutation_provenance():
-    """Get the mutation provenance tracking data."""
-    return mutation_provenance
-
-
-def generate_mutations(code, context=None):
-    """Generate mutations for the given code.
-    
-    Args:
-        code: The source code to mutate
-        context: Optional context dictionary
-        
-    Returns:
-        list of mutation specifications
-    """
-    pool = get_function_pool()
-    if len(pool) < 2:
-        return []
-    
-    mutations = []
-    operators = ["crossover", "mutate", "hybrid"]
-    
-    for _ in range(3):
-        func_a, func_b = random.sample(pool, 2)
-        operator = random.choice(operators)
-        
-        try:
-            new_code = mutate(func_a, func_b, operator, goal_context=context)
-            mutations.append({
-                "code": new_code,
-                "operator": operator,
-                "parent_a": func_a["name"],
-                "parent_b": func_b["name"]
-            })
-        except Exception:
-            continue
-    
-    return mutations
-
-
-def apply_mutation(code, mutation_spec):
-    """Apply a mutation specification to the given code.
-    
-    Args:
-        code: The source code to apply mutation to
-        mutation_spec: Dictionary with mutation details
-        
-    Returns:
-        The mutated code string
-    """
-    if not mutation_spec or "code" not in mutation_spec:
-        return code
-    
-    return mutation_spec["code"]
-
-
-def validate_mutation(mutation_spec):
-    """Validate a mutation specification.
-    
-    Args:
-        mutation_spec: Dictionary with mutation details
-        
-    Returns:
-        dict with 'valid' bool and 'reason' string
-    """
-    if not mutation_spec or "code" not in mutation_spec:
-        return {"valid": False, "reason": "Invalid mutation specification"}
-    
-    code = mutation_spec["code"]
-    
-    # Check syntax
-    try:
-        ast.parse(code)
-    except SyntaxError as e:
-        return {"valid": False, "reason": f"Syntax error: {str(e)}"}
-    
-    # Run basic tests
-    test_result = test_mutation(code)
-    
-    return {
-        "valid": test_result["valid"],
-        "reason": test_result.get("reason", "OK"),
-        "score": test_result.get("score", 0)
-    }
-
-
-def apply_single_module_mutation(module_path, mutation_spec):
-    """Apply a single-module mutation to a specific file.
-    
-    This function reads a module file, applies the mutation specification
-    to its content, validates the result, and writes it back atomically.
-    
-    Args:
-        module_path: Path to the module file to mutate
-        mutation_spec: Dictionary with mutation details, must contain 'code' key
-                      with the new code to replace the module's content
-        
-    Returns:
-        dict with keys:
-            - success: bool indicating if mutation was applied
-            - reason: string explanation
-            - backup_path: path to backup file if created, None otherwise
-    """
-    if not mutation_spec or "code" not in mutation_spec:
-        return {"success": False, "reason": "Invalid mutation specification", "backup_path": None}
-    
-    new_code = mutation_spec["code"]
-    
-    # Validate the new code syntax
-   
+    # Use atomic write to prevent partial

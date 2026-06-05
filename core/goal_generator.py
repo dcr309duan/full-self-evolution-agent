@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', or 'coordinated_mutation'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation', or 'adapt_to_pressure'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -67,6 +67,10 @@ previous_diversity: float = 1.0  # Track previous diversity to detect drops
 
 # Ecological gap tracking
 capability_coverage: Dict[str, float] = {}  # Maps capability names to their coverage scores (0.0 to 1.0)
+
+# Environmental pressure tracking
+environmental_pressure_active: bool = False  # Whether environmental pressure has been introduced
+environmental_pressure_description: str = ""  # Description of the current environmental pressure
 
 
 def prioritize_pending_goals() -> List[Goal]:
@@ -263,6 +267,44 @@ def generate_coordinated_mutation_goal(stuck_modules: List[str], nash_analysis: 
     return goal
 
 
+def generate_adapt_to_pressure_goal(pressure_description: str) -> Goal:
+    """Generate a goal to adapt to a new environmental pressure.
+
+    This goal is triggered when ecology_engine.introduce_environmental_pressure()
+    has been called. It forces the agent to evolve as the tests change.
+
+    Args:
+        pressure_description: Description of the new environmental pressure.
+
+    Returns:
+        A Goal object with type 'adapt_to_pressure' that specifies the adaptation needed.
+    """
+    if not pressure_description:
+        logger.warning("generate_adapt_to_pressure_goal called with empty pressure_description")
+        return None
+
+    description = (
+        f"Adapt to new environmental pressure: {pressure_description}. "
+        f"Update the relevant module to pass the modified test."
+    )
+
+    goal = Goal(
+        description=description,
+        priority=GoalPriority.CRITICAL,
+        module="test_suite",  # The test suite is the primary module affected
+        goal_type="adapt_to_pressure",
+        source="fitness",
+        tags=["adapt_to_pressure", "environmental_pressure", "test_evolution"]
+    )
+
+    logger.info(
+        "Generated adapt_to_pressure goal for pressure: %s",
+        pressure_description
+    )
+
+    return goal
+
+
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
@@ -287,6 +329,7 @@ def generate_goals(
         List of generated goals, sorted by priority (highest first).
     """
     global consecutive_successes, current_accuracy_threshold, previous_diversity, capability_coverage
+    global environmental_pressure_active, environmental_pressure_description
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
@@ -357,6 +400,16 @@ def generate_goals(
             goal.source = "curiosity"
             goal.tags.append("curiosity")
         goals.extend(curiosity_goals)
+
+    # Check if environmental pressure is active and generate adapt_to_pressure goal
+    if environmental_pressure_active and environmental_pressure_description:
+        adapt_goal = generate_adapt_to_pressure_goal(environmental_pressure_description)
+        if adapt_goal:
+            goals.append(adapt_goal)
+            logger.info(
+                "Generated adapt_to_pressure goal for pressure: %s",
+                environmental_pressure_description
+            )
 
     # Track consecutive successes and trigger meta-goal if threshold reached
     all_above_threshold = all(
@@ -860,44 +913,4 @@ def generate_sub_goals(
             # Dependency-based: diagnose is independent, implement depends on diagnose, test depends on implement
             implement_goal.dependencies.append(diagnose_goal.description)
             test_goal.dependencies.append(implement_goal.description)
-            sub_goals = [diagnose_goal, implement_goal, test_goal]
-        else:
-            # Default to sequential for unknown strategies
-            implement_goal.dependencies.append(diagnose_goal.description)
-            test_goal.dependencies.append(implement_goal.description)
-            sub_goals = [diagnose_goal, implement_goal, test_goal]
-    elif parent_goal.goal_type == "cluster_resolution":
-        # Break cluster resolution into smaller steps
-        analyze_goal = Goal(
-            description=f"Analyze failure cluster in {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="cluster_resolution",
-            source=parent_goal.source
-        )
-        fix_goal = Goal(
-            description=f"Implement root cause fix for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="cluster_resolution",
-            source=parent_goal.source
-        )
-        verify_goal = Goal(
-            description=f"Verify cluster resolution for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="cluster_resolution",
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: analyze -> fix -> verify
-            fix_goal.dependencies.append(analyze_goal.description)
-            verify_goal.dependencies.append(fix_goal.description)
-            sub_goals = [analyze_goal, fix_goal, verify_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [analyze_goal, fix_goal, verify_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: analyze is independent, fix depends on analyze, verify depends on fix
-            fix_goal.dependencies
+            sub_go

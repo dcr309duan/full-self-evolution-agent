@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 import networkx as nx
 from collections import defaultdict
+import copy
 
 @dataclass
 class CoordinatedMutation:
@@ -288,3 +289,90 @@ class CoordinatedChangePlanner:
                     
         pairs.sort(key=lambda x: x[2], reverse=True)
         return pairs
+
+    def execute_coordinated_mutation(self, plan: List[Dict[str, Any]], orchestrator: Any) -> Tuple[bool, str]:
+        """
+        Execute a coordinated mutation plan atomically with rollback support.
+        
+        Args:
+            plan: List of module changes, each containing:
+                - 'module_id': str - The module identifier
+                - 'file_path': str - Path to the file to modify
+                - 'original_content': str - Original file content for rollback
+                - 'new_content': str - New file content to apply
+                - 'mutation_type': str - Type of mutation being applied
+            orchestrator: The orchestrator instance with atomic write capability
+            
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        if not plan:
+            return False, "Empty plan provided"
+            
+        # Validate plan structure
+        for change in plan:
+            required_keys = ['module_id', 'file_path', 'original_content', 'new_content', 'mutation_type']
+            for key in required_keys:
+                if key not in change:
+                    return False, f"Missing required key '{key}' in plan change"
+        
+        # Create backup of original states for rollback
+        backup = []
+        try:
+            # Phase 1: Pre-execution validation
+            for change in plan:
+                module_id = change['module_id']
+                if module_id not in self._module_states:
+                    return False, f"Module {module_id} not registered in planner"
+                    
+                # Store backup information
+                backup.append({
+                    'module_id': module_id,
+                    'original_content': change['original_content'],
+                    'file_path': change['file_path']
+                })
+            
+            # Phase 2: Atomic execution using orchestrator's atomic write
+            for change in plan:
+                success = orchestrator.atomic_write(
+                    file_path=change['file_path'],
+                    content=change['new_content']
+                )
+                if not success:
+                    # Rollback all changes
+                    self._rollback_changes(backup, orchestrator)
+                    return False, f"Failed to apply change to {change['module_id']}"
+            
+            # Phase 3: Update module states after successful execution
+            for change in plan:
+                module_id = change['module_id']
+                if module_id in self._module_states:
+                    state = self._module_states[module_id]
+                    # Update strategy to reflect the mutation
+                    state.current_strategy['last_mutation'] = change['mutation_type']
+                    state.current_strategy['mutation_count'] = state.current_strategy.get('mutation_count', 0) + 1
+            
+            return True, "Coordinated mutation executed successfully"
+            
+        except Exception as e:
+            # Rollback on any exception
+            self._rollback_changes(backup, orchestrator)
+            return False, f"Execution failed with error: {str(e)}"
+    
+    def _rollback_changes(self, backup: List[Dict[str, Any]], orchestrator: Any) -> None:
+        """
+        Rollback all changes in the backup list.
+        
+        Args:
+            backup: List of backup entries with original content
+            orchestrator: The orchestrator instance with atomic write capability
+        """
+        for entry in reversed(backup):
+            try:
+                orchestrator.atomic_write(
+                    file_path=entry['file_path'],
+                    content=entry['original_content']
+                )
+            except Exception:
+                # Log rollback failure but continue with other rollbacks
+                pass

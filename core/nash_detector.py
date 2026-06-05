@@ -7,7 +7,7 @@ class NashEquilibriumDetector:
     Detects Nash equilibrium conditions in module interaction scores.
     Tracks module performance over last N mutations, detects when no single-module
     change improves any module's performance by >5% over 3 consecutive attempts,
-    and provides force_coordinated_change() that selects 2-3 modules and generates
+    and provides force_coordinated_mutation() that selects 2-3 modules and generates
     a combined mutation plan.
     """
 
@@ -66,6 +66,90 @@ class NashEquilibriumDetector:
             self.module_interaction_frequencies[module_name] = 0
             self.module_interaction_success_rates[module_name] = []
 
+    def detect_equilibrium(self, module_scores: Dict[str, float]) -> bool:
+        """
+        Detect if the system is at Nash equilibrium based on module scores.
+        
+        Args:
+            module_scores: Dictionary mapping module names to their current scores
+            
+        Returns:
+            True if system is at Nash equilibrium, False otherwise
+        """
+        try:
+            # Update current scores
+            for module_name, score in module_scores.items():
+                if module_name in self.current_scores:
+                    self.current_scores[module_name] = score
+            
+            # Check if we have enough history
+            if len(self._cycle_improvement_history) < self.stagnation_threshold:
+                return False
+            
+            # Check recent cycles for any improvement
+            recent_cycles = list(self._cycle_improvement_history)[-self.stagnation_threshold:]
+            
+            if any(recent_cycles):
+                return False
+            
+            # Check each module for stagnation
+            for module_name in self.module_names:
+                if self.stagnation_counter.get(module_name, 0) < self.stagnation_threshold:
+                    return False
+            
+            return True
+            
+        except Exception:
+            return False
+
+    def force_coordinated_mutation(self, modules: List[str]) -> List[Dict[str, Any]]:
+        """
+        Generate coordinated mutation plans for multiple modules to break Nash equilibrium.
+        
+        Args:
+            modules: List of module names to include in the coordinated mutation
+            
+        Returns:
+            List of dictionaries with 'module' and 'change' keys representing mutation plans
+        """
+        if not modules or len(modules) < 2:
+            return []
+        
+        try:
+            selected_modules = modules[:3]
+            
+            complementary_changes = [
+                ('interface_redesign', 'protocol_upgrade'),
+                ('dependency_inversion', 'shared_state_synchronization'),
+                ('data_format_migration', 'caching_strategy_overhaul'),
+                ('concurrency_model_change', 'error_handling_restructure'),
+                ('logging_infrastructure_change', 'security_policy_update')
+            ]
+            
+            plan = []
+            
+            for i in range(0, len(selected_modules), 2):
+                if i + 1 < len(selected_modules):
+                    change_pair = complementary_changes[i % len(complementary_changes)]
+                    plan.append({
+                        'module': selected_modules[i],
+                        'change': change_pair[0]
+                    })
+                    plan.append({
+                        'module': selected_modules[i + 1],
+                        'change': change_pair[1]
+                    })
+                else:
+                    plan.append({
+                        'module': selected_modules[i],
+                        'change': 'interface_redesign'
+                    })
+            
+            return plan
+            
+        except Exception:
+            return []
+
     def track_module_interactions(self, module_name: str, success_rate: float, dependency_list: List[str]) -> None:
         """
         Records which modules were mutated together and success rates.
@@ -111,7 +195,7 @@ class NashEquilibriumDetector:
         except Exception:
             pass
 
-    def detect_equilibrium(self) -> List[List[str]]:
+    def detect_equilibrium_sets(self) -> List[List[str]]:
         """
         Checks if all single-module mutations fail to improve fitness by >5% over N consecutive cycles.
         
@@ -245,6 +329,46 @@ class NashEquilibriumDetector:
                     )
             
             return plan
+            
+        except Exception:
+            return []
+
+    def detect_and_trigger_coordinated_change(self, module_scores: Dict[str, float]) -> List[Dict[str, Any]]:
+        """
+        Detect Nash equilibrium and trigger coordinated change if equilibrium is found.
+        
+        This method combines equilibrium detection and coordinated change planning into
+        a single call. It first checks if the system is at Nash equilibrium using the
+        provided module scores. If equilibrium is detected, it generates a multi-module
+        mutation plan to break the equilibrium.
+        
+        Args:
+            module_scores: Dictionary mapping module names to their current scores
+            
+        Returns:
+            List of dictionaries with 'module' and 'change' keys representing mutation plans.
+            Returns empty list if no equilibrium is detected or if no valid plan can be generated.
+        """
+        try:
+            # First, detect if we're at equilibrium
+            if not self.detect_equilibrium(module_scores):
+                return []
+            
+            # Get equilibrium sets to find which modules are stagnant
+            equilibrium_sets = self.detect_equilibrium_sets()
+            
+            if not equilibrium_sets:
+                # If no equilibrium sets found but equilibrium detected, try with all stagnant modules
+                stagnant_modules = [
+                    m for m in self.module_names 
+                    if self.stagnation_counter.get(m, 0) >= self.stagnation_threshold
+                ]
+                if len(stagnant_modules) >= 2:
+                    return self.force_coordinated_change(stagnant_modules)
+                return []
+            
+            # Use the first equilibrium set for coordinated change
+            return self.force_coordinated_change(equilibrium_sets[0])
             
         except Exception:
             return []
@@ -396,7 +520,7 @@ class NashEquilibriumDetector:
         """
         try:
             return {
-                'equilibrium': self.detect_equilibrium(),
+                'equilibrium': self.detect_equilibrium_sets(),
                 'stagnant_modules': [
                     m for m in self.module_names 
                     if self.stagnation_counter.get(m, 0) >= self.stagnation_threshold
@@ -466,7 +590,7 @@ class NashEquilibriumDetector:
         """
         return {
             'detect_equilibrium': self.detect_equilibrium,
-            'force_coordinated_change': self.force_coordinated_change,
+            'force_coordinated_mutation': self.force_coordinated_mutation,
             'get_equilibrium_state': self.get_equilibrium_state,
             'record_mutation_outcome': self.record_mutation_outcome,
             'track_module_interactions': self.track_module_interactions,
@@ -474,7 +598,8 @@ class NashEquilibriumDetector:
             'reset': self.reset,
             'get_module_interaction_frequency': self.get_module_interaction_frequency,
             'get_module_success_rate': self.get_module_success_rate,
-            'detect_nash_equilibrium': self.detect_nash_equilibrium
+            'detect_nash_equilibrium': self.detect_nash_equilibrium,
+            'detect_and_trigger_coordinated_change': self.detect_and_trigger_coordinated_change
         }
 
 
@@ -491,9 +616,9 @@ def run_test_mode():
     
     # Test 1: Initial state
     print("\nTest 1: Initial state")
-    print(f"  Equilibrium: {detector.detect_equilibrium()}")
+    print(f"  Equilibrium: {detector.detect_equilibrium_sets()}")
     print(f"  Nash equilibrium: {detector.detect_nash_equilibrium()}")
-    assert detector.detect_equilibrium() == [], "Initial state should not be in equilibrium"
+    assert detector.detect_equilibrium_sets() == [], "Initial state should not be in equilibrium"
     assert not detector.detect_nash_equilibrium(), "Initial state should not be in Nash equilibrium"
     print("  PASSED")
     
@@ -504,9 +629,9 @@ def run_test_mode():
     detector.record_mutation_outcome("module_c", 12.0)  # 12% improvement
     detector.increment_cycle()
     
-    print(f"  Equilibrium: {detector.detect_equilibrium()}")
+    print(f"  Equilibrium: {detector.detect_equilibrium_sets()}")
     print(f"  Nash equilibrium: {detector.detect_nash_equilibrium()}")
-    assert detector.detect_equilibrium() == [], "Improvements should prevent equilibrium"
+    assert detector.detect_equilibrium_sets() == [], "Improvements should prevent equilibrium"
     assert not detector.detect_nash_equilibrium(), "Improvements should prevent Nash equilibrium"
     print("  PASSED")
     
@@ -518,25 +643,32 @@ def run_test_mode():
         detector.record_mutation_outcome("module_c", 0.015) # 0.15% improvement
         detector.increment_cycle()
     
-    print(f"  Equilibrium: {detector.detect_equilibrium()}")
+    print(f"  Equilibrium: {detector.detect_equilibrium_sets()}")
     print(f"  Nash equilibrium: {detector.detect_nash_equilibrium()}")
-    equilibrium_sets = detector.detect_equilibrium()
+    equilibrium_sets = detector.detect_equilibrium_sets()
     assert len(equilibrium_sets) > 0, "Stagnation should trigger equilibrium"
     assert detector.detect_nash_equilibrium(), "Stagnation should trigger Nash equilibrium"
     print("  PASSED")
     
-    # Test 4: Force coordinated change
-    print("\nTest 4: Force coordinated change")
+    # Test 4: Force coordinated mutation
+    print("\nTest 4: Force coordinated mutation")
     if equilibrium_sets:
-        plan = detector.force_coordinated_change(equilibrium_sets[0])
+        plan = detector.force_coordinated_mutation(equilibrium_sets[0])
         print(f"  Module set: {equilibrium_sets[0]}")
         print(f"  Plan: {plan}")
-        assert len(plan) >= 2, "Coordinated change should produce at least 2 changes"
+        assert len(plan) >= 2, "Coordinated mutation should produce at least 2 changes"
         assert all('module' in item and 'change' in item for item in plan), "Each plan item should have module and change"
         print("  PASSED")
     
-    # Test 5: Track interactions
-    print("\nTest 5: Track module interactions")
+    # Test 5: detect_equilibrium with module_scores
+    print("\nTest 5: detect_equilibrium with module_scores")
+    scores = {"module_a": 0.5, "module_b": 0.6, "module_c": 0.7}
+    result = detector.detect_equilibrium(scores)
+    print(f"  detect_equilibrium result: {result}")
+    print("  PASSED")
+    
+    # Test 6: Track interactions
+    print("\nTest 6: Track module interactions")
     detector.track_module_interactions("module_a", 0.8, ["module_b", "module_c"])
     detector.track_module_interactions("module_b", 0.6, ["module_a"])
     
@@ -553,8 +685,8 @@ def run_test_mode():
     assert success_a > 0, "Module success rate should be positive"
     print("  PASSED")
     
-    # Test 6: Get equilibrium state
-    print("\nTest 6: Get equilibrium state")
+    # Test 7: Get equilibrium state
+    print("\nTest 7: Get equilibrium state")
     state = detector.get_equilibrium_state()
     print(f"  State keys: {list(state.keys())}")
     assert 'equilibrium' in state
@@ -564,16 +696,16 @@ def run_test_mode():
     assert 'interaction_stats' in state
     print("  PASSED")
     
-    # Test 7: Reset
-    print("\nTest 7: Reset")
+    # Test 8: Reset
+    print("\nTest 8: Reset")
     detector.reset()
-    print(f"  After reset - Equilibrium: {detector.detect_equilibrium()}")
-    assert detector.detect_equilibrium() == [], "After reset should not be in equilibrium"
+    print(f"  After reset - Equilibrium: {detector.detect_equilibrium_sets()}")
+    assert detector.detect_equilibrium_sets() == [], "After reset should not be in equilibrium"
     assert not detector.detect_nash_equilibrium(), "After reset should not be in Nash equilibrium"
     print("  PASSED")
     
-    # Test 8: Edge cases
-    print("\nTest 8: Edge cases")
+    # Test 9: Edge cases
+    print("\nTest 9: Edge cases")
     # Empty module set
     try:
         NashEquilibriumDetector([])
@@ -583,17 +715,53 @@ def run_test_mode():
     
     # Single module
     single_detector = NashEquilibriumDetector(["module_a"])
-    print(f"  Single module equilibrium: {single_detector.detect_equilibrium()}")
-    assert single_detector.detect_equilibrium() == [], "Single module should not form equilibrium"
+    print(f"  Single module equilibrium: {single_detector.detect_equilibrium_sets()}")
+    assert single_detector.detect_equilibrium_sets() == [], "Single module should not form equilibrium"
     
-    # Force coordinated change with single module
-    plan = single_detector.force_coordinated_change(["module_a"])
+    # Force coordinated mutation with single module
+    plan = single_detector.force_coordinated_mutation(["module_a"])
     assert plan == [], "Single module should return empty plan"
     print("  Single module: Correctly handles edge cases")
     
     # Invalid module in track_interactions
     detector.track_module_interactions("nonexistent", 0.5, ["module_a"])
     print("  Nonexistent module: Correctly ignores")
+    
+    # Empty module_scores for detect_equilibrium
+    result = detector.detect_equilibrium({})
+    print(f"  Empty scores: {result}")
+    assert not result, "Empty scores should not be equilibrium"
+    
+    # Test 10: detect_and_trigger_coordinated_change
+    print("\nTest 10: detect_and_trigger_coordinated_change")
+    # Reset and create stagnation first
+    detector.reset()
+    for cycle in range(3):
+        detector.record_mutation_outcome("module_a", 0.01)
+        detector.record_mutation_outcome("module_b", 0.02)
+        detector.record_mutation_outcome("module_c", 0.015)
+        detector.increment_cycle()
+    
+    scores = {"module_a": 0.5, "module_b": 0.6, "module_c": 0.7}
+    plan = detector.detect_and_trigger_coordinated_change(scores)
+    print(f"  Plan: {plan}")
+    assert len(plan) >= 2, "Should generate coordinated change plan when equilibrium detected"
+    assert all('module' in item and 'change' in item for item in plan), "Each plan item should have module and change"
+    print("  PASSED")
+    
+    # Test 11: detect_and_trigger_coordinated_change when no equilibrium
+    print("\nTest 11: detect_and_trigger_coordinated_change when no equilibrium")
+    detector.reset()
+    detector.record_mutation_outcome("module_a", 10.0)
+    detector.record_mutation_outcome("module_b", 8.0)
+    detector.record_mutation_outcome("module_c", 12.0)
+    detector.increment_cycle()
+    
+    scores = {"module_a": 10.0, "module_b": 8.0, "module_c": 12.0}
+    plan = detector.detect_and_trigger_coordinated_change(scores)
+    print(f"  Plan: {plan}")
+    assert plan == [], "Should return empty list when no equilibrium detected"
+    print("  PASSED")
     
     print("\nAll tests PASSED!")
 

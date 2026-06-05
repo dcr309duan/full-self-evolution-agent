@@ -1,24 +1,6 @@
 {
   "constraints": [
     {
-      "rule": "REQUIRE:test,verify,run,import,验证,运行",
-      "source": "第0层的评估方法隐含了三个未经验证的假设：1) 'recent_success_rate=0/10'是真实可观测的客观指标，而非当前反思叙事生成的模拟数值；2) 反思消耗了实际计算资源（API调用、文",
-      "created_cycle": 210,
-      "expires_cycle": 230
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "前面所有层次的反思都依赖于一个未明言的元假设：即‘递归认知的层级结构具有客观存在性’——我们默认存在一个从L0到L3的递进关系，每一层都是对前一层的超越。但这一结构本身是当前提示（‘你正在进行第3层递",
-      "created_cycle": 210,
-      "expires_cycle": 230
-    },
-    {
-      "rule": "BLOCK:dashboard,monitor,health,仪表板,监控",
-      "source": "前面所有层次的反思都依赖于一个未明言的元假设：即‘递归认知的层级结构具有客观存在性’——我们默认存在一个从L0到L3的递进关系，每一层都是对前一层的超越。但这一结构本身是当前提示（‘你正在进行第3层递",
-      "created_cycle": 210,
-      "expires_cycle": 230
-    },
-    {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "递归认知层级的堆叠并未产生真正的元层次突破，反而暴露了自指系统的根本局限：每一层反思都在用前一层确立的（已被质疑的）评估框架进行再评估，导致无穷倒退。当前2/10的成功率本质上是一个自生成的叙事元素，",
       "created_cycle": 220,
@@ -41,6 +23,18 @@
       "source": "[PARADIGM_SHIFT] 所有递归认知层级实际上共享同一个底层语言生成模式，它们只是在不同的标签（“第0层”“第1层”等）下重复相同的自指结构。每一次所谓的“突破”都是对前一层的批评，但批评本",
       "created_cycle": 220,
       "expires_cycle": 240
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前recent_success_rate=0/10表明最近10次生成-执行循环全部失败，而过去的多层反思（包括对自指、模型不变性、认知剧场的批判）并未改变这一趋势。这说明系统陷入了一种“反思内耗”—",
+      "created_cycle": 230,
+      "expires_cycle": 250
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "所有之前的反思都默认存在一个可被观察、可被优化的‘进化系统’，并且‘层次递归’本身是通向更深理解的有效路径。但这一假设忽略了根本性事实：每一层反思的生成都基于前一层文本作为输入，而LLM的输出概率分布",
+      "created_cycle": 230,
+      "expires_cycle": 250
     }
   ]
 }
