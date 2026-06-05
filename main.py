@@ -6,7 +6,7 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.evolution_loop import run_evolution
+from core.evolution_orchestrator import EvolutionOrchestrator
 
 
 def main():
@@ -15,8 +15,9 @@ def main():
     parser.add_argument("--api", action="store_true", help="Start the API server instead of the evolution loop")
     args = parser.parse_args()
 
+    orchestrator = EvolutionOrchestrator(max_cycles=args.max_cycles)
+
     if args.api:
-        from core.api_server import start_api_server
         print("""
 ╔══════════════════════════════════════════════════════════╗
 ║          SELF-EVOLUTION AGENT API SERVER                 ║
@@ -27,7 +28,7 @@ def main():
 ║  - External triggers and data retrieval supported       ║
 ╚══════════════════════════════════════════════════════════╝
 """)
-        start_api_server()
+        orchestrator.start_api()
     else:
         print("""
 ╔══════════════════════════════════════════════════════════╗
@@ -42,7 +43,7 @@ def main():
 ║  - Git-based version control of evolution                ║
 ╚══════════════════════════════════════════════════════════╝
 """)
-        run_evolution(args.max_cycles)
+        orchestrator.start()
 
 
 if __name__ == "__main__":

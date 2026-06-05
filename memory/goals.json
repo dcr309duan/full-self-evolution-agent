@@ -8,6 +8,12 @@
       "created_at": 1780626426.7464669
     },
     {
+      "description": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780626959.2867591
+    },
+    {
       "description": "Develop multi-file code analysis and refactoring capability",
       "priority": 7,
       "status": "pending",
@@ -20,6 +26,12 @@
       "status": "pending",
       "created_at": 1780623633.2473752,
       "consecutive_failures": 0
+    },
+    {
+      "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780626959.28765
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -130,6 +142,13 @@
       "status": "completed",
       "created_at": 1780626105.4531872,
       "completed_at": 1780626902.2321997
+    },
+    {
+      "description": "Implement a unified evolution loop orchestrator that integrates the API server, task scheduler, and web scraping modules into a single, autonomous goal-selection and prioritization pipeline, using the existing strategy-switching mechanism to decide which subsystem to evolve next.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780626959.285682,
+      "completed_at": 1780627237.8399327
     }
   ],
   "generated_goals": []

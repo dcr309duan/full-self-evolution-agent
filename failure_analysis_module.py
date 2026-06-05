@@ -62,6 +62,80 @@ class FailureAnalyzer:
         logger.info(f"Generated recommendation for failure #{len(self.failure_history)}: {recommendation['strategy']}")
         return recommendation
 
+    def analyze_subsystem_failure(self, subsystem_name: str, failure_report: dict) -> str:
+        """
+        Analyze a failure report for a specific subsystem and return a recommended
+        new strategy for evolving that subsystem.
+        
+        Args:
+            subsystem_name: Name of the subsystem that failed
+            failure_report: Dictionary containing failure details for the subsystem
+        
+        Returns:
+            A string describing the recommended new strategy for the subsystem
+        """
+        self.failure_history.append(failure_report)
+        
+        error_type = failure_report.get('error_type', 'unknown')
+        template_used = failure_report.get('template_used', '')
+        parameters = failure_report.get('parameters', {})
+        mutation_type = failure_report.get('mutation_type', '')
+        
+        # Generate subsystem-specific recommendation
+        if error_type == 'template_error':
+            recommendation = self._handle_subsystem_template_error(subsystem_name, template_used, parameters)
+        elif error_type == 'parameter_out_of_bounds':
+            recommendation = self._handle_subsystem_parameter_error(subsystem_name, parameters, mutation_type)
+        elif error_type == 'mutation_failure':
+            recommendation = self._handle_subsystem_mutation_failure(subsystem_name, mutation_type, parameters)
+        else:
+            recommendation = self._handle_subsystem_unknown_error(subsystem_name, failure_report)
+        
+        logger.info(f"Generated subsystem recommendation for '{subsystem_name}' failure #{len(self.failure_history)}: {recommendation}")
+        return recommendation
+
+    def _handle_subsystem_template_error(self, subsystem_name: str, template: str, parameters: Dict[str, Any]) -> str:
+        """
+        Suggest alternative templates for a specific subsystem when the current one fails.
+        """
+        alternative_templates = self._get_alternative_templates(template)
+        return (f"Subsystem '{subsystem_name}' template error: Switch to a different template family. "
+                f"Recommended templates: {alternative_templates}. "
+                f"Consider reducing template complexity or using a simpler structure for this subsystem.")
+
+    def _handle_subsystem_parameter_error(self, subsystem_name: str, parameters: Dict[str, Any], mutation_type: str) -> str:
+        """
+        Suggest parameter tuning for a specific subsystem when parameters are out of bounds.
+        """
+        problematic_params = self._identify_problematic_parameters(parameters)
+        adjustments = []
+        for param in problematic_params:
+            suggested_range = self._get_suggested_range(param, mutation_type)
+            adjustments.append(f"{param}: adjust to range {suggested_range}")
+        return (f"Subsystem '{subsystem_name}' parameter error: Tune parameters. "
+                f"Problematic parameters: {problematic_params}. "
+                f"Suggested adjustments: {'; '.join(adjustments)}. "
+                f"Consider subsystem-specific parameter ranges for better evolution.")
+
+    def _handle_subsystem_mutation_failure(self, subsystem_name: str, mutation_type: str, parameters: Dict[str, Any]) -> str:
+        """
+        Suggest a new mutation paradigm for a specific subsystem when the current one fails.
+        """
+        alternative_paradigms = self._get_alternative_paradigms(mutation_type)
+        return (f"Subsystem '{subsystem_name}' mutation failure: Switch to a different mutation paradigm. "
+                f"Recommended paradigms: {alternative_paradigms}. "
+                f"Consider subsystem-specific optimizations like adjusting mutation rate or using "
+                f"specialized mutation templates for '{subsystem_name}'.")
+
+    def _handle_subsystem_unknown_error(self, subsystem_name: str, failure_report: Dict[str, Any]) -> str:
+        """
+        Generate a conservative recommendation for unknown errors in a specific subsystem.
+        """
+        return (f"Subsystem '{subsystem_name}' unknown error: Reset to default configuration and retry. "
+                f"Suggestions: Use default templates, reduce mutation rate, simplify parameter space, "
+                f"enable verbose logging for debugging. Consider subsystem-specific optimizations "
+                f"once the error is identified.")
+
     def _handle_template_error(self, template: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """
         Suggest alternative templates when the current one fails.

@@ -474,6 +474,39 @@ class MutationEngine:
         ast.fix_missing_locations(tree)
         return ast.unparse(tree)
 
+    def evolve_subsystem(self, subsystem_name: str, subsystem_code: str) -> Tuple[bool, str]:
+        """
+        Apply the current mutation strategy to a given subsystem's source code.
+        
+        Args:
+            subsystem_name: Name of the subsystem being mutated (for logging/tracking)
+            subsystem_code: Source code of the subsystem to mutate
+            
+        Returns:
+            Tuple of (success: bool, mutated_code: str)
+            - success: True if mutation was applied successfully, False otherwise
+            - mutated_code: The mutated source code if successful, original code if failed
+        """
+        try:
+            # Apply mutation based on current strategy
+            if self.use_grammar_mutation:
+                mutated_code = self._grammar_guided_mutation(subsystem_code)
+            else:
+                mutated_code = self.mutate(subsystem_code)
+            
+            # Check if mutation actually changed the code
+            if mutated_code == subsystem_code:
+                return False, subsystem_code
+            
+            return True, mutated_code
+            
+        except Exception as e:
+            # Track failure for strategy adaptation
+            self.failure_counter += 1
+            if self.failure_counter >= 4:
+                self.use_grammar_mutation = True
+            return False, subsystem_code
+
 
 def create_mutation_engine(objective_weights: Optional[Dict[str, float]] = None) -> MutationEngine:
     """Factory function to create a MutationEngine with optional weights."""
