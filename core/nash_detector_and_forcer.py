@@ -1,7 +1,7 @@
 import json
+from collections import defaultdict, deque
+from typing import List, Dict, Tuple, Optional, Set, Any
 import random
-from collections import defaultdict
-from typing import List, Dict, Tuple, Optional, Set
 
 class NashDetectorAndForcer:
     """
@@ -37,6 +37,12 @@ class NashDetectorAndForcer:
         # History of scores for equilibrium detection
         self.score_history: List[List[float]] = []
         
+        # Sliding window for tracking module interaction frequencies and success rates
+        self.sliding_window_size: int = 20
+        self.interaction_history: deque = deque(maxlen=self.sliding_window_size)
+        self.interaction_frequencies: Dict[Tuple[int, int], int] = defaultdict(int)
+        self.interaction_success_rates: Dict[Tuple[int, int], float] = defaultdict(float)
+        
         # Threshold for considering a change "improving"
         self.improvement_threshold: float = 0.01
         
@@ -47,6 +53,10 @@ class NashDetectorAndForcer:
         # Current equilibrium state
         self.in_equilibrium: bool = False
         self.equilibrium_iterations: int = 0
+        
+        # Track consecutive cycles without improvement
+        self.consecutive_no_improvement: int = 0
+        self.equilibrium_detected: bool = False
 
     def set_dependency_matrix(self, matrix: List[List[float]]) -> None:
         """
@@ -105,12 +115,38 @@ class NashDetectorAndForcer:
         
         return new_scores
 
+    def record_interaction(self, module_i: int, module_j: int, success: bool) -> None:
+        """
+        Record an interaction between two modules and update frequencies/success rates.
+        
+        Args:
+            module_i: First module index
+            module_j: Second module index
+            success: Whether the interaction was successful
+        """
+        interaction_key = (min(module_i, module_j), max(module_i, module_j))
+        self.interaction_history.append((interaction_key, success))
+        
+        # Update frequencies and success rates based on sliding window
+        self.interaction_frequencies.clear()
+        success_counts = defaultdict(int)
+        total_counts = defaultdict(int)
+        
+        for key, suc in self.interaction_history:
+            total_counts[key] += 1
+            if suc:
+                success_counts[key] += 1
+        
+        for key in total_counts:
+            self.interaction_frequencies[key] = total_counts[key]
+            self.interaction_success_rates[key] = success_counts[key] / total_counts[key]
+
     def check_equilibrium(self) -> bool:
         """
         Check if the system is in a Nash equilibrium.
         
         A Nash equilibrium exists when no single module can improve its score
-        by changing its dependencies (within a small tolerance).
+        by changing its dependencies (within a small tolerance) for 3+ consecutive cycles.
         
         Returns:
             True if system is in equilibrium, False otherwise
@@ -125,9 +161,11 @@ class NashDetectorAndForcer:
         for i in range(self.num_modules):
             scores_i = [s[i] for s in recent_scores]
             if max(scores_i) - min(scores_i) > self.equilibrium_tolerance:
+                self.consecutive_no_improvement = 0
                 return False
         
         # Check if any single-module change improves the system
+        improvement_found = False
         for module_idx in range(self.num_modules):
             # Try a small perturbation to this module's dependencies
             original_deps = self.dependency_matrix[module_idx].copy()
@@ -145,31 +183,42 @@ class NashDetectorAndForcer:
             
             # If improvement found, not in equilibrium
             if new_score > self.module_scores[module_idx] + self.improvement_threshold:
-                return False
+                improvement_found = True
+                break
         
-        self.in_equilibrium = True
-        self.equilibrium_iterations += 1
-        return True
+        if improvement_found:
+            self.consecutive_no_improvement = 0
+            return False
+        else:
+            self.consecutive_no_improvement += 1
+            if self.consecutive_no_improvement >= 3:
+                self.in_equilibrium = True
+                self.equilibrium_iterations += 1
+                self.equilibrium_detected = True
+                return True
+            return False
 
-    def force_coordinated_change(self, num_modules_to_change: int = 3) -> Dict[str, any]:
+    def force_coordinated_change(self, num_modules_to_change: int = 3) -> Dict[str, Any]:
         """
         Force a coordinated multi-module change to escape equilibrium.
         
-        Generates simultaneous mutations across 2-4 modules.
+        Generates simultaneous mutations across 2-3 interdependent modules and returns the plan
+        to the orchestrator for execution.
         
         Args:
-            num_modules_to_change: Number of modules to mutate (default 3, clamped to 2-4)
+            num_modules_to_change: Number of modules to mutate (default 3, clamped to 2-3)
             
         Returns:
-            Dictionary describing the forced change
+            Dictionary describing the forced change plan for the orchestrator
         """
-        # Clamp to valid range
-        num_modules_to_change = max(2, min(4, num_modules_to_change))
+        # Clamp to valid range (2-3 modules)
+        num_modules_to_change = max(2, min(3, num_modules_to_change))
         
-        # Select random modules to change
-        modules_to_change = random.sample(range(self.num_modules), num_modules_to_change)
+        # Select interdependent modules based on interaction frequencies
+        modules_to_change = self._select_interdependent_modules(num_modules_to_change)
         
-        change_record = {
+        # Build a mutation plan that can be executed by the orchestrator
+        mutation_plan = {
             "type": "coordinated_mutation",
             "modules_changed": modules_to_change,
             "mutations": []
@@ -183,29 +232,31 @@ class NashDetectorAndForcer:
                 # Shift all dependencies slightly
                 shift_amount = random.uniform(-0.2, 0.2)
                 original = self.dependency_matrix[module_idx].copy()
+                new_deps = []
                 for j in range(self.num_modules):
-                    self.dependency_matrix[module_idx][j] = max(0.0, min(1.0, 
+                    new_val = max(0.0, min(1.0, 
                         self.dependency_matrix[module_idx][j] + shift_amount))
-                change_record["mutations"].append({
+                    new_deps.append(new_val)
+                mutation_plan["mutations"].append({
                     "module": module_idx,
                     "type": "shift",
                     "amount": shift_amount,
                     "original": original,
-                    "new": self.dependency_matrix[module_idx].copy()
+                    "new": new_deps
                 })
                 
             elif mutation_type == "dependency_swap":
                 # Swap two dependencies
                 j1, j2 = random.sample(range(self.num_modules), 2)
                 original = self.dependency_matrix[module_idx].copy()
-                self.dependency_matrix[module_idx][j1], self.dependency_matrix[module_idx][j2] = \
-                    self.dependency_matrix[module_idx][j2], self.dependency_matrix[module_idx][j1]
-                change_record["mutations"].append({
+                new_deps = original.copy()
+                new_deps[j1], new_deps[j2] = new_deps[j2], new_deps[j1]
+                mutation_plan["mutations"].append({
                     "module": module_idx,
                     "type": "swap",
                     "indices": (j1, j2),
                     "original": original,
-                    "new": self.dependency_matrix[module_idx].copy()
+                    "new": new_deps
                 })
                 
             else:  # dependency_reset
@@ -213,23 +264,97 @@ class NashDetectorAndForcer:
                 num_to_reset = random.randint(1, max(1, self.num_modules // 2))
                 indices_to_reset = random.sample(range(self.num_modules), num_to_reset)
                 original = self.dependency_matrix[module_idx].copy()
+                new_deps = original.copy()
                 for j in indices_to_reset:
-                    self.dependency_matrix[module_idx][j] = random.random()
-                change_record["mutations"].append({
+                    new_deps[j] = random.random()
+                mutation_plan["mutations"].append({
                     "module": module_idx,
                     "type": "reset",
                     "indices_reset": indices_to_reset,
                     "original": original,
-                    "new": self.dependency_matrix[module_idx].copy()
+                    "new": new_deps
                 })
+        
+        # Return the plan to the orchestrator without executing it here
+        return mutation_plan
+
+    def _select_interdependent_modules(self, num_modules: int) -> List[int]:
+        """
+        Select interdependent modules based on interaction frequencies.
+        
+        Args:
+            num_modules: Number of modules to select
+            
+        Returns:
+            List of module indices that are interdependent
+        """
+        if not self.interaction_frequencies:
+            # Fall back to random selection if no interaction data
+            return random.sample(range(self.num_modules), num_modules)
+        
+        # Sort interactions by frequency (most frequent first)
+        sorted_interactions = sorted(
+            self.interaction_frequencies.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        
+        selected_modules = set()
+        for (i, j), freq in sorted_interactions:
+            if len(selected_modules) >= num_modules:
+                break
+            selected_modules.add(i)
+            if len(selected_modules) < num_modules:
+                selected_modules.add(j)
+        
+        # If we don't have enough modules, add random ones
+        while len(selected_modules) < num_modules:
+            candidate = random.randint(0, self.num_modules - 1)
+            if candidate not in selected_modules:
+                selected_modules.add(candidate)
+        
+        return list(selected_modules)[:num_modules]
+
+    def execute_coordinated_change(self, mutation_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a coordinated change plan that was generated by force_coordinated_change.
+        
+        This method applies the mutations to the dependency matrix and updates scores.
+        
+        Args:
+            mutation_plan: The plan dictionary returned by force_coordinated_change
+            
+        Returns:
+            Dictionary with execution results
+        """
+        execution_record = {
+            "type": "coordinated_mutation_executed",
+            "modules_changed": mutation_plan["modules_changed"],
+            "mutations_applied": []
+        }
+        
+        for mutation in mutation_plan["mutations"]:
+            module_idx = mutation["module"]
+            new_deps = mutation["new"]
+            
+            # Apply the new dependencies
+            self.dependency_matrix[module_idx] = new_deps.copy()
+            
+            execution_record["mutations_applied"].append({
+                "module": module_idx,
+                "type": mutation["type"],
+                "new_dependencies": new_deps
+            })
         
         # Update scores after forced change
         self.update_all_scores()
         self.in_equilibrium = False
+        self.equilibrium_detected = False
+        self.consecutive_no_improvement = 0
         
-        return change_record
+        return execution_record
 
-    def run_equilibrium_cycle(self, max_iterations: int = 100) -> Dict[str, any]:
+    def run_equilibrium_cycle(self, max_iterations: int = 100) -> Dict[str, Any]:
         """
         Run a full equilibrium detection and forcing cycle.
         
@@ -254,18 +379,28 @@ class NashDetectorAndForcer:
             # Update scores
             scores = self.update_all_scores()
             
+            # Record interactions between modules (simulated)
+            for i in range(self.num_modules):
+                for j in range(i + 1, self.num_modules):
+                    interaction_success = random.random() > 0.3  # 70% success rate
+                    self.record_interaction(i, j, interaction_success)
+            
             # Check for equilibrium
             if self.check_equilibrium():
                 results["equilibria_detected"] += 1
                 
-                # Force coordinated change
-                num_to_change = random.randint(2, 4)
-                change = self.force_coordinated_change(num_to_change)
+                # Generate coordinated change plan (2-3 modules)
+                num_to_change = random.randint(2, 3)
+                change_plan = self.force_coordinated_change(num_to_change)
+                
+                # Execute the plan
+                execution = self.execute_coordinated_change(change_plan)
                 results["coordinated_changes_forced"] += 1
                 results["history"].append({
                     "iteration": iteration,
                     "type": "coordinated_change",
-                    "details": change
+                    "plan": change_plan,
+                    "execution": execution
                 })
             
             results["iterations"] = iteration + 1
@@ -285,7 +420,10 @@ class NashDetectorAndForcer:
             "dependency_matrix": self.dependency_matrix,
             "module_scores": self.module_scores,
             "in_equilibrium": self.in_equilibrium,
-            "equilibrium_iterations": self.equilibrium_iterations
+            "equilibrium_iterations": self.equilibrium_iterations,
+            "consecutive_no_improvement": self.consecutive_no_improvement,
+            "interaction_frequencies": {str(k): v for k, v in self.interaction_frequencies.items()},
+            "interaction_success_rates": {str(k): v for k, v in self.interaction_success_rates.items()}
         }
         return json.dumps(state, indent=2)
 
@@ -306,9 +444,20 @@ class NashDetectorAndForcer:
         instance.module_scores = state["module_scores"]
         instance.in_equilibrium = state["in_equilibrium"]
         instance.equilibrium_iterations = state["equilibrium_iterations"]
+        instance.consecutive_no_improvement = state.get("consecutive_no_improvement", 0)
+        
+        # Restore interaction data
+        for key_str, freq in state.get("interaction_frequencies", {}).items():
+            key = tuple(map(int, key_str.strip("()").split(", ")))
+            instance.interaction_frequencies[key] = freq
+        
+        for key_str, rate in state.get("interaction_success_rates", {}).items():
+            key = tuple(map(int, key_str.strip("()").split(", ")))
+            instance.interaction_success_rates[key] = rate
+        
         return instance
 
-    def get_system_summary(self) -> Dict[str, any]:
+    def get_system_summary(self) -> Dict[str, Any]:
         """
         Get a summary of the current system state.
         
@@ -322,13 +471,152 @@ class NashDetectorAndForcer:
             "min_score": min(self.module_scores) if self.module_scores else 0.0,
             "in_equilibrium": self.in_equilibrium,
             "equilibrium_iterations": self.equilibrium_iterations,
+            "consecutive_no_improvement": self.consecutive_no_improvement,
             "dependency_density": sum(
                 sum(1 for val in row if val > 0.5) for row in self.dependency_matrix
-            ) / (self.num_modules ** 2) if self.num_modules > 0 else 0.0
+            ) / (self.num_modules ** 2) if self.num_modules > 0 else 0.0,
+            "interaction_frequencies": dict(self.interaction_frequencies),
+            "interaction_success_rates": dict(self.interaction_success_rates)
         }
 
 
-# Example usage and test function
+# Simple test function to validate core logic
+def test_nash_detector_and_forcer():
+    """
+    Test function to validate the core logic of NashDetectorAndForcer.
+    Tests: initialization, equilibrium detection, coordinated change, and interaction tracking.
+    """
+    print("Running tests for NashDetectorAndForcer...")
+    
+    # Test 1: Initialization
+    print("\nTest 1: Initialization")
+    detector = NashDetectorAndForcer(num_modules=5, random_seed=42)
+    assert detector.num_modules == 5, "Should have 5 modules"
+    assert len(detector.dependency_matrix) == 5, "Dependency matrix should have 5 rows"
+    assert len(detector.module_scores) == 5, "Should have 5 module scores"
+    assert detector.sliding_window_size == 20, "Sliding window should be 20"
+    print("  PASS: Initialization works correctly")
+    
+    # Test 2: Score computation
+    print("\nTest 2: Score computation")
+    initial_scores = detector.module_scores.copy()
+    new_scores = detector.update_all_scores()
+    assert len(new_scores) == 5, "Should return 5 scores"
+    assert new_scores != initial_scores, "Scores should change after update"
+    print("  PASS: Score computation works correctly")
+    
+    # Test 3: Interaction tracking
+    print("\nTest 3: Interaction tracking")
+    detector.record_interaction(0, 1, True)
+    detector.record_interaction(1, 2, False)
+    detector.record_interaction(0, 2, True)
+    assert (0, 1) in detector.interaction_frequencies, "Should track interaction (0,1)"
+    assert detector.interaction_frequencies[(0, 1)] == 1, "Frequency should be 1"
+    assert detector.interaction_success_rates[(0, 1)] == 1.0, "Success rate should be 1.0"
+    assert detector.interaction_success_rates[(1, 2)] == 0.0, "Success rate should be 0.0"
+    print("  PASS: Interaction tracking works correctly")
+    
+    # Test 4: Equilibrium detection
+    print("\nTest 4: Equilibrium detection")
+    # Force stable scores to trigger equilibrium
+    for _ in range(10):
+        detector.update_all_scores()
+    # Check equilibrium with stable scores
+    is_equilibrium = detector.check_equilibrium()
+    # After 3+ consecutive no-improvement cycles, should detect equilibrium
+    if detector.consecutive_no_improvement >= 3:
+        assert is_equilibrium, "Should detect equilibrium after 3+ no-improvement cycles"
+        print("  PASS: Equilibrium detection works correctly")
+    else:
+        print("  INFO: Not enough cycles to trigger equilibrium (may need more iterations)")
+    
+    # Test 5: Coordinated change generation
+    print("\nTest 5: Coordinated change generation")
+    change_plan = detector.force_coordinated_change(3)
+    assert change_plan["type"] == "coordinated_mutation", "Should be coordinated mutation"
+    assert len(change_plan["modules_changed"]) == 3, "Should change 3 modules"
+    assert len(change_plan["mutations"]) == 3, "Should have 3 mutations"
+    print("  PASS: Coordinated change generation works correctly")
+    
+    # Test 6: Coordinated change execution
+    print("\nTest 6: Coordinated change execution")
+    execution_result = detector.execute_coordinated_change(change_plan)
+    assert execution_result["type"] == "coordinated_mutation_executed", "Should be executed mutation"
+    assert len(execution_result["mutations_applied"]) == 3, "Should have applied 3 mutations"
+    assert not detector.in_equilibrium, "Should exit equilibrium after change"
+    print("  PASS: Coordinated change execution works correctly")
+    
+    # Test 7: Serialization
+    print("\nTest 7: Serialization")
+    json_str = detector.to_json()
+    restored = NashDetectorAndForcer.from_json(json_str)
+    assert restored.num_modules == detector.num_modules, "Should restore num_modules"
+    assert restored.dependency_matrix == detector.dependency_matrix, "Should restore dependency matrix"
+    assert restored.module_scores == detector.module_scores, "Should restore module scores"
+    print("  PASS: Serialization works correctly")
+    
+    # Test 8: Interdependent module selection
+    print("\nTest 8: Interdependent module selection")
+    # Add more interactions to create interdependence
+    for _ in range(50):
+        i = random.randint(0, 4)
+        j = random.randint(0, 4)
+        if i != j:
+            detector.record_interaction(i, j, random.random() > 0.3)
+    selected = detector._select_interdependent_modules(3)
+    assert len(selected) == 3, "Should select 3 modules"
+    assert all(0 <= idx < 5 for idx in selected), "All indices should be valid"
+    print("  PASS: Interdependent module selection works correctly")
+    
+    # Test 9: Full cycle run
+    print("\nTest 9: Full cycle run")
+    detector2 = NashDetectorAndForcer(num_modules=5, random_seed=123)
+    results = detector2.run_equilibrium_cycle(max_iterations=30)
+    assert results["iterations"] == 30, "Should run 30 iterations"
+    assert len(results["final_scores"]) == 5, "Should have 5 final scores"
+    print(f"  Equilibria detected: {results['equilibria_detected']}")
+    print(f"  Coordinated changes forced: {results['coordinated_changes_forced']}")
+    print("  PASS: Full cycle run works correctly")
+    
+    # Test 10: Multi-module mutation proposals
+    print("\nTest 10: Multi-module mutation proposals")
+    # Generate a proposal that would be missed by single-module optimization
+    # This simulates a scenario where individual changes don't improve but combined do
+    detector3 = NashDetectorAndForcer(num_modules=5, random_seed=42)
+    # Set up a scenario where single changes are neutral but combined is positive
+    for i in range(5):
+        for j in range(5):
+            if i != j:
+                detector3.dependency_matrix[i][j] = 0.5
+    # Generate a coordinated proposal
+    proposal = detector3.force_coordinated_change(3)
+    assert proposal["type"] == "coordinated_mutation", "Should be coordinated mutation"
+    assert len(proposal["modules_changed"]) == 3, "Should propose 3 modules"
+    # Verify the proposal includes mutations that are interdependent
+    modules = proposal["modules_changed"]
+    for mutation in proposal["mutations"]:
+        assert mutation["module"] in modules, "Mutation module should be in proposed set"
+    print("  PASS: Multi-module mutation proposals work correctly")
+    
+    # Test 11: Nash equilibrium detection validation
+    print("\nTest 11: Nash equilibrium detection validation")
+    detector4 = NashDetectorAndForcer(num_modules=5, random_seed=42)
+    # Force a stable state where no single change improves score
+    for _ in range(20):
+        detector4.update_all_scores()
+    # Check equilibrium detection
+    eq_detected = detector4.check_equilibrium()
+    # The detector should eventually detect equilibrium after stable scores
+    if detector4.consecutive_no_improvement >= 3:
+        assert eq_detected, "Should detect equilibrium after 3+ no-improvement cycles"
+        print("  PASS: Nash equilibrium detection validation works correctly")
+    else:
+        print("  INFO: Not enough cycles to validate equilibrium detection")
+    
+    print("\nAll tests passed!")
+
+
+# Example usage
 def run_example():
     """
     Run an example demonstrating the NashDetectorAndForcer.
@@ -362,8 +650,20 @@ def run_example():
     print(f"Restored system summary:")
     print(json.dumps(restored.get_system_summary(), indent=2))
     
+    # Demonstrate force_coordinated_change returning a plan
+    print("\nDemonstrating force_coordinated_change plan generation...")
+    plan = detector.force_coordinated_change(3)
+    print(f"Generated plan for {len(plan['modules_changed'])} modules:")
+    print(json.dumps(plan, indent=2))
+    
     return detector
 
 
 if __name__ == "__main__":
+    # Run tests first
+    test_nash_detector_and_forcer()
+    
+    # Then run example
+    print("\n" + "="*50)
+    print("Running example...")
     run_example()

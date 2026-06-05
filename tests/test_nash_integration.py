@@ -116,11 +116,6 @@ class MockModule:
     def mutate(self):
         return self
 
-modules = []
-for module_name, module_data in json.load(open(os.path.join(test_dir, "ModuleA.json"))).items():
-    pass
-
-# Actually create modules properly
 module_names = ["ModuleA", "ModuleB", "ModuleC"]
 modules = []
 for name in module_names:
@@ -303,6 +298,115 @@ print(json.dumps(result))
         # Verify that coordinated_mutation_planner generates a plan
         self.assertIsNotNone(output["plan"], "Coordinated mutation planner should generate a plan")
         self.assertGreaterEqual(len(output["plan"]), 2, "Plan should target at least 2 modules")
+
+    def test_minimal_integration(self):
+        """Minimal integration test: detect equilibrium, trigger change, verify new state."""
+        # Create a script that runs the full integration
+        script_path = os.path.join(self.test_dir, "test_minimal_integration.py")
+        with open(script_path, 'w') as f:
+            f.write("""
+import sys
+import os
+import json
+
+# Add parent directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from core.nash_detector import NashDetector
+from core.multi_module_forcer import MultiModuleForcer
+
+# Load test data
+test_dir = sys.argv[1]
+with open(os.path.join(test_dir, "history.json"), 'r') as f:
+    history = json.load(f)
+with open(os.path.join(test_dir, "interaction_matrix.json"), 'r') as f:
+    interaction_matrix = json.load(f)
+with open(os.path.join(test_dir, "dependency_graph.json"), 'r') as f:
+    dependency_graph = json.load(f)
+
+# Create detector and load history
+detector = NashDetector()
+for module_name, module_history in history.items():
+    for entry in module_history:
+        detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+
+# Create mock modules
+class MockModule:
+    def __init__(self, name, fitness):
+        self.name = name
+        self.fitness = fitness
+    def get_scores(self):
+        return interaction_matrix[self.name]
+    def mutate(self):
+        return self
+
+module_names = ["ModuleA", "ModuleB", "ModuleC"]
+modules = []
+for name in module_names:
+    module_file = os.path.join(test_dir, f"{name}.json")
+    with open(module_file, 'r') as f:
+        data = json.load(f)
+    modules.append(MockModule(name, data["fitness"]))
+
+# Step 1: Detect equilibrium
+is_nash = detector.detect_equilibrium(modules)
+
+# Step 2: Trigger forced multi-module change if equilibrium detected
+plan = None
+if is_nash:
+    forcer = MultiModuleForcer()
+    plan = forcer.generate_plan(dependency_graph, {"is_equilibrium": True})
+    
+    # Apply mutations to simulate state change
+    for mutation in plan:
+        module_name = mutation["module"]
+        # Update module fitness to simulate mutation
+        for module in modules:
+            if module.name == module_name:
+                module.fitness = 0.7  # New fitness after mutation
+                break
+
+# Step 3: Verify system moves to new state by re-detecting equilibrium
+new_is_nash = detector.detect_equilibrium(modules)
+
+# Output result as JSON
+result = {
+    "initial_is_nash": is_nash,
+    "plan_generated": plan is not None,
+    "plan_length": len(plan) if plan else 0,
+    "new_is_nash": new_is_nash,
+    "new_fitnesses": [m.fitness for m in modules]
+}
+print(json.dumps(result))
+""")
+        
+        # Run the script via subprocess
+        result = subprocess.run(
+            [sys.executable, script_path, self.test_dir],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(script_path)
+        )
+        
+        # Check that the script ran successfully
+        self.assertEqual(result.returncode, 0, f"Script failed with error: {result.stderr}")
+        
+        # Parse the output
+        output = json.loads(result.stdout.strip())
+        
+        # Step 1: Verify equilibrium detected
+        self.assertTrue(output["initial_is_nash"], "Initial Nash equilibrium should be detected")
+        
+        # Step 2: Verify plan generated
+        self.assertTrue(output["plan_generated"], "Plan should be generated after equilibrium detection")
+        self.assertGreaterEqual(output["plan_length"], 2, "Plan should target at least 2 modules")
+        
+        # Step 3: Verify system moved to new state (no longer at equilibrium)
+        self.assertFalse(output["new_is_nash"], "System should no longer be at equilibrium after mutation")
+        
+        # Verify fitness values changed
+        for fitness in output["new_fitnesses"]:
+            self.assertEqual(fitness, 0.7, "All mutated modules should have new fitness 0.7")
 
     def tearDown(self):
         """Clean up temporary files."""

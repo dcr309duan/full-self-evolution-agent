@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation', 'adapt_to_pressure', or 'nash_equilibrium_meta'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation', 'adapt_to_pressure', 'nash_equilibrium_meta', or 'coordinated_multi_module_change'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -80,6 +80,9 @@ nash_equilibrium_analysis: Dict = {}  # Analysis details of the detected Nash eq
 # External goal queue for environmental pressure module
 external_goal_queue: List[Goal] = []  # Queue for goals injected by external modules
 
+# Coordinated multi-module change tracking
+coordinated_change_candidates: Dict[str, List[str]] = {}  # Maps goal descriptions to lists of module names requiring changes
+
 
 def add_external_goal(goal: Goal) -> bool:
     """Add an external goal to the goal queue after validation.
@@ -116,7 +119,8 @@ def add_external_goal(goal: Goal) -> bool:
         'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge',
         'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
         'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
-        'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure'
+        'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure',
+        'coordinated_multi_module_change'
     ]
     if goal.goal_type not in valid_goal_types:
         logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
@@ -415,6 +419,65 @@ def generate_adapt_to_pressure_goal(pressure_description: str) -> Goal:
     return goal
 
 
+def generate_coordinated_multi_module_change_goal(modules: List[str], description: str) -> Goal:
+    """Generate a coordinated multi-module change goal that requires changes to 3+ modules simultaneously.
+
+    This goal type is designed to be requested by the nash handler or other components
+    that need to coordinate changes across multiple modules to achieve a system-wide improvement.
+    The goal ensures that the goal generator can produce goals requiring changes to 3 or more
+    modules simultaneously.
+
+    Args:
+        modules: List of module names that need to be changed (must be 3 or more).
+        description: Description of the coordinated change needed.
+
+    Returns:
+        A Goal object with type 'coordinated_multi_module_change' that specifies the
+        coordinated changes needed across multiple modules.
+    """
+    if not modules or len(modules) < 3:
+        logger.warning(
+            "generate_coordinated_multi_module_change_goal called with %d modules, need at least 3",
+            len(modules) if modules else 0
+        )
+        return None
+
+    if not description or not description.strip():
+        logger.warning("generate_coordinated_multi_module_change_goal called with empty description")
+        return None
+
+    modules_str = ", ".join(modules)
+    full_description = (
+        f"Coordinated multi-module change: {description}. "
+        f"Requires simultaneous changes to modules [{modules_str}] to achieve system-wide improvement. "
+        f"All {len(modules)} modules must be modified together to avoid breaking dependencies."
+    )
+
+    goal = Goal(
+        description=full_description,
+        priority=GoalPriority.CRITICAL,
+        module=",".join(modules),  # Use comma-separated module names
+        goal_type="coordinated_multi_module_change",
+        source="fitness",
+        tags=["coordinated_multi_module_change", "multi_module", "system_wide_change"]
+    )
+
+    # Add individual module tags for tracking
+    for module in modules:
+        goal.tags.append(f"module:{module}")
+
+    # Register the goal in the coordinated change candidates for tracking
+    coordinated_change_candidates[full_description] = modules
+
+    logger.info(
+        "Generated coordinated multi-module change goal for %d modules: %s",
+        len(modules),
+        modules_str
+    )
+
+    return goal
+
+
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
@@ -441,7 +504,7 @@ def generate_goals(
     global consecutive_successes, current_accuracy_threshold, previous_diversity, capability_coverage
     global environmental_pressure_active, environmental_pressure_description
     global nash_equilibrium_detected, nash_equilibrium_modules, nash_equilibrium_analysis
-    global external_goal_queue
+    global external_goal_queue, coordinated_change_candidates
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
@@ -560,6 +623,19 @@ def generate_goals(
                 "Generated coordinated mutation goal for modules %s",
                 nash_equilibrium_modules
             )
+        
+        # Generate coordinated multi-module change goal if there are 3+ modules
+        if len(nash_equilibrium_modules) >= 3:
+            coordinated_multi_module_goal = generate_coordinated_multi_module_change_goal(
+                nash_equilibrium_modules,
+                f"Break Nash equilibrium across {len(nash_equilibrium_modules)} modules"
+            )
+            if coordinated_multi_module_goal:
+                goals.append(coordinated_multi_module_goal)
+                logger.info(
+                    "Generated coordinated multi-module change goal for %d modules",
+                    len(nash_equilibrium_modules)
+                )
         
         # Reset the flag after generating the goals to avoid duplicate generation
         nash_equilibrium_detected = False
@@ -837,85 +913,4 @@ def _calculate_priority(
     """
     # Base priority on accuracy deficit and coverage
     accuracy_deficit = 1.0 - metrics.accuracy
-    coverage_deficit = 1.0 - metrics.coverage
-
-    # Weighted score: higher = more urgent
-    score = (accuracy_deficit * (1 - coverage_weight) +
-             coverage_deficit * coverage_weight)
-
-    if score > 0.7:
-        return GoalPriority.HIGH
-    elif score > 0.4:
-        return GoalPriority.MEDIUM
-    else:
-        return GoalPriority.LOW
-
-
-def _coverage_score(goal: Goal, metrics_list: List[SimulationMetrics]) -> float:
-    """Calculate coverage score for a goal to prioritize coverage expansion.
-
-    Returns higher score for modules with lower coverage.
-    """
-    for metrics in metrics_list:
-        if metrics.module == goal.module:
-            return 1.0 - metrics.coverage
-    return 0.0
-
-
-def generate_goals_from_report(
-    report: Dict,
-    accuracy_threshold: float = 0.8,
-    coverage_weight: float = 0.5,
-    curiosity_goals: Optional[List[Goal]] = None,
-    retry_rate_threshold: float = 0.3,
-    permission_failure_threshold: int = 5,
-    health_dashboard: Optional[Dict] = None
-) -> List[Goal]:
-    """Generate goals from a simulation report dictionary.
-
-    Expected report format:
-    {
-        "modules": [
-            {
-                "name": "module_name",
-                "accuracy": 0.95,
-                "has_unexpected_side_effects": False,
-                "coverage": 0.8,
-                "fs_abstraction_retry_rate": 0.0,
-                "permission_failure_spike": False,
-                "failure_cluster": False,
-                "test_suite_diversity": 1.0
-            },
-            ...
-        ]
-    }
-
-    Args:
-        report: Dictionary containing simulation report data.
-        accuracy_threshold: Threshold for accuracy goals.
-        coverage_weight: Weight for coverage in priority.
-        curiosity_goals: Optional list of high-priority goals from the curiosity engine.
-        retry_rate_threshold: Threshold for fs_abstraction retry rate.
-        permission_failure_threshold: Threshold for permission failures.
-        health_dashboard: Optional dashboard containing system health status.
-
-    Returns:
-        List of generated goals.
-    """
-    metrics_list = []
-    for module_data in report.get("modules", []):
-        metrics = SimulationMetrics(
-            module=module_data.get("name", "unknown"),
-            accuracy=module_data.get("accuracy", 1.0),
-            has_unexpected_side_effects=module_data.get(
-                "has_unexpected_side_effects", False
-            ),
-            coverage=module_data.get("coverage", 0.0),
-            fs_abstraction_retry_rate=module_data.get("fs_abstraction_retry_rate", 0.0),
-            permission_failure_spike=module_data.get("permission_failure_spike", False),
-            failure_cluster=module_data.get("failure_cluster", False),
-            test_suite_diversity=module_data.get("test_suite_diversity", 1.0)
-        )
-        metrics_list.append(metrics)
-
-    return generate_goals
+    coverage_deficit
