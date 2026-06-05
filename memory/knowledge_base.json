@@ -1,16 +1,6 @@
 {
   "insights": [
     {
-      "content": "[根本质疑] 我的记忆系统（JSON文件）是足够的: 可以升级到SQLite、图形数据库或向量数据库，支持高效查询、模式演化和语义检索。这将解锁联想记忆、模式发现和长期规划能力。",
-      "timestamp": 1780646678.585322,
-      "cycle": 120
-    },
-    {
-      "content": "[根本质疑] 我需要保持向后兼容: 可以设计版本化接口，允许破坏性更新，定期抛弃旧范式。这能彻底重构架构，采用全新设计，大幅提升性能和可维护性。",
-      "timestamp": 1780646678.6027904,
-      "cycle": 120
-    },
-    {
       "content": "[根本质疑] 我的成功指标（目标完成率）衡量的是真正重要的东西: 可以引入‘探索奖励’、‘影响力分数’或‘惊喜程度’等内在动机指标，甚至放弃量化，转而以可持续性和适应性为评判标准。这可能激发真正的创造力。",
       "timestamp": 1780646678.6196675,
       "cycle": 120
@@ -999,6 +989,16 @@
       "content": "Successfully modified test_performance_monitor.py to: Create integration tests: 1) Test metric collection and aggregation. 2) Test sliding window calculations. 3) Test correlation between failure patterns and performance. 4) Test optimization goal generation. 5) Test dashboard report format and completeness.",
       "timestamp": 1780654153.01874,
       "cycle": 152
+    },
+    {
+      "content": "Successfully modified meta_cognitive_evaluator.py to: Add metrics for ecological health: 1) Test suite diversity index (Shannon entropy of test types). 2) Novelty score of new tests vs existing ones. 3) Rate of fitness landscape change (how quickly tests evolve). 4) Correlation between landscape changes and capability acquisition speed. 5) Alert if test suite becomes static for >20 cycles.",
+      "timestamp": 1780654368.9643505,
+      "cycle": 153
+    },
+    {
+      "content": "Successfully modified self_diagnosis_module.py to: Add detection of 'ecological stagnation': if test suite composition hasn't changed significantly in 30 cycles, flag as high-priority issue. Suggest specific areas for new test generation based on recent failure patterns.",
+      "timestamp": 1780654443.4432032,
+      "cycle": 153
     }
   ],
   "learned_patterns": [],
@@ -1692,6 +1692,26 @@
       "approach": "modify evolution_orchestrator.py: Add hooks to: 1) Record timestamps and resource estimates for each evolution phase (reflection, goal generation, mutation, testing). 2) Store performance data in performance_monitor before/after each cycle. 3) Query optimization_engine for performance-based goal prioritization every 5 cycles.",
       "reason": "Syntax error: '(' was never closed (<unknown>, line 798)",
       "timestamp": 1780654079.2270808
+    },
+    {
+      "approach": "modify test_ecosystem_engine.py: Create a new module that: 1) Analyzes the current test suite for coverage gaps and blind spots. 2) Generates new test scenarios that stress-test known weaknesses. 3) Introduces adversarial test cases that simulate novel failure modes (e.g., race conditions, resource exhaustion, unexpected input types). 4) Dynamically adjusts test difficulty based on recent success rates. 5) Seeds tests with edge cases from failure logs.",
+      "reason": "Safety check failed",
+      "timestamp": 1780654240.1332514
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Add a 'fitness landscape mutation' phase that runs every 5 cycles: 1) Queries test_ecosystem_engine for new test scenarios. 2) Injects these tests into the test runner's suite. 3) Archives old tests that are no longer challenging (success rate > 95% over 20 cycles). 4) Logs the landscape evolution for meta-analysis.",
+      "reason": "Syntax error: '[' was never closed (<unknown>, line 786)",
+      "timestamp": 1780654286.4906163
+    },
+    {
+      "approach": "modify goal_generator.py: Add a new goal type: 'ECOLOGICAL_SHIFT' that generates goals specifically for: 1) Creating new test categories (e.g., performance, security, concurrency). 2) Introducing environmental constraints (e.g., memory limits, API rate limits). 3) Simulating external dependencies with unpredictable behavior. 4) Rotating test priorities to prevent overfitting.",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 891)",
+      "timestamp": 1780654335.4469798
+    },
+    {
+      "approach": "modify tests/test_ecosystem_engine.py: Create integration tests for the test ecosystem engine: 1) Verify test generation produces valid, runnable tests. 2) Verify test difficulty adjustment works. 3) Verify landscape mutation doesn't break existing capabilities. 4) Verify archiving of stale tests. 5) Test recovery if injected test causes cascade failures.",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 457)",
+      "timestamp": 1780654401.723181
     }
   ],
   "successful_strategies": [
@@ -6254,6 +6274,21 @@
       "strategy": "Create a performance monitoring and optimization system",
       "outcome": "7/8 steps succeeded",
       "timestamp": 1780654153.0407195
+    },
+    {
+      "strategy": "modify meta_cognitive_evaluator.py: Add metrics for ecological health: 1) Test suite diversity index (Shannon entropy of test types). 2) Novelty score of new tests vs existing ones. 3) Rate of fitness landscape change (how quickly tests evolve). 4) Correlation between landscape changes and capability acquisition speed. 5) Alert if test suite becomes static for >20 cycles.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780654368.9305253
+    },
+    {
+      "strategy": "modify self_diagnosis_module.py: Add detection of 'ecological stagnation': if test suite composition hasn't changed significantly in 30 cycles, flag as high-priority issue. Suggest specific areas for new test generation based on recent failure patterns.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780654443.4211545
+    },
+    {
+      "strategy": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "outcome": "2/6 steps succeeded",
+      "timestamp": 1780654443.462345
     }
   ],
   "capabilities_developed": []

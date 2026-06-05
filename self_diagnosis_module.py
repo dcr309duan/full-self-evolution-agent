@@ -112,6 +112,8 @@ class FragilityHotspotMiner:
         self._recurrence_threshold = recurrence_threshold
         self._time_window_days = time_window_days
         self._performance_monitor = PerformanceMonitor()
+        self._test_suite_snapshots: List[Tuple[datetime, Set[str]]] = []
+        self._ecological_stagnation_cycles = 30
 
     def record_pair_failure(self, module_a: str, module_b: str, failure_type: str) -> None:
         """Record a failure for a module pair with a specific failure type."""
@@ -232,7 +234,8 @@ class FragilityHotspotMiner:
             "trends": self.detect_trends(),
             "refactoring_goals": self.prioritize_refactoring_goals(),
             "total_pairs_tracked": len(self._pair_failures),
-            "performance_correlations": self._performance_monitor.get_performance_impact_summary()
+            "performance_correlations": self._performance_monitor.get_performance_impact_summary(),
+            "ecological_stagnation": self.detect_ecological_stagnation()
         }
 
     def correlate_failure_patterns_with_performance(self) -> List[Dict]:
@@ -302,6 +305,82 @@ class FragilityHotspotMiner:
                 })
         
         return sorted(recommendations, key=lambda x: x["avg_throughput_impact_pct"])
+
+    def record_test_suite_snapshot(self, test_names: Set[str]) -> None:
+        """Record a snapshot of the current test suite composition."""
+        self._test_suite_snapshots.append((datetime.now(), test_names))
+        logger.debug(f"Recorded test suite snapshot with {len(test_names)} tests")
+
+    def detect_ecological_stagnation(self) -> Optional[Dict]:
+        """
+        Detect if test suite composition hasn't changed significantly in the last 30 cycles.
+        Returns a high-priority issue dict if stagnation detected, None otherwise.
+        """
+        if len(self._test_suite_snapshots) < 2:
+            return None
+
+        # Get snapshots from the last 30 cycles
+        recent_snapshots = self._test_suite_snapshots[-self._ecological_stagnation_cycles:]
+        
+        if len(recent_snapshots) < 2:
+            return None
+
+        # Check if test suite composition has changed significantly
+        first_snapshot = recent_snapshots[0][1]
+        last_snapshot = recent_snapshots[-1][1]
+        
+        # Calculate Jaccard similarity between first and last snapshot
+        intersection = first_snapshot & last_snapshot
+        union = first_snapshot | last_snapshot
+        
+        if not union:
+            return None
+            
+        similarity = len(intersection) / len(union)
+        
+        # If similarity is very high (>0.95), test suite hasn't changed significantly
+        if similarity > 0.95:
+            stagnation_issue = {
+                "type": "ecological_stagnation",
+                "priority": "high",
+                "cycles_without_change": len(recent_snapshots),
+                "similarity_score": round(similarity, 3),
+                "test_count_first": len(first_snapshot),
+                "test_count_last": len(last_snapshot),
+                "description": f"Test suite composition hasn't changed significantly in {len(recent_snapshots)} cycles. "
+                             f"Similarity score: {similarity:.3f}. This may indicate lack of test evolution."
+            }
+            
+            # Suggest specific areas for new test generation based on recent failure patterns
+            failure_patterns = self._get_recent_failure_patterns()
+            if failure_patterns:
+                stagnation_issue["suggested_test_areas"] = failure_patterns
+                stagnation_issue["description"] += f" Suggested areas for new test generation: {', '.join(failure_patterns)}"
+            
+            return stagnation_issue
+        
+        return None
+
+    def _get_recent_failure_patterns(self, window_days: int = 30) -> List[str]:
+        """
+        Analyze recent failure patterns to suggest areas for new test generation.
+        Returns a list of suggested test areas based on failure patterns.
+        """
+        cutoff = datetime.now() - timedelta(days=window_days)
+        failure_patterns = defaultdict(int)
+        
+        for pair_key, failure_types in self._pair_failures.items():
+            for failure_type, timestamps in failure_types.items():
+                recent_failures = [t for t in timestamps if t >= cutoff]
+                if recent_failures:
+                    # Suggest test generation for modules with recent failures
+                    for module in pair_key:
+                        if module not in ("__circular__", "__non_existent__"):
+                            failure_patterns[f"test_{module}_{failure_type}"] += len(recent_failures)
+        
+        # Return top 5 suggested test areas
+        sorted_patterns = sorted(failure_patterns.items(), key=lambda x: x[1], reverse=True)
+        return [pattern for pattern, count in sorted_patterns[:5]]
 
 
 class DependencyFailureTracker:
@@ -409,6 +488,11 @@ class DependencyFailureTracker:
         correlations = self._hotspot_miner.correlate_failure_patterns_with_performance()
         for corr in correlations[:5]:  # Top 5 correlations
             issues.append(f"Performance correlation: {corr['description']}")
+
+        # Add ecological stagnation detection
+        stagnation = self._hotspot_miner.detect_ecological_stagnation()
+        if stagnation:
+            issues.append(f"High priority: {stagnation['description']}")
 
         return issues
 
