@@ -1,6 +1,5 @@
-import json
 from collections import defaultdict
-from typing import Dict, List, Tuple, Set, Optional
+from typing import Dict, List, Tuple, Optional
 
 class NashEquilibriumDetector:
     """
@@ -78,18 +77,14 @@ class NashEquilibriumDetector:
         if len(self.module_interactions[key]) > 100:
             self.module_interactions[key] = self.module_interactions[key][-100:]
 
-    def detect_nash_equilibrium(self, cycles: int = 3) -> bool:
+    def detect_nash(self) -> bool:
         """
-        Checks if no single module's fitness has improved by >1% in last N cycles.
+        Checks if all single-module mutations fail to improve fitness by >1% over 3 consecutive cycles.
         
-        Args:
-            cycles: Number of cycles to check (default: 3)
-            
         Returns:
-            True if no single module's fitness has improved in last N cycles
+            True if no single module's fitness has improved in last 3 cycles
         """
-        if cycles < 1:
-            raise ValueError("cycles must be at least 1")
+        cycles = self.stagnation_threshold
         
         # Check if we have enough history
         if len(self._cycle_improvement_history) < cycles:
@@ -109,126 +104,9 @@ class NashEquilibriumDetector:
         
         return True
 
-    def check_and_force_coordinated_mutation(self) -> Optional[Dict]:
-        """
-        Checks if current module interactions are at Nash equilibrium by verifying
-        no single module's fitness improves by >1%. If at equilibrium,
-        generates a coordinated multi-module mutation plan targeting 2-3
-        interdependent modules and returns the plan for the orchestrator to execute atomically.
-        
-        Returns:
-            Dictionary with coordinated mutation plan, or None if not at equilibrium
-        """
-        # Check if at Nash equilibrium
-        if not self.detect_nash_equilibrium():
-            return None
-        
-        # Find interdependent modules based on interaction history
-        interdependent_pairs = []
-        for key, interactions in self.module_interactions.items():
-            if len(interactions) >= 3:  # At least 3 interactions to consider
-                success_rate = sum(1 for s, _ in interactions if s) / len(interactions)
-                if success_rate > 0.5:  # More than 50% success rate indicates interdependence
-                    interdependent_pairs.append(key)
-        
-        # Find stagnant modules
-        stagnant_modules = []
-        for module_name in self.module_names:
-            if self.stagnation_counter.get(module_name, 0) >= self.stagnation_threshold:
-                stagnant_modules.append(module_name)
-        
-        # Select target modules: prefer interdependent stagnant modules
-        selected_modules = []
-        used_modules = set()
-        
-        # First, try to find interdependent pairs among stagnant modules
-        for pair in interdependent_pairs:
-            m1, m2 = pair
-            if m1 in stagnant_modules and m2 in stagnant_modules:
-                if m1 not in used_modules and m2 not in used_modules:
-                    selected_modules.extend([m1, m2])
-                    used_modules.add(m1)
-                    used_modules.add(m2)
-                    if len(selected_modules) >= 2:
-                        break
-        
-        # If not enough modules selected, add more stagnant modules
-        if len(selected_modules) < 2:
-            for module in stagnant_modules:
-                if module not in used_modules:
-                    selected_modules.append(module)
-                    used_modules.add(module)
-                    if len(selected_modules) >= 3:
-                        break
-        
-        # If still not enough, use modules with lowest scores
-        if len(selected_modules) < 2:
-            sorted_modules = sorted(
-                self.module_names,
-                key=lambda m: self.current_scores.get(m, 0.0)
-            )
-            for module in sorted_modules:
-                if module not in used_modules:
-                    selected_modules.append(module)
-                    used_modules.add(module)
-                    if len(selected_modules) >= 3:
-                        break
-        
-        # Ensure we have at least 2 modules
-        if len(selected_modules) < 2:
-            return None
-        
-        # Limit to 2-3 modules
-        num_modules = min(len(selected_modules), 3)
-        selected_modules = selected_modules[:num_modules]
-        
-        # Generate coordinated mutation plan
-        plan = {
-            'timestamp': str(len(self._cycle_improvement_history)),
-            'modules': selected_modules,
-            'description': f"Coordinated multi-module mutation plan targeting {len(selected_modules)} modules",
-            'changes': []
-        }
-        
-        # Define possible changes
-        changes = [
-            'interface_redesign',
-            'dependency_inversion',
-            'shared_state_synchronization',
-            'protocol_upgrade',
-            'data_format_migration',
-            'concurrency_model_change',
-            'caching_strategy_overhaul',
-            'error_handling_restructure',
-            'logging_infrastructure_change',
-            'security_policy_update'
-        ]
-        
-        for i, module in enumerate(selected_modules):
-            change = changes[i % len(changes)]
-            plan['changes'].append({
-                'module': module,
-                'action': change,
-                'description': f"Apply {change} to {module}"
-            })
-        
-        # Record the interaction for each pair
-        for i in range(len(selected_modules)):
-            for j in range(i + 1, len(selected_modules)):
-                self.track_module_interactions(
-                    selected_modules[i],
-                    selected_modules[j],
-                    True  # Assume success for planning
-                )
-        
-        return plan
-
     def force_coordinated_change(self) -> Optional[Dict]:
         """
-        Generates a multi-module mutation plan targeting 2-3 modules simultaneously.
-        Designed to escape local optima by combining complementary modifications.
-        For example, if mutation_engine and goal_generator are both stuck,
-        propose a change that modifies both simultaneously.
+        Selects 2-3 modules and applies simultaneous mutations to escape local optima.
         
         Returns:
             Dictionary with coordinated change plan, or None if no plan possible
@@ -307,77 +185,17 @@ class NashEquilibriumDetector:
         
         return plan
 
-    def find_coordinated_change_candidates(self) -> List[Dict]:
+    def run_detection_cycle(self) -> Optional[Dict]:
         """
-        Identifies modules at Nash equilibrium, generates a set of 2-3 coordinated changes
-        that would improve the system, and returns a list of mutation specs.
-        
-        Each mutation spec contains:
-        - target_file: The file path of the module to modify
-        - description: A description of the change
-        - code_change: The actual code change to apply
+        Runs a detection cycle and returns a plan if equilibrium is detected.
         
         Returns:
-            List of mutation specs (each with target_file, description, and code_change)
+            Dictionary with coordinated change plan if at equilibrium, or None if not at equilibrium
         """
-        # Check if at Nash equilibrium
-        if not self.detect_nash_equilibrium():
-            return []
+        if not self.detect_nash():
+            return None
         
-        # Find stagnant modules
-        stagnant_modules = []
-        for module_name in self.module_names:
-            if self.stagnation_counter.get(module_name, 0) >= self.stagnation_threshold:
-                stagnant_modules.append(module_name)
-        
-        # If not enough stagnant modules, use modules with lowest scores
-        if len(stagnant_modules) < 2:
-            sorted_modules = sorted(
-                self.module_names,
-                key=lambda m: self.current_scores.get(m, 0.0)
-            )
-            stagnant_modules = sorted_modules[:3]
-        
-        # Ensure we have at least 2 modules
-        if len(stagnant_modules) < 2:
-            return []
-        
-        # Select 2-3 modules
-        num_modules = min(len(stagnant_modules), 3)
-        selected_modules = stagnant_modules[:num_modules]
-        
-        # Define coordinated changes that would improve the system
-        coordinated_changes = [
-            {
-                'target_file': f'modules/{selected_modules[0]}.py',
-                'description': f"Optimize {selected_modules[0]} to improve performance and reduce latency",
-                'code_change': f"def optimize_{selected_modules[0]}():\n    # Implement optimization for {selected_modules[0]}\n    pass"
-            },
-            {
-                'target_file': f'modules/{selected_modules[1]}.py',
-                'description': f"Refactor {selected_modules[1]} to enhance scalability and reliability",
-                'code_change': f"def refactor_{selected_modules[1]}():\n    # Implement refactoring for {selected_modules[1]}\n    pass"
-            }
-        ]
-        
-        # Add a third change if we have 3 modules
-        if num_modules == 3:
-            coordinated_changes.append({
-                'target_file': f'modules/{selected_modules[2]}.py',
-                'description': f"Update {selected_modules[2]} to improve integration with other modules",
-                'code_change': f"def update_{selected_modules[2]}():\n    # Implement integration update for {selected_modules[2]}\n    pass"
-            })
-        
-        # Record the interaction for each pair
-        for i in range(len(selected_modules)):
-            for j in range(i + 1, len(selected_modules)):
-                self.track_module_interactions(
-                    selected_modules[i],
-                    selected_modules[j],
-                    True  # Assume success for planning
-                )
-        
-        return coordinated_changes
+        return self.force_coordinated_change()
 
     def record_mutation_outcome(self, module_name: str, score_delta: float) -> None:
         """
@@ -487,7 +305,7 @@ class NashEquilibriumDetector:
             Dictionary containing equilibrium state information
         """
         return {
-            'equilibrium': self.detect_nash_equilibrium(),
+            'equilibrium': self.detect_nash(),
             'stagnant_modules': [
                 m for m in self.module_names 
                 if self.stagnation_counter.get(m, 0) >= self.stagnation_threshold
@@ -532,60 +350,30 @@ class NashEquilibriumDetector:
             raise ValueError("Stagnation threshold must be at least 1")
         self.stagnation_threshold = threshold
 
-    def to_json(self) -> str:
+    # Integration hooks for orchestrator registration
+    def register_with_orchestrator(self, orchestrator) -> None:
         """
-        Serialize the detector state to JSON.
-        
-        Returns:
-            JSON string representation of the detector state
-        """
-        state = {
-            'module_names': self.module_names,
-            'module_fitness_history': {
-                k: v for k, v in self.module_fitness_history.items()
-            },
-            'stagnation_counter': dict(self.stagnation_counter),
-            'cycle_improvement_history': self._cycle_improvement_history,
-            'current_scores': self.current_scores,
-            'improvement_threshold': self.improvement_threshold,
-            'cycles_without_improvement': self.cycles_without_improvement,
-            'stagnation_threshold': self.stagnation_threshold,
-            'max_history_length': self.max_history_length,
-            'module_interactions': {
-                f"{k[0]}_{k[1]}": [(s, t) for s, t in v]
-                for k, v in self.module_interactions.items()
-            }
-        }
-        return json.dumps(state, indent=2)
-
-    @classmethod
-    def from_json(cls, json_str: str) -> 'NashEquilibriumDetector':
-        """
-        Deserialize the detector state from JSON.
+        Register this detector with an orchestrator.
         
         Args:
-            json_str: JSON string representation of the detector state
-            
-        Returns:
-            NashEquilibriumDetector instance with restored state
+            orchestrator: The orchestrator instance to register with
         """
-        state = json.loads(json_str)
+        orchestrator.register_detector(self)
+
+    def get_orchestrator_hooks(self) -> Dict:
+        """
+        Get hooks for orchestrator integration.
         
-        detector = cls(state['module_names'])
-        detector.module_fitness_history = state['module_fitness_history']
-        detector.stagnation_counter = state['stagnation_counter']
-        detector._cycle_improvement_history = state['cycle_improvement_history']
-        detector.current_scores = state['current_scores']
-        detector.improvement_threshold = state['improvement_threshold']
-        detector.cycles_without_improvement = state['cycles_without_improvement']
-        detector.stagnation_threshold = state['stagnation_threshold']
-        detector.max_history_length = state['max_history_length']
-        
-        # Restore module interactions
-        for key_str, interactions in state['module_interactions'].items():
-            parts = key_str.split('_')
-            if len(parts) >= 2:
-                key = (parts[0], parts[1])
-                detector.module_interactions[key] = [(s, t) for s, t in interactions]
-        
-        return detector
+        Returns:
+            Dictionary of hook methods for orchestrator
+        """
+        return {
+            'detect_nash': self.detect_nash,
+            'force_coordinated_change': self.force_coordinated_change,
+            'run_detection_cycle': self.run_detection_cycle,
+            'get_equilibrium_state': self.get_equilibrium_state,
+            'record_mutation_outcome': self.record_mutation_outcome,
+            'track_module_interactions': self.track_module_interactions,
+            'increment_cycle': self.increment_cycle,
+            'reset': self.reset
+        }

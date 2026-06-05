@@ -302,3 +302,234 @@ class CoordinatedMutationPlan:
             f"changes={len(self._changes)}, "
             f"validated={self._validated})"
         )
+
+    def execute_coordinated_mutation(self, module_scores: Dict[str, float]) -> bool:
+        """Execute coordinated mutation across 2-3 modules atomically.
+
+        Given module names and their current scores, this method generates
+        simultaneous changes that improve all modules' scores. Changes are
+        applied atomically with rollback if any single change fails.
+
+        Args:
+            module_scores: Dictionary mapping module names to their current scores.
+
+        Returns:
+            True if all changes were applied successfully, False if rollback occurred.
+
+        Raises:
+            ValueError: If module_scores is empty or contains modules not in the plan.
+        """
+        if not module_scores:
+            raise ValueError("module_scores cannot be empty")
+
+        # Validate that all modules in module_scores are in the plan's scope
+        for module_name in module_scores:
+            if module_name not in self._modules_to_modify:
+                raise ValueError(
+                    f"Module '{module_name}' is not in the plan's scope. "
+                    f"Scope includes: {self._modules_to_modify}"
+                )
+
+        # Validate that we have 2-3 modules
+        if len(module_scores) < 2 or len(module_scores) > 3:
+            raise ValueError(
+                f"Coordinated mutation requires 2-3 modules, got {len(module_scores)}"
+            )
+
+        logger.info(
+            f"Starting coordinated mutation for modules: {list(module_scores.keys())} "
+            f"with scores: {module_scores}"
+        )
+
+        # Generate a plan that improves all modules' scores
+        plan = self._generate_improvement_plan(module_scores)
+
+        # Apply changes atomically with rollback
+        applied_changes: List[ModuleChange] = []
+        try:
+            for change in plan.changes:
+                # Simulate applying the change (in real implementation, this would
+                # modify the actual module)
+                success = self._apply_single_change(change, module_scores)
+                if not success:
+                    logger.error(
+                        f"Failed to apply change: {change.change_type.value} "
+                        f"on {change.module_name}.{change.target}"
+                    )
+                    # Rollback all previously applied changes
+                    self._rollback_changes(applied_changes, module_scores)
+                    return False
+                applied_changes.append(change)
+
+            # Verify that all modules' scores improved
+            for module_name, original_score in module_scores.items():
+                new_score = self._get_module_score(module_name)
+                if new_score <= original_score:
+                    logger.warning(
+                        f"Module '{module_name}' score did not improve: "
+                        f"{original_score} -> {new_score}"
+                    )
+                    # Rollback all changes
+                    self._rollback_changes(applied_changes, module_scores)
+                    return False
+
+            logger.info(
+                f"Successfully applied {len(applied_changes)} coordinated changes"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Error during coordinated mutation: {e}")
+            self._rollback_changes(applied_changes, module_scores)
+            return False
+
+    def _generate_improvement_plan(
+        self, module_scores: Dict[str, float]
+    ) -> MutationPlan:
+        """Generate a mutation plan that improves all modules' scores.
+
+        Args:
+            module_scores: Dictionary mapping module names to their current scores.
+
+        Returns:
+            A MutationPlan containing changes that improve all modules' scores.
+        """
+        plan = MutationPlan(
+            description="Coordinated mutation to improve all module scores"
+        )
+
+        module_names = list(module_scores.keys())
+
+        # Generate changes that create mutual dependencies and improvements
+        for i, module in enumerate(module_names):
+            # Add a new function that improves the module's score
+            change = ModuleChange(
+                module_name=module,
+                change_type=ChangeType.ADD_FUNCTION,
+                target=f"improvement_function_{i}",
+                description=f"Add improvement function to increase score of {module}",
+                dependencies=[]
+            )
+            plan.add_change(change)
+            self.add_change(change)
+
+            # Modify an existing interface to create beneficial coupling
+            next_module = module_names[(i + 1) % len(module_names)]
+            change = ModuleChange(
+                module_name=module,
+                change_type=ChangeType.MODIFY_INTERFACE,
+                target="process",
+                description=f"Modify interface to improve coupling with {next_module}",
+                dependencies=[next_module]
+            )
+            plan.add_change(change)
+            self.add_change(change)
+            self.add_dependency(module, next_module)
+
+            # Add a constant that optimizes the module's behavior
+            change = ModuleChange(
+                module_name=module,
+                change_type=ChangeType.ADD_CONSTANT,
+                target=f"OPTIMIZATION_CONSTANT_{i}",
+                description=f"Add optimization constant to improve {module} score",
+                dependencies=[]
+            )
+            plan.add_change(change)
+            self.add_change(change)
+
+        # Validate the plan
+        if not self.validate():
+            raise RuntimeError("Generated improvement plan has circular dependencies")
+
+        return plan
+
+    def _apply_single_change(
+        self, change: ModuleChange, module_scores: Dict[str, float]
+    ) -> bool:
+        """Apply a single change to a module.
+
+        In a real implementation, this would modify the actual module code.
+        Here we simulate the application and return success.
+
+        Args:
+            change: The ModuleChange to apply.
+            module_scores: Dictionary of current module scores.
+
+        Returns:
+            True if the change was applied successfully, False otherwise.
+        """
+        try:
+            # Simulate applying the change
+            logger.debug(
+                f"Applying change: {change.change_type.value} "
+                f"on {change.module_name}.{change.target}"
+            )
+
+            # In a real implementation, this would:
+            # 1. Parse the module's source code
+            # 2. Apply the modification
+            # 3. Verify the module still compiles/runs
+            # 4. Return True if successful
+
+            # For simulation, we always return True
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to apply change: {e}")
+            return False
+
+    def _rollback_changes(
+        self, changes: List[ModuleChange], module_scores: Dict[str, float]
+    ) -> None:
+        """Rollback a list of previously applied changes.
+
+        Args:
+            changes: List of ModuleChange objects to rollback.
+            module_scores: Dictionary of original module scores to restore.
+        """
+        if not changes:
+            return
+
+        logger.info(f"Rolling back {len(changes)} changes")
+
+        # Rollback in reverse order
+        for change in reversed(changes):
+            try:
+                # In a real implementation, this would:
+                # 1. Parse the module's source code
+                # 2. Reverse the modification
+                # 3. Verify the module is restored to its original state
+
+                logger.debug(
+                    f"Rolling back change: {change.change_type.value} "
+                    f"on {change.module_name}.{change.target}"
+                )
+            except Exception as e:
+                logger.error(f"Error during rollback of {change}: {e}")
+
+        # Clear the applied changes from the plan
+        for change in changes:
+            if change in self._changes:
+                self._changes.remove(change)
+
+        logger.info("Rollback completed")
+
+    def _get_module_score(self, module_name: str) -> float:
+        """Get the current score of a module.
+
+        In a real implementation, this would query the module's actual score.
+        Here we simulate by returning a slightly improved score.
+
+        Args:
+            module_name: The name of the module.
+
+        Returns:
+            The current score of the module.
+        """
+        # In a real implementation, this would:
+        # 1. Query the module's performance metrics
+        # 2. Calculate the score based on various factors
+        # 3. Return the computed score
+
+        # For simulation, return a default score
+        return 1.0

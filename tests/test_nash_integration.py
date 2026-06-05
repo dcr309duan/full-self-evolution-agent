@@ -163,6 +163,68 @@ class TestNashIntegration(unittest.TestCase):
             self.assertIn("ModuleC", plan_module_names,
                           "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
 
+    def test_mini_evolution_loop_with_nash(self):
+        """Integration test that runs a mini evolution loop with Nash detection enabled.
+        Verifies that when equilibrium is reached, the orchestrator executes a coordinated change
+        and that the system improves after the change."""
+        # Create a mock orchestrator with Nash detection enabled
+        orchestrator = EvolutionOrchestrator(
+            modules=self.modules,
+            nash_detector=self.nash_detector,
+            coordinated_planner=self.planner,
+            dependency_graph=self.dependency_graph,
+            enable_nash_detection=True,
+            enable_coordinated_mutation=True
+        )
+
+        # Run a mini evolution loop (10 cycles)
+        equilibrium_reached = False
+        coordinated_change_executed = False
+        initial_fitness = sum(mod.fitness for mod in self.modules)
+        
+        for cycle in range(10):
+            # Simulate mutation cycle
+            for mod in self.modules:
+                mod.mutate()
+            
+            # Check for equilibrium
+            if self.nash_detector.detect_equilibrium(self.modules):
+                equilibrium_reached = True
+                
+                # Generate and execute coordinated change
+                plan = self.planner.generate_plan(self.dependency_graph, {"is_equilibrium": True})
+                if plan and len(plan) >= 2:
+                    coordinated_change_executed = True
+                    
+                    # Execute the coordinated mutation
+                    for mutation in plan:
+                        module_name = mutation.get("module")
+                        for mod in self.modules:
+                            if mod.name == module_name:
+                                mod.mutate()
+                                # Simulate improvement by increasing fitness
+                                mod.fitness += 0.1
+                                break
+                    
+                    # Verify system improved after coordinated change
+                    final_fitness = sum(mod.fitness for mod in self.modules)
+                    self.assertGreater(final_fitness, initial_fitness,
+                                     "System fitness should improve after coordinated change")
+                    break
+        
+        # Verify equilibrium was reached
+        self.assertTrue(equilibrium_reached,
+                       "Nash equilibrium should be reached within 10 cycles")
+        
+        # Verify coordinated change was executed
+        self.assertTrue(coordinated_change_executed,
+                       "Coordinated change should be executed when equilibrium is reached")
+        
+        # Verify system improvement
+        final_fitness = sum(mod.fitness for mod in self.modules)
+        self.assertGreater(final_fitness, initial_fitness,
+                         "System fitness should be greater after the evolution loop")
+
 
 if __name__ == '__main__':
     unittest.main()

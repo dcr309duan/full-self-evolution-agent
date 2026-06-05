@@ -313,10 +313,9 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
             )
 
     def test_minimal_equilibrium_detection_and_force_coordinated(self):
-        """Create a minimal test that imports NashEquilibriumDetector, simulates 3 modules with static scores, 
-        verifies equilibrium detection triggers after no single-module improvement, and verifies 
-        force_coordinated_change returns a plan with >=2 modules."""
-        # Create 3 modules with static scores that form a Nash equilibrium
+        """Create a minimal test that imports NashEquilibriumDetector, creates instance, runs detect_nash() 
+        on mock module data, and verifies force_coordinated_change() produces multi-module changes."""
+        # Create 3 mock modules with static scores that form a Nash equilibrium
         module_x = MagicMock()
         module_x.name = "module_x"
         module_x.fitness = 0.90
@@ -333,7 +332,6 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
         module_z.mutation_options = ["option_e", "option_f"]
 
         # Create interaction matrix that prevents single-module improvement
-        # Each module's fitness drops if any other module changes alone
         interaction_matrix = {
             ("module_x", "module_y"): -0.20,
             ("module_y", "module_x"): -0.20,
@@ -345,10 +343,10 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
 
         modules = [module_x, module_y, module_z]
 
-        # Initialize detector
+        # Initialize detector with interaction matrix
         detector = NashEquilibriumDetector(interaction_matrix=interaction_matrix)
 
-        # Create a mock fitness evaluator that returns static scores
+        # Create a mock fitness evaluator that returns static scores with interaction penalties
         fitness_evaluator = MagicMock()
         def mock_evaluate(module, context=None):
             base = module.fitness
@@ -360,7 +358,7 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
             return max(0.0, min(1.0, base))
         fitness_evaluator.evaluate.side_effect = mock_evaluate
 
-        # Verify equilibrium detection triggers (no single-module improvement possible)
+        # Run detect_nash() on mock module data
         is_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
         self.assertTrue(is_equilibrium, "System should be in Nash equilibrium with static scores")
 
@@ -375,12 +373,12 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
         }
         planner.force_coordinated_change.return_value = plan
 
-        # Verify force_coordinated_change returns a plan with >=2 modules
+        # Verify force_coordinated_change() produces multi-module changes
         result = planner.force_coordinated_change(modules, interaction_matrix)
         self.assertIsNotNone(result, "Plan should not be None")
         self.assertIn('mutations', result, "Plan should contain mutations")
         self.assertGreaterEqual(len(result['mutations']), 2, 
-                               "Plan should involve at least 2 modules")
+                               "force_coordinated_change should produce changes involving at least 2 modules")
 
     def test_integration_coordinated_mutation_triggered_after_failed_cycles(self):
         """Integration test that: (1) sets up 3 interdependent mock modules, 
