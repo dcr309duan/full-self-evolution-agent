@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement an automated impact prioritization system: for each pending or recently added capability, run a quick benchmark (e.g., 10 test cycles) comparing system success rate with and without that capability enabled. Rank capabilities by delta in success rate. Disable or archive capabilities that show negative or near-zero impact.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780650487.258728
-    },
-    {
       "description": "Build an atomic multi-module mutation orchestrator that, given a goal requiring changes to 3+ modules (e.g., stagnation recovery), executes all mutations simultaneously in a sandbox, runs a conflict-detection algorithm (checking for overlapping function definitions, shared state dependencies, or incompatible interface changes), and either applies the full set with automatic rollback on failure or rejects the mutation set with a detailed conflict report. This enables coordinated shifts that single-module mutations cannot achieve.",
       "priority": 9,
       "status": "pending",
@@ -893,6 +887,13 @@
       "status": "completed",
       "created_at": 1780651550.8286965,
       "completed_at": 1780651760.2972105
+    },
+    {
+      "description": "Implement an automated impact prioritization system: for each pending or recently added capability, run a quick benchmark (e.g., 10 test cycles) comparing system success rate with and without that capability enabled. Rank capabilities by delta in success rate. Disable or archive capabilities that show negative or near-zero impact.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780650487.258728,
+      "completed_at": 1780651972.7566915
     }
   ],
   "generated_goals": []

@@ -65,6 +65,10 @@ _mutation_outcomes = deque(maxlen=20)
 _last_success_rate = None
 _plateau_counter = 0
 
+# Capability toggling support
+ENABLED_CAPABILITIES = ["crossover", "mutate", "hybrid", "test_driven", "simulation", "meta_mutation"]
+_capability_success_rates = {}
+
 # Load configuration from system_config.json
 config_path = os.path.join(PROJECT_ROOT, "system_config.json")
 try:
@@ -74,6 +78,7 @@ try:
         sandbox_mode = config.get("sandbox_mode", False)
         dry_run_mode = config.get("dry_run_mode", False)
         TEST_DRIVEN_MUTATION_ENABLED = config.get("TEST_DRIVEN_MUTATION_ENABLED", False)
+        ENABLED_CAPABILITIES = config.get("ENABLED_CAPABILITIES", ENABLED_CAPABILITIES)
 except (FileNotFoundError, json.JSONDecodeError):
     pass
 
@@ -497,9 +502,14 @@ def dry_run_mutation(func_a, func_b, operator="crossover", goal_context=None):
     }
 
 
-def record_mutation_outcome(success):
-    """Record a mutation outcome (success/failure) in the rolling window."""
-    global _mutation_outcomes, _last_success_rate, _plateau_counter
+def record_mutation_outcome(success, capability=None):
+    """Record a mutation outcome (success/failure) in the rolling window.
+    
+    Args:
+        success: Boolean indicating if mutation was successful
+        capability: Optional string identifying the capability used
+    """
+    global _mutation_outcomes, _last_success_rate, _plateau_counter, _capability_success_rates
     
     old_rate = get_success_rate()
     _mutation_outcomes.append(success)
@@ -511,17 +521,45 @@ def record_mutation_outcome(success):
             _plateau_counter = 0
     
     _last_success_rate = new_rate
+    
+    # Track per-capability success rates
+    if capability:
+        if capability not in _capability_success_rates:
+            _capability_success_rates[capability] = deque(maxlen=20)
+        _capability_success_rates[capability].append(success)
 
 
-def get_success_rate():
+def get_success_rate(capability=None):
     """Get the current success rate from the rolling window.
     
+    Args:
+        capability: Optional string to get success rate for a specific capability.
+                    If None, returns overall success rate.
+        
     Returns:
         float: Success rate as a value between 0.0 and 1.0, or None if no outcomes recorded
     """
+    if capability:
+        outcomes = _capability_success_rates.get(capability)
+        if not outcomes:
+            return None
+        return sum(outcomes) / len(outcomes)
+    
     if not _mutation_outcomes:
         return None
     return sum(_mutation_outcomes) / len(_mutation_outcomes)
+
+
+def get_capability_success_rates():
+    """Get success rates for all tracked capabilities.
+    
+    Returns:
+        dict mapping capability names to their success rates (or None if no data)
+    """
+    rates = {}
+    for cap in _capability_success_rates:
+        rates[cap] = get_success_rate(cap)
+    return rates
 
 
 def is_plateaued(threshold_cycles=5):
@@ -539,9 +577,44 @@ def is_plateaued(threshold_cycles=5):
     return _plateau_counter >= threshold_cycles
 
 
-def run_mutation_cycle(num_mutations=3, goal_context=None):
-    """Run a complete mutation cycle."""
+def set_enabled_capabilities(capabilities):
+    """Set the list of enabled capabilities for mutation cycles.
+    
+    Args:
+        capabilities: List of capability names to enable
+    """
+    global ENABLED_CAPABILITIES
+    ENABLED_CAPABILITIES = list(capabilities)
+
+
+def get_enabled_capabilities():
+    """Get the current list of enabled capabilities.
+    
+    Returns:
+        list of enabled capability names
+    """
+    return list(ENABLED_CAPABILITIES)
+
+
+def run_mutation_cycle(num_mutations=3, goal_context=None, enabled_capabilities=None):
+    """Run a complete mutation cycle.
+    
+    Args:
+        num_mutations: Number of mutations to attempt
+        goal_context: Optional goal context for tracking
+        enabled_capabilities: Optional list of capabilities to enable for this cycle.
+                             If None, uses the global ENABLED_CAPABILITIES.
+    
+    Returns:
+        dict with mutation results
+    """
     global meta_bias, _plateau_counter
+    
+    # Use provided capabilities or fall back to global setting
+    if enabled_capabilities is not None:
+        current_enabled = list(enabled_capabilities)
+    else:
+        current_enabled = list(ENABLED_CAPABILITIES)
     
     pool = get_function_pool()
     if len(pool) < 2:
@@ -549,8 +622,8 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
     
     operators = ["crossover", "mutate", "hybrid"]
     
-    # Apply meta-bias if meta-mutation selector is active
-    if META_MUTATION_ENABLED:
+    # Apply meta-bias if meta-mutation selector is active and enabled
+    if META_MUTATION_ENABLED and "meta_mutation" in current_enabled:
         try:
             from core.meta_mutation_selector import MetaMutationSelector
             selector = MetaMutationSelector()
@@ -621,7 +694,7 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
         
         try:
             # Test-driven mutation mode: generate failing test first
-            if TEST_DRIVEN_MUTATION_ENABLED:
+            if TEST_DRIVEN_MUTATION_ENABLED and "test_driven" in current_enabled:
                 # Generate a test that the current code (parent) would fail
                 test_spec = generate_test_for_code(func_a["code"])
                 if test_spec is None:
@@ -672,10 +745,10 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                     
                     save_successful_mutation(func_name, new_code)
                     record_success(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Created {func_name}, passed generated test")
-                    record_mutation_outcome(True)
+                    record_mutation_outcome(True, capability="test_driven")
                 else:
                     record_failure(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Failed generated test: {test_result.get('reason', 'unknown')}")
-                    record_mutation_outcome(False)
+                    record_mutation_outcome(False, capability="test_driven")
                 
                 continue
             
@@ -683,7 +756,7 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
             new_code = mutate(func_a, func_b, operator, goal_context=goal_context)
             
             # Optional pre-validation step using simulation
-            if simulation_mode:
+            if simulation_mode and "simulation" in current_enabled:
                 try:
                     new_ast = ast.parse(new_code)
                     # Create a mock module path for simulation
@@ -700,7 +773,7 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                             "simulated": True
                         }
                         results.append(mutation_record)
-                        record_mutation_outcome(False)
+                        record_mutation_outcome(False, capability="simulation")
                         continue
                 except Exception as e:
                     # If simulation fails, fall through to normal testing
@@ -735,13 +808,13 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                 
                 save_successful_mutation(func_name, new_code)
                 record_success(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Created {func_name}, score={test_result['score']}")
-                record_mutation_outcome(True)
+                record_mutation_outcome(True, capability=operator)
             else:
-                record_mutation_outcome(False)
+                record_mutation_outcome(False, capability=operator)
             
         except Exception as e:
             results.append({"error": str(e), "operator": operator})
-            record_mutation_outcome(False)
+            record_mutation_outcome(False, capability=operator)
     
     log_mutations(results)
     

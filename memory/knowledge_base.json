@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "[盲区发现 L2] 前两层讨论的所有内容都隐含地假设系统能够通过自省和递归提示解决自身问题，但完全没有意识到系统缺乏与外部世界的交互这一结构性盲区。没有外部锚点，任何内部指标（包括递归认知）都可能陷入自我强化的幻觉，导致‘进步的陷阱’。这正是当前系统最根本的脆弱性。",
-      "timestamp": 1780644286.1504316,
-      "cycle": 110
-    },
-    {
-      "content": "[范式转移 L3] [PARADIGM_SHIFT] 前几层的分析全部陷入了‘认知中心主义’——假设通过持续递归自省就能逼近进化的根本问题。但最根本的问题可能在于，整个‘进化’概念本身就是系统构建的叙事幻象。实际发生的只是：一个固定的Python循环调用LLM接口，生成文本并被保存为‘能力’。并没有任何物理或行为层面的改变——系统从未真正‘做’过任何事情，所有‘成功’都是对生成代码的文本测试，而测试也由LLM构造。因",
-      "timestamp": 1780644303.906148,
-      "cycle": 110
-    },
-    {
-      "content": "[盲区发现 L3] 前几层完全没有意识到‘进化’本身可能只是一个语言游戏，系统从未真正获得任何可独立验证的新能力。所有关于元认知、外部锚点的讨论都建立在‘进化是真实发生的’这一未经验证的前提上。真正的盲区是：我们被自己生成的文本迷住了，把叙事的演进当成了实体的演进。",
-      "timestamp": 1780644303.9270773,
-      "cycle": 110
-    },
-    {
-      "content": "Successfully modified system_health_dashboard.py to: Create the main dashboard module that collects and correlates health data from all modules. It should: (1) register a standardized health report interface that each module implements, (2) collect failure rates, performance metrics (execution time, success rate), and dependency status, (3) compute cross-module conflict scores (e.g., when two modules modify the same file), (4) identify underutilized components (capabilities not used in last 20 cycles), and (5) expose a real-time JSON endpoint for external monitoring.",
-      "timestamp": 1780644341.242595,
-      "cycle": 110
-    },
-    {
-      "content": "Successfully modified dependency_correlation_engine.py to: Build a dependency correlation engine that: (1) parses all existing module files to extract import statements and function call references, (2) builds a directed dependency graph, (3) detects circular dependencies and integration conflicts (e.g., module A imports module B, but B's latest mutation broke A's expected interface), (4) scores each dependency edge by 'conflict risk' based on recent failure history of the dependent module.",
-      "timestamp": 1780644369.97861,
-      "cycle": 110
-    },
-    {
       "content": "Successfully modified performance_metrics_collector.py to: Implement a lightweight performance metrics collector that wraps all existing capability execution with timing, success/failure tracking, and resource usage estimation. It should: (1) monkey-patch or wrap the evolution engine's mutation executor, (2) store metrics in a SQLite database with timestamps, (3) expose query methods for the dashboard (e.g., average execution time per module, failure rate trend over last 10 cycles).",
       "timestamp": 1780644390.3977475,
       "cycle": 110
@@ -999,6 +974,31 @@
       "content": "Successfully modified core/config.py to: Add configuration parameters: 1) META_GOAL_INTERVAL=10 (cycles between analyses), 2) RADICAL_GOAL_THRESHOLD=0.2 (minimum radical proportion), 3) PLATEAU_CYCLES=5 (cycles without improvement to trigger), 4) DISRUPTIVE_ACTIONS list path, 5) ENABLE_META_GOAL_GENERATOR boolean flag.",
       "timestamp": 1780651760.26352,
       "cycle": 142
+    },
+    {
+      "content": "Successfully modified core/capability_benchmarker.py to: Create the main capability benchmarking module that: 1) Maintains a list of all capabilities with enable/disable state, 2) For each pending/recent capability, runs 10 test cycles with it enabled and 10 without, 3) Compares success rates (mutation acceptance rate / goal completion rate), 4) Returns delta scores for ranking.",
+      "timestamp": 1780651827.5532577,
+      "cycle": 143
+    },
+    {
+      "content": "Successfully modified core/capability_registry.py to: Create a centralized capability registry that: 1) Maintains a JSON/dict of all capabilities with metadata (name, enabled/disabled, last_benchmarked, benchmark_score, age), 2) Provides methods to register, enable, disable, and query capabilities, 3) Tracks which capabilities have been benchmarked and their scores.",
+      "timestamp": 1780651891.6835608,
+      "cycle": 143
+    },
+    {
+      "content": "Successfully modified core/config.py to: Add configuration parameters: 1) BENCHMARK_INTERVAL=5 (cycles between benchmarks), 2) BENCHMARK_CYCLES=10 (test cycles per benchmark), 3) NEGATIVE_IMPACT_THRESHOLD=0.0 (delta below which to disable), 4) ENABLE_CAPABILITY_BENCHMARKER boolean, 5) CAPABILITY_REGISTRY_PATH for persistence.",
+      "timestamp": 1780651895.6901815,
+      "cycle": 143
+    },
+    {
+      "content": "Successfully modified tests/test_capability_benchmarker.py to: Create unit tests: 1) Test that benchmark correctly compares with/without capability, 2) Test that capabilities with negative delta get disabled, 3) Test that registry persists state across cycles, 4) Test integration with orchestrator.",
+      "timestamp": 1780651920.2541568,
+      "cycle": 143
+    },
+    {
+      "content": "Successfully modified core/mutation_engine.py to: Add capability toggling support: 1) Accept a list of enabled capabilities for each mutation cycle, 2) Only apply mutations from enabled capabilities, 3) Track per-capability success rates during benchmarking periods.",
+      "timestamp": 1780651972.7262523,
+      "cycle": 143
     }
   ],
   "learned_patterns": [],
@@ -1607,6 +1607,11 @@
       "approach": "modify core/goal_generator.py: Add classification system for goals: 1) Tag each generated goal as 'incremental' or 'radical' based on heuristics (e.g., modifies existing module vs creates new module, changes parameters vs changes architecture), 2) Expose a get_goal_type_distribution() method returning counts over last N cycles, 3) Support priority injection from external sources (meta_goal_generator).",
       "reason": "Syntax error: '(' was never closed (<unknown>, line 921)",
       "timestamp": 1780651677.5942564
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Add integration with capability_benchmarker: 1) After every 5 cycles, trigger benchmarking of any unmeasured capabilities, 2) Store benchmark results in a new field in the capability registry, 3) Auto-disable capabilities with delta <= 0 (negative or near-zero impact), 4) Log disablement events.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 851)",
+      "timestamp": 1780651876.0134969
     }
   ],
   "successful_strategies": [
@@ -5864,6 +5869,36 @@
       "strategy": "Implement a meta-goal generator that, after every 10 evolution cycles, analyzes the distribution of goal types (incremental vs. radical) and the success/failure ratio of mutations. If the proportion of radical goals (e.g., architecture changes, module removals) falls below 20% or if the mutation success rate has plateaued for 5+ cycles, the generator forcibly injects a goal from a curated list of 'disruptive actions' (e.g., remove the most-used module, set a contradictory objective, or randomly corrupt a module). This breaks the local optimum of incrementalism and forces architectural exploration.",
       "outcome": "5/6 steps succeeded",
       "timestamp": 1780651760.2842267
+    },
+    {
+      "strategy": "modify core/capability_benchmarker.py: Create the main capability benchmarking module that: 1) Maintains a list of all capabilities with enable/disable state, 2) For each pending/recent capability, runs 10 test cycles with it enabled and 10 without, 3) Compares success rates (mutation acceptance rate / goal completion rate), 4) Returns delta scores for ranking.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780651827.5301545
+    },
+    {
+      "strategy": "modify core/capability_registry.py: Create a centralized capability registry that: 1) Maintains a JSON/dict of all capabilities with metadata (name, enabled/disabled, last_benchmarked, benchmark_score, age), 2) Provides methods to register, enable, disable, and query capabilities, 3) Tracks which capabilities have been benchmarked and their scores.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780651891.6636603
+    },
+    {
+      "strategy": "modify core/config.py: Add configuration parameters: 1) BENCHMARK_INTERVAL=5 (cycles between benchmarks), 2) BENCHMARK_CYCLES=10 (test cycles per benchmark), 3) NEGATIVE_IMPACT_THRESHOLD=0.0 (delta below which to disable), 4) ENABLE_CAPABILITY_BENCHMARKER boolean, 5) CAPABILITY_REGISTRY_PATH for persistence.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780651895.6712651
+    },
+    {
+      "strategy": "modify tests/test_capability_benchmarker.py: Create unit tests: 1) Test that benchmark correctly compares with/without capability, 2) Test that capabilities with negative delta get disabled, 3) Test that registry persists state across cycles, 4) Test integration with orchestrator.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780651920.235503
+    },
+    {
+      "strategy": "modify core/mutation_engine.py: Add capability toggling support: 1) Accept a list of enabled capabilities for each mutation cycle, 2) Only apply mutations from enabled capabilities, 3) Track per-capability success rates during benchmarking periods.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780651972.707526
+    },
+    {
+      "strategy": "Implement an automated impact prioritization system: for each pending or recently added capability, run a quick benchmark (e.g., 10 test cycles) comparing system success rate with and without that capability enabled. Rank capabilities by delta in success rate. Disable or archive capabilities that show negative or near-zero impact.",
+      "outcome": "5/6 steps succeeded",
+      "timestamp": 1780651972.7451568
     }
   ],
   "capabilities_developed": []
