@@ -20,6 +20,42 @@ class FailureAnalyzer:
         """
         self.config = config or {}
         self.failure_history = []
+        self.failure_pattern_counts = {}
+
+    def get_failure_pattern_key(self, failure_context: Dict[str, Any]) -> str:
+        """
+        Return a normalized string key for deduplication and retry counting.
+        
+        Args:
+            failure_context: Dictionary containing failure context information
+                Expected keys:
+                - 'error_type': str
+                - 'template_used': str (optional)
+                - 'mutation_type': str (optional)
+                - 'parameter_pattern': str (optional) - normalized parameter pattern
+        
+        Returns:
+            A normalized string key representing the failure pattern
+        """
+        error_type = failure_context.get('error_type', 'unknown')
+        template_used = failure_context.get('template_used', '')
+        mutation_type = failure_context.get('mutation_type', '')
+        parameter_pattern = failure_context.get('parameter_pattern', '')
+        
+        # Normalize the key components
+        normalized_template = template_used.strip().lower() if template_used else 'no_template'
+        normalized_mutation = mutation_type.strip().lower() if mutation_type else 'no_mutation'
+        normalized_parameter = parameter_pattern.strip().lower() if parameter_pattern else 'no_parameters'
+        
+        # Create a structured key
+        key_parts = [
+            f"error:{error_type}",
+            f"template:{normalized_template}",
+            f"mutation:{normalized_mutation}",
+            f"params:{normalized_parameter}"
+        ]
+        
+        return "|".join(key_parts)
 
     def analyze_failure(self, failure_report: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -44,6 +80,19 @@ class FailureAnalyzer:
         parameters = failure_report.get('parameters', {})
         mutation_type = failure_report.get('mutation_type', '')
         
+        # Generate failure pattern key for deduplication
+        failure_context = {
+            'error_type': error_type,
+            'template_used': template_used,
+            'mutation_type': mutation_type,
+            'parameter_pattern': self._normalize_parameter_pattern(parameters)
+        }
+        pattern_key = self.get_failure_pattern_key(failure_context)
+        
+        # Update failure pattern counts
+        self.failure_pattern_counts[pattern_key] = self.failure_pattern_counts.get(pattern_key, 0) + 1
+        retry_count = self.failure_pattern_counts[pattern_key]
+        
         # Generate recommendation based on error type
         if error_type == 'template_error':
             recommendation = self._handle_template_error(template_used, parameters)
@@ -58,6 +107,12 @@ class FailureAnalyzer:
         recommendation['analysis_id'] = len(self.failure_history)
         recommendation['original_error'] = error_type
         recommendation['confidence'] = self._calculate_confidence(recommendation)
+        recommendation['failure_pattern_key'] = pattern_key
+        recommendation['retry_count'] = retry_count
+        
+        # Add actionable recommendations for design limitations
+        if self._is_design_limitation(error_type, recommendation):
+            recommendation['design_limitation_recommendations'] = self._get_design_limitation_recommendations(error_type, template_used, mutation_type)
         
         logger.info(f"Generated recommendation for failure #{len(self.failure_history)}: {recommendation['strategy']}")
         return recommendation
@@ -81,6 +136,18 @@ class FailureAnalyzer:
         parameters = failure_report.get('parameters', {})
         mutation_type = failure_report.get('mutation_type', '')
         
+        # Generate failure pattern key for subsystem
+        failure_context = {
+            'error_type': error_type,
+            'template_used': template_used,
+            'mutation_type': mutation_type,
+            'parameter_pattern': self._normalize_parameter_pattern(parameters)
+        }
+        pattern_key = self.get_failure_pattern_key(failure_context)
+        
+        # Update failure pattern counts
+        self.failure_pattern_counts[pattern_key] = self.failure_pattern_counts.get(pattern_key, 0) + 1
+        
         # Generate subsystem-specific recommendation
         if error_type == 'template_error':
             recommendation = self._handle_subsystem_template_error(subsystem_name, template_used, parameters)
@@ -91,8 +158,131 @@ class FailureAnalyzer:
         else:
             recommendation = self._handle_subsystem_unknown_error(subsystem_name, failure_report)
         
+        # Add design limitation recommendations if applicable
+        if self._is_design_limitation(error_type, {}):
+            recommendation += " " + self._get_design_limitation_recommendations(error_type, template_used, mutation_type)
+        
         logger.info(f"Generated subsystem recommendation for '{subsystem_name}' failure #{len(self.failure_history)}: {recommendation}")
         return recommendation
+
+    def _normalize_parameter_pattern(self, parameters: Dict[str, Any]) -> str:
+        """
+        Normalize parameter dictionary into a pattern string for deduplication.
+        
+        Args:
+            parameters: Dictionary of parameter names and values
+        
+        Returns:
+            Normalized parameter pattern string
+        """
+        if not parameters:
+            return "empty"
+        
+        # Sort parameters by name for consistency
+        sorted_params = sorted(parameters.items())
+        
+        # Create a pattern based on parameter names and value types
+        pattern_parts = []
+        for param_name, param_value in sorted_params:
+            if isinstance(param_value, (int, float)):
+                # For numeric values, categorize by range
+                if param_value < 0:
+                    value_type = "negative"
+                elif param_value == 0:
+                    value_type = "zero"
+                elif param_value < 1:
+                    value_type = "small_positive"
+                else:
+                    value_type = "large_positive"
+                pattern_parts.append(f"{param_name}:{value_type}")
+            elif isinstance(param_value, str):
+                pattern_parts.append(f"{param_name}:string")
+            elif isinstance(param_value, bool):
+                pattern_parts.append(f"{param_name}:bool")
+            elif isinstance(param_value, list):
+                pattern_parts.append(f"{param_name}:list:{len(param_value)}")
+            elif isinstance(param_value, dict):
+                pattern_parts.append(f"{param_name}:dict:{len(param_value)}")
+            else:
+                pattern_parts.append(f"{param_name}:other")
+        
+        return ",".join(pattern_parts)
+
+    def _is_design_limitation(self, error_type: str, recommendation: Dict[str, Any]) -> bool:
+        """
+        Determine if the error indicates a design limitation.
+        
+        Args:
+            error_type: Type of error encountered
+            recommendation: Generated recommendation dictionary
+        
+        Returns:
+            True if the error suggests a design limitation
+        """
+        # Design limitations are typically indicated by repeated failures
+        # or specific error types that suggest fundamental issues
+        design_limitation_indicators = [
+            'template_error',
+            'mutation_failure',
+            'parameter_out_of_bounds'
+        ]
+        
+        # Check if error type suggests design limitation
+        if error_type in design_limitation_indicators:
+            # Check if this pattern has occurred multiple times
+            pattern_key = recommendation.get('failure_pattern_key', '')
+            if pattern_key and self.failure_pattern_counts.get(pattern_key, 0) >= 2:
+                return True
+        
+        return False
+
+    def _get_design_limitation_recommendations(self, error_type: str, template: str, mutation_type: str) -> str:
+        """
+        Generate actionable recommendations for alternative approaches when a design limitation is detected.
+        
+        Args:
+            error_type: Type of error encountered
+            template: Template that was being used
+            mutation_type: Mutation type that was being applied
+        
+        Returns:
+            String with actionable recommendations
+        """
+        recommendations = []
+        
+        if error_type == 'template_error':
+            recommendations.append(
+                f"Design limitation detected with template '{template}'. "
+                f"Consider redesigning the template structure to be more flexible. "
+                f"Alternative approaches: (1) Use a more generic template that supports multiple patterns, "
+                f"(2) Implement template composition to combine simpler templates, "
+                f"(3) Add template validation before execution to catch issues early."
+            )
+        elif error_type == 'parameter_out_of_bounds':
+            recommendations.append(
+                f"Design limitation detected with parameter ranges. "
+                f"Consider implementing adaptive parameter bounds that adjust based on context. "
+                f"Alternative approaches: (1) Use dynamic range calculation based on historical data, "
+                f"(2) Implement parameter normalization to keep values within valid ranges, "
+                f"(3) Add parameter constraints that are context-aware."
+            )
+        elif error_type == 'mutation_failure':
+            recommendations.append(
+                f"Design limitation detected with mutation type '{mutation_type}'. "
+                f"Consider implementing a fallback mutation strategy when the primary one fails. "
+                f"Alternative approaches: (1) Use a hybrid mutation approach that combines multiple types, "
+                f"(2) Implement mutation validation before application, "
+                f"(3) Add mutation rate adaptation based on failure history."
+            )
+        else:
+            recommendations.append(
+                f"Design limitation detected. Consider reviewing the overall system architecture. "
+                f"Alternative approaches: (1) Implement graceful degradation, "
+                f"(2) Add comprehensive error handling with fallback mechanisms, "
+                f"(3) Consider using a different algorithmic approach."
+            )
+        
+        return " ".join(recommendations)
 
     def _handle_subsystem_template_error(self, subsystem_name: str, template: str, parameters: Dict[str, Any]) -> str:
         """
@@ -318,7 +508,8 @@ class FailureAnalyzer:
         return {
             'total_failures': len(self.failure_history),
             'error_type_distribution': error_types,
-            'most_common_error': max(error_types, key=error_types.get) if error_types else None
+            'most_common_error': max(error_types, key=error_types.get) if error_types else None,
+            'failure_pattern_counts': dict(self.failure_pattern_counts)
         }
 
 

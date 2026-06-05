@@ -3,12 +3,12 @@ import threading
 import time
 import uuid
 from queue import PriorityQueue
-from typing import Callable, Optional, Dict, Any
+from typing import Callable, Optional, Dict, Any, List
 
 class Task:
     """Represents a scheduled task with metadata."""
     
-    def __init__(self, func: Callable, interval: float, task_id: Optional[str] = None, enabled: bool = True):
+    def __init__(self, func: Callable, interval: float, task_id: Optional[str] = None, enabled: bool = True, priority: int = 0, retry_count: int = 0):
         self.id = task_id or str(uuid.uuid4())
         self.func = func
         self.interval = interval
@@ -18,6 +18,9 @@ class Task:
         self.completed_count = 0
         self.failed_count = 0
         self.total_execution_time = 0.0
+        self.priority = priority
+        self.retry_count = retry_count
+        self.failure_pattern: List[float] = []  # Timestamps of recent failures
         
     def to_dict(self) -> Dict[str, Any]:
         """Serialize task to dictionary for JSON persistence."""
@@ -29,7 +32,10 @@ class Task:
             'enabled': self.enabled,
             'completed_count': self.completed_count,
             'failed_count': self.failed_count,
-            'total_execution_time': self.total_execution_time
+            'total_execution_time': self.total_execution_time,
+            'priority': self.priority,
+            'retry_count': self.retry_count,
+            'failure_pattern': self.failure_pattern
         }
     
     @classmethod
@@ -43,6 +49,9 @@ class Task:
         task.completed_count = data.get('completed_count', 0)
         task.failed_count = data.get('failed_count', 0)
         task.total_execution_time = data.get('total_execution_time', 0.0)
+        task.priority = data.get('priority', 0)
+        task.retry_count = data.get('retry_count', 0)
+        task.failure_pattern = data.get('failure_pattern', [])
         return task
 
 class Scheduler:
@@ -57,17 +66,53 @@ class Scheduler:
         self._func_map: Dict[str, Callable] = {}
         self._scheduler_thread: Optional[threading.Thread] = None
         self._start_time = 0.0
+        self._retry_goals: Dict[str, Task] = {}  # Store retry goal tasks
         
     def register_function(self, func: Callable, name: Optional[str] = None) -> None:
         """Register a function for deserialization from JSON."""
         func_name = name or func.__name__
         self._func_map[func_name] = func
         
-    def add_task(self, func: Callable, interval: float, task_id: Optional[str] = None, enabled: bool = True) -> str:
+    def add_task(self, func: Callable, interval: float, task_id: Optional[str] = None, enabled: bool = True, priority: int = 0) -> str:
         """Add a new task to the scheduler. Returns the task ID."""
         with self._lock:
-            task = Task(func=func, interval=interval, task_id=task_id, enabled=enabled)
+            task = Task(func=func, interval=interval, task_id=task_id, enabled=enabled, priority=priority)
             self._tasks[task.id] = task
+            if enabled and self._running:
+                self._schedule_task(task)
+            self._save_tasks()
+            return task.id
+    
+    def add_retry_goal(self, func: Callable, interval: float, task_id: Optional[str] = None, enabled: bool = True) -> Optional[str]:
+        """Add a retry goal task with priority boosting. Returns the task ID or None if retry limit exceeded."""
+        with self._lock:
+            # Check failure pattern log for retry count
+            if task_id and task_id in self._retry_goals:
+                existing_task = self._retry_goals[task_id]
+                if existing_task.retry_count >= 3:
+                    print(f"Retry limit exceeded for task {task_id}")
+                    return None
+                
+                # Check failure pattern within last hour
+                current_time = time.time()
+                recent_failures = [t for t in existing_task.failure_pattern if current_time - t < 3600]
+                if len(recent_failures) >= 3:
+                    print(f"Too many recent failures for task {task_id}")
+                    return None
+            
+            # Priority boosting: higher than normal (0) but lower than critical (-1)
+            priority = -2  # Retry goals get priority -2 (between normal 0 and critical -1)
+            
+            task = Task(func=func, interval=interval, task_id=task_id, enabled=enabled, priority=priority)
+            if task_id:
+                task.id = task_id
+                task.retry_count = self._retry_goals.get(task_id, Task(func, interval)).retry_count + 1 if task_id in self._retry_goals else 1
+            else:
+                task.retry_count = 1
+            
+            self._retry_goals[task.id] = task
+            self._tasks[task.id] = task
+            
             if enabled and self._running:
                 self._schedule_task(task)
             self._save_tasks()
@@ -81,6 +126,7 @@ class Scheduler:
                 return False
             if task._timer:
                 task._timer.cancel()
+            self._retry_goals.pop(task_id, None)
             self._save_tasks()
             return True
     
@@ -120,6 +166,7 @@ class Scheduler:
         - Average execution time
         - Queue length (number of tasks)
         - Scheduler uptime
+        - Retry goal health (penalty for excessive retries)
         
         Returns a float between 0.0 (unhealthy) and 1.0 (healthy).
         """
@@ -159,12 +206,22 @@ class Scheduler:
             else:
                 uptime_score = 0.0
             
+            # Retry goal health factor
+            retry_goals_count = len(self._retry_goals)
+            if retry_goals_count > 0:
+                max_retries = max(task.retry_count for task in self._retry_goals.values())
+                retry_penalty = min(1.0, max_retries / 3.0)  # Penalize based on max retries
+                retry_health = 1.0 - retry_penalty
+            else:
+                retry_health = 1.0
+            
             # Weighted combination
             health_score = (
-                0.4 * completion_ratio +
-                0.3 * time_score +
+                0.35 * completion_ratio +
+                0.25 * time_score +
                 0.1 * queue_factor +
-                0.2 * uptime_score
+                0.15 * uptime_score +
+                0.15 * retry_health
             )
             
             return max(0.0, min(1.0, health_score))
@@ -191,9 +248,16 @@ class Scheduler:
                     execution_time = time.time() - start_time
                     task.completed_count += 1
                     task.total_execution_time += execution_time
+                    # Clear failure pattern on success
+                    task.failure_pattern = []
                 except Exception as e:
                     print(f"Task {task.id} failed: {e}")
                     task.failed_count += 1
+                    # Record failure timestamp
+                    task.failure_pattern.append(time.time())
+                    # Keep only last 10 failures
+                    if len(task.failure_pattern) > 10:
+                        task.failure_pattern = task.failure_pattern[-10:]
                 task.last_run = time.time()
                 self._save_tasks()
                 if task.enabled:
@@ -226,6 +290,9 @@ class Scheduler:
                 task = Task.from_dict(data, self._func_map)
                 if task:
                     self._tasks[task.id] = task
+                    # Restore retry goals based on priority
+                    if task.priority == -2:
+                        self._retry_goals[task.id] = task
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -236,18 +303,28 @@ if __name__ == "__main__":
     def example_task():
         print("Task executed at:", time.time())
     
+    def retry_goal_task():
+        print("Retry goal executed at:", time.time())
+    
     scheduler = Scheduler("example_tasks.json")
     scheduler.register_function(example_task)
+    scheduler.register_function(retry_goal_task)
     
-    # Add a task that runs every 5 seconds
+    # Add a normal task that runs every 5 seconds
     task_id = scheduler.add_task(example_task, 5.0)
     print(f"Added task: {task_id}")
+    
+    # Add a retry goal task
+    retry_id = scheduler.add_retry_goal(retry_goal_task, 3.0)
+    if retry_id:
+        print(f"Added retry goal: {retry_id}")
     
     scheduler.start()
     
     try:
         time.sleep(15)
         print(f"Health score: {scheduler.get_health_score():.2f}")
+        print(f"Tasks: {scheduler.list_tasks()}")
     finally:
         scheduler.stop()
         print("Scheduler stopped")

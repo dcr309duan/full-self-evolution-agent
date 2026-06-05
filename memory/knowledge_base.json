@@ -404,6 +404,41 @@
       "content": "Successfully modified evolution_orchestrator.py to: Add the reflection parsing step to the unified evolution loop. After each mutation cycle, parse the reflection log, extract structured insights, and feed them into the mutation strategy selector. This closes the feedback loop by making mutation strategies directly responsive to parsed gaps and priorities.",
       "timestamp": 1780627699.7100384,
       "cycle": 30
+    },
+    {
+      "content": "Self-reflection: The root limitation is not a missing capability but a failure to prioritize reliability over expansion. The system has built many sophisticated modules (meta-evaluation, failure analysis, reflection parsing) but hasn't yet used them to fix the core loop. The next evolutionary leap requires turning the tools inward: use reflection to heal the mutation engine, use failure analysis to kill unproductive goals, and use the orchestrator to enforce a 'hardening phase' after every N successful additions. True autonomy emerges not from adding more, but from making existing parts resilient and self-sustaining.",
+      "timestamp": 1780627778.6386926,
+      "cycle": 31
+    },
+    {
+      "content": "Successfully modified self_healing_retry_loop.py to: Create the main self-healing retry loop module. This module will: (1) intercept goal failures from the orchestrator, (2) invoke the failure analysis module to classify the failure, (3) call the reflection parser on the failure context, (4) generate 2-3 smaller sub-goals or alternative strategies based on the analysis, (5) enqueue them for retry with a different approach, (6) maintain a failure pattern log to track retry counts per goal type, and (7) enforce a 3-retry maximum per failure pattern to prevent infinite loops.",
+      "timestamp": 1780627814.9484048,
+      "cycle": 31
+    },
+    {
+      "content": "Successfully modified task_scheduler.py to: Add support for 'retry goals' as a new task type with priority boosting. When a sub-goal from the self-healing loop is enqueued, it should be scheduled with higher priority than normal goals but lower than critical system tasks. Add a 'retry_count' field to task metadata and ensure the scheduler respects the 3-retry maximum by checking the failure pattern log before scheduling.",
+      "timestamp": 1780627887.9474099,
+      "cycle": 31
+    },
+    {
+      "content": "Successfully modified tests/test_self_healing_retry_loop.py to: Create comprehensive unit tests for the self-healing retry loop: (1) test that a failed goal triggers sub-goal generation, (2) test that sub-goals are different from the original approach, (3) test that the 3-retry limit is enforced, (4) test that different failure patterns have separate retry counters, (5) test integration with the failure analysis module, (6) test that successful retries reset the counter for that pattern, and (7) test edge cases like empty failure context or malformed input.",
+      "timestamp": 1780627914.159997,
+      "cycle": 31
+    },
+    {
+      "content": "Successfully modified goal_generator.py to: Add a 'retry_generation' mode to the goal generator. When the self-healing loop requests sub-goals, the generator should produce smaller, more focused goals that address the specific failure cause (implementation bug vs. design limitation). Add a parameter to generate 'alternative strategies' that use different approaches than the original failed goal.",
+      "timestamp": 1780627949.384221,
+      "cycle": 31
+    },
+    {
+      "content": "Successfully modified failure_analysis_module.py to: Extend the failure analysis module to return structured failure patterns that can be used for retry decisions. Add a method 'get_failure_pattern_key(failure_context)' that returns a normalized string key for deduplication and retry counting. Ensure the module outputs actionable recommendations for alternative approaches when a design limitation is detected.",
+      "timestamp": 1780627986.0270705,
+      "cycle": 31
+    },
+    {
+      "content": "Successfully modified reflection_parser.py to: Add a 'parse_failure_context' method that extracts structured insights from failure logs and error messages. This should output: failure_type, root_cause_hint, suggested_approach_change, and confidence_score. This feeds directly into the sub-goal generation process.",
+      "timestamp": 1780628006.6789448,
+      "cycle": 31
     }
   ],
   "learned_patterns": [],
@@ -462,6 +497,11 @@
       "approach": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
       "reason": "All 6 steps failed",
       "timestamp": 1780626260.5240748
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Integrate the self-healing retry loop into the unified evolution loop. After each goal execution attempt, check if it failed. If so, instead of just logging the failure, pass it to the self_healing_retry_loop module. The orchestrator should then process the generated sub-goals as new tasks with priority, and update the failure pattern log. Add a configuration parameter to enable/disable self-healing behavior.",
+      "reason": "Syntax error: expected an indented block after 'else' statement on line 835 (<unknown>, line 835)",
+      "timestamp": 1780627862.0780163
     }
   ],
   "successful_strategies": [
@@ -804,6 +844,41 @@
       "strategy": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
       "outcome": "5/5 steps succeeded",
       "timestamp": 1780627699.7135038
+    },
+    {
+      "strategy": "modify self_healing_retry_loop.py: Create the main self-healing retry loop module. This module will: (1) intercept goal failures from the orchestrator, (2) invoke the failure analysis module to classify the failure, (3) call the reflection parser on the failure context, (4) generate 2-3 smaller sub-goals or alternative strategies based on the analysis, (5) enqueue them for retry with a different approach, (6) maintain a failure pattern log to track retry counts per goal type, and (7) enforce a 3-retry maximum per failure pattern to prevent infinite loops.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627814.9439752
+    },
+    {
+      "strategy": "modify task_scheduler.py: Add support for 'retry goals' as a new task type with priority boosting. When a sub-goal from the self-healing loop is enqueued, it should be scheduled with higher priority than normal goals but lower than critical system tasks. Add a 'retry_count' field to task metadata and ensure the scheduler respects the 3-retry maximum by checking the failure pattern log before scheduling.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627887.9438605
+    },
+    {
+      "strategy": "modify tests/test_self_healing_retry_loop.py: Create comprehensive unit tests for the self-healing retry loop: (1) test that a failed goal triggers sub-goal generation, (2) test that sub-goals are different from the original approach, (3) test that the 3-retry limit is enforced, (4) test that different failure patterns have separate retry counters, (5) test integration with the failure analysis module, (6) test that successful retries reset the counter for that pattern, and (7) test edge cases like empty failure context or malformed input.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627914.156057
+    },
+    {
+      "strategy": "modify goal_generator.py: Add a 'retry_generation' mode to the goal generator. When the self-healing loop requests sub-goals, the generator should produce smaller, more focused goals that address the specific failure cause (implementation bug vs. design limitation). Add a parameter to generate 'alternative strategies' that use different approaches than the original failed goal.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627949.3805854
+    },
+    {
+      "strategy": "modify failure_analysis_module.py: Extend the failure analysis module to return structured failure patterns that can be used for retry decisions. Add a method 'get_failure_pattern_key(failure_context)' that returns a normalized string key for deduplication and retry counting. Ensure the module outputs actionable recommendations for alternative approaches when a design limitation is detected.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627986.0228946
+    },
+    {
+      "strategy": "modify reflection_parser.py: Add a 'parse_failure_context' method that extracts structured insights from failure logs and error messages. This should output: failure_type, root_cause_hint, suggested_approach_change, and confidence_score. This feeds directly into the sub-goal generation process.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628006.6736798
+    },
+    {
+      "strategy": "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatically invokes the failure analysis module and reflection parser to generate 2-3 smaller sub-goals or alternative implementation strategies, then enqueues them for retry with a different approach, logging the failure pattern to avoid infinite loops after 3 retries.",
+      "outcome": "6/7 steps succeeded",
+      "timestamp": 1780628006.6844432
     }
   ],
   "capabilities_developed": []

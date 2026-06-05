@@ -29,6 +29,29 @@ DEFAULT_PATTERNS = {
         r"(?:what\s+if|maybe\s+we|could\s+try|perhaps)",
         r"(?:novel|innovative|creative|new\s+approach)",
     ],
+    "failure_type": [
+        r"(?:error|exception|failure|crash|bug|issue|problem)",
+        r"(?:timeout|time.?out|hang|freeze|stall)",
+        r"(?:memory|overflow|leak|out.?of.?memory)",
+        r"(?:permission|access|denied|unauthorized|forbidden)",
+        r"(?:connection|network|socket|disconnect)",
+        r"(?:syntax|parse|compilation|type.?error)",
+        r"(?:logic|semantic|runtime|unexpected)",
+    ],
+    "root_cause_hint": [
+        r"(?:because|due to|caused by|result of|stemming from)",
+        r"(?:root cause|underlying|fundamental|primary reason)",
+        r"(?:triggered by|originates from|starts with)",
+        r"(?:missing|incorrect|invalid|wrong|bad)\s+\w+",
+        r"(?:not\s+(?:found|defined|initialized|configured|handled))",
+    ],
+    "suggested_approach_change": [
+        r"(?:try|attempt|use|implement|apply|adopt)\s+(?:a|an|the|different|new|alternative)",
+        r"(?:instead|rather than|alternative|different approach|change strategy)",
+        r"(?:refactor|redesign|restructure|rework|rewrite)",
+        r"(?:add|include|integrate|incorporate)\s+(?:check|validation|handling|fallback)",
+        r"(?:optimize|improve|enhance|upgrade|migrate)",
+    ],
 }
 
 
@@ -145,6 +168,50 @@ class ReflectionParser:
         self.patterns = patterns
         self._compiled_patterns = self._compile_patterns()
 
+    def parse_failure_context(self, text: str) -> Dict[str, List[Tuple[str, float]]]:
+        """
+        Extract structured insights from failure logs and error messages.
+
+        Args:
+            text: Raw failure log or error message text.
+
+        Returns:
+            Dictionary with keys: failure_type, root_cause_hint, suggested_approach_change, confidence_score.
+            Each value is a list of (extracted_text, confidence) tuples.
+        """
+        if not text or not isinstance(text, str):
+            return {
+                "failure_type": [],
+                "root_cause_hint": [],
+                "suggested_approach_change": [],
+                "confidence_score": []
+            }
+
+        results = {}
+        
+        # Extract failure type
+        failure_matches = self.extract_field(text, "failure_type")
+        results["failure_type"] = failure_matches
+        
+        # Extract root cause hints
+        root_cause_matches = self.extract_field(text, "root_cause_hint")
+        results["root_cause_hint"] = root_cause_matches
+        
+        # Extract suggested approach changes
+        approach_matches = self.extract_field(text, "suggested_approach_change")
+        results["suggested_approach_change"] = approach_matches
+        
+        # Calculate overall confidence score based on all extracted fields
+        all_matches = failure_matches + root_cause_matches + approach_matches
+        if all_matches:
+            avg_confidence = sum(conf for _, conf in all_matches) / len(all_matches)
+        else:
+            avg_confidence = 0.0
+        
+        results["confidence_score"] = [("overall_confidence", round(avg_confidence, 2))]
+        
+        return results
+
 
 # Example usage (if run as script)
 if __name__ == "__main__":
@@ -167,3 +234,15 @@ if __name__ == "__main__":
     high_conf = parser.get_high_confidence(sample_text, threshold=0.7)
     for field, matches in high_conf.items():
         print(f"{field}: {matches}")
+
+    # Test parse_failure_context
+    print("\n=== Failure Context Analysis ===")
+    failure_text = (
+        "Error: Connection timeout occurred due to network instability. "
+        "Root cause: missing retry logic. Suggested approach: implement exponential backoff."
+    )
+    failure_context = parser.parse_failure_context(failure_text)
+    for field, matches in failure_context.items():
+        print(f"\n{field}:")
+        for text, conf in matches:
+            print(f"  - '{text}' (confidence: {conf})")
