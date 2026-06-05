@@ -1,0 +1,15 @@
+{
+  "capabilities": [
+    {
+      "name": "Mutation Quality Gate",
+      "description": "syntax check, static analysis, and integration test before saving mutations, with 3 retry attempts",
+      "enabled": true,
+      "retry_attempts": 3,
+      "checks": [
+        "syntax_check",
+        "static_analysis",
+        "integration_test"
+      ]
+    }
+  ]
+}

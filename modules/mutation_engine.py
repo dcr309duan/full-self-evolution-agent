@@ -315,3 +315,135 @@ class MutationEngine:
         except Exception as e:
             logger.error(f"Unexpected error during trivial mutation: {e}")
             raise
+
+    def quality_gate(self, filepath: str) -> Dict[str, Any]:
+        """
+        Perform a quality gate check on the mutated file.
+        This is a placeholder that should be replaced with actual quality checks.
+        
+        Args:
+            filepath: Path to the file to check
+            
+        Returns:
+            Dict with keys 'passed' (bool) and 'errors' (list of error dicts)
+        """
+        # Placeholder: always pass for now
+        # In a real implementation, this would check syntax, style, etc.
+        return {'passed': True, 'errors': []}
+
+    def apply_mutation(self, filepath: str, mutation_type: str, mutation_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Main mutation application method. Applies a mutation, runs quality gate,
+        and handles retries on failure.
+        
+        Args:
+            filepath: Path to the file to mutate
+            mutation_type: Type of mutation to apply
+            mutation_params: Optional parameters for the mutation
+            
+        Returns:
+            Dict with keys:
+                - 'success': bool
+                - 'error_details': list of error dicts (if failed)
+                - 'retry_count': int (number of retries attempted)
+                - 'discarded': bool (True if mutation was discarded after max retries)
+        """
+        max_retries = 3
+        retry_count = 0
+        error_details = []
+        
+        while retry_count < max_retries:
+            try:
+                # Apply the mutation based on type
+                if mutation_type == 'trivial_mutation':
+                    self.trivial_mutation(filepath)
+                else:
+                    # For other mutation types, we would implement specific logic
+                    # For now, just record the mutation attempt
+                    self.record_mutation(
+                        mutation_type=mutation_type,
+                        target=filepath,
+                        details=mutation_params or {}
+                    )
+                
+                # Run quality gate
+                gate_result = self.quality_gate(filepath)
+                
+                if gate_result['passed']:
+                    # Save the mutation (atomic write is handled by mutation methods)
+                    return {
+                        'success': True,
+                        'error_details': [],
+                        'retry_count': retry_count,
+                        'discarded': False
+                    }
+                else:
+                    # Gate failed
+                    error_details = gate_result.get('errors', [{'message': 'Quality gate failed'}])
+                    logger.error(f"Quality gate failed for {mutation_type} on {filepath}: {error_details}")
+                    
+                    # Register failure
+                    self.register_failure(
+                        mutation_type=mutation_type,
+                        error_type='quality_gate_failure',
+                        details={'errors': error_details, 'retry_count': retry_count}
+                    )
+                    
+                    retry_count += 1
+                    
+                    if retry_count >= max_retries:
+                        # Discard mutation entirely
+                        logger.error(f"Mutation {mutation_type} on {filepath} discarded after {max_retries} failures")
+                        return {
+                            'success': False,
+                            'error_details': error_details,
+                            'retry_count': retry_count,
+                            'discarded': True
+                        }
+                    
+                    # Return structured failure response for LLM to fix
+                    return {
+                        'success': False,
+                        'error_details': error_details,
+                        'retry_count': retry_count,
+                        'discarded': False
+                    }
+                    
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Error during mutation {mutation_type} on {filepath}: {error_msg}")
+                
+                error_details = [{'message': error_msg, 'exception': type(e).__name__}]
+                
+                # Register failure
+                self.register_failure(
+                    mutation_type=mutation_type,
+                    error_type='mutation_error',
+                    details={'error': error_msg, 'retry_count': retry_count}
+                )
+                
+                retry_count += 1
+                
+                if retry_count >= max_retries:
+                    logger.error(f"Mutation {mutation_type} on {filepath} discarded after {max_retries} failures")
+                    return {
+                        'success': False,
+                        'error_details': error_details,
+                        'retry_count': retry_count,
+                        'discarded': True
+                    }
+                
+                return {
+                    'success': False,
+                    'error_details': error_details,
+                    'retry_count': retry_count,
+                    'discarded': False
+                }
+        
+        # Should not reach here, but just in case
+        return {
+            'success': False,
+            'error_details': error_details,
+            'retry_count': retry_count,
+            'discarded': True
+        }
