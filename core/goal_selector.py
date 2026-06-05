@@ -190,44 +190,54 @@ class GoalSelector:
         
         return None
 
-    def select_next_goal(self) -> Optional[Goal]:
+    def select_next_goal(self, system_state: Optional[Any] = None) -> Optional[Goal]:
         """
-        Select the next goal to process based on current mode.
+        Select the next goal to process based on current mode and feasibility score.
         
         In test_mode, repair goals are prioritized and processed in dependency order.
         When consolidation_priority is True and consolidation goals exist, they are 
         prioritized over new capability goals.
         Meta-optimization goals are processed after repair and consolidation but before new capabilities.
         In normal mode, goals are selected by priority.
+        
+        Only accepts goals whose feasibility score exceeds the system state's goal_acceptance_threshold.
         """
+        # Helper function to check if a goal meets the acceptance threshold
+        def is_goal_acceptable(goal: Goal) -> bool:
+            if system_state is None:
+                return True
+            threshold = getattr(system_state, 'goal_acceptance_threshold', 0.0)
+            feasibility = goal.metadata.get('feasibility_score', 0.0)
+            return feasibility > threshold
+
         if self.test_mode:
             # Process repair goals first, in dependency order
             repair_goals = self._get_repair_goals_in_dependency_order()
             if repair_goals:
-                # Find the first repair goal whose dependencies are all completed
+                # Find the first repair goal whose dependencies are all completed and is acceptable
                 for goal in repair_goals:
                     if all(dep in [g.goal_id for g in self.completed_goals] 
-                           for dep in goal.dependencies):
+                           for dep in goal.dependencies) and is_goal_acceptable(goal):
                         self.pending_repair_goals.remove(goal)
                         return goal
                 
-                # If no repair goal has all dependencies met, return None
-                # (wait for dependencies to be completed)
+                # If no repair goal has all dependencies met or is acceptable, return None
+                # (wait for dependencies to be completed or threshold to be met)
                 return None
 
         # Check consolidation priority if enabled
         if self.consolidation_priority and self.pending_consolidation_goals:
             consolidation_goals = self._get_consolidation_goals_in_dependency_order()
             if consolidation_goals:
-                # Find the first consolidation goal whose dependencies are all completed
+                # Find the first consolidation goal whose dependencies are all completed and is acceptable
                 for goal in consolidation_goals:
                     if all(dep in [g.goal_id for g in self.completed_goals] 
-                           for dep in goal.dependencies):
+                           for dep in goal.dependencies) and is_goal_acceptable(goal):
                         self.pending_consolidation_goals.remove(goal)
                         return goal
                 
-                # If no consolidation goal has all dependencies met, return None
-                # (wait for dependencies to be completed)
+                # If no consolidation goal has all dependencies met or is acceptable, return None
+                # (wait for dependencies to be completed or threshold to be met)
                 return None
 
         # Process meta-optimization goals (after repair and consolidation, before new capabilities)
@@ -236,7 +246,7 @@ class GoalSelector:
             if meta_goals:
                 for goal in meta_goals:
                     if all(dep in [g.goal_id for g in self.completed_goals] 
-                           for dep in goal.dependencies):
+                           for dep in goal.dependencies) and is_goal_acceptable(goal):
                         self.pending_meta_optimization_goals.remove(goal)
                         return goal
                 return None
@@ -246,9 +256,14 @@ class GoalSelector:
         if not all_goals:
             return None
 
-        # Select the highest priority goal
-        all_goals.sort(key=lambda g: g.priority, reverse=True)
-        selected = all_goals[0]
+        # Filter goals by acceptance threshold and select the highest priority acceptable goal
+        acceptable_goals = [g for g in all_goals if is_goal_acceptable(g)]
+        if not acceptable_goals:
+            return None
+
+        # Select the highest priority acceptable goal
+        acceptable_goals.sort(key=lambda g: g.priority, reverse=True)
+        selected = acceptable_goals[0]
         
         if selected in self.pending_new_goals:
             self.pending_new_goals.remove(selected)

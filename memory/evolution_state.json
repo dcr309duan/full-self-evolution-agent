@@ -1,9 +1,8 @@
 {
-  "cycle_count": 105,
-  "current_generation": 76,
-  "last_evolution_time": 1780643142.0486636,
+  "cycle_count": 106,
+  "current_generation": 77,
+  "last_evolution_time": 1780643367.531936,
   "capabilities": [
-    "Build a causal dependency graph from the self-model that maps module interfaces and callers, enablin",
     "Create a failure pattern miner that analyzes the failure log to identify high-level architectural bo",
     "Implement a canonical schema alignment layer that validates and normalizes reflection_parser outputs",
     "Build a dependency-aware planning system that parses the current goal graph, identifies unmet prereq",
@@ -52,7 +51,8 @@
     "Build a 'meta-parameter evolution' module that tracks the performance impact of key evolution engine",
     "Build an end-to-end integration test harness that executes the full evolution loop (reflection → goa",
     "Add a 'recursive sandbox' mechanism that, before applying any mutation to the core evolution engine,",
-    "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness i"
+    "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness i",
+    "Implement a plasticity-stability scheduler that dynamically adjusts the mutation rate and goal accep"
   ],
   "history": [
     {
@@ -624,6 +624,12 @@
       "goal": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
       "success": true,
       "timestamp": 1780643330.8876088
+    },
+    {
+      "cycle": 106,
+      "goal": "Implement a plasticity-stability scheduler that dynamically adjusts the mutation rate and goal acceptance threshold based on recent success rate: after 3 consecutive failures, reduce mutation rate by 20% and raise threshold by 10%; after 3 consecutive successes, reverse the adjustments. Log all adjustments to a dedicated meta-parameter history file.",
+      "success": true,
+      "timestamp": 1780643511.8725154
     }
   ],
   "status": "evolving"

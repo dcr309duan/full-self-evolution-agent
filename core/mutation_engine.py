@@ -411,9 +411,29 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
         except ImportError:
             pass
     
+    # Get current mutation rate from system state
+    mutation_rate = 1.0  # Default to always mutate
+    try:
+        from core.system_state import get_system_state
+        state = get_system_state()
+        mutation_rate = state.get("mutation_rate", 1.0)
+    except ImportError:
+        pass
+    except Exception:
+        pass
+    
     results = []
     
     for i in range(num_mutations):
+        # Apply mutation rate: skip with probability (1 - mutation_rate)
+        if random.random() > mutation_rate:
+            results.append({
+                "skipped": True,
+                "reason": f"Mutation skipped due to mutation_rate={mutation_rate}",
+                "timestamp": time.time()
+            })
+            continue
+        
         func_a, func_b = random.sample(pool, 2)
         operator = random.choice(operators)
         
