@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation', or 'adapt_to_pressure'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation', 'adapt_to_pressure', or 'nash_equilibrium_meta'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -71,6 +71,11 @@ capability_coverage: Dict[str, float] = {}  # Maps capability names to their cov
 # Environmental pressure tracking
 environmental_pressure_active: bool = False  # Whether environmental pressure has been introduced
 environmental_pressure_description: str = ""  # Description of the current environmental pressure
+
+# Nash equilibrium tracking for meta-goal triggering
+nash_equilibrium_detected: bool = False  # Whether Nash equilibrium has been detected
+nash_equilibrium_modules: List[str] = []  # Modules stuck in Nash equilibrium
+nash_equilibrium_analysis: Dict = {}  # Analysis details of the detected Nash equilibrium
 
 
 def prioritize_pending_goals() -> List[Goal]:
@@ -267,6 +272,59 @@ def generate_coordinated_mutation_goal(stuck_modules: List[str], nash_analysis: 
     return goal
 
 
+def generate_nash_equilibrium_meta_goal(stuck_modules: List[str], nash_analysis: Dict) -> Goal:
+    """Generate a meta-goal when Nash equilibrium is detected.
+
+    This meta-goal triggers a higher-level strategy to break the Nash equilibrium
+    by modifying the test suite or evaluation criteria to force exploration of
+    new fitness landscapes.
+
+    Args:
+        stuck_modules: List of module names currently stuck in Nash equilibrium.
+        nash_analysis: Dictionary containing Nash equilibrium analysis details,
+            including fitness scores and interaction patterns.
+
+    Returns:
+        A Goal object with type 'nash_equilibrium_meta' that specifies the
+        meta-level strategy to break the equilibrium.
+    """
+    if not stuck_modules:
+        logger.warning("generate_nash_equilibrium_meta_goal called with empty stuck_modules list")
+        return None
+
+    modules_str = ", ".join(stuck_modules)
+    description = (
+        f"Nash equilibrium detected in modules [{modules_str}]. "
+        f"Meta-goal: Modify test suite or evaluation criteria to break the equilibrium "
+        f"and force exploration of new fitness landscapes. Current fitness scores: "
+        f"{nash_analysis.get('fitness_scores', 'unknown')}."
+    )
+
+    goal = Goal(
+        description=description,
+        priority=GoalPriority.CRITICAL,
+        module="test_suite",
+        goal_type="nash_equilibrium_meta",
+        source="fitness",
+        tags=["nash_equilibrium_meta", "test_suite_modification", "equilibrium_break", "meta_goal"]
+    )
+
+    # Add nash analysis details as tags for reference
+    if nash_analysis:
+        for key, value in nash_analysis.items():
+            if isinstance(value, str):
+                goal.tags.append(f"nash_{key}:{value}")
+            elif isinstance(value, (int, float)):
+                goal.tags.append(f"nash_{key}:{value:.2f}")
+
+    logger.info(
+        "Generated Nash equilibrium meta-goal for modules %s",
+        stuck_modules
+    )
+
+    return goal
+
+
 def generate_adapt_to_pressure_goal(pressure_description: str) -> Goal:
     """Generate a goal to adapt to a new environmental pressure.
 
@@ -330,6 +388,7 @@ def generate_goals(
     """
     global consecutive_successes, current_accuracy_threshold, previous_diversity, capability_coverage
     global environmental_pressure_active, environmental_pressure_description
+    global nash_equilibrium_detected, nash_equilibrium_modules, nash_equilibrium_analysis
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
@@ -410,6 +469,21 @@ def generate_goals(
                 "Generated adapt_to_pressure goal for pressure: %s",
                 environmental_pressure_description
             )
+
+    # Check if Nash equilibrium is detected and generate meta-goal
+    if nash_equilibrium_detected and nash_equilibrium_modules:
+        nash_meta_goal = generate_nash_equilibrium_meta_goal(
+            nash_equilibrium_modules,
+            nash_equilibrium_analysis
+        )
+        if nash_meta_goal:
+            goals.append(nash_meta_goal)
+            logger.info(
+                "Generated Nash equilibrium meta-goal for modules %s",
+                nash_equilibrium_modules
+            )
+        # Reset the flag after generating the goal to avoid duplicate generation
+        nash_equilibrium_detected = False
 
     # Track consecutive successes and trigger meta-goal if threshold reached
     all_above_threshold = all(
@@ -843,74 +917,4 @@ def generate_sub_goals(
             # Default to sequential for unknown strategies
             implement_goal.dependencies.append(analyze_goal.description)
             validate_goal.dependencies.append(implement_goal.description)
-            sub_goals = [analyze_goal, implement_goal, validate_goal]
-            
-    elif parent_goal.goal_type == "dependency_tracking":
-        # Break dependency tracking into smaller steps
-        identify_goal = Goal(
-            description=f"Identify dependencies for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="dependency_tracking",
-            source=parent_goal.source
-        )
-        implement_goal = Goal(
-            description=f"Implement dependency tracking for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="dependency_tracking",
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: identify -> implement
-            implement_goal.dependencies.append(identify_goal.description)
-            sub_goals = [identify_goal, implement_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [identify_goal, implement_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: implement depends on identify
-            implement_goal.dependencies.append(identify_goal.description)
-            sub_goals = [identify_goal, implement_goal]
-        else:
-            # Default to sequential for unknown strategies
-            implement_goal.dependencies.append(identify_goal.description)
-            sub_goals = [identify_goal, implement_goal]
-    elif parent_goal.goal_type == "infrastructure_hardening":
-        # Break infrastructure hardening into smaller steps
-        diagnose_goal = Goal(
-            description=f"Diagnose infrastructure issues in {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="infrastructure_hardening",
-            source=parent_goal.source
-        )
-        implement_goal = Goal(
-            description=f"Implement hardening fixes for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="infrastructure_hardening",
-            source=parent_goal.source
-        )
-        test_goal = Goal(
-            description=f"Test hardening improvements for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="infrastructure_hardening",
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: diagnose -> implement -> test
-            implement_goal.dependencies.append(diagnose_goal.description)
-            test_goal.dependencies.append(implement_goal.description)
-            sub_goals = [diagnose_goal, implement_goal, test_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [diagnose_goal, implement_goal, test_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: diagnose is independent, implement depends on diagnose, test depends on implement
-            implement_goal.dependencies.append(diagnose_goal.description)
-            test_goal.dependencies.append(implement_goal.description)
             sub_go

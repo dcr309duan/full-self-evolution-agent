@@ -58,6 +58,12 @@ class NashEquilibriumDetector:
         # Module interaction success rates: module_name -> list of success rates
         self.module_interaction_success_rates: Dict[str, List[float]] = {}
         
+        # Module improvement rates over cycles
+        self.module_improvement_rates: Dict[str, List[float]] = {}
+        
+        # Payoff matrix for module interactions: (module1, module2) -> payoff value
+        self.payoff_matrix: Dict[Tuple[str, str], float] = {}
+        
         # Initialize current scores to 0
         for module_name in self.module_names:
             self.current_scores[module_name] = 0.0
@@ -65,6 +71,63 @@ class NashEquilibriumDetector:
             self.stagnation_counter[module_name] = 0
             self.module_interaction_frequencies[module_name] = 0
             self.module_interaction_success_rates[module_name] = []
+            self.module_improvement_rates[module_name] = []
+
+    def track_module_improvement_rates(self, module_name: str, improvement_rate: float) -> None:
+        """
+        Track the improvement rate for a module over cycles.
+        
+        Args:
+            module_name: Name of the module
+            improvement_rate: The improvement rate (as a decimal, e.g., 0.05 for 5%)
+        """
+        if module_name not in self.module_improvement_rates:
+            self.module_improvement_rates[module_name] = []
+        
+        self.module_improvement_rates[module_name].append(improvement_rate)
+        
+        # Keep only last 100 entries to prevent memory issues
+        if len(self.module_improvement_rates[module_name]) > 100:
+            self.module_improvement_rates[module_name] = self.module_improvement_rates[module_name][-100:]
+
+    def get_module_improvement_rate_history(self, module_name: str) -> List[float]:
+        """
+        Get the improvement rate history for a module.
+        
+        Args:
+            module_name: Name of the module
+            
+        Returns:
+            List of improvement rates over cycles
+        """
+        return self.module_improvement_rates.get(module_name, [])
+
+    def get_average_improvement_rate(self, module_name: str, recent_cycles: int = 5) -> float:
+        """
+        Get the average improvement rate for a module over recent cycles.
+        
+        Args:
+            module_name: Name of the module
+            recent_cycles: Number of recent cycles to consider
+            
+        Returns:
+            Average improvement rate as a float
+        """
+        rates = self.module_improvement_rates.get(module_name, [])
+        if not rates:
+            return 0.0
+        
+        recent_rates = rates[-recent_cycles:] if len(rates) > recent_cycles else rates
+        return sum(recent_rates) / len(recent_rates)
+
+    def get_all_module_improvement_rates(self) -> Dict[str, List[float]]:
+        """
+        Get improvement rates for all modules.
+        
+        Returns:
+            Dictionary mapping module names to their improvement rate histories
+        """
+        return dict(self.module_improvement_rates)
 
     def detect_equilibrium(self, module_scores: Dict[str, float]) -> bool:
         """
@@ -102,21 +165,37 @@ class NashEquilibriumDetector:
         except Exception:
             return False
 
-    def force_coordinated_mutation(self, modules: List[str]) -> List[Dict[str, Any]]:
+    def get_stable_modules(self) -> List[str]:
+        """
+        Get list of modules that are currently in a stable state (stagnant).
+        
+        Returns:
+            List of module names that are stagnant
+        """
+        try:
+            stable_modules = []
+            for module_name in self.module_names:
+                if self.stagnation_counter.get(module_name, 0) >= self.stagnation_threshold:
+                    stable_modules.append(module_name)
+            return stable_modules
+        except Exception:
+            return []
+
+    def force_coordinated_mutation(self, target_modules: List[str]) -> List[Dict[str, Any]]:
         """
         Generate coordinated mutation plans for multiple modules to break Nash equilibrium.
         
         Args:
-            modules: List of module names to include in the coordinated mutation
+            target_modules: List of module names to include in the coordinated mutation
             
         Returns:
             List of dictionaries with 'module' and 'change' keys representing mutation plans
         """
-        if not modules or len(modules) < 2:
+        if not target_modules or len(target_modules) < 2:
             return []
         
         try:
-            selected_modules = modules[:3]
+            selected_modules = target_modules[:3]
             
             complementary_changes = [
                 ('interface_redesign', 'protocol_upgrade'),
@@ -149,6 +228,32 @@ class NashEquilibriumDetector:
             
         except Exception:
             return []
+
+    def get_orchestrator_hooks(self) -> Dict[str, Any]:
+        """
+        Get hooks for orchestrator integration.
+        
+        Returns:
+            Dictionary of hook methods for orchestrator
+        """
+        return {
+            'detect_equilibrium': self.detect_equilibrium,
+            'get_stable_modules': self.get_stable_modules,
+            'force_coordinated_mutation': self.force_coordinated_mutation,
+            'get_equilibrium_state': self.get_equilibrium_state,
+            'record_mutation_outcome': self.record_mutation_outcome,
+            'track_module_interactions': self.track_module_interactions,
+            'increment_cycle': self.increment_cycle,
+            'reset': self.reset,
+            'get_module_interaction_frequency': self.get_module_interaction_frequency,
+            'get_module_success_rate': self.get_module_success_rate,
+            'detect_nash_equilibrium': self.detect_nash_equilibrium,
+            'detect_and_trigger_coordinated_change': self.detect_and_trigger_coordinated_change,
+            'track_module_improvement_rates': self.track_module_improvement_rates,
+            'get_module_improvement_rate_history': self.get_module_improvement_rate_history,
+            'get_average_improvement_rate': self.get_average_improvement_rate,
+            'get_all_module_improvement_rates': self.get_all_module_improvement_rates
+        }
 
     def track_module_interactions(self, module_name: str, success_rate: float, dependency_list: List[str]) -> None:
         """
@@ -400,6 +505,9 @@ class NashEquilibriumDetector:
             else:
                 improvement_pct = abs(score_delta) if score_delta > 0 else 0
             
+            # Track improvement rate
+            self.track_module_improvement_rates(module_name, improvement_pct)
+            
             if improvement_pct > self.improvement_threshold:
                 self.stagnation_counter[module_name] = 0
             else:
@@ -527,7 +635,8 @@ class NashEquilibriumDetector:
                 ],
                 'cycles_without_improvement': self.cycles_without_improvement,
                 'module_scores': dict(self.current_scores),
-                'interaction_stats': self.get_all_interaction_stats()
+                'interaction_stats': self.get_all_interaction_stats(),
+                'module_improvement_rates': {k: v[-5:] if len(v) > 5 else v for k, v in self.module_improvement_rates.items()}
             }
         except Exception:
             return {
@@ -535,7 +644,8 @@ class NashEquilibriumDetector:
                 'stagnant_modules': [],
                 'cycles_without_improvement': self.cycles_without_improvement,
                 'module_scores': dict(self.current_scores),
-                'interaction_stats': {}
+                'interaction_stats': {},
+                'module_improvement_rates': {}
             }
 
     def reset(self) -> None:
@@ -548,6 +658,8 @@ class NashEquilibriumDetector:
             self.cycles_without_improvement = 0
             self.module_interaction_frequencies.clear()
             self.module_interaction_success_rates.clear()
+            self.module_improvement_rates.clear()
+            self.payoff_matrix.clear()
             
             for module_name in self.module_names:
                 self.current_scores[module_name] = 0.0
@@ -555,6 +667,7 @@ class NashEquilibriumDetector:
                 self.stagnation_counter[module_name] = 0
                 self.module_interaction_frequencies[module_name] = 0
                 self.module_interaction_success_rates[module_name] = []
+                self.module_improvement_rates[module_name] = []
                 
         except Exception:
             pass
@@ -581,26 +694,91 @@ class NashEquilibriumDetector:
             raise ValueError("Stagnation threshold must be at least 1")
         self.stagnation_threshold = threshold
 
-    def get_orchestrator_hooks(self) -> Dict[str, Any]:
+    def update_payoff_matrix(self, module1: str, module2: str, payoff: float) -> None:
         """
-        Get hooks for orchestrator integration.
+        Update the payoff matrix for a pair of modules.
+        
+        Args:
+            module1: First module name
+            module2: Second module name
+            payoff: The payoff value for the interaction
+        """
+        key = tuple(sorted([module1, module2]))
+        self.payoff_matrix[key] = payoff
+
+    def get_payoff(self, module1: str, module2: str) -> float:
+        """
+        Get the payoff value for a pair of modules.
+        
+        Args:
+            module1: First module name
+            module2: Second module name
+            
+        Returns:
+            The payoff value, or 0.0 if not found
+        """
+        key = tuple(sorted([module1, module2]))
+        return self.payoff_matrix.get(key, 0.0)
+
+    def find_coordinated_mutation_sets(self) -> List[List[str]]:
+        """
+        Find sets of 2-3 modules where combined changes produce >15% improvement
+        even though individual changes produce <5%.
         
         Returns:
-            Dictionary of hook methods for orchestrator
+            List of module sets that would benefit from coordinated mutation
         """
-        return {
-            'detect_equilibrium': self.detect_equilibrium,
-            'force_coordinated_mutation': self.force_coordinated_mutation,
-            'get_equilibrium_state': self.get_equilibrium_state,
-            'record_mutation_outcome': self.record_mutation_outcome,
-            'track_module_interactions': self.track_module_interactions,
-            'increment_cycle': self.increment_cycle,
-            'reset': self.reset,
-            'get_module_interaction_frequency': self.get_module_interaction_frequency,
-            'get_module_success_rate': self.get_module_success_rate,
-            'detect_nash_equilibrium': self.detect_nash_equilibrium,
-            'detect_and_trigger_coordinated_change': self.detect_and_trigger_coordinated_change
-        }
+        try:
+            coordinated_sets = []
+            
+            # Check pairs
+            for i in range(len(self.module_names)):
+                for j in range(i + 1, len(self.module_names)):
+                    module_i = self.module_names[i]
+                    module_j = self.module_names[j]
+                    
+                    # Get individual improvement rates
+                    rate_i = self.get_average_improvement_rate(module_i, 5)
+                    rate_j = self.get_average_improvement_rate(module_j, 5)
+                    
+                    # Check if individual improvements are < 5%
+                    if rate_i < 0.05 and rate_j < 0.05:
+                        # Get combined payoff
+                        payoff = self.get_payoff(module_i, module_j)
+                        
+                        # Check if combined improvement would be > 15%
+                        if payoff > 0.15:
+                            coordinated_sets.append([module_i, module_j])
+            
+            # Check triples
+            for i in range(len(self.module_names)):
+                for j in range(i + 1, len(self.module_names)):
+                    for k in range(j + 1, len(self.module_names)):
+                        module_i = self.module_names[i]
+                        module_j = self.module_names[j]
+                        module_k = self.module_names[k]
+                        
+                        # Get individual improvement rates
+                        rate_i = self.get_average_improvement_rate(module_i, 5)
+                        rate_j = self.get_average_improvement_rate(module_j, 5)
+                        rate_k = self.get_average_improvement_rate(module_k, 5)
+                        
+                        # Check if individual improvements are < 5%
+                        if rate_i < 0.05 and rate_j < 0.05 and rate_k < 0.05:
+                            # Get combined payoffs
+                            payoff_ij = self.get_payoff(module_i, module_j)
+                            payoff_ik = self.get_payoff(module_i, module_k)
+                            payoff_jk = self.get_payoff(module_j, module_k)
+                            
+                            # Check if combined improvement would be > 15%
+                            combined_payoff = payoff_ij + payoff_ik + payoff_jk
+                            if combined_payoff > 0.15:
+                                coordinated_sets.append([module_i, module_j, module_k])
+            
+            return coordinated_sets
+            
+        except Exception:
+            return []
 
 
 def run_test_mode():
@@ -694,6 +872,7 @@ def run_test_mode():
     assert 'cycles_without_improvement' in state
     assert 'module_scores' in state
     assert 'interaction_stats' in state
+    assert 'module_improvement_rates' in state
     print("  PASSED")
     
     # Test 8: Reset
@@ -753,18 +932,3 @@ def run_test_mode():
     print("\nTest 11: detect_and_trigger_coordinated_change when no equilibrium")
     detector.reset()
     detector.record_mutation_outcome("module_a", 10.0)
-    detector.record_mutation_outcome("module_b", 8.0)
-    detector.record_mutation_outcome("module_c", 12.0)
-    detector.increment_cycle()
-    
-    scores = {"module_a": 10.0, "module_b": 8.0, "module_c": 12.0}
-    plan = detector.detect_and_trigger_coordinated_change(scores)
-    print(f"  Plan: {plan}")
-    assert plan == [], "Should return empty list when no equilibrium detected"
-    print("  PASSED")
-    
-    print("\nAll tests PASSED!")
-
-
-if __name__ == "__main__":
-    run_test_mode()

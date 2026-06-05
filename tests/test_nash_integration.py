@@ -306,6 +306,66 @@ class TestNashIntegration(unittest.TestCase):
                 self.assertGreater(mod.success_rate, 0.5,
                                  f"Module {mod.name} should have improved success rate after coordinated change")
 
+    def test_nash_detection_with_mock_scores(self):
+        """Integration test that: (1) instantiates NashEquilibriumDetector with mock scores,
+        (2) verifies it detects equilibrium, (3) verifies coordinated mutations include at least 2 modules,
+        (4) verifies the mutations are properly formatted for the orchestrator."""
+        # (1) Create mock scores that indicate equilibrium (no module can improve alone)
+        mock_scores = {
+            "ModuleA": {"ModuleA": 0.5, "ModuleB": 0.5, "ModuleC": 0.5},
+            "ModuleB": {"ModuleA": 0.5, "ModuleB": 0.5, "ModuleC": 0.5},
+            "ModuleC": {"ModuleA": 0.5, "ModuleB": 0.5, "ModuleC": 0.5}
+        }
+        
+        # Configure modules with mock scores
+        self.module_a.get_scores.return_value = mock_scores["ModuleA"]
+        self.module_b.get_scores.return_value = mock_scores["ModuleB"]
+        self.module_c.get_scores.return_value = mock_scores["ModuleC"]
+        
+        # Create a mock orchestrator with Nash detection enabled
+        orchestrator = EvolutionOrchestrator(
+            modules=self.modules,
+            nash_detector=self.nash_detector,
+            coordinated_planner=self.planner,
+            dependency_graph=self.dependency_graph,
+            enable_nash_detection=True,
+            enable_coordinated_mutation=True
+        )
+
+        # (2) Verify equilibrium is detected
+        is_nash = self.nash_detector.detect_equilibrium(self.modules)
+        self.assertTrue(is_nash, "Nash equilibrium should be detected with mock scores showing no improvement possible")
+        
+        # (3) Verify coordinated mutations include at least 2 modules
+        plan = self.planner.generate_plan(self.dependency_graph, {"is_equilibrium": True})
+        self.assertIsNotNone(plan, "Coordinated planner should generate a plan when equilibrium is detected")
+        self.assertGreaterEqual(len(plan), 2, "Plan should target at least 2 modules")
+        
+        # (4) Verify the mutations are properly formatted for the orchestrator
+        for mutation in plan:
+            # Each mutation should have a 'module' key with a valid module name
+            self.assertIn("module", mutation, "Each mutation should have a 'module' key")
+            module_name = mutation["module"]
+            self.assertIn(module_name, [mod.name for mod in self.modules],
+                         f"Module {module_name} in plan should exist in the system")
+            
+            # Each mutation should have a 'type' key (optional but recommended)
+            if "type" in mutation:
+                self.assertIsInstance(mutation["type"], str, "Mutation type should be a string")
+            
+            # Each mutation should have a 'params' key (optional but recommended)
+            if "params" in mutation:
+                self.assertIsInstance(mutation["params"], dict, "Mutation params should be a dictionary")
+        
+        # Verify the plan respects dependencies
+        plan_module_names = [m.get("module") for m in plan]
+        if "ModuleA" in plan_module_names:
+            self.assertIn("ModuleB", plan_module_names,
+                         "If ModuleA is targeted, ModuleB must also be targeted due to dependency")
+        if "ModuleB" in plan_module_names:
+            self.assertIn("ModuleC", plan_module_names,
+                         "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
+
 
 if __name__ == '__main__':
     unittest.main()
