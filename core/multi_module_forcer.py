@@ -455,6 +455,27 @@ class MultiModuleOrchestrator:
         self.forcer = MultiModuleForcer(self.detector)
         self.execution_history: List[Dict[str, Any]] = []
         self.snapshot_stack: List[Dict[str, Any]] = []
+        self.equilibrium_log: List[Dict[str, Any]] = []
+        self.forced_change_log: List[Dict[str, Any]] = []
+
+    def log_equilibrium_event(self, event_type: str, details: Dict[str, Any]) -> None:
+        """Log an equilibrium detection event."""
+        log_entry = {
+            "event_type": event_type,
+            "details": details,
+            "timestamp": len(self.equilibrium_log)
+        }
+        self.equilibrium_log.append(log_entry)
+
+    def log_forced_change(self, change_type: str, plan: Dict[str, Any], result: Dict[str, Any]) -> None:
+        """Log a forced change event."""
+        log_entry = {
+            "change_type": change_type,
+            "plan": plan,
+            "result": result,
+            "timestamp": len(self.forced_change_log)
+        }
+        self.forced_change_log.append(log_entry)
 
     def orchestrate_from_equilibria(self) -> Dict[str, Any]:
         """
@@ -463,11 +484,14 @@ class MultiModuleOrchestrator:
         """
         clusters = self.forcer.analyze_equilibrium_clusters()
         if not clusters:
+            self.log_equilibrium_event("no_clusters", {"message": "No equilibrium clusters found"})
             return {
                 "success": False,
                 "error": "No equilibrium clusters found",
                 "mutations_executed": 0,
             }
+
+        self.log_equilibrium_event("clusters_found", {"cluster_count": len(clusters), "clusters": [list(c) for c in clusters]})
 
         results = []
         for cluster in clusters:
@@ -479,8 +503,10 @@ class MultiModuleOrchestrator:
                     # Take snapshot for rollback
                     self._take_snapshot()
                     result = self.forcer.execute_coordinated_mutation(resolved_plan)
+                    self.log_forced_change("coordinated_mutation", resolved_plan, result)
                     if not result.get("success", False):
                         self._rollback()
+                        self.log_equilibrium_event("rollback", {"cluster": list(cluster), "reason": "Mutation failed"})
                     results.append(result)
 
         return {
@@ -562,8 +588,10 @@ class MultiModuleOrchestrator:
         if not result.get("success", False):
             self._rollback()
             result["rolled_back"] = True
+            self.log_equilibrium_event("rollback", {"plan": plan, "reason": "Mutation failed"})
         else:
             result["rolled_back"] = False
+        self.log_forced_change("executed_mutation", plan, result)
         self.execution_history.append(result)
         return result
 
@@ -599,11 +627,14 @@ class MultiModuleOrchestrator:
                 # Record successful atomic operation
                 result["atomic_applied"] = True
                 result["rolled_back"] = False
+                self.log_forced_change("atomic_mutation_success", plan, result)
             else:
                 # Rollback on failure
                 self._rollback()
                 result["atomic_applied"] = False
                 result["rolled_back"] = True
+                self.log_equilibrium_event("rollback", {"plan": plan, "reason": "Atomic mutation failed"})
+                self.log_forced_change("atomic_mutation_failure", plan, result)
             
             self.execution_history.append(result)
             return result
@@ -618,6 +649,8 @@ class MultiModuleOrchestrator:
                 "rolled_back": True,
                 "plan": plan,
             }
+            self.log_equilibrium_event("rollback", {"plan": plan, "reason": f"Exception: {str(e)}"})
+            self.log_forced_change("atomic_mutation_exception", plan, error_result)
             self.execution_history.append(error_result)
             return error_result
 
@@ -627,12 +660,22 @@ class MultiModuleOrchestrator:
         """
         return self.execution_history.copy()
 
+    def get_equilibrium_log(self) -> List[Dict[str, Any]]:
+        """Returns the equilibrium event log."""
+        return self.equilibrium_log.copy()
+
+    def get_forced_change_log(self) -> List[Dict[str, Any]]:
+        """Returns the forced change log."""
+        return self.forced_change_log.copy()
+
     def clear_history(self) -> None:
         """
         Clears the execution history and snapshot stack.
         """
         self.execution_history.clear()
         self.snapshot_stack.clear()
+        self.equilibrium_log.clear()
+        self.forced_change_log.clear()
 
 
 def analyze_and_force_coordination(
@@ -760,3 +803,187 @@ def integrate_with_orchestrator_cycle(
             "rolled_back_count": sum(1 for r in executed_results if r.get("rolled_back", False))
         }
     }
+
+
+def check_and_force_coordinated_mutation(
+    detector: Optional[NashEquilibriumDetector] = None
+) -> Dict[str, Any]:
+    """
+    Checks if the system is in a Nash equilibrium and forces a coordinated mutation
+    to escape it. This function implements the full pipeline:
+    (1) periodically checks for Nash equilibrium,
+    (2) when detected, generates a coordinated multi-module mutation plan,
+    (3) applies all changes atomically,
+    (4) verifies the system escapes the equilibrium.
+    
+    Args:
+        detector: Optional NashEquilibriumDetector instance.
+        
+    Returns:
+        A result dictionary with the outcome of the coordinated mutation attempt.
+    """
+    forcer = MultiModuleForcer(detector)
+    orchestrator = MultiModuleOrchestrator(detector)
+    
+    # Step 1: Check for Nash equilibrium
+    equilibrium_result = forcer.detector.detect_equilibrium()
+    
+    if not equilibrium_result.get("equilibrium_detected", False):
+        orchestrator.log_equilibrium_event("no_equilibrium", {"message": "No Nash equilibrium detected"})
+        return {
+            "success": False,
+            "error": "No Nash equilibrium detected",
+            "equilibrium_detected": False,
+            "mutation_applied": False,
+            "escaped_equilibrium": False
+        }
+    
+    orchestrator.log_equilibrium_event("equilibrium_detected", equilibrium_result)
+    
+    # Step 2: Generate coordinated multi-module mutation plan
+    plans = forcer.force_coalition_change()
+    
+    if not plans:
+        # Fall back to cluster-based planning
+        clusters = forcer.analyze_equilibrium_clusters()
+        if not clusters:
+            orchestrator.log_equilibrium_event("no_plans", {"message": "No viable mutation plans generated"})
+            return {
+                "success": False,
+                "error": "No viable mutation plans generated",
+                "equilibrium_detected": True,
+                "mutation_applied": False,
+                "escaped_equilibrium": False
+            }
+        
+        for cluster in clusters:
+            cluster_plans = forcer.generate_coordinated_mutation_plan(cluster)
+            plans.extend(cluster_plans)
+    
+    if not plans:
+        orchestrator.log_equilibrium_event("no_plans", {"message": "No viable mutation plans generated"})
+        return {
+            "success": False,
+            "error": "No viable mutation plans generated",
+            "equilibrium_detected": True,
+            "mutation_applied": False,
+            "escaped_equilibrium": False
+        }
+    
+    # Step 3: Apply all changes atomically
+    best_plan = plans[0]  # Plans are sorted by impact
+    result = orchestrator.integrate_with_mutation_pipeline(best_plan)
+    
+    if not result.get("success", False):
+        orchestrator.log_forced_change("failed_mutation", best_plan, result)
+        return {
+            "success": False,
+            "error": "Atomic mutation application failed",
+            "equilibrium_detected": True,
+            "mutation_applied": False,
+            "escaped_equilibrium": False,
+            "mutation_result": result
+        }
+    
+    # Step 4: Verify the system escapes the equilibrium
+    post_equilibrium = forcer.detector.detect_equilibrium()
+    escaped = not post_equilibrium.get("equilibrium_detected", True)
+    
+    orchestrator.log_forced_change("successful_mutation", best_plan, result)
+    orchestrator.log_equilibrium_event("post_mutation_check", {"escaped": escaped, "post_equilibrium": post_equilibrium})
+    
+    return {
+        "success": escaped,
+        "equilibrium_detected": True,
+        "mutation_applied": True,
+        "escaped_equilibrium": escaped,
+        "plan_applied": best_plan,
+        "mutation_result": result,
+        "post_equilibrium_state": post_equilibrium,
+        "verification": {
+            "pre_equilibrium": equilibrium_result,
+            "post_equilibrium": post_equilibrium,
+            "escaped": escaped
+        }
+    }
+
+
+def _vote_on_modules(modules: List[str], detector: NashEquilibriumDetector) -> List[str]:
+    """
+    Simple voting mechanism to select which modules to change together.
+    Each module gets a vote based on its stability and interaction count.
+    Returns the top 2-3 modules with the most votes.
+    """
+    votes = {}
+    for module in modules:
+        data = detector.module_interactions.get(module, {})
+        stability = data.get("stability", 0.5)
+        references = len(data.get("references", []))
+        referenced_by = len(data.get("referenced_by", []))
+        
+        # Vote score: higher stability and more interactions = more votes
+        vote_score = stability * 2.0 + references * 0.5 + referenced_by * 0.5
+        votes[module] = vote_score
+    
+    # Sort by vote score descending
+    sorted_modules = sorted(votes.items(), key=lambda x: x[1], reverse=True)
+    
+    # Select top 2-3 modules (randomly choose between 2 or 3)
+    num_to_select = random.choice([2, 3])
+    selected = [m[0] for m in sorted_modules[:num_to_select]]
+    
+    return selected
+
+
+def generate_coordinated_change_plan(detector: NashEquilibriumDetector) -> Optional[Dict[str, Any]]:
+    """
+    When nash_detector signals equilibrium, generate a coordinated change plan
+    affecting 2-3 modules simultaneously using a voting mechanism.
+    
+    Args:
+        detector: The NashEquilibriumDetector instance.
+        
+    Returns:
+        A coordinated change plan, or None if no equilibrium detected.
+    """
+    # Check for equilibrium
+    equilibrium_result = detector.detect_equilibrium()
+    if not equilibrium_result.get("equilibrium_detected", False):
+        return None
+    
+    # Get all modules
+    modules = list(detector.module_interactions.keys())
+    if len(modules) < 2:
+        return None
+    
+    # Use voting to select which modules to change together
+    selected_modules = _vote_on_modules(modules, detector)
+    
+    # Create a coordinated change plan
+    forcer = MultiModuleForcer(detector)
+    plan = forcer._create_mutation_plan(set(selected_modules))
+    
+    if plan:
+        plan["source"] = "voting_mechanism"
+        plan["voting_results"] = {m: detector.module_interactions.get(m, {}).get("stability", 0.5) for m in selected_modules}
+    
+    return plan
+
+
+def execute_atomic_coordinated_change(
+    plan: Dict[str, Any],
+    detector: NashEquilibriumDetector
+) -> Dict[str, Any]:
+    """
+    Implement the changes in a single atomic operation.
+    Roll back all changes if any single change fails.
+    
+    Args:
+        plan: The coordinated change plan to execute.
+        detector: The NashEquilibriumDetector instance.
+        
+    Returns:
+        A result dictionary indicating success/failure and rollback status.
+    """
+    orchestrator = MultiModuleOrchestrator(detector)
+    return orchestrator.integrate_with_mutation_pipeline(plan)
