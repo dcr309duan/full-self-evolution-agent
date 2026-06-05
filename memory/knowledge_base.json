@@ -1,46 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/orchestrator.py to: Integrate the simulation engine into the evolution loop: (1) Before any mutation, run simulation and check predicted outcome, (2) If simulation predicts failure, log warning and optionally skip or adjust mutation, (3) Add 'simulation_confidence' metric to reflection output, (4) Track simulation accuracy over time for self-improvement.",
-      "timestamp": 1780637556.24607,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified tests/unit/test_simulation_engine.py to: Create unit tests for the simulation engine: (1) Test dependency subgraph cloning with a simple two-module dependency, (2) Test sandbox isolation (no side effects on real filesystem), (3) Test mutation application and test execution in sandbox, (4) Test handling of missing dependencies, (5) Test performance with larger dependency graphs.",
-      "timestamp": 1780637570.823998,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified tests/integration/test_simulation_pipeline.py to: Create integration test for the full simulation pipeline: (1) Create a multi-module test scenario with dependencies, (2) Propose a valid mutation, (3) Run simulation and verify it returns predicted pass, (4) Propose an invalid mutation, (5) Run simulation and verify it returns predicted fail, (6) Verify no files were modified outside the sandbox.",
-      "timestamp": 1780637586.7505167,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified core/reflection_parser.py to: Add schema fields for simulation results: 'simulation_prediction' (pass/fail), 'simulation_confidence' (0.0-1.0), 'simulation_side_effects' (list of affected modules), 'simulation_accuracy_trend' (list of recent accuracy values). Update the schema alignment layer to include these new fields.",
-      "timestamp": 1780637595.6612062,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified core/goal_generator.py to: Add capability to generate goals for improving simulation accuracy: (1) If simulation accuracy drops below threshold, generate 'Improve simulation accuracy for [module]' goal, (2) If simulation reveals unexpected side effects, generate 'Add dependency tracking for [module]' goal, (3) Prioritize goals that expand simulation coverage.",
-      "timestamp": 1780637610.2758036,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified core/simulation_metrics.py to: Create metrics collector for the simulation engine: (1) Track simulation accuracy vs actual mutation outcomes, (2) Track simulation time and resource usage, (3) Track false positive/negative rates per module, (4) Export metrics for the reflection system to analyze.",
-      "timestamp": 1780637627.1153045,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified core/self_model.py to: Update the self-model knowledge graph to include: (1) Simulation nodes for each module with accuracy metrics, (2) Dependency edges used by the simulation engine, (3) Simulation history as a property of each module node, (4) Cross-reference between simulation predictions and actual mutation outcomes.",
-      "timestamp": 1780637637.862654,
-      "cycle": 81
-    },
-    {
-      "content": "Successfully modified core/goal_triage.py to: Create a new goal triage module that: (1) Scans all pending and in-progress goals from the goal registry, (2) Checks each goal's 'last_active_generation' field against the current generation, (3) Flags goals that have been unfished (no progress) for 3+ consecutive generations, (4) For flagged goals, either breaks them into smaller sub-goals (if feasible) or archives them with a lesson recorded in the knowledge base.",
-      "timestamp": 1780637713.2206035,
-      "cycle": 82
-    },
-    {
       "content": "Successfully modified core/goal_generator.py to: Add a new method `generate_sub_goals(parent_goal)` that takes a complex goal and breaks it into 2-3 smaller, more achievable sub-goals. Also add a method `archive_goal_with_lesson(goal, lesson)` that records the goal as archived in the goal registry and stores the lesson in the knowledge base.",
       "timestamp": 1780637730.1650465,
       "cycle": 82
@@ -999,6 +959,46 @@
       "content": "Successfully modified core/fitness_landscape_analyzer.py to: Add Nash equilibrium visualization data: track 'stagnation periods' where no single-module improvement occurs, compute 'coordination potential' score for each module pair, and output recommended coordinated mutation targets when equilibrium detected.",
       "timestamp": 1780643934.2235842,
       "cycle": 108
+    },
+    {
+      "content": "Self-reflection: The evolution process has fallen into a pattern of 'capability accumulation' mistaken for progress. True autonomy requires not just adding tools, but mastering the art of removal and simplification. T",
+      "timestamp": 1780643993.9280193,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified core/capability_consolidation_engine.py to: Create the main CapabilityConsolidationEngine class with methods: scan_all_modules() to discover all Python modules in the codebase, score_module(module) that computes utility score from usage_frequency (tracked via import count), failure_rate (from mutation logs), dependency_count (imports in module), and age (cycles since last modification). Implement archive_module(module_path, threshold) that moves low-scoring modules to an archive/ directory and updates the module registry. Implement refactor_core_pathways() that identifies high-complexity modules (high dependency count, low score) and generates simplified replacements.",
+      "timestamp": 1780644043.7934875,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified core/consolidation_scorer.py to: Build a standalone scoring utility that: (1) tracks usage frequency by monitoring import statements across all modules, (2) reads failure logs from core/mutation_logger.py to compute failure rates per module, (3) parses AST of each module to count dependencies (imports and from-imports), (4) checks file modification timestamps against cycle counter to compute age. Returns a normalized score (0-100) for each module.",
+      "timestamp": 1780644061.591305,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified core/archive_manager.py to: Implement ArchiveManager that: (1) creates archive/ directory structure with timestamps, (2) moves module files while preserving directory structure, (3) updates any imports in remaining modules that reference archived modules (replacing with stub or removing), (4) maintains an archive manifest JSON file listing archived modules, their original paths, scores, and archive date. Includes rollback capability to restore archived modules if needed.",
+      "timestamp": 1780644084.120398,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified core/evolution_engine.py to: Integrate the consolidation engine into the main evolution loop. After every 5 cycles (check cycle % 5 == 0), call consolidation_engine.run_consolidation() which: scans all modules, scores them, archives those below configurable threshold (default 20), and refactors core pathways. Add configuration parameters: 'consolidation_enabled' (bool), 'consolidation_threshold' (int 0-100), 'archive_enabled' (bool). Log consolidation events with scores and decisions.",
+      "timestamp": 1780644107.9877863,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified tests/test_consolidation_engine.py to: Create test suite: (1) test that scoring correctly computes utility from mock usage data, (2) test that modules below threshold are archived, (3) test that archiving removes module from active imports, (4) test that refactoring reduces dependency count in core pathways, (5) test that consolidation runs on correct cycle intervals, (6) test rollback/restore from archive works, (7) test that critical modules (evolution_engine, goal_selector) cannot be archived even if low-scoring.",
+      "timestamp": 1780644137.2183235,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified config/consolidation_config.json to: Create configuration file with: consolidation_threshold: 20, consolidation_interval_cycles: 5, archive_enabled: true, protected_modules: ['core/evolution_engine.py', 'core/goal_selector.py', 'core/mutation_engine.py', 'core/test_runner.py', 'core/reflection_engine.py'], max_archived_per_run: 3, refactoring_enabled: true, min_dependency_reduction: 0.3 (30% reduction target for refactored pathways).",
+      "timestamp": 1780644139.8556204,
+      "cycle": 109
+    },
+    {
+      "content": "Successfully modified core/coordinated_mutator.py to: Add a new mutation strategy 'consolidation_mutation' that, when consolidation engine identifies modules for archiving, generates coordinated mutations that: (1) merge functionality from low-scoring modules into higher-scoring ones before archiving, (2) create compatibility stubs if needed, (3) update all cross-references. This prevents loss of useful functionality during consolidation.",
+      "timestamp": 1780644178.8317664,
+      "cycle": 109
     }
   ],
   "learned_patterns": [],
@@ -4614,6 +4614,46 @@
       "strategy": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "outcome": "5/5 steps succeeded",
       "timestamp": 1780643934.240034
+    },
+    {
+      "strategy": "modify core/capability_consolidation_engine.py: Create the main CapabilityConsolidationEngine class with methods: scan_all_modules() to discover all Python modules in the codebase, score_module(module) that computes utility score from usage_frequency (tracked via import count), failure_rate (from mutation logs), dependency_count (imports in module), and age (cycles since last modification). Implement archive_module(module_path, threshold) that moves low-scoring modules to an archive/ directory and updates the module registry. Implement refactor_core_pathways() that identifies high-complexity modules (high dependency count, low score) and generates simplified replacements.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644043.7782803
+    },
+    {
+      "strategy": "modify core/consolidation_scorer.py: Build a standalone scoring utility that: (1) tracks usage frequency by monitoring import statements across all modules, (2) reads failure logs from core/mutation_logger.py to compute failure rates per module, (3) parses AST of each module to count dependencies (imports and from-imports), (4) checks file modification timestamps against cycle counter to compute age. Returns a normalized score (0-100) for each module.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644061.5674655
+    },
+    {
+      "strategy": "modify core/archive_manager.py: Implement ArchiveManager that: (1) creates archive/ directory structure with timestamps, (2) moves module files while preserving directory structure, (3) updates any imports in remaining modules that reference archived modules (replacing with stub or removing), (4) maintains an archive manifest JSON file listing archived modules, their original paths, scores, and archive date. Includes rollback capability to restore archived modules if needed.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644084.1042638
+    },
+    {
+      "strategy": "modify core/evolution_engine.py: Integrate the consolidation engine into the main evolution loop. After every 5 cycles (check cycle % 5 == 0), call consolidation_engine.run_consolidation() which: scans all modules, scores them, archives those below configurable threshold (default 20), and refactors core pathways. Add configuration parameters: 'consolidation_enabled' (bool), 'consolidation_threshold' (int 0-100), 'archive_enabled' (bool). Log consolidation events with scores and decisions.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644107.9689727
+    },
+    {
+      "strategy": "modify tests/test_consolidation_engine.py: Create test suite: (1) test that scoring correctly computes utility from mock usage data, (2) test that modules below threshold are archived, (3) test that archiving removes module from active imports, (4) test that refactoring reduces dependency count in core pathways, (5) test that consolidation runs on correct cycle intervals, (6) test rollback/restore from archive works, (7) test that critical modules (evolution_engine, goal_selector) cannot be archived even if low-scoring.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644137.202666
+    },
+    {
+      "strategy": "modify config/consolidation_config.json: Create configuration file with: consolidation_threshold: 20, consolidation_interval_cycles: 5, archive_enabled: true, protected_modules: ['core/evolution_engine.py', 'core/goal_selector.py', 'core/mutation_engine.py', 'core/test_runner.py', 'core/reflection_engine.py'], max_archived_per_run: 3, refactoring_enabled: true, min_dependency_reduction: 0.3 (30% reduction target for refactored pathways).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644139.8398917
+    },
+    {
+      "strategy": "modify core/coordinated_mutator.py: Add a new mutation strategy 'consolidation_mutation' that, when consolidation engine identifies modules for archiving, generates coordinated mutations that: (1) merge functionality from low-scoring modules into higher-scoring ones before archiving, (2) create compatibility stubs if needed, (3) update all cross-references. This prevents loss of useful functionality during consolidation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780644178.8154175
+    },
+    {
+      "strategy": "Implement a Capability Consolidation Engine that runs every 5 cycles: scans all modules, scores each on utility (usage frequency, failure rate, dependency count, age), archives modules below a configurable threshold, and refactors core pathways to reduce codebase complexity.",
+      "outcome": "7/7 steps succeeded",
+      "timestamp": 1780644178.849932
     }
   ],
   "capabilities_developed": []

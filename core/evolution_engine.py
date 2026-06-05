@@ -11,6 +11,7 @@ from core.mutation import Mutation
 from core.ecology_engine import EcologyEngine
 from core.nash_detector import NashDetector
 from core.coordinated_mutator import CoordinatedMutator
+from core.consolidation_engine import ConsolidationEngine
 
 
 @dataclass
@@ -22,16 +23,21 @@ class EvolutionEngine:
     ecology_engine: EcologyEngine
     nash_detector: NashDetector
     coordinated_mutator: CoordinatedMutator
+    consolidation_engine: ConsolidationEngine
     mutation_outcomes: List[Dict[str, Any]] = field(default_factory=list)
     consecutive_test_passes: int = 0
     nash_equilibrium_detected: bool = False
     nash_escape_attempts: int = 0
+    consolidation_enabled: bool = True
+    consolidation_threshold: int = 20
+    archive_enabled: bool = True
     
     def __post_init__(self):
         """Initialize mutation outcomes tracking if not already present."""
         if not hasattr(self.system_state, 'mutation_outcomes'):
             self.system_state.mutation_outcomes = []
         self.logger = logging.getLogger(__name__)
+        self._cycle_count = 0
     
     def select_goal(self, goals: List[Goal]) -> Optional[Goal]:
         """Select a goal based on feasibility threshold from system state.
@@ -243,6 +249,62 @@ class EvolutionEngine:
         
         return avg_feasibility * 0.7 + diversity_score * 0.3
     
+    def _run_consolidation(self, goals: List[Goal]) -> None:
+        """Run consolidation engine to scan, score, archive, and refactor modules.
+        
+        Args:
+            goals: Current list of goals to evaluate
+        """
+        if not self.consolidation_enabled:
+            self.logger.info("Consolidation disabled, skipping")
+            return
+        
+        self.logger.info(
+            f"Running consolidation cycle (threshold={self.consolidation_threshold}, "
+            f"archive_enabled={self.archive_enabled})"
+        )
+        
+        # Scan all modules and score them
+        module_scores = self.consolidation_engine.score_modules(goals)
+        
+        # Log scores for each module
+        for module_id, score in module_scores.items():
+            self.logger.info(
+                f"Consolidation scoring - Module {module_id}: score={score:.2f}, "
+                f"threshold={self.consolidation_threshold}"
+            )
+        
+        # Archive modules below threshold if enabled
+        if self.archive_enabled:
+            archived_modules = self.consolidation_engine.archive_modules(
+                module_scores, 
+                self.consolidation_threshold
+            )
+            if archived_modules:
+                self.logger.info(
+                    f"Consolidation archiving - Archived {len(archived_modules)} modules: "
+                    f"{[m.id for m in archived_modules]}"
+                )
+            else:
+                self.logger.info("Consolidation archiving - No modules archived")
+        
+        # Refactor core pathways
+        refactored_pathways = self.consolidation_engine.refactor_core_pathways(goals)
+        if refactored_pathways:
+            self.logger.info(
+                f"Consolidation refactoring - Refactored {len(refactored_pathways)} pathways: "
+                f"{[p.id for p in refactored_pathways]}"
+            )
+        else:
+            self.logger.info("Consolidation refactoring - No pathways refactored")
+        
+        # Log consolidation summary
+        self.logger.info(
+            f"Consolidation complete - Modules scored: {len(module_scores)}, "
+            f"Archived: {len(archived_modules) if self.archive_enabled else 0}, "
+            f"Pathways refactored: {len(refactored_pathways)}"
+        )
+    
     def evolve(self, goals: List[Goal]) -> List[Goal]:
         """Execute one evolution cycle.
         
@@ -253,8 +315,9 @@ class EvolutionEngine:
         4. Evaluate and adjust scheduler parameters
         5. Check ecology engine and introduce pressure if needed
         6. Run Nash detection and attempt coordinated escape if equilibrium detected
-        7. Log current meta-parameter state for continuous monitoring
-        8. Log fitness landscape report
+        7. Run consolidation every 5 cycles if enabled
+        8. Log current meta-parameter state for continuous monitoring
+        9. Log fitness landscape report
         
         Args:
             goals: Current list of goals to evolve
@@ -262,6 +325,8 @@ class EvolutionEngine:
         Returns:
             Updated list of goals after evolution
         """
+        self._cycle_count += 1
+        
         # Select goal
         selected_goal = self.select_goal(goals)
         if selected_goal is None:
@@ -286,6 +351,10 @@ class EvolutionEngine:
         
         # Run Nash detection and attempt coordinated escape if equilibrium detected
         nash_escape_applied = self._detect_and_escape_nash_equilibrium(goals)
+        
+        # Run consolidation every 5 cycles
+        if self._cycle_count % 5 == 0:
+            self._run_consolidation(goals)
         
         # Log meta-parameter state at the end of each evolution cycle
         self._log_meta_parameter_state()
@@ -339,5 +408,9 @@ class EvolutionEngine:
             'consecutive_test_passes': self.consecutive_test_passes,
             'ecology_engine_state': self.ecology_engine.get_state() if hasattr(self.ecology_engine, 'get_state') else {},
             'nash_equilibrium_detected': self.nash_equilibrium_detected,
-            'nash_escape_attempts': self.nash_escape_attempts
+            'nash_escape_attempts': self.nash_escape_attempts,
+            'consolidation_enabled': self.consolidation_enabled,
+            'consolidation_threshold': self.consolidation_threshold,
+            'archive_enabled': self.archive_enabled,
+            'cycle_count': self._cycle_count
         }

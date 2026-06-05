@@ -1,9 +1,8 @@
 {
-  "cycle_count": 108,
-  "current_generation": 79,
-  "last_evolution_time": 1780643802.2847915,
+  "cycle_count": 109,
+  "current_generation": 80,
+  "last_evolution_time": 1780643971.1985781,
   "capabilities": [
-    "Build a dependency-aware planning system that parses the current goal graph, identifies unmet prereq",
     "Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and gen",
     "Implement a canonical schema alignment layer: a validated, versioned data contract that normalizes o",
     "Build a system-wide integration test suite that validates the end-to-end data flow from reflection →",
@@ -52,7 +51,8 @@
     "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness i",
     "Implement a plasticity-stability scheduler that dynamically adjusts the mutation rate and goal accep",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
-    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr"
+    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
+    "Implement a Capability Consolidation Engine that runs every 5 cycles: scans all modules, scores each"
   ],
   "history": [
     {
@@ -642,6 +642,12 @@
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "success": true,
       "timestamp": 1780643934.4311666
+    },
+    {
+      "cycle": 109,
+      "goal": "Implement a Capability Consolidation Engine that runs every 5 cycles: scans all modules, scores each on utility (usage frequency, failure rate, dependency count, age), archives modules below a configurable threshold, and refactors core pathways to reduce codebase complexity.",
+      "success": true,
+      "timestamp": 1780644179.0821815
     }
   ],
   "status": "evolving"

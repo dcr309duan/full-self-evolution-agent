@@ -2,10 +2,22 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a real-time system health dashboard that correlates failures, performance metrics, and dependency issues across all modules, providing a single view to detect integration conflicts and underutilized components.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780643996.517085
+    },
+    {
       "description": "Create a self-model consistency validator that, after each successful evolution cycle, updates an internal dependency graph and verifies that all module interfaces, schemas, and call sites remain aligned, flagging mismatches for immediate repair.",
       "priority": 7,
       "status": "pending",
       "created_at": 1780640492.0718932
+    },
+    {
+      "description": "Implement automated rollback and conflict resolution for overlapping module edits: when two mutations modify the same code region, detect the conflict, attempt a three-way merge using the last stable snapshot, and if merge fails, revert both changes and log the conflict for manual review.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780643996.5195127
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -637,6 +649,13 @@
       "status": "completed",
       "created_at": 1780643294.6655066,
       "completed_at": 1780643934.2506988
+    },
+    {
+      "description": "Implement a Capability Consolidation Engine that runs every 5 cycles: scans all modules, scores each on utility (usage frequency, failure rate, dependency count, age), archives modules below a configurable threshold, and refactors core pathways to reduce codebase complexity.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780643996.5140643,
+      "completed_at": 1780644178.862567
     }
   ],
   "generated_goals": []

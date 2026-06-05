@@ -1,0 +1,15 @@
+{
+  "consolidation_threshold": 20,
+  "consolidation_interval_cycles": 5,
+  "archive_enabled": true,
+  "protected_modules": [
+    "core/evolution_engine.py",
+    "core/goal_selector.py",
+    "core/mutation_engine.py",
+    "core/test_runner.py",
+    "core/reflection_engine.py"
+  ],
+  "max_archived_per_run": 3,
+  "refactoring_enabled": true,
+  "min_dependency_reduction": 0.3
+}
