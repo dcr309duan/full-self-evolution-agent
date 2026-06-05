@@ -125,7 +125,7 @@ body {
 .activity-table td { padding: 10px; border-bottom: 1px solid #21262d; }
 .result-success { color: #3fb950; font-weight: 600; }
 .result-failed { color: #f85149; font-weight: 600; }
-.insight-item { padding: 8px 12px; margin-bottom: 6px; background: #0d1117; border-radius: 6px; font-size: 12px; border-left: 3px solid #8957e5; }
+.insight-item { padding: 8px 12px; margin-bottom: 6px; background: #0d1117; border-radius: 6px; font-size: 12px; border-left: 3px solid #8957e5; overflow-wrap: break-word; white-space: pre-wrap; }
 .insight-time { color: #8b949e; font-size: 11px; }
 .log-area {
     background: #010409; border: 1px solid #21262d; border-radius: 8px;
@@ -267,10 +267,10 @@ function updateDashboard(data) {
     document.getElementById('meta-blinds').textContent = (meta.blind_spots || []).length;
     let metaHtml = '';
     (meta.paradigm_shifts || []).slice().reverse().forEach(s => {
-        metaHtml += '<div class="insight-item" style="border-left-color:#f0883e;"><span class="insight-time">' + formatTime(s.timestamp) + '</span> <strong>[范式转移]</strong> ' + (s.insight||'').substring(0,150) + '</div>';
+        metaHtml += '<div class="insight-item" style="border-left-color:#f0883e;word-wrap:break-word;white-space:pre-wrap;"><span class="insight-time">' + formatTime(s.timestamp) + '</span> <strong>[范式转移]</strong> ' + (s.insight||'') + '</div>';
     });
     (meta.blind_spots || []).slice().reverse().forEach(b => {
-        metaHtml += '<div class="insight-item" style="border-left-color:#f85149;"><span class="insight-time">' + formatTime(b.timestamp) + '</span> <strong>[盲区]</strong> ' + (b.description||'').substring(0,150) + '</div>';
+        metaHtml += '<div class="insight-item" style="border-left-color:#f85149;word-wrap:break-word;white-space:pre-wrap;"><span class="insight-time">' + formatTime(b.timestamp) + '</span> <strong>[盲区]</strong> ' + (b.description||'') + '</div>';
     });
     document.getElementById('meta-details').innerHTML = metaHtml || '<span style="color:#8b949e;font-size:12px;">等待第一次元认知会话（每10轮触发）</span>';
 
