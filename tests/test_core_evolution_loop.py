@@ -1,0 +1,293 @@
+import os
+import sys
+import tempfile
+import shutil
+import unittest
+from unittest.mock import MagicMock, patch
+from pathlib import Path
+
+# Add the parent directory to sys.path to import the project modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Import the components of the pipeline
+from core.reflection_parser import ReflectionParser
+from core.goal_generator import GoalGenerator
+from core.mutation_engine import MutationEngine
+from core.test_runner import TestRunner
+from core.promotion import PromotionLogic
+
+
+class TestCoreEvolutionLoop(unittest.TestCase):
+    """End-to-end integration test for the core evolution loop."""
+
+    def setUp(self):
+        """Set up a sandboxed temporary directory for the test."""
+        self.test_dir = tempfile.mkdtemp()
+        self.sandbox_path = Path(self.test_dir)
+
+        # Create necessary subdirectories
+        (self.sandbox_path / "logs").mkdir(exist_ok=True)
+        (self.sandbox_path / "mutations").mkdir(exist_ok=True)
+        (self.sandbox_path / "tests").mkdir(exist_ok=True)
+
+        # Create a mock mutation engine that returns a known valid mutation
+        self.mock_mutation_engine = MagicMock(spec=MutationEngine)
+        self.mock_mutation_engine.generate_mutation.return_value = {
+            "mutation_id": "test_mutation_001",
+            "code": "def add(a, b): return a + b",
+            "description": "Simple addition function",
+            "valid": True
+        }
+
+        # Initialize pipeline components
+        self.reflection_parser = ReflectionParser(sandbox_path=self.sandbox_path)
+        self.goal_generator = GoalGenerator(sandbox_path=self.sandbox_path)
+        self.test_runner = TestRunner(sandbox_path=self.sandbox_path)
+        self.promotion_logic = PromotionLogic(sandbox_path=self.sandbox_path)
+
+    def tearDown(self):
+        """Clean up the sandbox directory after the test."""
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_full_pipeline_execution(self):
+        """Test the complete evolution pipeline from reflection to promotion."""
+        try:
+            # Step 1: Reflection Parser
+            reflection_data = {"content": "Improve the add function to handle negative numbers"}
+            parsed_reflection = self.reflection_parser.parse(reflection_data)
+            self.assertIsNotNone(parsed_reflection, "Reflection parser returned None")
+            self.assertIn("goal", parsed_reflection, "Parsed reflection missing 'goal' key")
+            self.assertEqual(
+                parsed_reflection["goal"],
+                "Improve the add function to handle negative numbers",
+                f"Unexpected goal: {parsed_reflection['goal']}"
+            )
+            # Assertion 1: reflection_parser returns valid JSON with required keys
+            self.assertIsInstance(parsed_reflection, dict, 
+                "Step 1 FAILED: reflection_parser should return a dict, got {type(parsed_reflection).__name__}")
+            self.assertIn("current_assessment", parsed_reflection,
+                "Step 1 FAILED: reflection_parser result missing 'current_assessment' key. Keys present: " + 
+                str(list(parsed_reflection.keys())))
+            self.assertIn("key_gaps", parsed_reflection,
+                "Step 1 FAILED: reflection_parser result missing 'key_gaps' key. Keys present: " + 
+                str(list(parsed_reflection.keys())))
+            self.assertIn("next_priority", parsed_reflection,
+                "Step 1 FAILED: reflection_parser result missing 'next_priority' key. Keys present: " + 
+                str(list(parsed_reflection.keys())))
+            self.assertIsInstance(parsed_reflection["key_gaps"], list,
+                "Step 1 FAILED: 'key_gaps' should be a list, got {type(parsed_reflection['key_gaps']).__name__}")
+            self.assertIsInstance(parsed_reflection["next_priority"], str,
+                "Step 1 FAILED: 'next_priority' should be a string, got {type(parsed_reflection['next_priority']).__name__}")
+            print("✓ Reflection parser step passed")
+
+            # Step 2: Goal Generator
+            goal = self.goal_generator.generate_goal(parsed_reflection)
+            self.assertIsNotNone(goal, "Goal generator returned None")
+            self.assertIn("description", goal, "Goal missing 'description' key")
+            self.assertIn("constraints", goal, "Goal missing 'constraints' key")
+            self.assertIsInstance(goal["constraints"], list, "Constraints should be a list")
+            # Assertion 2: goal_generator produces a goal that matches one of the key_gaps
+            self.assertIsInstance(goal, dict,
+                "Step 2 FAILED: goal_generator should return a dict, got {type(goal).__name__}")
+            self.assertIn("goal_text", goal,
+                "Step 2 FAILED: goal missing 'goal_text' key. Keys present: " + str(list(goal.keys())))
+            goal_text = goal.get("goal_text", "")
+            key_gaps = parsed_reflection.get("key_gaps", [])
+            goal_matches_gap = any(gap.lower() in goal_text.lower() or goal_text.lower() in gap.lower() 
+                                  for gap in key_gaps)
+            self.assertTrue(goal_matches_gap,
+                "Step 2 FAILED: Goal '{goal_text}' does not match any key_gaps: {key_gaps}. "
+                "The generated goal should address one of the identified gaps.")
+            print("✓ Goal generator step passed")
+
+            # Step 3: Mutation Engine (using mock)
+            mutation = self.mock_mutation_engine.generate_mutation(goal)
+            self.assertIsNotNone(mutation, "Mutation engine returned None")
+            self.assertEqual(mutation["mutation_id"], "test_mutation_001", "Unexpected mutation ID")
+            self.assertTrue(mutation["valid"], "Mutation should be valid")
+            self.assertIn("code", mutation, "Mutation missing 'code' key")
+            # Assertion 3: mutation_engine in mock mode returns a valid mutation dict with required keys
+            self.assertIsInstance(mutation, dict,
+                "Step 3 FAILED: mutation_engine should return a dict, got {type(mutation).__name__}")
+            self.assertIn("file", mutation,
+                "Step 3 FAILED: mutation missing 'file' key. Keys present: " + str(list(mutation.keys())))
+            self.assertIn("change", mutation,
+                "Step 3 FAILED: mutation missing 'change' key. Keys present: " + str(list(mutation.keys())))
+            self.assertIn("rollback", mutation,
+                "Step 3 FAILED: mutation missing 'rollback' key. Keys present: " + str(list(mutation.keys())))
+            self.assertIsInstance(mutation["file"], str,
+                "Step 3 FAILED: 'file' should be a string, got {type(mutation['file']).__name__}")
+            self.assertIsInstance(mutation["change"], str,
+                "Step 3 FAILED: 'change' should be a string, got {type(mutation['change']).__name__}")
+            self.assertIsInstance(mutation["rollback"], str,
+                "Step 3 FAILED: 'rollback' should be a string, got {type(mutation['rollback']).__name__}")
+            print("✓ Mutation engine step passed")
+
+            # Step 4: Test Runner
+            test_results = self.test_runner.run_tests(mutation)
+            self.assertIsNotNone(test_results, "Test runner returned None")
+            self.assertIn("passed", test_results, "Test results missing 'passed' key")
+            self.assertIn("failed", test_results, "Test results missing 'failed' key")
+            self.assertIn("errors", test_results, "Test results missing 'errors' key")
+            self.assertIsInstance(test_results["passed"], list, "Passed tests should be a list")
+            self.assertIsInstance(test_results["failed"], list, "Failed tests should be a list")
+            self.assertIsInstance(test_results["errors"], list, "Errors should be a list")
+            # Assertion 4: test_runner executes the mutation and returns a test result
+            self.assertIsInstance(test_results, dict,
+                "Step 4 FAILED: test_runner should return a dict, got {type(test_results).__name__}")
+            self.assertIn("test_result", test_results,
+                "Step 4 FAILED: test_results missing 'test_result' key. Keys present: " + str(list(test_results.keys())))
+            test_result = test_results.get("test_result", "")
+            self.assertIn(test_result, ["passed", "failed", "error"],
+                "Step 4 FAILED: 'test_result' should be one of 'passed', 'failed', or 'error', got '{test_result}'")
+            print("✓ Test runner step passed")
+
+            # Step 5: Promotion Logic
+            promotion_result = self.promotion_logic.evaluate(mutation, test_results)
+            self.assertIsNotNone(promotion_result, "Promotion logic returned None")
+            self.assertIn("promoted", promotion_result, "Promotion result missing 'promoted' key")
+            self.assertIn("reason", promotion_result, "Promotion result missing 'reason' key")
+            self.assertIsInstance(promotion_result["promoted"], bool, "Promoted should be a boolean")
+            # Assertion 5: promotion logic correctly promotes or reverts based on test result
+            self.assertIsInstance(promotion_result, dict,
+                "Step 5 FAILED: promotion_logic should return a dict, got {type(promotion_result).__name__}")
+            self.assertIn("action", promotion_result,
+                "Step 5 FAILED: promotion_result missing 'action' key. Keys present: " + str(list(promotion_result.keys())))
+            action = promotion_result.get("action", "")
+            test_result = test_results.get("test_result", "")
+            if test_result == "passed":
+                self.assertEqual(action, "promote",
+                    "Step 5 FAILED: When test_result is 'passed', action should be 'promote', got '{action}'")
+            else:
+                self.assertEqual(action, "revert",
+                    "Step 5 FAILED: When test_result is '{test_result}', action should be 'revert', got '{action}'")
+            print("✓ Promotion logic step passed")
+
+            # Step 6: Verify all steps produced expected outputs
+            self.assertTrue(
+                parsed_reflection["goal"] == "Improve the add function to handle negative numbers",
+                "Reflection goal mismatch"
+            )
+            self.assertTrue(
+                len(goal["constraints"]) > 0,
+                "Goal should have at least one constraint"
+            )
+            self.assertTrue(
+                mutation["valid"],
+                "Mutation should be marked as valid"
+            )
+            self.assertTrue(
+                len(test_results["passed"]) + len(test_results["failed"]) + len(test_results["errors"]) > 0,
+                "Test results should contain at least one test outcome"
+            )
+            self.assertIsInstance(
+                promotion_result["promoted"],
+                bool,
+                "Promotion result should be boolean"
+            )
+
+            print("\n✓ All pipeline steps completed successfully")
+        finally:
+            # Ensure sandbox directory is cleaned up even if test fails
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_pipeline_with_invalid_mutation(self):
+        """Test the pipeline handles invalid mutations gracefully."""
+        try:
+            # Override mock to return invalid mutation
+            self.mock_mutation_engine.generate_mutation.return_value = {
+                "mutation_id": "invalid_mutation",
+                "code": "",
+                "description": "Empty mutation",
+                "valid": False
+            }
+
+            # Run through the pipeline
+            reflection_data = {"content": "Fix the broken function"}
+            parsed_reflection = self.reflection_parser.parse(reflection_data)
+            goal = self.goal_generator.generate_goal(parsed_reflection)
+            mutation = self.mock_mutation_engine.generate_mutation(goal)
+
+            # Assert invalid mutation is handled
+            self.assertFalse(mutation["valid"], "Mutation should be marked as invalid")
+            self.assertEqual(mutation["code"], "", "Invalid mutation should have empty code")
+
+            # Test runner should handle invalid mutation
+            with self.assertRaises(ValueError) as context:
+                self.test_runner.run_tests(mutation)
+            self.assertIn("invalid", str(context.exception).lower(), "Error should mention invalid mutation")
+
+            print("✓ Invalid mutation handling passed")
+        finally:
+            # Ensure sandbox directory is cleaned up even if test fails
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_pipeline_with_missing_goal(self):
+        """Test the pipeline handles missing goal gracefully."""
+        try:
+            reflection_data = {"content": ""}
+            parsed_reflection = self.reflection_parser.parse(reflection_data)
+
+            # Goal generator should handle empty reflection
+            with self.assertRaises(ValueError) as context:
+                self.goal_generator.generate_goal(parsed_reflection)
+            self.assertIn("goal", str(context.exception).lower(), "Error should mention missing goal")
+
+            print("✓ Missing goal handling passed")
+        finally:
+            # Ensure sandbox directory is cleaned up even if test fails
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_self_validating_pipeline(self):
+        """Test that the test itself fails with clear diagnostic if any step is broken.
+        
+        This test temporarily corrupts the reflection parser output to verify that
+        the test assertions properly detect and report failures.
+        """
+        try:
+            # Temporarily corrupt the reflection parser output
+            original_parse = self.reflection_parser.parse
+            def corrupted_parse(data):
+                result = original_parse(data)
+                # Corrupt the result by removing required keys
+                if isinstance(result, dict):
+                    result.pop("current_assessment", None)
+                    result.pop("key_gaps", None)
+                    result.pop("next_priority", None)
+                return result
+            
+            self.reflection_parser.parse = corrupted_parse
+            
+            # Attempt to run the pipeline - this should fail with clear diagnostic
+            reflection_data = {"content": "Improve the add function to handle negative numbers"}
+            parsed_reflection = self.reflection_parser.parse(reflection_data)
+            
+            # This assertion should fail with a clear message about missing keys
+            with self.assertRaises(AssertionError) as context:
+                self.assertIn("current_assessment", parsed_reflection,
+                    "Step 1 FAILED: reflection_parser result missing 'current_assessment' key. Keys present: " + 
+                    str(list(parsed_reflection.keys())))
+            
+            error_message = str(context.exception)
+            self.assertIn("Step 1 FAILED", error_message, 
+                "Error message should contain step identification")
+            self.assertIn("current_assessment", error_message,
+                "Error message should mention the missing key")
+            self.assertIn("key_gaps", error_message,
+                "Error message should mention other missing keys")
+            
+            print("✓ Self-validating test passed - corrupted reflection parser correctly detected")
+            
+        finally:
+            # Restore original parser
+            self.reflection_parser.parse = original_parse
+            # Ensure sandbox directory is cleaned up even if test fails
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

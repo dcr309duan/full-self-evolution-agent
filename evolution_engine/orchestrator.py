@@ -3,6 +3,7 @@
 import os
 import sys
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import logging
@@ -79,16 +80,39 @@ class DependencyAwareFeasibilityEstimator:
 feasibility_estimator = DependencyAwareFeasibilityEstimator()
 
 
-def check_primitive_validation() -> None:
+def check_primitive_validation(sandbox_mode: bool = False) -> None:
     """
     Check if the primitive test file exists and passes.
     If not, log the error and set the global flag.
+    
+    Args:
+        sandbox_mode: If True, use temporary directory for file operations
     """
     global PRIMITIVE_VALIDATION_FAILED
 
-    if not PRIMITIVE_TEST_PATH.exists():
+    if sandbox_mode:
+        # Create a temporary directory for sandbox operations
+        temp_dir = tempfile.mkdtemp(prefix="evolution_sandbox_")
+        sandbox_test_path = Path(temp_dir) / PRIMITIVE_TEST_PATH.name
+        
+        # Copy the test file to sandbox if it exists
+        if PRIMITIVE_TEST_PATH.exists():
+            import shutil
+            shutil.copy2(PRIMITIVE_TEST_PATH, sandbox_test_path)
+            test_path = sandbox_test_path
+        else:
+            print(
+                f"ERROR: Primitive test file not found: {PRIMITIVE_TEST_PATH}",
+                file=sys.stderr
+            )
+            PRIMITIVE_VALIDATION_FAILED = True
+            return
+    else:
+        test_path = PRIMITIVE_TEST_PATH
+
+    if not test_path.exists():
         print(
-            f"ERROR: Primitive test file not found: {PRIMITIVE_TEST_PATH}",
+            f"ERROR: Primitive test file not found: {test_path}",
             file=sys.stderr
         )
         PRIMITIVE_VALIDATION_FAILED = True
@@ -96,14 +120,14 @@ def check_primitive_validation() -> None:
 
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(PRIMITIVE_TEST_PATH), "-x", "--tb=short"],
+            [sys.executable, "-m", "pytest", str(test_path), "-x", "--tb=short"],
             capture_output=True,
             text=True,
             timeout=60
         )
         if result.returncode != 0:
             print(
-                f"ERROR: Primitive test failed: {PRIMITIVE_TEST_PATH}\n"
+                f"ERROR: Primitive test failed: {test_path}\n"
                 f"STDOUT: {result.stdout}\n"
                 f"STDERR: {result.stderr}",
                 file=sys.stderr
@@ -113,7 +137,7 @@ def check_primitive_validation() -> None:
             PRIMITIVE_VALIDATION_FAILED = False
     except subprocess.TimeoutExpired:
         print(
-            f"ERROR: Primitive test timed out: {PRIMITIVE_TEST_PATH}",
+            f"ERROR: Primitive test timed out: {test_path}",
             file=sys.stderr
         )
         PRIMITIVE_VALIDATION_FAILED = True
@@ -123,14 +147,20 @@ def check_primitive_validation() -> None:
             file=sys.stderr
         )
         PRIMITIVE_VALIDATION_FAILED = True
+    finally:
+        # Clean up sandbox directory if used
+        if sandbox_mode and 'temp_dir' in locals():
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def schedule_goal(goal: Dict[str, Any]) -> bool:
+def schedule_goal(goal: Dict[str, Any], sandbox_mode: bool = False) -> bool:
     """
     Schedule a goal for execution after checking feasibility.
     
     Args:
         goal: Dictionary containing goal information
+        sandbox_mode: If True, use temporary directory for file operations
         
     Returns:
         True if goal was scheduled, False if blocked
@@ -145,17 +175,26 @@ def schedule_goal(goal: Dict[str, Any]) -> bool:
     
     # Schedule the goal for execution
     logger.info(f"Goal {goal.get('id', 'unknown')} is feasible, scheduling for execution")
+    
+    if sandbox_mode:
+        # Create sandbox directory for this goal's operations
+        temp_dir = tempfile.mkdtemp(prefix=f"goal_sandbox_{goal.get('id', 'unknown')}_")
+        logger.info(f"Using sandbox directory for goal {goal.get('id', 'unknown')}: {temp_dir}")
+        # Store sandbox path in goal for later cleanup
+        goal['_sandbox_path'] = temp_dir
+    
     # Actual scheduling logic would go here
     return True
 
 
-def process_mutation_result(mutation_id: str, success: bool) -> None:
+def process_mutation_result(mutation_id: str, success: bool, sandbox_mode: bool = False) -> None:
     """
     Process the result of a mutation and re-evaluate blocked goals.
     
     Args:
         mutation_id: Identifier of the mutation that was executed
         success: Whether the mutation was successful
+        sandbox_mode: If True, use temporary directory for file operations
     """
     global feasibility_estimator
     
@@ -169,18 +208,22 @@ def process_mutation_result(mutation_id: str, success: bool) -> None:
         # Schedule newly unblocked goals
         for goal in unblocked_goals:
             logger.info(f"Re-scheduling previously blocked goal {goal.get('id', 'unknown')}")
-            schedule_goal(goal)
+            schedule_goal(goal, sandbox_mode)
 
 
-def run_evolution_loop() -> None:
+def run_evolution_loop(sandbox_mode: bool = False) -> None:
     """
     Main evolution loop that checks primitive validation before proceeding.
+    
+    Args:
+        sandbox_mode: If True, use temporary directory for all file operations
+                      to avoid modifying production code
     """
     global PRIMITIVE_VALIDATION_FAILED
     global feasibility_estimator
 
     # Initial validation check
-    check_primitive_validation()
+    check_primitive_validation(sandbox_mode)
 
     while True:
         if PRIMITIVE_VALIDATION_FAILED:
@@ -193,7 +236,7 @@ def run_evolution_loop() -> None:
             # Optionally, wait and retry periodically
             import time
             time.sleep(10)
-            check_primitive_validation()
+            check_primitive_validation(sandbox_mode)
             continue
 
         # Main evolution logic goes here
@@ -209,14 +252,15 @@ def run_evolution_loop() -> None:
         }
         
         # Try to schedule a goal
-        if schedule_goal(example_goal):
+        if schedule_goal(example_goal, sandbox_mode):
             # If scheduled, execute and process result
             # This is where actual execution would happen
-            process_mutation_result('mutation_001', True)
-            process_mutation_result('mutation_002', True)
+            process_mutation_result('mutation_001', True, sandbox_mode)
+            process_mutation_result('mutation_002', True, sandbox_mode)
         
         break  # Remove this break when implementing actual loop logic
 
 
 if __name__ == "__main__":
-    run_evolution_loop()
+    # Default to sandbox mode for safety
+    run_evolution_loop(sandbox_mode=True)

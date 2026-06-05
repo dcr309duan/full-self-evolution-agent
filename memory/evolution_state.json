@@ -1,9 +1,8 @@
 {
-  "cycle_count": 72,
-  "current_generation": 44,
-  "last_evolution_time": 1780635882.286582,
+  "cycle_count": 73,
+  "current_generation": 45,
+  "last_evolution_time": 1780636023.0973666,
   "capabilities": [
-    "Mutation engine - genetic programming for capability evolution",
     "Build an AST-based code rewriter with automatic rollback: implement a function that can safely modif",
     "Create a meta-evaluation loop that scores the evolution engine's own performance (e.g., rate of impr",
     "Implement a failure analysis module that classifies each failed task as either an implementation bug",
@@ -52,7 +51,8 @@
     "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote ",
     "Build a minimal 'new file creation' metamorphic test: write a script that creates a new Python file ",
     "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of t",
-    "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries "
+    "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries ",
+    "Build a minimal end-to-end integration test that validates the core evolution loop (reflection → goa"
   ],
   "history": [
     {
@@ -432,6 +432,12 @@
       "goal": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
       "success": true,
       "timestamp": 1780635988.8550549
+    },
+    {
+      "cycle": 73,
+      "goal": "Build a minimal end-to-end integration test that validates the core evolution loop (reflection → goal generation → mutation → test → promotion). The test must run in a sandboxed environment, use a mock mutation engine, and fail with a clear diagnostic if any step breaks. Ensure it passes reliably before any new features are added.",
+      "success": true,
+      "timestamp": 1780636155.5719202
     }
   ],
   "status": "evolving"

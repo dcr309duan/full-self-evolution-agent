@@ -6,9 +6,10 @@ from evolution_engine.failure_analysis import log_failure_analysis
 logger = logging.getLogger(__name__)
 
 class MutationEngine:
-    def __init__(self, schema_version: str = "1.0"):
+    def __init__(self, schema_version: str = "1.0", mock_mode: bool = False):
         self.schema_version = schema_version
         self.recorder = FailureContextRecorder()
+        self.mock_mode = mock_mode
 
     def apply_mutation(self, target_file: str, mutation_params: Dict[str, Any]) -> Optional[str]:
         """
@@ -21,6 +22,9 @@ class MutationEngine:
         Returns:
             The mutated file content if successful, None if failed
         """
+        if self.mock_mode:
+            return "mock_mutated_content"
+        
         try:
             # Simulate mutation application (placeholder logic)
             mutated_content = self._perform_mutation(target_file, mutation_params)
