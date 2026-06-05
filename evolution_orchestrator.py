@@ -5,6 +5,8 @@ continuous evolution loop that scores, selects, mutates, tests, and evaluates ea
 Includes a goal_selection mechanism that maintains a priority queue of evolution goals.
 Integrates reflection parsing to close the feedback loop between mutation outcomes and strategy selection.
 Integrates Nash equilibrium detection and coordinated mutation planning to escape local optima.
+Includes a health check hook that updates the system health dashboard after each mutation cycle,
+and a health check threshold that pauses evolution if the dashboard reports a critical integration conflict.
 """
 
 import time
@@ -25,6 +27,7 @@ from meta_evaluation import MetaEvaluation
 from reflection_parser import ReflectionParser
 from nash_detector import NashEquilibriumDetector  # New import for Nash detection
 from coordinated_planner import CoordinatedMutationPlanner  # New import for coordinated planning
+from system_health_dashboard import SystemHealthDashboard  # Import for health dashboard
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,7 @@ STATE_FILE = "orchestrator_state.json"  # File to persist orchestrator state
 LOG_FILE = "evolution_log.json"  # File to log evolution cycles
 REFLECTION_LOG_FILE = "reflection_log.json"  # File to log reflection data
 NASH_DETECTION_INTERVAL = 5  # Number of cycles between Nash equilibrium checks
+HEALTH_CHECK_THRESHOLD = 3  # Number of critical integration conflicts before pausing evolution
 
 
 class EvolutionOrchestrator:
@@ -54,6 +58,7 @@ class EvolutionOrchestrator:
         self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))
         self.nash_detector = NashEquilibriumDetector(self.config.get("nash_detector", {}))  # New subsystem
         self.coordinated_planner = CoordinatedMutationPlanner(self.config.get("coordinated_planner", {}))  # New subsystem
+        self.system_health_dashboard = SystemHealthDashboard(self.config.get("system_health_dashboard", {}))  # New subsystem
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -67,6 +72,7 @@ class EvolutionOrchestrator:
             "reflection_parser": 1.0,
             "nash_detector": 1.0,  # Added nash_detector score
             "coordinated_planner": 1.0,  # Added coordinated_planner score
+            "system_health_dashboard": 1.0,  # Added system_health_dashboard score
         }
 
         # Count consecutive failures per subsystem
@@ -84,6 +90,10 @@ class EvolutionOrchestrator:
         self.coordinated_mutation_active = False
         self.coordinated_mutation_plan = None
 
+        # Health check state tracking
+        self.health_check_conflict_count = 0
+        self.evolution_paused = False
+
         # Mapping of subsystem names to their source file paths
         self.subsystem_source_paths: Dict[str, str] = {
             "api_server": "api_server.py",
@@ -96,6 +106,7 @@ class EvolutionOrchestrator:
             "reflection_parser": "reflection_parser.py",
             "nash_detector": "nash_detector.py",  # Added nash_detector path
             "coordinated_planner": "coordinated_planner.py",  # Added coordinated_planner path
+            "system_health_dashboard": "system_health_dashboard.py",  # Added system_health_dashboard path
         }
 
         # Mapping of subsystem names to their instances for restart
@@ -110,6 +121,7 @@ class EvolutionOrchestrator:
             "reflection_parser": self.reflection_parser,
             "nash_detector": self.nash_detector,  # Added nash_detector instance
             "coordinated_planner": self.coordinated_planner,  # Added coordinated_planner instance
+            "system_health_dashboard": self.system_health_dashboard,  # Added system_health_dashboard instance
         }
 
         # Goal selection mechanism: priority queue of evolution goals
@@ -137,6 +149,7 @@ class EvolutionOrchestrator:
             (8, time.time(), "improve reflection parsing", "reflection_parser"),
             (9, time.time(), "improve nash detection", "nash_detector"),  # Added nash_detector goal
             (10, time.time(), "improve coordinated planning", "coordinated_planner"),  # Added coordinated_planner goal
+            (11, time.time(), "improve system health dashboard", "system_health_dashboard"),  # Added system_health_dashboard goal
         ]
         
         for goal in default_goals:
@@ -210,6 +223,7 @@ class EvolutionOrchestrator:
         scores["reflection_parser"] = self.reflection_parser.get_health_score()
         scores["nash_detector"] = self.nash_detector.get_health_score()  # Added nash_detector score
         scores["coordinated_planner"] = self.coordinated_planner.get_health_score()  # Added coordinated_planner score
+        scores["system_health_dashboard"] = self.system_health_dashboard.get_health_score()  # Added system_health_dashboard score
 
         # Clamp to [0, 1]
         for name in scores:
@@ -379,6 +393,7 @@ class EvolutionOrchestrator:
             "reflection_parser": self.reflection_parser,
             "nash_detector": self.nash_detector,
             "coordinated_planner": self.coordinated_planner,
+            "system_health_dashboard": self.system_health_dashboard,
         }
 
         target = subsystem_map.get(subsystem_name)
@@ -486,7 +501,9 @@ class EvolutionOrchestrator:
             "new_scores": new_scores,
             "consecutive_failures": self.consecutive_failures.get(subsystem_name, 0),
             "nash_detected": self.nash_detected,
-            "coordinated_mutation_active": self.coordinated_mutation_active
+            "coordinated_mutation_active": self.coordinated_mutation_active,
+            "evolution_paused": self.evolution_paused,
+            "health_check_conflict_count": self.health_check_conflict_count,
         }
         
         try:
@@ -527,6 +544,8 @@ class EvolutionOrchestrator:
             "cycles_since_nash_check": self.cycles_since_nash_check,
             "coordinated_mutation_active": self.coordinated_mutation_active,
             "coordinated_mutation_plan": self.coordinated_mutation_plan,
+            "health_check_conflict_count": self.health_check_conflict_count,
+            "evolution_paused": self.evolution_paused,
             "timestamp": time.time()
         }
         
@@ -577,6 +596,12 @@ class EvolutionOrchestrator:
                 self.coordinated_mutation_active = state["coordinated_mutation_active"]
             if "coordinated_mutation_plan" in state:
                 self.coordinated_mutation_plan = state["coordinated_mutation_plan"]
+            
+            # Restore health check state
+            if "health_check_conflict_count" in state:
+                self.health_check_conflict_count = state["health_check_conflict_count"]
+            if "evolution_paused" in state:
+                self.evolution_paused = state["evolution_paused"]
             
             logger.info("Orchestrator state loaded successfully from %s", STATE_FILE)
         except Exception as e:
@@ -806,48 +831,3 @@ class EvolutionOrchestrator:
             
             if success_rate >= 0.5:
                 logger.info("Coordinated mutation plan was successful (%.0f%% success rate)", success_rate * 100)
-            else:
-                logger.warning("Coordinated mutation plan had low success rate (%.0f%%)", success_rate * 100)
-        else:
-            # Update the next subsystem to evolve
-            next_subsystem = None
-            for step in mutation_steps:
-                if not step.get("completed", False):
-                    next_subsystem = step.get("subsystem")
-                    break
-            
-            if next_subsystem:
-                self.coordinated_mutation_plan["next_subsystem"] = next_subsystem
-                logger.info("Next subsystem in coordinated plan: '%s'", next_subsystem)
-
-    def evolution_cycle(self):
-        """Execute one complete evolution cycle."""
-        logger.info("Starting evolution cycle...")
-
-        # Save old scores for logging
-        old_scores = self.subsystem_scores.copy()
-
-        # 1) Score each subsystem
-        self.score_subsystems()
-
-        # 2) Check for Nash equilibrium periodically
-        self.cycles_since_nash_check += 1
-        if self.cycles_since_nash_check >= NASH_DETECTION_INTERVAL:
-            self._check_nash_equilibrium()
-            self.cycles_since_nash_check = 0
-
-        # 3) Identify the subsystem to evolve using goal selection mechanism
-        selected = self.select_subsystem_to_evolve()
-
-        # Determine the strategy used
-        if self.coordinated_mutation_active:
-            strategy = "coordinated"
-        elif self.get_highest_priority_goal():
-            strategy = "goal_based"
-        else:
-            strategy = "score_based"
-
-        # If a goal was used, pop it from the queue
-        highest_goal = self.get_highest_priority_goal()
-        if highest_goal and self.map_goal_to_subsystem(highest_goal) == selected:
-            self.pop_h

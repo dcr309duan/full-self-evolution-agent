@@ -81,6 +81,48 @@ class GoalFeasibilityEstimator:
             # Silently fail if cannot write; data persists in memory
             pass
 
+    def _query_dashboard_conflict_score(self, goal_type: str) -> float:
+        """Query dashboard for current conflict score of involved modules."""
+        # Simulated dashboard query - in production, this would call an actual API
+        # Returns a value between 0.0 and 1.0
+        conflict_scores = {
+            "API server": 0.3,
+            "mutation engine": 0.6,
+            "data pipeline": 0.4,
+            "web scraper": 0.2,
+            "machine learning model": 0.8,
+            "database schema": 0.1,
+        }
+        return conflict_scores.get(goal_type, 0.0)
+
+    def _query_dashboard_performance_trend(self, goal_type: str) -> str:
+        """Query dashboard for performance degradation trends."""
+        # Simulated dashboard query - in production, this would call an actual API
+        # Returns 'positive', 'neutral', or 'negative'
+        performance_trends = {
+            "API server": "positive",
+            "mutation engine": "negative",
+            "data pipeline": "neutral",
+            "web scraper": "positive",
+            "machine learning model": "negative",
+            "database schema": "positive",
+        }
+        return performance_trends.get(goal_type, "neutral")
+
+    def _query_dashboard_underutilization_status(self, goal_type: str) -> bool:
+        """Query dashboard for underutilization status."""
+        # Simulated dashboard query - in production, this would call an actual API
+        # Returns True if underutilized, False otherwise
+        underutilization_status = {
+            "API server": False,
+            "mutation engine": True,
+            "data pipeline": False,
+            "web scraper": False,
+            "machine learning model": True,
+            "database schema": False,
+        }
+        return underutilization_status.get(goal_type, False)
+
     def parse_goal_type(self, goal_description: str) -> Optional[str]:
         """Parse goal type from goal description using keyword matching."""
         goal_lower = goal_description.lower()
@@ -245,6 +287,29 @@ class GoalFeasibilityEstimator:
         success_probability = (0.6 * capability_overlap + 0.4 * historical_rate) * (1 - complexity_penalty)
         success_probability = max(0.0, min(1.0, success_probability))
 
+        # Query dashboard data for additional adjustments
+        conflict_score = self._query_dashboard_conflict_score(goal_type)
+        performance_trend = self._query_dashboard_performance_trend(goal_type)
+        underutilization_status = self._query_dashboard_underutilization_status(goal_type)
+
+        # Apply dashboard-based adjustments
+        dashboard_adjustment_reasons = []
+        if conflict_score > 0.7:
+            success_probability *= 0.5
+            dashboard_adjustment_reasons.append(f"high conflict score ({conflict_score:.2f})")
+        if performance_trend == "negative":
+            success_probability *= 0.5
+            dashboard_adjustment_reasons.append("negative performance trend")
+        if underutilization_status:
+            dashboard_adjustment_reasons.append("underutilization status")
+
+        success_probability = max(0.0, min(1.0, success_probability))
+
+        # Build explanation with dashboard data
+        dashboard_info = ""
+        if dashboard_adjustment_reasons:
+            dashboard_info = f" Dashboard adjustments due to: {', '.join(dashboard_adjustment_reasons)}."
+
         # Decision logic
         if success_probability >= 0.75:
             decision = "proceed"
@@ -252,6 +317,7 @@ class GoalFeasibilityEstimator:
                 f"High feasibility ({success_probability:.0%}): "
                 f"Capability overlap {capability_overlap:.0%}, "
                 f"historical success rate {historical_rate:.0%}."
+                f"{dashboard_info}"
             )
         elif success_probability >= 0.45:
             decision = "adjust_complexity"
@@ -260,6 +326,7 @@ class GoalFeasibilityEstimator:
                 f"Consider reducing complexity or acquiring missing capabilities: {', '.join(missing)}. "
                 f"Capability overlap {capability_overlap:.0%}, "
                 f"historical success rate {historical_rate:.0%}."
+                f"{dashboard_info}"
             )
         else:
             decision = "block"
@@ -267,8 +334,9 @@ class GoalFeasibilityEstimator:
                 f"Low feasibility ({success_probability:.0%}): "
                 f"Significant capability gaps: {', '.join(missing)}. "
                 f"Capability overlap {capability_overlap:.0%}, "
-                f"historical success rate {historical_rate:.0%}. "
-                f"Consider alternative goal or acquire necessary capabilities first."
+                f"historical success rate {historical_rate:.0%}."
+                f"{dashboard_info}"
+                f" Consider alternative goal or acquire necessary capabilities first."
             )
 
         return GoalFeasibilityResult(
