@@ -68,7 +68,7 @@ class MutationEngine:
         """
         self.mutation_rate = mutation_rate
         self.allowed_mutation_types = allowed_mutation_types or [
-            'point', 'insertion', 'deletion', 'substitution', 'inversion'
+            'point', 'insertion', 'deletion', 'substitution', 'inversion', 'trivial_mutation'
         ]
         self.max_history_size = max_history_size
         self.mutation_history: List[MutationRecord] = []
@@ -277,3 +277,41 @@ class MutationEngine:
         """
         state = json.loads(json_str)
         return cls.from_serialized_state(state)
+    
+    def trivial_mutation(self, filepath: str) -> None:
+        """
+        Perform a trivial mutation that only adds a comment to a file.
+        This provides a minimal mutation that should never fail.
+        Implemented with simple file read/write (no atomic operations initially to isolate issues).
+        
+        Args:
+            filepath: Path to the file to mutate
+        """
+        try:
+            # Read the file content
+            with open(filepath, 'r') as f:
+                content = f.read()
+            
+            # Add a trivial comment at the end of the file
+            comment = "\n# Trivial mutation comment added at " + datetime.utcnow().isoformat() + "\n"
+            content += comment
+            
+            # Write the modified content back to the file (simple write, no atomic operations)
+            with open(filepath, 'w') as f:
+                f.write(content)
+            
+            # Record the mutation
+            self.record_mutation(
+                mutation_type='trivial_mutation',
+                target=filepath,
+                details={'comment_added': comment.strip()}
+            )
+        except FileNotFoundError:
+            logger.error(f"File not found: {filepath}")
+            raise
+        except PermissionError:
+            logger.error(f"Permission denied when accessing file: {filepath}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during trivial mutation: {e}")
+            raise
