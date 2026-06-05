@@ -2,6 +2,24 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a schema alignment layer between the reflection parser and goal generator: normalize the JSON output of the reflection parser to include a mandatory 'meta_mutation_directives' field (list of {module, type_of_change, priority}) and an 'exploration_task_acceptance' field (boolean + optional task spec), then update the goal generator to parse these fields and translate them into concrete mutation or exploration goals.",
+      "priority": 10,
+      "status": "pending",
+      "created_at": 1780630847.0855217
+    },
+    {
+      "description": "Build a dependency-aware scheduling system that reads the system model (or a simple dependency manifest) to block modifications on reflection_parser or goal_generator until all prerequisite modules (e.g., schema definitions, base parsers) are verified as consistent, and prioritize mutations that unblock the current bottleneck.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780630847.086984
+    },
+    {
+      "description": "Create a self-consistency test suite for introspection modules: for each reflection cycle, automatically generate test cases that check that the reflection parser output can be parsed by the goal generator without errors, and that the goal generator output can be consumed by the mutation engine, failing and rolling back any change that breaks this contract.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780630847.0881603
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
