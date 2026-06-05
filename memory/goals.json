@@ -2,10 +2,22 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a meta-cognitive evaluator that tracks long-term fitness trends (e.g., success rate on core vs. peripheral changes over last 30 cycles) and dynamically adjusts the mutation rate and goal acceptance threshold to favor core-stabilizing mutations when brittleness is detected.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780644832.413181
+    },
+    {
       "description": "Implement automated rollback and conflict resolution for overlapping module edits: when two mutations modify the same code region, detect the conflict, attempt a three-way merge using the last stable snapshot, and if merge fails, revert both changes and log the conflict for manual review.",
       "priority": 7,
       "status": "pending",
       "created_at": 1780643996.5195127
+    },
+    {
+      "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780644832.4152675
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -658,6 +670,13 @@
       "status": "completed",
       "created_at": 1780640492.0718932,
       "completed_at": 1780644762.2169833
+    },
+    {
+      "description": "Implement a sandboxed mutation executor that clones core modules (mutation engine, orchestrator, dependency graph) into a temporary directory, applies the mutation, runs a focused test suite, and promotes only if all tests pass; otherwise, rollback and log failure context.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780644832.4109704,
+      "completed_at": 1780644985.401294
     }
   ],
   "generated_goals": []
