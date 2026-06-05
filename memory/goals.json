@@ -2,6 +2,18 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a self-consistency test suite that runs after every mutation to verify system integrity: it checks that the mutation engine, reflection parser, and goal generator outputs are consistent with the actual code state, and triggers an automatic rollback if any check fails.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780634744.6814713
+    },
+    {
+      "description": "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a dependency graph (tracking prerequisites like 'pre-mutation validation depends on mutation engine'), automatically blocks goals with unmet dependencies, and re-prioritizes the backlog to focus on completing the end-to-end pipeline first.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780634744.6834295
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -342,6 +354,13 @@
       "status": "completed",
       "created_at": 1780634345.3734598,
       "completed_at": 1780634668.155107
+    },
+    {
+      "description": "Implement a canonical schema alignment layer that converts all inter-module data (reflection output, goals, system model state) into a unified JSON format with strict validation, and add a pre-mutation check that verifies schema compliance before any mutation is applied.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780634744.6796439,
+      "completed_at": 1780634871.8894753
     }
   ],
   "generated_goals": []

@@ -1,5 +1,6 @@
 from . import clone_and_promote
 from . import static_validator
+from . import schema_alignment
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class MutationEngine:
         except Exception as e:
             logger.error(f"e2e validation error for {mutated_module_path}: {str(e)}")
 
-    def apply_mutation(self, module_path, mutation_function, mutation_strategy_name):
+    def apply_mutation(self, module_path, mutation_function, mutation_strategy_name, mutation_request_payload=None):
         """
         Apply a mutation using the clone-and-promote mechanism for safety.
         
@@ -44,11 +45,27 @@ class MutationEngine:
             module_path: Path to the module to mutate
             mutation_function: The mutation function to apply
             mutation_strategy_name: Name of the mutation strategy being used
+            mutation_request_payload: The mutation request payload for schema validation
             
         Returns:
             Result of the mutation operation
         """
         logger.info(f"Applying mutation strategy '{mutation_strategy_name}' to {module_path}")
+        
+        # Pre-mutation static validation: validate and normalize the mutation request payload
+        if mutation_request_payload is not None:
+            try:
+                validated_payload = schema_alignment.validate_and_normalize(mutation_request_payload)
+                if validated_payload is None:
+                    logger.error(f"Schema validation failed for mutation request payload: {mutation_request_payload}")
+                    self.static_validation_failures += 1
+                    logger.info(f"Mutation '{mutation_strategy_name}' aborted due to schema validation failure")
+                    return {"error": "Schema validation failed for mutation request payload", "success": False}
+            except Exception as e:
+                logger.error(f"Schema validation error for mutation request payload: {str(e)}")
+                self.static_validation_failures += 1
+                logger.info(f"Mutation '{mutation_strategy_name}' aborted due to schema validation error")
+                return {"error": f"Schema validation error: {str(e)}", "success": False}
         
         # Static validation before mutation
         validation_result = static_validator.validate_module_ast(module_path)
