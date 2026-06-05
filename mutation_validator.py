@@ -234,6 +234,69 @@ def validate_syntax(code_string: str) -> Tuple[bool, str]:
         return False, f"Unexpected error: {type(e).__name__}: {e}"
 
 
+class ValidationError(Exception):
+    """Base error for mutation validation failures."""
+    pass
+
+
+class InterfaceError(ValidationError):
+    """Raised when a mutation breaks a module interface."""
+    pass
+
+
+class TestError(ValidationError):
+    """Raised when a mutation fails test execution."""
+    pass
+
+
+class MutationValidator:
+    """Validates proposed mutations before they are applied.
+
+    Combines syntax checking, type validation, and structural checks.
+    """
+
+    def __init__(self, known_variables=None):
+        self.known_variables = known_variables or {}
+
+    def validate(self, code: str) -> Tuple[bool, List[str]]:
+        """Run all validation checks on a code string.
+
+        Returns (is_valid, list_of_errors).
+        """
+        errors = []
+
+        syntax_ok, syntax_err = validate_syntax(code)
+        if not syntax_ok:
+            errors.append(syntax_err)
+            return False, errors
+
+        types_ok, type_errors = validate_types(code, self.known_variables)
+        if not types_ok:
+            errors.extend(type_errors)
+
+        return len(errors) == 0, errors
+
+    def validate_mutation(self, original: str, mutated: str) -> Tuple[bool, List[str]]:
+        """Validate a mutation by checking the mutated code is valid
+        and structurally different from the original."""
+        is_valid, errors = self.validate(mutated)
+        if not is_valid:
+            return False, errors
+
+        if original.strip() == mutated.strip():
+            return False, ["Mutation produced no change"]
+
+        try:
+            orig_tree = ast.parse(original)
+            mut_tree = ast.parse(mutated)
+            if ast.dump(orig_tree) == ast.dump(mut_tree):
+                return False, ["AST is identical to original"]
+        except SyntaxError:
+            pass
+
+        return True, []
+
+
 def _test_validate_syntax():
     """Simple test function to demonstrate usage (not exported)."""
     test_cases = [

@@ -4,6 +4,7 @@ Main orchestrator for the self-evolving system. Initializes all subsystems and r
 continuous evolution loop that scores, selects, mutates, tests, and evaluates each subsystem.
 Includes a goal_selection mechanism that maintains a priority queue of evolution goals.
 Integrates reflection parsing to close the feedback loop between mutation outcomes and strategy selection.
+Integrates Nash equilibrium detection and coordinated mutation planning to escape local optima.
 """
 
 import time
@@ -21,7 +22,9 @@ from mutation_engine import MutationEngine
 from testing_framework import TestingFramework
 from failure_analysis import FailureAnalysis
 from meta_evaluation import MetaEvaluation
-from reflection_parser import ReflectionParser  # New import for reflection parsing
+from reflection_parser import ReflectionParser
+from nash_detector import NashEquilibriumDetector  # New import for Nash detection
+from coordinated_planner import CoordinatedMutationPlanner  # New import for coordinated planning
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,7 @@ EVOLUTION_INTERVAL = 60.0  # Default interval between evolution cycles in second
 STATE_FILE = "orchestrator_state.json"  # File to persist orchestrator state
 LOG_FILE = "evolution_log.json"  # File to log evolution cycles
 REFLECTION_LOG_FILE = "reflection_log.json"  # File to log reflection data
+NASH_DETECTION_INTERVAL = 5  # Number of cycles between Nash equilibrium checks
 
 
 class EvolutionOrchestrator:
@@ -47,7 +51,9 @@ class EvolutionOrchestrator:
         self.testing_framework = TestingFramework(self.config.get("testing_framework", {}))
         self.failure_analysis = FailureAnalysis(self.config.get("failure_analysis", {}))
         self.meta_evaluation = MetaEvaluation(self.config.get("meta_evaluation", {}))
-        self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))  # New subsystem
+        self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))
+        self.nash_detector = NashEquilibriumDetector(self.config.get("nash_detector", {}))  # New subsystem
+        self.coordinated_planner = CoordinatedMutationPlanner(self.config.get("coordinated_planner", {}))  # New subsystem
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -58,7 +64,9 @@ class EvolutionOrchestrator:
             "testing_framework": 1.0,
             "failure_analysis": 1.0,
             "meta_evaluation": 1.0,
-            "reflection_parser": 1.0,  # Added reflection_parser score
+            "reflection_parser": 1.0,
+            "nash_detector": 1.0,  # Added nash_detector score
+            "coordinated_planner": 1.0,  # Added coordinated_planner score
         }
 
         # Count consecutive failures per subsystem
@@ -70,6 +78,12 @@ class EvolutionOrchestrator:
         # Control flag
         self.running = False
 
+        # Nash equilibrium state tracking
+        self.nash_detected = False
+        self.cycles_since_nash_check = 0
+        self.coordinated_mutation_active = False
+        self.coordinated_mutation_plan = None
+
         # Mapping of subsystem names to their source file paths
         self.subsystem_source_paths: Dict[str, str] = {
             "api_server": "api_server.py",
@@ -79,7 +93,9 @@ class EvolutionOrchestrator:
             "testing_framework": "testing_framework.py",
             "failure_analysis": "failure_analysis.py",
             "meta_evaluation": "meta_evaluation.py",
-            "reflection_parser": "reflection_parser.py",  # Added reflection_parser path
+            "reflection_parser": "reflection_parser.py",
+            "nash_detector": "nash_detector.py",  # Added nash_detector path
+            "coordinated_planner": "coordinated_planner.py",  # Added coordinated_planner path
         }
 
         # Mapping of subsystem names to their instances for restart
@@ -91,7 +107,9 @@ class EvolutionOrchestrator:
             "testing_framework": self.testing_framework,
             "failure_analysis": self.failure_analysis,
             "meta_evaluation": self.meta_evaluation,
-            "reflection_parser": self.reflection_parser,  # Added reflection_parser instance
+            "reflection_parser": self.reflection_parser,
+            "nash_detector": self.nash_detector,  # Added nash_detector instance
+            "coordinated_planner": self.coordinated_planner,  # Added coordinated_planner instance
         }
 
         # Goal selection mechanism: priority queue of evolution goals
@@ -116,7 +134,9 @@ class EvolutionOrchestrator:
             (5, time.time(), "enhance testing framework", "testing_framework"),
             (6, time.time(), "improve failure analysis", "failure_analysis"),
             (7, time.time(), "refine meta evaluation", "meta_evaluation"),
-            (8, time.time(), "improve reflection parsing", "reflection_parser"),  # Added reflection_parser goal
+            (8, time.time(), "improve reflection parsing", "reflection_parser"),
+            (9, time.time(), "improve nash detection", "nash_detector"),  # Added nash_detector goal
+            (10, time.time(), "improve coordinated planning", "coordinated_planner"),  # Added coordinated_planner goal
         ]
         
         for goal in default_goals:
@@ -187,7 +207,9 @@ class EvolutionOrchestrator:
         scores["testing_framework"] = self.testing_framework.get_health_score()
         scores["failure_analysis"] = self.failure_analysis.get_health_score()
         scores["meta_evaluation"] = self.meta_evaluation.get_health_score()
-        scores["reflection_parser"] = self.reflection_parser.get_health_score()  # Added reflection_parser score
+        scores["reflection_parser"] = self.reflection_parser.get_health_score()
+        scores["nash_detector"] = self.nash_detector.get_health_score()  # Added nash_detector score
+        scores["coordinated_planner"] = self.coordinated_planner.get_health_score()  # Added coordinated_planner score
 
         # Clamp to [0, 1]
         for name in scores:
@@ -203,6 +225,13 @@ class EvolutionOrchestrator:
         Returns:
             Name of the subsystem to evolve.
         """
+        # If coordinated mutation is active, use the plan
+        if self.coordinated_mutation_active and self.coordinated_mutation_plan:
+            next_subsystem = self.coordinated_mutation_plan.get("next_subsystem")
+            if next_subsystem and next_subsystem in self.subsystem_scores:
+                logger.info("Using coordinated mutation plan, selecting subsystem '%s'", next_subsystem)
+                return next_subsystem
+        
         # First, check if there are goals in the queue
         highest_goal = self.get_highest_priority_goal()
         
@@ -347,7 +376,9 @@ class EvolutionOrchestrator:
             "testing_framework": self.testing_framework,
             "failure_analysis": self.failure_analysis,
             "meta_evaluation": self.meta_evaluation,
-            "reflection_parser": self.reflection_parser,  # Added reflection_parser
+            "reflection_parser": self.reflection_parser,
+            "nash_detector": self.nash_detector,
+            "coordinated_planner": self.coordinated_planner,
         }
 
         target = subsystem_map.get(subsystem_name)
@@ -453,7 +484,9 @@ class EvolutionOrchestrator:
             "success": success,
             "old_scores": old_scores,
             "new_scores": new_scores,
-            "consecutive_failures": self.consecutive_failures.get(subsystem_name, 0)
+            "consecutive_failures": self.consecutive_failures.get(subsystem_name, 0),
+            "nash_detected": self.nash_detected,
+            "coordinated_mutation_active": self.coordinated_mutation_active
         }
         
         try:
@@ -490,6 +523,10 @@ class EvolutionOrchestrator:
             "consecutive_failures": self.consecutive_failures,
             "goal_queue": list(self.goal_queue),
             "evolution_history": self.evolution_history[-100:],  # Keep last 100 entries
+            "nash_detected": self.nash_detected,
+            "cycles_since_nash_check": self.cycles_since_nash_check,
+            "coordinated_mutation_active": self.coordinated_mutation_active,
+            "coordinated_mutation_plan": self.coordinated_mutation_plan,
             "timestamp": time.time()
         }
         
@@ -530,6 +567,16 @@ class EvolutionOrchestrator:
             if "evolution_history" in state:
                 self.evolution_history = state["evolution_history"]
                 logger.info("Restored %d evolution history entries from saved state", len(self.evolution_history))
+            
+            # Restore Nash equilibrium state
+            if "nash_detected" in state:
+                self.nash_detected = state["nash_detected"]
+            if "cycles_since_nash_check" in state:
+                self.cycles_since_nash_check = state["cycles_since_nash_check"]
+            if "coordinated_mutation_active" in state:
+                self.coordinated_mutation_active = state["coordinated_mutation_active"]
+            if "coordinated_mutation_plan" in state:
+                self.coordinated_mutation_plan = state["coordinated_mutation_plan"]
             
             logger.info("Orchestrator state loaded successfully from %s", STATE_FILE)
         except Exception as e:
@@ -630,6 +677,149 @@ class EvolutionOrchestrator:
         except Exception as e:
             logger.exception("Error during reflection parsing for subsystem '%s': %s", subsystem_name, e)
 
+    def _check_nash_equilibrium(self):
+        """Check if the system has reached a Nash equilibrium state.
+        
+        A Nash equilibrium in this context means that no single subsystem mutation
+        can improve the overall system performance. This is detected by analyzing
+        the recent mutation history and subsystem scores.
+        """
+        logger.info("Checking for Nash equilibrium state...")
+        
+        try:
+            # Collect recent mutation history for analysis
+            recent_history = self.evolution_history[-20:] if len(self.evolution_history) >= 20 else self.evolution_history
+            
+            # Call the Nash detector to analyze the system state
+            nash_result = self.nash_detector.detect_equilibrium(
+                subsystem_scores=self.subsystem_scores,
+                consecutive_failures=self.consecutive_failures,
+                recent_history=recent_history
+            )
+            
+            if nash_result and nash_result.get("nash_detected", False):
+                logger.warning("Nash equilibrium detected! System is stuck in local optimum.")
+                self.nash_detected = True
+                
+                # Log the Nash detection details
+                nash_details = {
+                    "timestamp": time.time(),
+                    "detection_method": nash_result.get("method", "unknown"),
+                    "confidence": nash_result.get("confidence", 0.0),
+                    "stuck_subsystems": nash_result.get("stuck_subsystems", []),
+                    "recommendation": nash_result.get("recommendation", "invoke_coordinated_planning")
+                }
+                logger.info("Nash detection details: %s", nash_details)
+                
+                # Invoke coordinated mutation planner
+                self._invoke_coordinated_planner(nash_result)
+            else:
+                self.nash_detected = False
+                logger.debug("No Nash equilibrium detected. Continuing normal operation.")
+                
+        except Exception as e:
+            logger.exception("Error during Nash equilibrium detection: %s", e)
+            self.nash_detected = False
+
+    def _invoke_coordinated_planner(self, nash_result: Dict[str, Any]):
+        """Invoke the coordinated mutation planner to escape Nash equilibrium.
+
+        Args:
+            nash_result: The result from the Nash equilibrium detector containing
+                        information about which subsystems are stuck.
+        """
+        logger.info("Invoking coordinated mutation planner to escape Nash equilibrium...")
+        
+        try:
+            # Get the stuck subsystems from the Nash result
+            stuck_subsystems = nash_result.get("stuck_subsystems", list(self.subsystem_scores.keys()))
+            
+            # Call the coordinated planner to generate a mutation plan
+            plan = self.coordinated_planner.generate_plan(
+                stuck_subsystems=stuck_subsystems,
+                subsystem_scores=self.subsystem_scores,
+                consecutive_failures=self.consecutive_failures,
+                evolution_history=self.evolution_history
+            )
+            
+            if plan:
+                self.coordinated_mutation_plan = plan
+                self.coordinated_mutation_active = True
+                logger.info("Coordinated mutation plan generated: %s", plan)
+                
+                # Add high-priority goals for the coordinated mutations
+                for mutation_step in plan.get("mutation_steps", []):
+                    subsystem = mutation_step.get("subsystem")
+                    priority = mutation_step.get("priority", 1)  # High priority for coordinated mutations
+                    description = mutation_step.get("description", f"Coordinated mutation for {subsystem}")
+                    
+                    if subsystem and subsystem in self.subsystem_scores:
+                        self.add_goal(
+                            priority=priority,
+                            goal_description=description,
+                            subsystem=subsystem
+                        )
+                
+                logger.info("Added %d coordinated mutation goals to the queue", 
+                          len(plan.get("mutation_steps", [])))
+            else:
+                logger.warning("Coordinated planner returned no plan. Falling back to normal operation.")
+                self.coordinated_mutation_active = False
+                self.coordinated_mutation_plan = None
+                
+        except Exception as e:
+            logger.exception("Error during coordinated planning: %s", e)
+            self.coordinated_mutation_active = False
+            self.coordinated_mutation_plan = None
+
+    def _update_coordinated_mutation_status(self, subsystem_name: str, success: bool):
+        """Update the status of the coordinated mutation plan after a mutation cycle.
+
+        Args:
+            subsystem_name: The subsystem that was mutated.
+            success: Whether the mutation was successful.
+        """
+        if not self.coordinated_mutation_active or not self.coordinated_mutation_plan:
+            return
+        
+        # Update the plan with the result of this mutation
+        mutation_steps = self.coordinated_mutation_plan.get("mutation_steps", [])
+        for step in mutation_steps:
+            if step.get("subsystem") == subsystem_name:
+                step["completed"] = True
+                step["success"] = success
+                break
+        
+        # Check if all steps are completed
+        all_completed = all(step.get("completed", False) for step in mutation_steps)
+        
+        if all_completed:
+            logger.info("Coordinated mutation plan completed. Resuming normal operation.")
+            self.coordinated_mutation_active = False
+            self.coordinated_mutation_plan = None
+            self.nash_detected = False
+            
+            # Evaluate the overall success of the coordinated plan
+            successes = sum(1 for step in mutation_steps if step.get("success", False))
+            total_steps = len(mutation_steps)
+            success_rate = successes / total_steps if total_steps > 0 else 0
+            
+            if success_rate >= 0.5:
+                logger.info("Coordinated mutation plan was successful (%.0f%% success rate)", success_rate * 100)
+            else:
+                logger.warning("Coordinated mutation plan had low success rate (%.0f%%)", success_rate * 100)
+        else:
+            # Update the next subsystem to evolve
+            next_subsystem = None
+            for step in mutation_steps:
+                if not step.get("completed", False):
+                    next_subsystem = step.get("subsystem")
+                    break
+            
+            if next_subsystem:
+                self.coordinated_mutation_plan["next_subsystem"] = next_subsystem
+                logger.info("Next subsystem in coordinated plan: '%s'", next_subsystem)
+
     def evolution_cycle(self):
         """Execute one complete evolution cycle."""
         logger.info("Starting evolution cycle...")
@@ -640,160 +830,24 @@ class EvolutionOrchestrator:
         # 1) Score each subsystem
         self.score_subsystems()
 
-        # 2) Identify the subsystem to evolve using goal selection mechanism
+        # 2) Check for Nash equilibrium periodically
+        self.cycles_since_nash_check += 1
+        if self.cycles_since_nash_check >= NASH_DETECTION_INTERVAL:
+            self._check_nash_equilibrium()
+            self.cycles_since_nash_check = 0
+
+        # 3) Identify the subsystem to evolve using goal selection mechanism
         selected = self.select_subsystem_to_evolve()
 
         # Determine the strategy used
-        strategy = "goal_based" if self.get_highest_priority_goal() else "score_based"
+        if self.coordinated_mutation_active:
+            strategy = "coordinated"
+        elif self.get_highest_priority_goal():
+            strategy = "goal_based"
+        else:
+            strategy = "score_based"
 
         # If a goal was used, pop it from the queue
         highest_goal = self.get_highest_priority_goal()
         if highest_goal and self.map_goal_to_subsystem(highest_goal) == selected:
-            self.pop_highest_priority_goal()
-            logger.info("Popped goal '%s' from queue after selecting subsystem '%s'", 
-                       highest_goal[2], selected)
-
-        # 3) Read that subsystem's source code from disk
-        source_code = self.read_subsystem_source_code(selected)
-        if source_code is None:
-            logger.error("Failed to read source code for '%s'. Skipping evolution.", selected)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        # 4) Call mutation_engine.evolve_subsystem() with that code
-        logger.info("Calling mutation engine to evolve subsystem '%s'", selected)
-        try:
-            mutated_code = self.mutation_engine.evolve_subsystem(source_code)
-        except Exception as e:
-            logger.exception("Mutation engine failed to evolve subsystem '%s': %s", selected, e)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        if mutated_code is None:
-            logger.error("Mutation engine returned None for subsystem '%s'. Evolution failed.", selected)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        # 5) If successful, write the mutated code back to disk and restart the subsystem
-        write_success = self.write_subsystem_source_code(selected, mutated_code)
-        if not write_success:
-            logger.error("Failed to write mutated code for subsystem '%s'. Evolution failed.", selected)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        restart_success = self.restart_subsystem(selected)
-        if not restart_success:
-            logger.warning("Failed to restart subsystem '%s' after mutation. Continuing anyway.", selected)
-
-        # Run tests to validate the mutation
-        tests_passed = self.run_tests(selected)
-        success = self.evaluate_success(selected, tests_passed)
-
-        # 6) If failed, log failure and increment failure counter for that subsystem
-        if not success:
-            logger.warning("Evolution of subsystem '%s' failed. Incrementing failure counter.", selected)
-            self.update_scores_and_log(selected, False)
-            
-            # 7) If failure counter reaches threshold, integrate with failure analysis module
-            if self.consecutive_failures[selected] >= FAILURE_THRESHOLD:
-                logger.warning("Failure threshold reached for subsystem '%s'. Calling failure analysis module.", selected)
-                try:
-                    # Call the failure analysis module to analyze the subsystem failure
-                    analysis_result = self.failure_analysis.analyze_subsystem_failure(selected)
-                    logger.info("Failure analysis result for '%s': %s", selected, analysis_result)
-                    
-                    # Apply the recommended strategy from failure analysis
-                    if analysis_result and "recommended_strategy" in analysis_result:
-                        recommended_strategy = analysis_result["recommended_strategy"]
-                        logger.info("Applying recommended strategy '%s' for subsystem '%s'", recommended_strategy, selected)
-                        
-                        # Apply the strategy based on the recommendation
-                        if recommended_strategy == "switch_strategy":
-                            self.trigger_strategy_switch(selected)
-                        elif recommended_strategy == "rollback":
-                            # Rollback to previous version if available
-                            logger.info("Rolling back subsystem '%s' to previous version", selected)
-                            # Placeholder for rollback logic
-                        elif recommended_strategy == "adjust_parameters":
-                            # Adjust subsystem parameters
-                            logger.info("Adjusting parameters for subsystem '%s'", selected)
-                            # Placeholder for parameter adjustment
-                        elif recommended_strategy == "reinitialize":
-                            # Reinitialize the subsystem
-                            logger.info("Reinitializing subsystem '%s'", selected)
-                            # Placeholder for reinitialization logic
-                        else:
-                            logger.warning("Unknown recommended strategy '%s' for subsystem '%s'", recommended_strategy, selected)
-                    else:
-                        logger.warning("No recommended strategy provided by failure analysis for subsystem '%s'", selected)
-                        # Fallback to default strategy switch
-                        self.trigger_strategy_switch(selected)
-                except Exception as e:
-                    logger.exception("Error during failure analysis integration for subsystem '%s': %s", selected, e)
-                    # Fallback to default strategy switch
-                    self.trigger_strategy_switch(selected)
-        else:
-            self.update_scores_and_log(selected, True)
-
-        # Log the evolution cycle
-        self._log_evolution_cycle(selected, strategy, success, old_scores, self.subsystem_scores)
-        
-        # NEW: Parse reflection and update mutation strategy based on insights
-        self._parse_reflection_and_update_strategy(selected, success)
-        
-        # Save state after each cycle
-        self._save_state()
-
-        logger.info("Evolution cycle completed for '%s' (success=%s).", selected, success)
-
-    def run_continuous_loop(self, interval_seconds: float = EVOLUTION_INTERVAL):
-        """Run the continuous evolution loop.
-
-        Args:
-            interval_seconds: Time in seconds between evolution cycles.
-        """
-        self.running = True
-        logger.info("Starting continuous evolution loop with interval %.2f seconds.", interval_seconds)
-
-        try:
-            while self.running:
-                self.evolution_cycle()
-                # 8) Sleep for configurable interval then repeat
-                time.sleep(interval_seconds)
-        except KeyboardInterrupt:
-            logger.info("Evolution loop interrupted by user.")
-        except Exception as e:
-            logger.exception("Unexpected error in evolution loop: %s", e)
-        finally:
-            self.running = False
-            # Save state on exit
-            self._save_state()
-            logger.info("Evolution loop stopped.")
-
-    def stop(self):
-        """Signal the continuous loop to stop."""
-        self.running = False
-        logger.info("Stop signal sent to evolution loop.")
-
-
-# Example usage (if run as script)
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    orchestrator = EvolutionOrchestrator()
-    
-    # Example of adding custom goals
-    orchestrator.add_goal(1, "urgent: fix API server crash", "api_server")
-    orchestrator.add_goal(5, "improve web scraper efficiency", "web_scraper")
-    
-    # Run a single cycle for demonstration
-    orchestrator.evolution_cycle()
-    # Uncomment to run continuously:
-    # orchestrator.run_continuous_loop(interval_seconds=10)
+            self.pop_h

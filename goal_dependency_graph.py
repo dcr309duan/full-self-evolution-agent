@@ -6,12 +6,14 @@ class GoalDependencyGraph:
     """
     A directed acyclic graph (DAG) of goals and their dependencies.
     Maintains adjacency lists using sets for O(1) lookups.
-    Supports multiple node types including regular goals and benchmark creation goals.
+    Supports multiple node types including regular goals, benchmark creation goals,
+    and coordinated mutation goals.
     """
 
     # Node type constants
     GOAL = "GOAL"
     BENCHMARK_CREATION = "BENCHMARK_CREATION"
+    COORDINATED_MUTATION = "COORDINATED_MUTATION"
 
     def __init__(self):
         # adjacency list: goal -> set of prerequisites (dependencies)
@@ -22,6 +24,8 @@ class GoalDependencyGraph:
         self._met: Set[str] = set()
         # node type mapping: node_name -> type string
         self._node_types: Dict[str, str] = {}
+        # adjacency list for coordinated mutation relationships: mutation_node -> set of mutation nodes it coordinates with
+        self._coordinated_with: Dict[str, Set[str]] = defaultdict(set)
 
     def add_goal(self, name: str, dependencies: Optional[List[str]] = None, 
                  node_type: str = GOAL) -> None:
@@ -32,7 +36,7 @@ class GoalDependencyGraph:
         Args:
             name: The name of the goal/node
             dependencies: List of prerequisite node names
-            node_type: Type of node (GOAL or BENCHMARK_CREATION)
+            node_type: Type of node (GOAL, BENCHMARK_CREATION, or COORDINATED_MUTATION)
         """
         if dependencies is None:
             dependencies = []
@@ -77,6 +81,14 @@ class GoalDependencyGraph:
             if not self._prerequisites[dependent]:
                 del self._prerequisites[dependent]
 
+        # Remove coordinated_with relationships
+        if name in self._coordinated_with:
+            for other in self._coordinated_with[name]:
+                self._coordinated_with[other].discard(name)
+                if not self._coordinated_with[other]:
+                    del self._coordinated_with[other]
+            del self._coordinated_with[name]
+
         # Remove the goal itself
         del self._prerequisites[name]
         if name in self._dependents:
@@ -118,7 +130,7 @@ class GoalDependencyGraph:
 
     def get_node_type(self, name: str) -> Optional[str]:
         """
-        Get the type of a node (GOAL or BENCHMARK_CREATION).
+        Get the type of a node (GOAL, BENCHMARK_CREATION, or COORDINATED_MUTATION).
         Returns None if the node doesn't exist.
         """
         return self._node_types.get(name)
@@ -152,6 +164,45 @@ class GoalDependencyGraph:
         """
         return {name for name, ntype in self._node_types.items() if ntype == node_type}
 
+    def add_coordinated_mutation(self, name: str, dependencies: Optional[List[str]] = None,
+                                  coordinated_with: Optional[List[str]] = None) -> None:
+        """
+        Add a coordinated mutation node with its dependencies and coordination relationships.
+        
+        Args:
+            name: The name of the coordinated mutation node
+            dependencies: List of prerequisite node names (typically the modules being changed)
+            coordinated_with: List of other coordinated mutation nodes this is coordinated with
+        """
+        self.add_goal(name, dependencies, self.COORDINATED_MUTATION)
+        
+        if coordinated_with:
+            for other in coordinated_with:
+                self.add_coordination_edge(name, other)
+
+    def add_coordination_edge(self, node1: str, node2: str) -> None:
+        """
+        Add an 'is_coordinated_with' relationship between two mutation nodes.
+        Both nodes must exist and be of type COORDINATED_MUTATION.
+        
+        Args:
+            node1: First coordinated mutation node
+            node2: Second coordinated mutation node
+        """
+        if node1 not in self._node_types or self._node_types[node1] != self.COORDINATED_MUTATION:
+            raise ValueError(f"Node '{node1}' is not a COORDINATED_MUTATION node")
+        if node2 not in self._node_types or self._node_types[node2] != self.COORDINATED_MUTATION:
+            raise ValueError(f"Node '{node2}' is not a COORDINATED_MUTATION node")
+        
+        self._coordinated_with[node1].add(node2)
+        self._coordinated_with[node2].add(node1)
+
+    def get_coordinated_mutations(self, name: str) -> Set[str]:
+        """
+        Get all coordinated mutation nodes that are coordinated with the given node.
+        """
+        return self._coordinated_with.get(name, set()).copy()
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Serialize the graph to a dictionary.
@@ -159,7 +210,8 @@ class GoalDependencyGraph:
         return {
             "prerequisites": {k: list(v) for k, v in self._prerequisites.items()},
             "met": list(self._met),
-            "node_types": dict(self._node_types)
+            "node_types": dict(self._node_types),
+            "coordinated_with": {k: list(v) for k, v in self._coordinated_with.items()}
         }
 
     @classmethod
@@ -174,6 +226,12 @@ class GoalDependencyGraph:
             graph.add_goal(goal, prereqs, node_type)
         for goal in data.get("met", []):
             graph.mark_met(goal)
+        # Restore coordinated_with relationships
+        coordinated_with = data.get("coordinated_with", {})
+        for node, others in coordinated_with.items():
+            for other in others:
+                if node in graph and other in graph:
+                    graph._coordinated_with[node].add(other)
         return graph
 
     def __contains__(self, name: str) -> bool:

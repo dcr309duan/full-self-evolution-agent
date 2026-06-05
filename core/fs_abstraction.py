@@ -396,3 +396,14 @@ class FileSystemAbstraction:
             'is_symlink': target_path.is_symlink(),
             'absolute_path': str(target_path.resolve())
         }
+
+
+_fs_instance = None
+
+
+def get_fs() -> FileSystemAbstraction:
+    """Get the singleton FileSystemAbstraction instance."""
+    global _fs_instance
+    if _fs_instance is None:
+        _fs_instance = FileSystemAbstraction()
+    return _fs_instance
