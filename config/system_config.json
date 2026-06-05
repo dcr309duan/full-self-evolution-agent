@@ -1,0 +1,4 @@
+{
+  "primitive_validation_required": true,
+  "primitive_test_path": "tests/test_new_file_creation_metamorphic.py"
+}
