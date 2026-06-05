@@ -2314,3 +2314,17 @@ SyntaxError: invalid syntax
 [2026-06-05 18:01:43] Cycle 150: 注入跨领域目标 [game_theory]: Nash Equilibrium Detection for Module Interactions
 [2026-06-05 18:01:50] Cycle 150: === Cycle Complete ===
 
+[2026-06-05 18:02:27] Cycle 151: === Starting Evolution Cycle ===
+[2026-06-05 18:02:27] Cycle 151: Phase 1: Self-reflection
+[2026-06-05 18:02:50] Cycle 151: Reflection: {"current_assessment": "The system has accumulated a large set of capabilities (over 40 in the list) and a high ratio of successful strategies to failed approaches (899:136). However, recent cycles sh
+[2026-06-05 18:02:50] Cycle 151: Phase 2: Goal selection and execution
+[2026-06-05 18:02:50] Cycle 151: Selected goal: Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.
+[2026-06-05 18:02:50] Cycle 151: Executing goal: Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.
+[2026-06-05 18:03:00] Cycle 151:   Step: create -> fragility_hotspot_miner.py: Create module that: 1) Parses last 50 rollback events from evolution_log.json and failure_logs. 2) Extracts module pairs involved in each failure (caller-callee, import relationships). 3) Counts frequency of each module pair. 4) Identifies pairs appearing >3 times. 5) Auto-generates a refactoring goal targeting those specific integration points.
+[2026-06-05 18:03:21] Cycle 151:   Step: modify -> failure_logs.json: Add structured rollback event logging with module pair metadata. Each failure entry should include: 'modules_involved': ['moduleA', 'moduleB'], 'failure_type': 'circular_dependency'|'import_error'|'integration_failure', 'rollback_initiated': true/false.
+[2026-06-05 18:03:25] Cycle 151:   Step: modify -> evolution_orchestrator.py: Add call to fragility_hotspot_miner after each rollback event. Store identified hotspots in a new 'fragility_hotspots.json' file. When a new hotspot is identified (pair crosses >3 threshold), inject a refactoring goal into the goal queue with priority 'high'.
+[2026-06-05 18:04:14] Cycle 151:   Step: create -> test_fragility_hotspot_miner.py: Create tests: 1) Test with simulated failure logs containing repeated module pairs. 2) Verify pair counting logic. 3) Test threshold detection (>3). 4) Verify goal generation format. 5) Test edge cases (single failures, no pairs, all unique pairs).
+[2026-06-05 18:04:24] Cycle 151:   Step: modify -> self_diagnosis_module.py: Add integration with fragility hotspot miner: track which module pairs are becoming hotspots over time, detect trends (e.g., same pair appearing in 3 different failure types), and prioritize refactoring goals based on pair recurrence rate.
+[2026-06-05 18:04:48] Cycle 151: Goal completed: Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.
+[2026-06-05 18:04:48] Cycle 151: === Cycle Complete ===
+

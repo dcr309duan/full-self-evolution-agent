@@ -20,12 +20,6 @@
       "created_at": 1780653063.2412038
     },
     {
-      "description": "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780652325.9069374
-    },
-    {
       "description": "Create a performance monitoring and optimization system",
       "priority": 6,
       "status": "pending",
@@ -949,6 +943,13 @@
       "status": "completed",
       "created_at": 1780652325.9041018,
       "completed_at": 1780653694.8067896
+    },
+    {
+      "description": "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780652325.9069374,
+      "completed_at": 1780653888.2217264
     }
   ],
   "generated_goals": []

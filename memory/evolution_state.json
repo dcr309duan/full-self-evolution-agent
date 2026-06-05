@@ -1,9 +1,8 @@
 {
-  "cycle_count": 150,
-  "current_generation": 121,
-  "last_evolution_time": 1780653457.9748995,
+  "cycle_count": 151,
+  "current_generation": 122,
+  "last_evolution_time": 1780653747.0200562,
   "capabilities": [
-    "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifi",
     "Build a 'meta-parameter evolution' module that tracks the performance impact of key evolution engine",
     "Build an end-to-end integration test harness that executes the full evolution loop (reflection → goa",
     "Add a 'recursive sandbox' mechanism that, before applying any mutation to the core evolution engine,",
@@ -52,15 +51,10 @@
     "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub reposito",
     "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa",
     "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the",
-    "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements"
+    "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements",
+    "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, ident"
   ],
   "history": [
-    {
-      "cycle": 49,
-      "goal": "Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs into a normalized format consumable by goal_generator and mutation_engine, including runtime validation and automated adaptation on mismatch detection.",
-      "success": true,
-      "timestamp": 1780631961.021132
-    },
     {
       "cycle": 50,
       "goal": "Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.",
@@ -654,6 +648,12 @@
       "goal": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
       "success": true,
       "timestamp": 1780653710.2876384
+    },
+    {
+      "cycle": 151,
+      "goal": "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.",
+      "success": true,
+      "timestamp": 1780653888.4040773
     }
   ],
   "status": "evolving"

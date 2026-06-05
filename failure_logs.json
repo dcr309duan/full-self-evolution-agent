@@ -1,0 +1,19 @@
+{
+  "failure_logs": [
+    {
+      "modules_involved": ["moduleA", "moduleB"],
+      "failure_type": "circular_dependency",
+      "rollback_initiated": true
+    },
+    {
+      "modules_involved": ["moduleC", "moduleD"],
+      "failure_type": "import_error",
+      "rollback_initiated": false
+    },
+    {
+      "modules_involved": ["moduleE", "moduleF"],
+      "failure_type": "integration_failure",
+      "rollback_initiated": true
+    }
+  ]
+}
