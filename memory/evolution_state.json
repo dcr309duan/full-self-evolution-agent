@@ -1,9 +1,8 @@
 {
-  "cycle_count": 147,
-  "current_generation": 118,
-  "last_evolution_time": 1780652803.5282128,
+  "cycle_count": 148,
+  "current_generation": 119,
+  "last_evolution_time": 1780653034.6010516,
   "capabilities": [
-    "Implement a 'meta-mutation' selector that, after each 5 evolution cycles, analyzes the last 50 mutat",
     "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (",
     "Create a 'systemic integration test harness' that runs the full evolution loop (reflection → goal se",
     "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifi",
@@ -52,15 +51,10 @@
     "Build an atomic multi-module mutation orchestrator that, given a goal requiring changes to 3+ module",
     "Implement a system-wide integration health dashboard that tracks cross-module dependency failures, s",
     "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end",
-    "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub reposito"
+    "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub reposito",
+    "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa"
   ],
   "history": [
-    {
-      "cycle": 46,
-      "goal": "Implement a schema alignment layer between the reflection parser and goal generator: normalize the JSON output of the reflection parser to include a mandatory 'meta_mutation_directives' field (list of {module, type_of_change, priority}) and an 'exploration_task_acceptance' field (boolean + optional task spec), then update the goal generator to parse these fields and translate them into concrete mutation or exploration goals.",
-      "success": true,
-      "timestamp": 1780631020.5559561
-    },
     {
       "cycle": 47,
       "goal": "Build a dependency-aware scheduling system that reads the system model (or a simple dependency manifest) to block modifications on reflection_parser or goal_generator until all prerequisite modules (e.g., schema definitions, base parsers) are verified as consistent, and prioritize mutations that unblock the current bottleneck.",
@@ -654,6 +648,12 @@
       "goal": "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub repositories related to 'self-evolving systems' or 'meta-learning' (using a pre-approved list), extracts one novel design pattern per repo via a simple keyword and structure analysis, and generates a goal to integrate that pattern into the system (e.g., 'Add a reward-shaping module based on pattern X'). This introduces external insights to break out of self-referential optimization loops.",
       "success": true,
       "timestamp": 1780652997.3976758
+    },
+    {
+      "cycle": 148,
+      "goal": "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usage score (times called, last active cycle, dependency count) over the last 20 cycles, and automatically remove or merge any capability with score below threshold. Enforce every 5 cycles with a rollback mechanism if critical tests fail.",
+      "success": true,
+      "timestamp": 1780653254.1192904
     }
   ],
   "status": "evolving"

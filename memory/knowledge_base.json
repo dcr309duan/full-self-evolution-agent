@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified system_health_audit.py to: Add meta-cognitive health metrics: (1) include current mutation rate and acceptance threshold in health report; (2) report brittleness status; (3) track how many times parameters were adjusted in last 30 cycles; (4) flag if parameters are stuck at extreme values.",
-      "timestamp": 1780645280.5094228,
-      "cycle": 113
-    },
-    {
-      "content": "Successfully modified conflict_resolver.py to: Create new module that implements automated rollback and conflict resolution: (1) maintains a registry of last stable snapshots per module (AST + hash); (2) detects when two mutations modify overlapping code regions by comparing AST diff ranges; (3) performs three-way merge using last stable snapshot as base; (4) if merge succeeds, applies merged result and updates snapshot; (5) if merge fails, reverts both mutations to the last stable snapshot and logs conflict details to a conflict_log.json file; (6) exposes methods: register_snapshot(module_path, ast), detect_conflict(mutation1, mutation2), resolve_conflict(mutation1, mutation2, base_snapshot), revert_to_snapshot(module_path), get_conflict_log()",
-      "timestamp": 1780645355.1239944,
-      "cycle": 114
-    },
-    {
-      "content": "Successfully modified snapshot_manager.py to: Create module that manages stable snapshots: (1) on every successful mutation promotion, captures a snapshot of the modified module (full AST + source hash + timestamp); (2) stores snapshots in a snapshots/ directory as JSON files; (3) maintains an index mapping module_path -> list of snapshots with timestamps; (4) provides get_latest_stable(module_path) and get_snapshot_at(module_path, timestamp) methods; (5) prunes old snapshots (keep last 10 per module) to manage storage; (6) integrates with conflict_resolver to provide base snapshots for three-way merge",
-      "timestamp": 1780645373.770674,
-      "cycle": 114
-    },
-    {
-      "content": "Successfully modified test_conflict_resolver.py to: Create comprehensive tests for conflict resolution: (1) test that overlapping mutations are correctly detected (same function, same line range); (2) test that non-overlapping mutations are not flagged; (3) test three-way merge succeeds with non-conflicting changes to same region; (4) test three-way merge fails with truly conflicting changes and both mutations are reverted; (5) test that conflict_log is properly written with mutation IDs, timestamps, and diff details; (6) test integration with snapshot_manager for base snapshot retrieval; (7) test that reverting to snapshot restores exact original state",
-      "timestamp": 1780645493.7483387,
-      "cycle": 114
-    },
-    {
       "content": "Successfully modified test_snapshot_manager.py to: Create tests for snapshot management: (1) test that snapshot is captured after mutation promotion; (2) test that get_latest_stable returns correct snapshot; (3) test that multiple snapshots are stored and indexed correctly; (4) test snapshot pruning (only last 10 kept); (5) test that snapshot contains correct AST, hash, and timestamp; (6) test that snapshot can be used to restore module to exact state",
       "timestamp": 1780645513.0422277,
       "cycle": 114
@@ -999,6 +979,26 @@
       "content": "[研究] Autonomous Dependency and API Compatibility Resolution for Self-Modifying Systems: Current approaches focus on dynamic dependency analysis using runtime monitoring and static analysis",
       "timestamp": 1780652997.369048,
       "cycle": 147
+    },
+    {
+      "content": "Self-reflection: The evolutionary process has become addicted to additive mutations—every cycle adds something, but almost never removes anything. This leads to a steadily increasing complexity that eventually overwhe",
+      "timestamp": 1780653059.1255352,
+      "cycle": 148
+    },
+    {
+      "content": "Successfully modified core/capability_bankruptcy.py to: Create the Capability Bankruptcy & Consolidation Engine: 1) Scans all capabilities from knowledge base and module registry, 2) For each capability computes usage_score = (times_called * 0.4) + (recency_bonus * 0.3) + (dependency_count * 0.2) - (age_penalty * 0.1), where recency_bonus decays over 20 cycles, 3) Flags capabilities with score < threshold (configurable, default 0.3) for removal or merge, 4) For flagged capabilities, checks if any other capability covers >=60% of its functionality → merge suggestion, 5) Generates a rollback snapshot before any removal, 6) Runs critical test suite after changes, reverts if any test fails, 7) Enforces execution every 5 cycles (check cycle % 5 == 0).",
+      "timestamp": 1780653102.053169,
+      "cycle": 148
+    },
+    {
+      "content": "Successfully modified tests/test_capability_bankruptcy.py to: Create comprehensive test suite: 1) Test scoring with mock capabilities (varying call counts, ages, dependencies), 2) Test threshold-based removal triggers, 3) Test merge suggestion when capabilities overlap, 4) Test rollback mechanism by injecting a test that fails, 5) Test enforcement timing (runs only on cycles divisible by 5), 6) Test that critical capabilities (core modules) are never removed regardless of score.",
+      "timestamp": 1780653141.5972433,
+      "cycle": 148
+    },
+    {
+      "content": "Successfully modified core/accumulated_knowledge.py to: Add capability tracking fields: 1) For each capability entry, maintain times_called counter, last_active_cycle, dependency_count, 2) Add method get_usage_stats(cycle, window=20) that returns usage scores for all capabilities, 3) Add method remove_capability(name) that safely deletes a capability entry.",
+      "timestamp": 1780653254.0363364,
+      "cycle": 148
     }
   ],
   "learned_patterns": [],
@@ -1662,6 +1662,16 @@
       "approach": "modify core/orchestrator.py: Modify orchestrator to: 1) Track cycle count for external knowledge injection scheduling, 2) Ensure external knowledge injector runs before goal generation in the evolution loop, 3) Handle cases where external injection fails (network issues) gracefully without blocking the cycle.",
       "reason": "Syntax error: '{' was never closed (<unknown>, line 964)",
       "timestamp": 1780652956.549933
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Integrate the Capability Bankruptcy Engine into the main evolution loop: 1) After cycle completion, if cycle % 5 == 0, call bankruptcy_engine.execute(), 2) Pass the current cycle number and list of all capabilities, 3) If bankruptcy engine returns rollback_required flag, revert to previous state and log the failure, 4) Add configuration parameter for bankruptcy_threshold (default 0.3) and bankruptcy_enabled (default True).",
+      "reason": "Syntax error: expected an indented block after 'else' statement on line 857 (<unknown>, line 858)",
+      "timestamp": 1780653189.4012675
+    },
+    {
+      "approach": "modify core/goal_generator.py: Add awareness of capability bankruptcy: 1) When generating goals, exclude capabilities that are flagged for removal (to avoid generating goals that depend on soon-to-be-removed modules), 2) Add a meta-goal type 'CONSOLIDATE' that suggests merging two similar capabilities when overlap is detected.",
+      "reason": "Syntax error: expected an indented block after 'if' statement on line 920 (<unknown>, line 920)",
+      "timestamp": 1780653237.8350496
     }
   ],
   "successful_strategies": [
@@ -6079,6 +6089,26 @@
       "strategy": "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub repositories related to 'self-evolving systems' or 'meta-learning' (using a pre-approved list), extracts one novel design pattern per repo via a simple keyword and structure analysis, and generates a goal to integrate that pattern into the system (e.g., 'Add a reward-shaping module based on pattern X'). This introduces external insights to break out of self-referential optimization loops.",
       "outcome": "2/4 steps succeeded",
       "timestamp": 1780652956.5703669
+    },
+    {
+      "strategy": "modify core/capability_bankruptcy.py: Create the Capability Bankruptcy & Consolidation Engine: 1) Scans all capabilities from knowledge base and module registry, 2) For each capability computes usage_score = (times_called * 0.4) + (recency_bonus * 0.3) + (dependency_count * 0.2) - (age_penalty * 0.1), where recency_bonus decays over 20 cycles, 3) Flags capabilities with score < threshold (configurable, default 0.3) for removal or merge, 4) For flagged capabilities, checks if any other capability covers >=60% of its functionality → merge suggestion, 5) Generates a rollback snapshot before any removal, 6) Runs critical test suite after changes, reverts if any test fails, 7) Enforces execution every 5 cycles (check cycle % 5 == 0).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780653102.0306149
+    },
+    {
+      "strategy": "modify tests/test_capability_bankruptcy.py: Create comprehensive test suite: 1) Test scoring with mock capabilities (varying call counts, ages, dependencies), 2) Test threshold-based removal triggers, 3) Test merge suggestion when capabilities overlap, 4) Test rollback mechanism by injecting a test that fails, 5) Test enforcement timing (runs only on cycles divisible by 5), 6) Test that critical capabilities (core modules) are never removed regardless of score.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780653141.575905
+    },
+    {
+      "strategy": "modify core/accumulated_knowledge.py: Add capability tracking fields: 1) For each capability entry, maintain times_called counter, last_active_cycle, dependency_count, 2) Add method get_usage_stats(cycle, window=20) that returns usage scores for all capabilities, 3) Add method remove_capability(name) that safely deletes a capability entry.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780653254.0169692
+    },
+    {
+      "strategy": "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usage score (times called, last active cycle, dependency count) over the last 20 cycles, and automatically remove or merge any capability with score below threshold. Enforce every 5 cycles with a rollback mechanism if critical tests fail.",
+      "outcome": "3/5 steps succeeded",
+      "timestamp": 1780653254.0566463
     }
   ],
   "capabilities_developed": []

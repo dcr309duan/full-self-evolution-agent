@@ -2,10 +2,22 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the failure_pattern_learner for the most recent 10 failures, and if the target module appears in any failure, apply a penalty to the mutation probability and log a rationale. This closes the gap between analysis and action.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780653063.238052
+    },
+    {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780652325.9041018
+    },
+    {
+      "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780653063.2412038
     },
     {
       "description": "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.",
@@ -916,6 +928,13 @@
       "status": "completed",
       "created_at": 1780651550.8343124,
       "completed_at": 1780652956.5838404
+    },
+    {
+      "description": "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usage score (times called, last active cycle, dependency count) over the last 20 cycles, and automatically remove or merge any capability with score below threshold. Enforce every 5 cycles with a rollback mechanism if critical tests fail.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780653063.235105,
+      "completed_at": 1780653254.0687993
     }
   ],
   "generated_goals": []
