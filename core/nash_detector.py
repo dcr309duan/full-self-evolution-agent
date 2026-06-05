@@ -1,683 +1,356 @@
-import random
-from typing import Dict, List, Tuple, Set, Optional, Callable
+import json
 from collections import defaultdict
+from typing import Dict, List, Tuple, Set, Optional
 
 class NashEquilibriumDetector:
     """
     Detects Nash equilibrium conditions in module interaction scores.
-    Tracks module interaction scores over cycles, detects when no single-module
-    mutation improves the system for 3+ consecutive cycles, and provides a
-    'force_coordinated_change' method that generates multi-module mutation plans.
+    Tracks module interaction scores over a sliding window of 10 cycles,
+    detects when no single-module mutation improves score by >5% over 3
+    consecutive cycles, and provides a 'force_coordinated_change' method
+    that generates multi-module mutation plans.
     """
 
-    def __init__(self, fitness_functions: Dict[str, Callable]):
+    def __init__(self, module_names: List[str]):
         """
-        Initialize the detector with module fitness functions.
+        Initialize the detector with module names.
         
         Args:
-            fitness_functions: Dict mapping module names to their fitness functions.
-                Each fitness function should take no arguments and return a float.
+            module_names: List of module names to track
         """
-        if not fitness_functions:
-            raise ValueError("fitness_functions dict cannot be empty")
+        if not module_names:
+            raise ValueError("module_names list cannot be empty")
         
-        self.fitness_functions = fitness_functions.copy()
-        self.module_names = list(fitness_functions.keys())
+        self.module_names = list(module_names)
         
-        # Module interaction scores: (module1, module2) -> list of score deltas (last 10)
-        self.interaction_scores: Dict[Tuple[str, str], List[float]] = {}
-        # Maximum history length per module pair
+        # Module interaction tracking: (module1, module2) -> list of (success, timestamp)
+        self.module_interactions: Dict[Tuple[str, str], List[Tuple[bool, str]]] = defaultdict(list)
+        
+        # Module performance history: module_name -> list of scores (sliding window of 10)
+        self.module_performance_history: Dict[str, List[float]] = {}
+        
+        # Maximum history length per module (sliding window)
         self.max_history_length: int = 10
-        # Stagnation threshold for detecting equilibrium (3+ consecutive cycles)
+        
+        # Stagnation threshold for detecting equilibrium (N cycles)
         self.stagnation_threshold: int = 3
-        # Consecutive non-improvement counter per module pair
-        self.stagnation_counter: Dict[Tuple[str, str], int] = {}
+        
+        # Consecutive non-improvement counter per module
+        self.stagnation_counter: Dict[str, int] = {}
+        
         # History of cycle outcomes: list of booleans (True if any improvement)
         self._cycle_improvement_history: List[bool] = []
+        
         # Baseline score values for each module
         self.baseline_scores: Dict[str, float] = {}
+        
         # Current score values for each module
         self.current_scores: Dict[str, float] = {}
-        # Improvement threshold (0.1 by default)
-        self.improvement_threshold: float = 0.1
+        
+        # Improvement threshold (5% = 0.05)
+        self.improvement_threshold: float = 0.05
+        
         # Number of cycles without improvement
         self.cycles_without_improvement: int = 0
         
-        # Initialize baseline scores
-        self._compute_baseline_scores()
+        # Initialize baseline scores to 0
+        for module_name in self.module_names:
+            self.baseline_scores[module_name] = 0.0
+            self.current_scores[module_name] = 0.0
+            self.module_performance_history[module_name] = [0.0]
 
-    def _compute_baseline_scores(self) -> None:
-        """Compute baseline scores for all modules."""
-        for module_name, fitness_func in self.fitness_functions.items():
-            try:
-                score = fitness_func()
-                self.baseline_scores[module_name] = score
-                self.current_scores[module_name] = score
-            except Exception:
-                self.baseline_scores[module_name] = 0.0
-                self.current_scores[module_name] = 0.0
-
-    def record_mutation_outcome(self, module1: str, module2: str, score_delta: float) -> None:
+    def track_module_interactions(self, module1: str, module2: str, success: bool) -> None:
         """
-        Record the outcome of a mutation affecting a module pair.
+        Records which modules were mutated together and success rates.
         
         Args:
-            module1: First module in the pair
-            module2: Second module in the pair
-            score_delta: The change in interaction score (positive = improvement)
+            module1: First module name
+            module2: Second module name
+            success: Whether the interaction was successful
         """
-        pair = tuple(sorted([module1, module2]))
-        if pair not in self.interaction_scores:
-            self.interaction_scores[pair] = []
-        self.interaction_scores[pair].append(score_delta)
+        if module1 not in self.module_names or module2 not in self.module_names:
+            return
         
-        # Keep only last 10 entries
-        if len(self.interaction_scores[pair]) > self.max_history_length:
-            self.interaction_scores[pair] = self.interaction_scores[pair][-self.max_history_length:]
+        # Normalize order for consistent key
+        key = tuple(sorted([module1, module2]))
         
-        # Update stagnation counter
-        if pair not in self.stagnation_counter:
-            self.stagnation_counter[pair] = 0
-        if score_delta <= 0:
-            self.stagnation_counter[pair] += 1
-        else:
-            self.stagnation_counter[pair] = 0
+        # Use cycle count as timestamp for simplicity
+        timestamp = str(len(self._cycle_improvement_history))
+        self.module_interactions[key].append((success, timestamp))
+        
+        # Keep only last 100 interactions per pair
+        if len(self.module_interactions[key]) > 100:
+            self.module_interactions[key] = self.module_interactions[key][-100:]
 
-    def detect_equilibrium(self) -> bool:
+    def detect_nash_equilibrium(self, cycles: int = 3) -> bool:
         """
-        Detect when no single module change improves any module's score by >0.1.
-        Returns True if all module pairs have been stagnant for the threshold number of cycles.
+        Checks if no single-module mutation has improved score by >5% in last N cycles.
         
+        Args:
+            cycles: Number of cycles to check (default: 3)
+            
         Returns:
-            True if system is in Nash equilibrium
+            True if no single-module mutation has improved the system in last N cycles
         """
-        if not self.interaction_scores:
+        if cycles < 1:
+            raise ValueError("cycles must be at least 1")
+        
+        # Check if we have enough history
+        if len(self._cycle_improvement_history) < cycles:
             return False
         
-        # Check if all module pairs that have been evaluated are stagnant
-        for pair, deltas in self.interaction_scores.items():
-            if len(deltas) < self.stagnation_threshold:
-                return False
-            if self.stagnation_counter.get(pair, 0) < self.stagnation_threshold:
-                return False
+        # Check the last N cycles
+        recent_cycles = self._cycle_improvement_history[-cycles:]
         
-        # Also check if any single-module change would improve score by >0.1
+        # If any cycle had improvement, not in equilibrium
+        if any(recent_cycles):
+            return False
+        
+        # Also check stagnation counters for all modules
         for module_name in self.module_names:
-            try:
-                current_score = self.current_scores.get(module_name, 0.0)
-                baseline_score = self.baseline_scores.get(module_name, 0.0)
-                
-                # Simulate a small change and check if it improves score by >0.1
-                if baseline_score > 0:
-                    improvement = abs(current_score - baseline_score)
-                    if improvement > self.improvement_threshold:
-                        return False
-            except Exception:
-                continue
+            if self.stagnation_counter.get(module_name, 0) < cycles:
+                return False
         
         return True
 
-    def is_at_equilibrium(self) -> bool:
+    def check_and_force_coordinated_mutation(self) -> Optional[Dict]:
         """
-        Check if the system is currently at a Nash equilibrium.
-        This is a convenience method that calls detect_equilibrium() and returns the result.
+        Checks if current module interactions are at Nash equilibrium by verifying
+        no single-module mutation improves system fitness by >5%. If at equilibrium,
+        generates a coordinated multi-module mutation plan targeting 2-3 interdependent
+        modules and returns the plan for the orchestrator to execute atomically.
         
         Returns:
-            True if the system is at Nash equilibrium, False otherwise
+            Dictionary with coordinated mutation plan, or None if not at equilibrium
         """
-        return self.detect_equilibrium()
-
-    def suggest_coordinated_changes(self) -> List[Tuple[str, str]]:
-        """
-        Identify coordinated multi-module change opportunities by finding module pairs
-        where both modules are stuck (stagnant).
+        # Check if at Nash equilibrium
+        if not self.detect_nash_equilibrium():
+            return None
         
-        Returns:
-            List of module pairs (sorted tuples) that are candidates for coordinated changes
-        """
-        stagnant_pairs = []
-        for pair, count in self.stagnation_counter.items():
-            if count >= self.stagnation_threshold:
-                stagnant_pairs.append(pair)
-        return stagnant_pairs
-
-    def get_interaction_scores(self) -> Dict[Tuple[str, str], List[float]]:
-        """
-        Get the current interaction scores.
+        # Find interdependent modules based on interaction history
+        interdependent_pairs = []
+        for key, interactions in self.module_interactions.items():
+            if len(interactions) >= 3:  # At least 3 interactions to consider
+                success_rate = sum(1 for s, _ in interactions if s) / len(interactions)
+                if success_rate > 0.5:  # More than 50% success rate indicates interdependence
+                    interdependent_pairs.append(key)
         
-        Returns:
-            Dictionary mapping module pairs to their score delta history
-        """
-        return dict(self.interaction_scores)
-
-    def reset(self) -> None:
-        """Reset all tracking data."""
-        self.interaction_scores.clear()
-        self.stagnation_counter.clear()
-        self._cycle_improvement_history.clear()
-        self.cycles_without_improvement = 0
-        self._compute_baseline_scores()
-
-    def _compute_joint_improvement_potential(self, modules: List[str]) -> float:
-        """
-        Compute the potential improvement from changing multiple modules simultaneously.
-        
-        Args:
-            modules: List of module names to consider for joint change
-            
-        Returns:
-            Estimated joint improvement potential
-        """
-        if not modules:
-            return 0.0
-        
-        try:
-            # Sum individual score improvements from baseline
-            total_improvement = 0.0
-            for m in modules:
-                current = self.current_scores.get(m, 0.0)
-                baseline = self.baseline_scores.get(m, 0.0)
-                total_improvement += (current - baseline)
-            
-            # Add interaction effects based on interaction scores
-            interaction_effect = 0.0
-            for i in range(len(modules)):
-                for j in range(i + 1, len(modules)):
-                    pair = tuple(sorted([modules[i], modules[j]]))
-                    deltas = self.interaction_scores.get(pair, [])
-                    if deltas:
-                        recent_deltas = deltas[-3:] if len(deltas) >= 3 else deltas
-                        interaction_effect += sum(recent_deltas) / len(recent_deltas)
-            
-            # Combine individual improvements and interaction effects
-            joint_potential = (total_improvement * 0.7) + (interaction_effect * 0.3)
-            
-            return joint_potential
-            
-        except Exception:
-            return 0.0
-
-    def _compute_payoff_matrix(self) -> Dict[Tuple[str, str], float]:
-        """
-        Compute payoff matrix from module interaction logs (success/failure rates).
-        
-        Returns:
-            Dictionary mapping module pairs to their average payoff (success rate)
-        """
-        payoff_matrix: Dict[Tuple[str, str], float] = {}
-        
-        for pair, deltas in self.interaction_scores.items():
-            if deltas:
-                # Calculate success rate: proportion of positive deltas
-                positive_deltas = sum(1 for d in deltas if d > 0)
-                success_rate = positive_deltas / len(deltas)
-                payoff_matrix[pair] = success_rate
-            else:
-                payoff_matrix[pair] = 0.0
-        
-        return payoff_matrix
-
-    def _check_nash_equilibrium(self, payoff_matrix: Dict[Tuple[str, str], float]) -> bool:
-        """
-        Check for Nash equilibrium using a best-response algorithm.
-        
-        Args:
-            payoff_matrix: Dictionary mapping module pairs to their average payoff
-            
-        Returns:
-            True if the system is at Nash equilibrium, False otherwise
-        """
-        if not payoff_matrix:
-            return False
-        
-        # For each module, check if it has a best response to all other modules
+        # Find stagnant modules
+        stagnant_modules = []
         for module_name in self.module_names:
-            # Find all pairs involving this module
-            module_pairs = [pair for pair in payoff_matrix if module_name in pair]
-            
-            if not module_pairs:
-                continue
-            
-            # Get the best payoff for this module across all its interactions
-            best_payoff = max(payoff_matrix[pair] for pair in module_pairs)
-            
-            # Check if any single-module change could improve this module's payoff
-            for pair in module_pairs:
-                current_payoff = payoff_matrix[pair]
-                # If there's a better payoff available, it's not Nash equilibrium
-                if current_payoff < best_payoff:
-                    return False
+            if self.stagnation_counter.get(module_name, 0) >= self.stagnation_threshold:
+                stagnant_modules.append(module_name)
         
-        return True
-
-    def _generate_coordinated_mutation_plan(self, modules: List[str]) -> List[Tuple[str, str]]:
-        """
-        Generate a coordinated mutation plan (list of (module, change) pairs) that
-        would not be found by single-module optimization.
+        # Select target modules: prefer interdependent stagnant modules
+        selected_modules = []
+        used_modules = set()
         
-        Args:
-            modules: List of module names to include in the plan
-            
-        Returns:
-            List of (module, change) pairs representing the coordinated mutation plan
-        """
-        plan: List[Tuple[str, str]] = []
+        # First, try to find interdependent pairs among stagnant modules
+        for pair in interdependent_pairs:
+            m1, m2 = pair
+            if m1 in stagnant_modules and m2 in stagnant_modules:
+                if m1 not in used_modules and m2 not in used_modules:
+                    selected_modules.extend([m1, m2])
+                    used_modules.add(m1)
+                    used_modules.add(m2)
+                    if len(selected_modules) >= 2:
+                        break
         
-        # Define possible changes that are unlikely to be found by single-module optimization
-        coordinated_changes = [
-            "interface_redesign",
-            "dependency_inversion",
-            "shared_state_synchronization",
-            "protocol_upgrade",
-            "data_format_migration",
-            "concurrency_model_change",
-            "caching_strategy_overhaul",
-            "error_handling_restructure",
-            "logging_infrastructure_change",
-            "security_policy_update"
+        # If not enough modules selected, add more stagnant modules
+        if len(selected_modules) < 2:
+            for module in stagnant_modules:
+                if module not in used_modules:
+                    selected_modules.append(module)
+                    used_modules.add(module)
+                    if len(selected_modules) >= 3:
+                        break
+        
+        # If still not enough, use modules with lowest scores
+        if len(selected_modules) < 2:
+            sorted_modules = sorted(
+                self.module_names,
+                key=lambda m: self.current_scores.get(m, 0.0)
+            )
+            for module in sorted_modules:
+                if module not in used_modules:
+                    selected_modules.append(module)
+                    used_modules.add(module)
+                    if len(selected_modules) >= 3:
+                        break
+        
+        # Ensure we have at least 2 modules
+        if len(selected_modules) < 2:
+            return None
+        
+        # Limit to 2-3 modules
+        num_modules = min(len(selected_modules), 3)
+        selected_modules = selected_modules[:num_modules]
+        
+        # Generate coordinated mutation plan
+        plan = {
+            'timestamp': str(len(self._cycle_improvement_history)),
+            'modules': selected_modules,
+            'description': f"Coordinated multi-module mutation plan targeting {len(selected_modules)} modules",
+            'changes': []
+        }
+        
+        # Define possible changes
+        changes = [
+            'interface_redesign',
+            'dependency_inversion',
+            'shared_state_synchronization',
+            'protocol_upgrade',
+            'data_format_migration',
+            'concurrency_model_change',
+            'caching_strategy_overhaul',
+            'error_handling_restructure',
+            'logging_infrastructure_change',
+            'security_policy_update'
         ]
         
-        for i, module in enumerate(modules):
-            # Select a change that complements the other modules' changes
-            change_index = i % len(coordinated_changes)
-            change = coordinated_changes[change_index]
-            plan.append((module, change))
+        for i, module in enumerate(selected_modules):
+            change = changes[i % len(changes)]
+            plan['changes'].append({
+                'module': module,
+                'action': change,
+                'description': f"Apply {change} to {module}"
+            })
+        
+        # Record the interaction for each pair
+        for i in range(len(selected_modules)):
+            for j in range(i + 1, len(selected_modules)):
+                self.track_module_interactions(
+                    selected_modules[i],
+                    selected_modules[j],
+                    True  # Assume success for planning
+                )
         
         return plan
 
-    def detect_and_force_coordinated_change(self) -> bool:
+    def force_coordinated_change(self) -> Optional[Dict]:
         """
-        Detect Nash equilibrium and force a coordinated change to break it.
-        
-        This method:
-        1. Computes payoff matrix from module interaction logs (success/failure rates)
-        2. Checks for Nash equilibrium using a best-response algorithm
-        3. If equilibrium detected, generates a coordinated mutation plan (list of
-           (module, change) pairs) that would not be found by single-module optimization
+        Generates a multi-module mutation plan targeting 2-3 modules simultaneously.
         
         Returns:
-            True if coordinated change was applied, False otherwise
+            Dictionary with coordinated change plan, or None if no plan possible
         """
-        try:
-            # Step 1: Compute payoff matrix from module interaction logs
-            payoff_matrix = self._compute_payoff_matrix()
-            
-            if not payoff_matrix:
-                return False
-            
-            # Step 2: Check for Nash equilibrium using best-response algorithm
-            if not self._check_nash_equilibrium(payoff_matrix):
-                return False
-            
-            # Step 3: If equilibrium detected, generate coordinated mutation plan
-            # Find modules that are stuck (stagnant)
-            stagnant_pairs = self.suggest_coordinated_changes()
-            
-            if not stagnant_pairs:
-                # Use all modules with non-positive score changes
-                stuck_modules = []
-                for module_name in self.module_names:
-                    current = self.current_scores.get(module_name, 0.0)
-                    baseline = self.baseline_scores.get(module_name, 0.0)
-                    if current <= baseline:
-                        stuck_modules.append(module_name)
-                
-                if len(stuck_modules) < 2:
-                    return False
-                
-                # Select 2-3 modules randomly
-                num_modules = min(len(stuck_modules), random.randint(2, 3))
-                selected_modules = stuck_modules[:num_modules]
-            else:
-                # Collect all unique modules from stagnant pairs
-                stagnant_modules: Set[str] = set()
-                for m1, m2 in stagnant_pairs:
-                    stagnant_modules.add(m1)
-                    stagnant_modules.add(m2)
-                
-                if len(stagnant_modules) < 2:
-                    return False
-                
-                # Select 2-3 modules randomly
-                num_modules = min(len(stagnant_modules), random.randint(2, 3))
-                selected_modules = list(stagnant_modules)[:num_modules]
-            
-            # Generate coordinated mutation plan
-            coordinated_plan = self._generate_coordinated_mutation_plan(selected_modules)
-            
-            # Apply the coordinated mutation
-            success = self._apply_coordinated_mutation_plan(coordinated_plan)
-            
-            return success
-            
-        except Exception:
-            return False
-
-    def _apply_coordinated_mutation_plan(self, plan: List[Tuple[str, str]]) -> bool:
-        """
-        Apply a coordinated mutation plan.
+        # Find stagnant modules
+        stagnant_modules = []
+        for module_name in self.module_names:
+            if self.stagnation_counter.get(module_name, 0) >= self.stagnation_threshold:
+                stagnant_modules.append(module_name)
         
-        Args:
-            plan: List of (module, change) pairs representing the coordinated mutation plan
-            
-        Returns:
-            True if the plan was applied successfully, False otherwise
-        """
-        try:
-            if not plan:
-                return False
-            
-            # Extract all modules involved in the coordinated plan
-            affected_modules: Set[str] = set()
-            for module, change in plan:
-                affected_modules.add(module)
-            
-            if not affected_modules:
-                return False
-            
-            # Apply changes atomically by resetting stagnation tracking for all affected modules
-            modules_list = list(affected_modules)
-            for i in range(len(modules_list)):
-                for j in range(i + 1, len(modules_list)):
-                    module1 = modules_list[i]
-                    module2 = modules_list[j]
-                    pair = tuple(sorted([module1, module2]))
-                    
-                    # Reset stagnation counter and interaction scores for this pair
-                    self.stagnation_counter[pair] = 0
-                    if pair in self.interaction_scores:
-                        self.interaction_scores[pair] = []
-            
-            # Update current score values to simulate the effect of coordinated changes
-            for module_name in affected_modules:
-                try:
-                    fitness_func = self.fitness_functions.get(module_name)
-                    if fitness_func:
-                        new_score = fitness_func()
-                        self.current_scores[module_name] = new_score
-                except Exception:
-                    pass
-            
-            # Record a positive cycle outcome
-            self._cycle_improvement_history.append(True)
-            if len(self._cycle_improvement_history) > 5:
-                self._cycle_improvement_history = self._cycle_improvement_history[-5:]
-            
-            # Reset cycles without improvement counter
-            self.cycles_without_improvement = 0
-            
-            return True
-            
-        except Exception:
-            return False
-
-    def force_coordinated_change(self) -> bool:
-        """
-        Force a coordinated change to break out of Nash equilibrium.
+        # If not enough stagnant modules, use modules with lowest scores
+        if len(stagnant_modules) < 2:
+            # Sort modules by current score (ascending)
+            sorted_modules = sorted(
+                self.module_names,
+                key=lambda m: self.current_scores.get(m, 0.0)
+            )
+            stagnant_modules = sorted_modules[:3]
         
-        This method:
-        1. Identifies modules currently at Nash equilibrium by checking if all single-module mutations degrade performance
-        2. Generates a coordinated multi-module mutation plan that changes 2-3 modules simultaneously
-        3. Executes the coordinated change via the atomic multi-module mutation orchestrator
-        4. Verifies the combined change improves overall system fitness beyond any single-module alternative
+        # Ensure we have at least 2 modules
+        if len(stagnant_modules) < 2:
+            return None
         
-        Returns:
-            True if the coordinated change successfully broke the equilibrium (overall system fitness improved),
-            False otherwise
-        """
-        try:
-            # Step 1: Identify modules currently at Nash equilibrium
-            if not self.detect_equilibrium():
-                return False
-            
-            # Verify that all single-module mutations degrade performance
-            all_single_mutations_degrade = True
-            for pair, deltas in self.interaction_scores.items():
-                if deltas:
-                    recent_deltas = deltas[-3:] if len(deltas) >= 3 else deltas
-                    if any(d > self.improvement_threshold for d in recent_deltas):
-                        all_single_mutations_degrade = False
-                        break
-            
-            if not all_single_mutations_degrade:
-                return False
-            
-            # Step 2: Generate a coordinated multi-module mutation plan that changes 2-3 modules simultaneously
-            stagnant_pairs = self.suggest_coordinated_changes()
-            
-            if not stagnant_pairs:
-                # Use all modules with non-positive score changes
-                stuck_modules = []
-                for module_name in self.module_names:
-                    current = self.current_scores.get(module_name, 0.0)
-                    baseline = self.baseline_scores.get(module_name, 0.0)
-                    if current <= baseline:
-                        stuck_modules.append(module_name)
-                
-                if len(stuck_modules) < 2:
-                    return False
-                
-                # Select 2-3 modules randomly
-                num_modules = min(len(stuck_modules), random.randint(2, 3))
-                selected_modules = stuck_modules[:num_modules]
-            else:
-                # Collect all unique modules from stagnant pairs
-                stagnant_modules: Set[str] = set()
-                for m1, m2 in stagnant_pairs:
-                    stagnant_modules.add(m1)
-                    stagnant_modules.add(m2)
-                
-                if len(stagnant_modules) < 2:
-                    return False
-                
-                # Select 2-3 modules randomly
-                num_modules = min(len(stagnant_modules), random.randint(2, 3))
-                selected_modules = list(stagnant_modules)[:num_modules]
-            
-            # Compute the joint improvement potential for the selected modules
-            joint_potential = self._compute_joint_improvement_potential(selected_modules)
-            
-            # Build the coordinated mutation plan
-            coordinated_plan = []
-            for i, module in enumerate(selected_modules):
-                if i == 0:
-                    action = 'change_interface'
-                    description = f"Modify {module}'s interface as part of coordinated escape from Nash equilibrium (joint potential: {joint_potential:.4f})"
-                elif i == 1:
-                    action = 'change_implementation'
-                    description = f"Modify {module}'s implementation to complement interface changes (joint potential: {joint_potential:.4f})"
-                else:
-                    action = 'change_parameter'
-                    description = f"Modify {module}'s parameters to complete the coordinated change (joint potential: {joint_potential:.4f})"
-                
-                coordinated_plan.append({
-                    'module': module,
-                    'action': action,
-                    'description': description
-                })
-            
-            plan = {
-                'coordinated_plan': coordinated_plan,
-                'description': f"Coordinated multi-module change plan involving {len(selected_modules)} modules to break Nash equilibrium"
-            }
-            
-            # Step 3: Execute the coordinated change atomically
-            # Record the current scores before applying changes
-            pre_change_scores = {}
-            for module_name in selected_modules:
-                try:
-                    fitness_func = self.fitness_functions.get(module_name)
-                    if fitness_func:
-                        pre_change_scores[module_name] = fitness_func()
-                    else:
-                        pre_change_scores[module_name] = self.current_scores.get(module_name, 0.0)
-                except Exception:
-                    pre_change_scores[module_name] = self.current_scores.get(module_name, 0.0)
-            
-            # Apply the coordinated mutation atomically
-            success = self._apply_coordinated_mutation(plan)
-            
-            if not success:
-                return False
-            
-            # Step 4: Verify the combined change improves overall system fitness
-            pre_overall_score = sum(pre_change_scores.values()) / len(pre_change_scores) if pre_change_scores else 0.0
-            
-            post_change_scores = {}
-            for module_name in selected_modules:
-                try:
-                    fitness_func = self.fitness_functions.get(module_name)
-                    if fitness_func:
-                        post_change_scores[module_name] = fitness_func()
-                    else:
-                        post_change_scores[module_name] = self.current_scores.get(module_name, 0.0)
-                except Exception:
-                    post_change_scores[module_name] = self.current_scores.get(module_name, 0.0)
-            
-            post_overall_score = sum(post_change_scores.values()) / len(post_change_scores) if post_change_scores else 0.0
-            
-            # Check if overall system score improved
-            overall_improvement = False
-            if pre_overall_score > 0:
-                improvement_ratio = (post_overall_score - pre_overall_score) / pre_overall_score
-                if improvement_ratio > self.improvement_threshold:
-                    overall_improvement = True
-            elif post_overall_score > pre_overall_score:
-                overall_improvement = True
-            
-            # Also verify that the combined change improves beyond any single-module alternative
-            best_single_improvement = 0.0
-            for module_name in selected_modules:
-                pre = pre_change_scores.get(module_name, 0.0)
-                post = post_change_scores.get(module_name, 0.0)
-                if pre > 0:
-                    single_improvement = (post - pre) / pre
-                    if single_improvement > best_single_improvement:
-                        best_single_improvement = single_improvement
-            
-            if overall_improvement:
-                self.cycles_without_improvement = 0
-                return True
-            else:
-                return False
-                
-        except Exception:
-            return False
-
-    def _apply_coordinated_mutation(self, plan: Dict) -> bool:
-        """
-        Apply a coordinated mutation plan atomically.
+        # Select 2-3 modules
+        num_modules = min(len(stagnant_modules), 3)
+        selected_modules = stagnant_modules[:num_modules]
         
-        Args:
-            plan: Dictionary containing:
-                - 'coordinated_plan': list of mutation steps, each a dict with
-                  'module', 'action', and 'description' keys
-                - 'description': string describing the coordinated change strategy
-        
-        Returns:
-            True if the coordinated mutation was applied successfully, False otherwise
-        """
-        try:
-            if not plan or 'coordinated_plan' not in plan:
-                return False
-            
-            coordinated_plan = plan['coordinated_plan']
-            if not coordinated_plan:
-                return False
-            
-            # Extract all modules involved in the coordinated plan
-            affected_modules: Set[str] = set()
-            for step in coordinated_plan:
-                if 'module' in step:
-                    affected_modules.add(step['module'])
-            
-            if not affected_modules:
-                return False
-            
-            # Apply changes atomically by resetting stagnation tracking for all affected modules
-            modules_list = list(affected_modules)
-            for i in range(len(modules_list)):
-                for j in range(i + 1, len(modules_list)):
-                    module1 = modules_list[i]
-                    module2 = modules_list[j]
-                    pair = tuple(sorted([module1, module2]))
-                    
-                    # Reset stagnation counter and interaction scores for this pair
-                    self.stagnation_counter[pair] = 0
-                    if pair in self.interaction_scores:
-                        self.interaction_scores[pair] = []
-            
-            # Update current score values to simulate the effect of coordinated changes
-            for module_name in affected_modules:
-                try:
-                    fitness_func = self.fitness_functions.get(module_name)
-                    if fitness_func:
-                        new_score = fitness_func()
-                        self.current_scores[module_name] = new_score
-                except Exception:
-                    pass
-            
-            # Record a positive cycle outcome
-            self._cycle_improvement_history.append(True)
-            if len(self._cycle_improvement_history) > 5:
-                self._cycle_improvement_history = self._cycle_improvement_history[-5:]
-            
-            # Reset cycles without improvement counter
-            self.cycles_without_improvement = 0
-            
-            return True
-            
-        except Exception:
-            return False
-
-    def update_fitness_functions(self, fitness_functions: Dict[str, Callable]) -> None:
-        """
-        Update the fitness functions for all modules.
-        
-        Args:
-            fitness_functions: New dict of module fitness functions
-        """
-        if not fitness_functions:
-            raise ValueError("fitness_functions dict cannot be empty")
-        
-        self.fitness_functions = fitness_functions.copy()
-        self.module_names = list(fitness_functions.keys())
-        self._compute_baseline_scores()
-
-    def get_equilibrium_state(self) -> Dict:
-        """
-        Get the current equilibrium state information.
-        
-        Returns:
-            Dictionary containing:
-            - 'equilibrium': bool indicating if system is at equilibrium
-            - 'stagnant_pairs': list of stagnant module pairs
-            - 'cycles_without_improvement': int
-        """
-        return {
-            'equilibrium': self.detect_equilibrium(),
-            'stagnant_pairs': self.suggest_coordinated_changes(),
-            'cycles_without_improvement': self.cycles_without_improvement
+        # Generate coordinated mutation plan
+        plan = {
+            'timestamp': str(len(self._cycle_improvement_history)),
+            'modules': selected_modules,
+            'description': f"Coordinated multi-module mutation plan targeting {len(selected_modules)} modules",
+            'changes': []
         }
+        
+        # Define possible changes
+        changes = [
+            'interface_redesign',
+            'dependency_inversion',
+            'shared_state_synchronization',
+            'protocol_upgrade',
+            'data_format_migration',
+            'concurrency_model_change',
+            'caching_strategy_overhaul',
+            'error_handling_restructure',
+            'logging_infrastructure_change',
+            'security_policy_update'
+        ]
+        
+        for i, module in enumerate(selected_modules):
+            change = changes[i % len(changes)]
+            plan['changes'].append({
+                'module': module,
+                'action': change,
+                'description': f"Apply {change} to {module}"
+            })
+        
+        # Record the interaction for each pair
+        for i in range(len(selected_modules)):
+            for j in range(i + 1, len(selected_modules)):
+                self.track_module_interactions(
+                    selected_modules[i],
+                    selected_modules[j],
+                    True  # Assume success for planning
+                )
+        
+        return plan
+
+    def record_mutation_outcome(self, module_name: str, score_delta: float) -> None:
+        """
+        Record the outcome of a mutation affecting a module.
+        
+        Args:
+            module_name: Name of the module
+            score_delta: The change in score (positive = improvement)
+        """
+        if module_name not in self.module_performance_history:
+            self.module_performance_history[module_name] = []
+        
+        # Update current score
+        current = self.current_scores.get(module_name, 0.0)
+        self.current_scores[module_name] = current + score_delta
+        
+        # Track performance history
+        self.module_performance_history[module_name].append(self.current_scores[module_name])
+        
+        # Keep only last N entries (sliding window of 10)
+        if len(self.module_performance_history[module_name]) > self.max_history_length:
+            self.module_performance_history[module_name] = self.module_performance_history[module_name][-self.max_history_length:]
+        
+        # Update stagnation counter
+        if module_name not in self.stagnation_counter:
+            self.stagnation_counter[module_name] = 0
+        
+        # Check if improvement is >5% compared to baseline
+        baseline = self.baseline_scores.get(module_name, 0.0)
+        if baseline > 0:
+            improvement_pct = abs(score_delta) / baseline
+        else:
+            improvement_pct = abs(score_delta) if score_delta > 0 else 0
+        
+        if improvement_pct > self.improvement_threshold:
+            self.stagnation_counter[module_name] = 0
+        else:
+            self.stagnation_counter[module_name] += 1
 
     def increment_cycle(self) -> None:
         """Advance to the next evaluation cycle."""
         self.cycles_without_improvement += 1
         
-        # Check if any module improved in this cycle
+        # Check if any module improved by >5% in this cycle
         any_improvement = False
         for module_name in self.module_names:
-            try:
-                current_score = self.current_scores.get(module_name, 0.0)
-                baseline_score = self.baseline_scores.get(module_name, 0.0)
-                
-                if baseline_score > 0:
-                    improvement = abs(current_score - baseline_score)
-                    if improvement > self.improvement_threshold:
-                        any_improvement = True
-                        break
-            except Exception:
-                continue
+            current_score = self.current_scores.get(module_name, 0.0)
+            baseline_score = self.baseline_scores.get(module_name, 0.0)
+            
+            if baseline_score > 0:
+                improvement_pct = abs(current_score - baseline_score) / baseline_score
+                if improvement_pct > self.improvement_threshold:
+                    any_improvement = True
+                    break
         
         if any_improvement:
             self.cycles_without_improvement = 0
@@ -686,12 +359,83 @@ class NashEquilibriumDetector:
         if len(self._cycle_improvement_history) > 5:
             self._cycle_improvement_history = self._cycle_improvement_history[-5:]
 
+    def get_interaction_success_rate(self, module1: str, module2: str) -> float:
+        """
+        Get the success rate for interactions between two modules.
+        
+        Args:
+            module1: First module name
+            module2: Second module name
+            
+        Returns:
+            Success rate as a float between 0 and 1
+        """
+        key = tuple(sorted([module1, module2]))
+        interactions = self.module_interactions.get(key, [])
+        
+        if not interactions:
+            return 0.0
+        
+        successes = sum(1 for success, _ in interactions if success)
+        return successes / len(interactions)
+
+    def get_all_interaction_stats(self) -> Dict[str, Dict]:
+        """
+        Get statistics for all module interactions.
+        
+        Returns:
+            Dictionary mapping interaction keys to their statistics
+        """
+        stats = {}
+        for key, interactions in self.module_interactions.items():
+            total = len(interactions)
+            successes = sum(1 for success, _ in interactions if success)
+            stats[f"{key[0]}_{key[1]}"] = {
+                'total_interactions': total,
+                'successful_interactions': successes,
+                'success_rate': successes / total if total > 0 else 0.0,
+                'last_interaction': interactions[-1][1] if interactions else None
+            }
+        return stats
+
+    def get_equilibrium_state(self) -> Dict:
+        """
+        Get the current equilibrium state information.
+        
+        Returns:
+            Dictionary containing equilibrium state information
+        """
+        return {
+            'equilibrium': self.detect_nash_equilibrium(),
+            'stagnant_modules': [
+                m for m in self.module_names 
+                if self.stagnation_counter.get(m, 0) >= self.stagnation_threshold
+            ],
+            'cycles_without_improvement': self.cycles_without_improvement,
+            'module_scores': dict(self.current_scores),
+            'interaction_stats': self.get_all_interaction_stats()
+        }
+
+    def reset(self) -> None:
+        """Reset all tracking data."""
+        self.module_interactions.clear()
+        self.module_performance_history.clear()
+        self.stagnation_counter.clear()
+        self._cycle_improvement_history.clear()
+        self.cycles_without_improvement = 0
+        
+        # Reset baseline scores
+        for module_name in self.module_names:
+            self.baseline_scores[module_name] = 0.0
+            self.current_scores[module_name] = 0.0
+            self.module_performance_history[module_name] = [0.0]
+
     def set_improvement_threshold(self, threshold: float) -> None:
         """
         Set the improvement threshold for detecting equilibrium.
         
         Args:
-            threshold: Float representing the minimum improvement value
+            threshold: Float representing the minimum improvement value (default 0.05 for 5%)
         """
         if threshold < 0:
             raise ValueError("Improvement threshold must be non-negative")
@@ -707,3 +451,63 @@ class NashEquilibriumDetector:
         if threshold < 1:
             raise ValueError("Stagnation threshold must be at least 1")
         self.stagnation_threshold = threshold
+
+    def to_json(self) -> str:
+        """
+        Serialize the detector state to JSON.
+        
+        Returns:
+            JSON string representation of the detector state
+        """
+        state = {
+            'module_names': self.module_names,
+            'module_performance_history': {
+                k: v for k, v in self.module_performance_history.items()
+            },
+            'stagnation_counter': dict(self.stagnation_counter),
+            'cycle_improvement_history': self._cycle_improvement_history,
+            'baseline_scores': self.baseline_scores,
+            'current_scores': self.current_scores,
+            'improvement_threshold': self.improvement_threshold,
+            'cycles_without_improvement': self.cycles_without_improvement,
+            'stagnation_threshold': self.stagnation_threshold,
+            'max_history_length': self.max_history_length,
+            'module_interactions': {
+                f"{k[0]}_{k[1]}": [(s, t) for s, t in v]
+                for k, v in self.module_interactions.items()
+            }
+        }
+        return json.dumps(state, indent=2)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> 'NashEquilibriumDetector':
+        """
+        Deserialize the detector state from JSON.
+        
+        Args:
+            json_str: JSON string representation of the detector state
+            
+        Returns:
+            NashEquilibriumDetector instance with restored state
+        """
+        state = json.loads(json_str)
+        
+        detector = cls(state['module_names'])
+        detector.module_performance_history = state['module_performance_history']
+        detector.stagnation_counter = state['stagnation_counter']
+        detector._cycle_improvement_history = state['cycle_improvement_history']
+        detector.baseline_scores = state['baseline_scores']
+        detector.current_scores = state['current_scores']
+        detector.improvement_threshold = state['improvement_threshold']
+        detector.cycles_without_improvement = state['cycles_without_improvement']
+        detector.stagnation_threshold = state['stagnation_threshold']
+        detector.max_history_length = state['max_history_length']
+        
+        # Restore module interactions
+        for key_str, interactions in state['module_interactions'].items():
+            parts = key_str.split('_')
+            if len(parts) >= 2:
+                key = (parts[0], parts[1])
+                detector.module_interactions[key] = [(s, t) for s, t in interactions]
+        
+        return detector

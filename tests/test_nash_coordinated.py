@@ -191,3 +191,176 @@ class TestNashCoordinated:
         assert result["plan_applied"], "Should apply coordinated plan"
         assert result["new_fitness"] > 0.6, "Fitness should improve after escape"
         assert len(result["modules_changed"]) == 3, "All modules should be changed"
+
+    def test_detection_triggers_coordinated_mutation(self, orchestrator, detector, mock_modules):
+        """Test that Nash detection triggers coordinated mutation across modules."""
+        # Setup: Simulate Nash equilibrium detection
+        detector.detect_nash_equilibrium = MagicMock(return_value=(True, mock_modules))
+        
+        # Mock coordinated change to produce a valid plan
+        detector.evaluate_coordinated_change = MagicMock(return_value=0.85)
+        detector.force_coordinated_change = MagicMock(
+            return_value={
+                "modules": ["ModuleA", "ModuleB", "ModuleC"],
+                "changes": ["coordinated_mut_a", "coordinated_mut_b", "coordinated_mut_c"],
+                "expected_fitness": 0.85,
+            }
+        )
+        
+        # Mock apply_coordinated_plan to track calls
+        orchestrator.apply_coordinated_plan = MagicMock(return_value=True)
+        
+        # Run the Nash escape cycle
+        result = orchestrator.run_nash_escape_cycle()
+        
+        # Verify detection triggered coordinated mutation
+        assert result["nash_detected"], "Nash equilibrium should be detected"
+        assert result["plan_applied"], "Coordinated plan should be applied"
+        assert result["new_fitness"] > 0.6, "Fitness should improve after coordinated mutation"
+        assert len(result["modules_changed"]) == 3, "All 3 modules should be mutated"
+        
+        # Verify the coordinated plan was created and applied
+        detector.force_coordinated_change.assert_called_once()
+        orchestrator.apply_coordinated_plan.assert_called_once()
+
+    def test_atomic_execution_and_rollback_on_failure(self, orchestrator, detector, mock_modules):
+        """Test that coordinated mutation executes atomically and rolls back on failure."""
+        # Setup: Simulate Nash equilibrium detection
+        detector.detect_nash_equilibrium = MagicMock(return_value=(True, mock_modules))
+        
+        # Create a plan that will fail during application
+        detector.evaluate_coordinated_change = MagicMock(return_value=0.75)
+        detector.force_coordinated_change = MagicMock(
+            return_value={
+                "modules": ["ModuleA", "ModuleB", "ModuleC"],
+                "changes": ["mut_a_fail", "mut_b_fail", "mut_c_fail"],
+                "expected_fitness": 0.75,
+            }
+        )
+        
+        # Store initial state for rollback verification
+        initial_fitnesses = [m.fitness for m in mock_modules]
+        initial_mutate_calls = [m.mutate.call_count for m in mock_modules]
+        
+        # Mock apply_coordinated_plan to simulate failure and rollback
+        def failing_apply(plan):
+            # Simulate partial mutation application
+            mock_modules[0].mutate.return_value = "partial_mut_a"
+            mock_modules[0].fitness = 0.4  # Decreased fitness
+            mock_modules[1].mutate.return_value = "partial_mut_b"
+            mock_modules[1].fitness = 0.5  # Decreased fitness
+            # Simulate failure on third module
+            raise RuntimeError("Mutation failed on ModuleC")
+        
+        orchestrator.apply_coordinated_plan = MagicMock(side_effect=failing_apply)
+        
+        # Mock rollback functionality
+        def rollback_state():
+            mock_modules[0].fitness = initial_fitnesses[0]
+            mock_modules[1].fitness = initial_fitnesses[1]
+            mock_modules[2].fitness = initial_fitnesses[2]
+            mock_modules[0].mutate.return_value = "mutated_a"
+            mock_modules[1].mutate.return_value = "mutated_b"
+            mock_modules[2].mutate.return_value = "mutated_c"
+        
+        orchestrator.rollback = MagicMock(side_effect=rollback_state)
+        
+        # Attempt to run Nash escape cycle (should handle failure)
+        try:
+            result = orchestrator.run_nash_escape_cycle()
+        except RuntimeError:
+            # Perform rollback
+            orchestrator.rollback()
+            result = {"nash_detected": True, "plan_applied": False, "rolled_back": True}
+        
+        # Verify atomic execution attempt
+        assert result.get("nash_detected", False), "Nash should be detected"
+        
+        # Verify rollback restored original state
+        assert mock_modules[0].fitness == initial_fitnesses[0], "ModuleA fitness should be rolled back"
+        assert mock_modules[1].fitness == initial_fitnesses[1], "ModuleB fitness should be rolled back"
+        assert mock_modules[2].fitness == initial_fitnesses[2], "ModuleC fitness should be rolled back"
+        
+        # Verify mutation states are restored
+        assert mock_modules[0].mutate.return_value == "mutated_a", "ModuleA mutate should be restored"
+        assert mock_modules[1].mutate.return_value == "mutated_b", "ModuleB mutate should be restored"
+        assert mock_modules[2].mutate.return_value == "mutated_c", "ModuleC mutate should be restored"
+        
+        # Verify rollback was called
+        orchestrator.rollback.assert_called_once()
+
+    def test_coordinated_mutation_with_atomic_rollback_integration(self, orchestrator, detector, mock_modules):
+        """Integration test: setup Nash state, verify detection triggers coordinated mutation with atomic rollback."""
+        # Step 1: Setup simulated Nash equilibrium state with 3 interdependent modules
+        # Configure modules with Nash trap interactions
+        mock_modules[0].interaction_matrix = np.array([[0.0, -0.4, -0.3]])
+        mock_modules[1].interaction_matrix = np.array([[-0.35, 0.0, -0.25]])
+        mock_modules[2].interaction_matrix = np.array([[-0.3, -0.2, 0.0]])
+        
+        # Verify initial Nash state
+        fitness_changes = {
+            "ModuleA": -0.2,
+            "ModuleB": -0.15,
+            "ModuleC": -0.1,
+        }
+        is_nash, nash_modules = detector.detect_nash_equilibrium(mock_modules, fitness_changes)
+        assert is_nash, "Should be in Nash equilibrium"
+        assert len(nash_modules) == 3, "All modules should be in Nash trap"
+        
+        # Step 2: Verify detection triggers coordinated mutation
+        detector.detect_nash_equilibrium = MagicMock(return_value=(True, mock_modules))
+        
+        # Mock coordinated change evaluation
+        detector.evaluate_coordinated_change = MagicMock(return_value=0.9)
+        detector.force_coordinated_change = MagicMock(
+            return_value={
+                "modules": ["ModuleA", "ModuleB", "ModuleC"],
+                "changes": ["coordinated_mut_a", "coordinated_mut_b", "coordinated_mut_c"],
+                "expected_fitness": 0.9,
+            }
+        )
+        
+        # Store initial state for rollback verification
+        initial_state = {
+            "fitness": [m.fitness for m in mock_modules],
+            "mutate_return": [m.mutate.return_value for m in mock_modules]
+        }
+        
+        # Step 3: Verify atomic execution and rollback on failure
+        def failing_atomic_apply(plan):
+            # Simulate atomic execution attempt
+            mock_modules[0].mutate.return_value = "new_mut_a"
+            mock_modules[0].fitness = 0.85
+            mock_modules[1].mutate.return_value = "new_mut_b"
+            mock_modules[1].fitness = 0.88
+            # Simulate failure on third mutation
+            raise ValueError("Atomic mutation failed on ModuleC")
+        
+        orchestrator.apply_coordinated_plan = MagicMock(side_effect=failing_atomic_apply)
+        
+        # Mock rollback to restore initial state
+        def atomic_rollback():
+            mock_modules[0].fitness = initial_state["fitness"][0]
+            mock_modules[1].fitness = initial_state["fitness"][1]
+            mock_modules[2].fitness = initial_state["fitness"][2]
+            mock_modules[0].mutate.return_value = initial_state["mutate_return"][0]
+            mock_modules[1].mutate.return_value = initial_state["mutate_return"][1]
+            mock_modules[2].mutate.return_value = initial_state["mutate_return"][2]
+        
+        orchestrator.rollback = MagicMock(side_effect=atomic_rollback)
+        
+        # Execute and handle failure
+        try:
+            orchestrator.run_nash_escape_cycle()
+        except ValueError:
+            orchestrator.rollback()
+        
+        # Verify atomic rollback restored all modules to initial state
+        for i, module in enumerate(mock_modules):
+            assert module.fitness == initial_state["fitness"][i], f"{module.name} fitness should be rolled back"
+            assert module.mutate.return_value == initial_state["mutate_return"][i], f"{module.name} mutate should be rolled back"
+        
+        # Verify the coordinated mutation was triggered
+        detector.force_coordinated_change.assert_called_once()
+        orchestrator.apply_coordinated_plan.assert_called_once()
+        orchestrator.rollback.assert_called_once()

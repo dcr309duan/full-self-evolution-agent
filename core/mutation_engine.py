@@ -962,3 +962,29 @@ def validate_mutation(mutation_spec):
         "reason": test_result.get("reason", "OK"),
         "score": test_result.get("score", 0)
     }
+
+
+def apply_single_module_mutation(module_path, mutation_spec):
+    """Apply a single-module mutation to a specific file.
+    
+    This function reads a module file, applies the mutation specification
+    to its content, validates the result, and writes it back atomically.
+    
+    Args:
+        module_path: Path to the module file to mutate
+        mutation_spec: Dictionary with mutation details, must contain 'code' key
+                      with the new code to replace the module's content
+        
+    Returns:
+        dict with keys:
+            - success: bool indicating if mutation was applied
+            - reason: string explanation
+            - backup_path: path to backup file if created, None otherwise
+    """
+    if not mutation_spec or "code" not in mutation_spec:
+        return {"success": False, "reason": "Invalid mutation specification", "backup_path": None}
+    
+    new_code = mutation_spec["code"]
+    
+    # Validate the new code syntax
+   

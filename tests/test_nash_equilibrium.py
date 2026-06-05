@@ -382,5 +382,123 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
         self.assertGreaterEqual(len(result['mutations']), 2, 
                                "Plan should involve at least 2 modules")
 
+    def test_integration_coordinated_mutation_triggered_after_failed_cycles(self):
+        """Integration test that: (1) sets up 3 interdependent mock modules, 
+        (2) simulates 5 cycles where single-module changes fail to improve, 
+        (3) verifies that coordinated multi-module mutation is triggered, 
+        (4) validates that the coordinated change produces a measurable system improvement."""
+        # Create 3 interdependent mock modules
+        module_a = MagicMock()
+        module_a.name = "module_a"
+        module_a.fitness = 0.80
+        module_a.mutation_options = ["mut_a1", "mut_a2", "mut_a3"]
+
+        module_b = MagicMock()
+        module_b.name = "module_b"
+        module_b.fitness = 0.75
+        module_b.mutation_options = ["mut_b1", "mut_b2", "mut_b3"]
+
+        module_c = MagicMock()
+        module_c.name = "module_c"
+        module_c.fitness = 0.70
+        module_c.mutation_options = ["mut_c1", "mut_c2", "mut_c3"]
+
+        # Create interaction matrix where single-module changes fail to improve
+        # Each module's fitness drops when any other module changes alone
+        interaction_matrix = {
+            ("module_a", "module_b"): -0.15,
+            ("module_b", "module_a"): -0.15,
+            ("module_a", "module_c"): -0.15,
+            ("module_c", "module_a"): -0.15,
+            ("module_b", "module_c"): -0.15,
+            ("module_c", "module_b"): -0.15,
+        }
+
+        modules = [module_a, module_b, module_c]
+
+        # Initialize components
+        detector = NashEquilibriumDetector(interaction_matrix=interaction_matrix)
+        planner = CoordinatedMutationPlanner()
+        mutation_engine = MutationEngine()
+        fitness_evaluator = FitnessEvaluator()
+
+        # Configure fitness evaluator to respect interaction constraints
+        def evaluate_fitness(module, context=None):
+            base_fitness = module.fitness
+            if context:
+                for other_module in context:
+                    key = (module.name, other_module.name)
+                    if key in interaction_matrix:
+                        base_fitness += interaction_matrix[key]
+            return max(0.0, min(1.0, base_fitness))
+
+        fitness_evaluator.evaluate.side_effect = evaluate_fitness
+
+        # Record initial total fitness
+        initial_total_fitness = sum(m.fitness for m in modules)
+
+        # Simulate 5 cycles where single-module changes fail to improve
+        equilibrium_detected = False
+        for cycle in range(5):
+            # Try single-module mutations
+            for module in modules:
+                best_mutation = mutation_engine.find_best_mutation(module, fitness_evaluator)
+                if best_mutation:
+                    mutation_engine.apply_mutation(module, best_mutation)
+            
+            # Check if equilibrium is detected (no single-module improvement possible)
+            if detector.check_equilibrium(modules, fitness_evaluator):
+                equilibrium_detected = True
+                break
+
+        # Verify equilibrium was detected (single-module changes failed to improve)
+        self.assertTrue(equilibrium_detected, 
+                       "Equilibrium should be detected after 5 cycles of failed single-module changes")
+
+        # Verify that coordinated multi-module mutation is triggered
+        bundle = planner.generate_bundle(modules, interaction_matrix)
+        self.assertIsNotNone(bundle, "Coordinated mutation bundle should be generated")
+        self.assertIn('mutations', bundle, "Bundle should contain mutations")
+        self.assertGreaterEqual(len(bundle['mutations']), 2, 
+                               "Coordinated mutation should involve at least 2 modules")
+
+        # Apply coordinated mutation
+        mutation_engine.apply_bundle(bundle)
+
+        # Verify coordinated mutation phase was triggered
+        self.assertTrue(planner.coordinated_phase_completed,
+                       "Coordinated mutation phase should be triggered")
+
+        # Calculate final total fitness
+        final_total_fitness = sum(m.fitness for m in modules)
+
+        # Validate that the coordinated change produces a measurable system improvement
+        self.assertGreater(final_total_fitness, initial_total_fitness,
+                          f"Coordinated mutation should improve total fitness: "
+                          f"{initial_total_fitness:.2f} -> {final_total_fitness:.2f}")
+
+        # Verify improvement is at least 5%
+        improvement_percentage = ((final_total_fitness - initial_total_fitness) / initial_total_fitness) * 100
+        self.assertGreaterEqual(
+            improvement_percentage,
+            5.0,
+            f"Coordinated mutation should improve overall system fitness by at least 5%. "
+            f"Initial: {initial_total_fitness:.2f}, Final: {final_total_fitness:.2f}, "
+            f"Improvement: {improvement_percentage:.2f}%"
+        )
+
+        # Verify equilibrium is broken after coordinated mutation
+        is_still_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
+        self.assertFalse(is_still_equilibrium,
+                        "Coordinated mutation should break the equilibrium")
+
+        # Verify each module's fitness improved
+        for module in modules:
+            self.assertGreater(
+                module.fitness,
+                0.0,
+                f"Module {module.name} should have positive fitness after coordinated mutation"
+            )
+
 if __name__ == '__main__':
     unittest.main()
