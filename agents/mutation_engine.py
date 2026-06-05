@@ -9,6 +9,33 @@ class MutationEngine:
         self.strategy_tracker = strategy_tracker or {}
         self.static_validation_failures = 0
 
+    def trigger_e2e_validation(self, mutated_module_path):
+        """
+        Trigger the end-to-end validation test suite on the mutated module.
+        
+        Args:
+            mutated_module_path: Path to the mutated module to validate
+        """
+        logger.info(f"Triggering e2e validation for mutated module: {mutated_module_path}")
+        # Invoke the test suite on the mutated module
+        import subprocess
+        import sys
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pytest", mutated_module_path, "-v"],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if result.returncode == 0:
+                logger.info(f"e2e validation passed for {mutated_module_path}")
+            else:
+                logger.error(f"e2e validation failed for {mutated_module_path}: {result.stderr}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"e2e validation timed out for {mutated_module_path}")
+        except Exception as e:
+            logger.error(f"e2e validation error for {mutated_module_path}: {str(e)}")
+
     def apply_mutation(self, module_path, mutation_function, mutation_strategy_name):
         """
         Apply a mutation using the clone-and-promote mechanism for safety.
@@ -42,6 +69,11 @@ class MutationEngine:
             mutation_function=mutation_function,
             mutation_strategy_name=mutation_strategy_name
         )
+        
+        # Post-mutation hook: trigger e2e validation if mutation was successful
+        if result is not None:
+            mutated_module_path = result.get('mutated_path', module_path) if isinstance(result, dict) else module_path
+            self.trigger_e2e_validation(mutated_module_path)
         
         logger.info(f"Mutation '{mutation_strategy_name}' completed with result: {result} (static validation: passed)")
         return result
