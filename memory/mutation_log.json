@@ -42,5 +42,49 @@
         "timestamp": 1780625069.635353
       }
     ]
+  },
+  {
+    "timestamp": 1780625232.5278718,
+    "results": [
+      {
+        "parent_a": "memoize",
+        "parent_b": "is_prime",
+        "operator": "hybrid",
+        "code": "def memoized_is_prime(n):\n    if n < 2:\n        return False\n    cache = {}\n    if n in cache:\n        return cache[n]\n    for i in range(2, int(n**0.5)+1):\n        if n % i == 0:\n            cache[n] = False\n            return False\n    cache[n] = True\n    return True",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: memoized_is_prime\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780625226.9813528
+      },
+      {
+        "parent_a": "flatten",
+        "parent_b": "quicksort",
+        "operator": "mutate",
+        "code": "def flatten_sort(lst):\n    flat = []\n    for item in lst:\n        if isinstance(item, list):\n            flat.extend(flatten_sort(item))\n        else:\n            flat.append(item)\n    if len(flat) <= 1:\n        return flat\n    pivot = flat[len(flat)//2]\n    left = [x for x in flat if x < pivot]\n    mid = [x for x in flat if x == pivot]\n    right = [x for x in flat if x > pivot]\n    return flatten_sort(left) + mid + flatten_sort(right)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.2,
+          "stdout": "FUNCTION: flatten_sort\nSCORE: 1/5\n"
+        },
+        "timestamp": 1780625228.6290047
+      },
+      {
+        "parent_a": "retry",
+        "parent_b": "retry_fibonacci",
+        "operator": "hybrid",
+        "code": "def retry_calculator(func, n, max_attempts=3, delay=1):\n    import time\n    for attempt in range(max_attempts):\n        try:\n            if n < 0:\n                raise ValueError(\"n must be non-negative\")\n            a, b = 0, 1\n            for _ in range(n):\n                a, b = b, a + b\n            result = a\n            return func(result)\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_calculator\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780625232.5276856
+      }
+    ]
   }
 ]

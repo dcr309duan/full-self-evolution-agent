@@ -6,7 +6,7 @@
       "priority": 7,
       "status": "pending",
       "created_at": 1780623346.364249,
-      "consecutive_failures": 0
+      "consecutive_failures": 1
     },
     {
       "description": "Develop multi-file code analysis and refactoring capability",
