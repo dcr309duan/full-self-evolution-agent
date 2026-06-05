@@ -162,3 +162,116 @@ class ReflectionParser:
                 for a in assessments
             },
         }
+
+
+def validate_reflection_output(output_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate the structure and types of a reflection output dictionary.
+
+    Checks:
+    (1) 'current_assessment' is a non-empty string
+    (2) 'key_gaps' is a list of strings
+    (3) 'next_priority' is a non-empty string
+    (4) 'timestamp' is a valid float
+    (5) 'cycle' is a positive integer
+
+    Args:
+        output_dict: The reflection output dictionary to validate.
+
+    Returns:
+        Dict with 'valid': bool and 'errors': list of mismatch descriptions.
+    """
+    errors = []
+
+    # Check (1): 'current_assessment' is a non-empty string
+    current_assessment = output_dict.get('current_assessment')
+    if not isinstance(current_assessment, str) or current_assessment.strip() == '':
+        errors.append("'current_assessment' must be a non-empty string")
+
+    # Check (2): 'key_gaps' is a list of strings
+    key_gaps = output_dict.get('key_gaps')
+    if not isinstance(key_gaps, list):
+        errors.append("'key_gaps' must be a list")
+    else:
+        if not all(isinstance(gap, str) for gap in key_gaps):
+            errors.append("'key_gaps' must be a list of strings")
+
+    # Check (3): 'next_priority' is a non-empty string
+    next_priority = output_dict.get('next_priority')
+    if not isinstance(next_priority, str) or next_priority.strip() == '':
+        errors.append("'next_priority' must be a non-empty string")
+
+    # Check (4): 'timestamp' is a valid float
+    timestamp = output_dict.get('timestamp')
+    if not isinstance(timestamp, (int, float)):
+        errors.append("'timestamp' must be a valid float")
+    else:
+        try:
+            float(timestamp)
+        except (ValueError, TypeError):
+            errors.append("'timestamp' must be a valid float")
+
+    # Check (5): 'cycle' is a positive integer
+    cycle = output_dict.get('cycle')
+    if not isinstance(cycle, int) or cycle <= 0:
+        errors.append("'cycle' must be a positive integer")
+
+    return {
+        'valid': len(errors) == 0,
+        'errors': errors
+    }
+
+
+def normalize_reflection_output(output_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize a reflection output dictionary by ensuring all required fields exist
+    with sensible defaults if missing, to prevent schema drift.
+
+    Default values:
+        - current_assessment: ""
+        - key_gaps: []
+        - next_priority: ""
+        - timestamp: 0.0
+        - cycle: 0
+
+    Args:
+        output_dict: The raw reflection output dictionary.
+
+    Returns:
+        A normalized dictionary with all required fields present.
+    """
+    normalized = output_dict.copy()
+
+    # Ensure 'current_assessment' is a string
+    if 'current_assessment' not in normalized or not isinstance(normalized['current_assessment'], str):
+        normalized['current_assessment'] = ""
+
+    # Ensure 'key_gaps' is a list of strings
+    if 'key_gaps' not in normalized or not isinstance(normalized['key_gaps'], list):
+        normalized['key_gaps'] = []
+    else:
+        normalized['key_gaps'] = [str(gap) for gap in normalized['key_gaps']]
+
+    # Ensure 'next_priority' is a string
+    if 'next_priority' not in normalized or not isinstance(normalized['next_priority'], str):
+        normalized['next_priority'] = ""
+
+    # Ensure 'timestamp' is a float
+    if 'timestamp' not in normalized:
+        normalized['timestamp'] = 0.0
+    else:
+        try:
+            normalized['timestamp'] = float(normalized['timestamp'])
+        except (ValueError, TypeError):
+            normalized['timestamp'] = 0.0
+
+    # Ensure 'cycle' is an integer
+    if 'cycle' not in normalized:
+        normalized['cycle'] = 0
+    else:
+        try:
+            normalized['cycle'] = int(normalized['cycle'])
+        except (ValueError, TypeError):
+            normalized['cycle'] = 0
+
+    return normalized

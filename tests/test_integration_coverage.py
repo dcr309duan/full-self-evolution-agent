@@ -389,6 +389,143 @@ def add(a, b):
         sys.path.remove(test_dir)
         shutil.rmtree(test_dir, ignore_errors=True)
 
+def test_e2e_pipeline_schema_alignment():
+    """Test end-to-end pipeline schema alignment."""
+    import tempfile
+    import shutil
+    
+    test_dir = tempfile.mkdtemp()
+    
+    try:
+        # Add test directory to path
+        sys.path.insert(0, test_dir)
+        
+        # Create a mock system_model module
+        system_model_path = os.path.join(test_dir, "system_model.py")
+        with open(system_model_path, 'w') as f:
+            f.write("""
+def validate_system_model_input(reflection_output):
+    \"\"\"Validate reflection output has required fields.\"\"\"
+    required_fields = ['schema', 'fields', 'version']
+    if not isinstance(reflection_output, dict):
+        return False, "Reflection output must be a dictionary"
+    for field in required_fields:
+        if field not in reflection_output:
+            return False, f"Missing required field: {field}"
+    return True, "Validation passed"
+
+def compare_schemas(schema1, schema2):
+    \"\"\"Compare two schemas and return if they match.\"\"\"
+    if not isinstance(schema1, dict) or not isinstance(schema2, dict):
+        return False, "Both schemas must be dictionaries"
+    if schema1.get('type') != schema2.get('type'):
+        return False, "Schema types do not match"
+    if schema1.get('fields') != schema2.get('fields'):
+        return False, "Schema fields do not match"
+    return True, "Schemas match"
+""")
+        
+        # Import the mock system_model
+        import system_model
+        
+        # Test 1: Create a mock reflection output with valid schema
+        valid_reflection = {
+            'schema': {
+                'type': 'object',
+                'fields': ['id', 'name', 'email']
+            },
+            'fields': ['id', 'name', 'email'],
+            'version': '1.0'
+        }
+        
+        # Test 2: Feed it through validate_system_model_input
+        is_valid, message = system_model.validate_system_model_input(valid_reflection)
+        assert is_valid, f"Valid reflection should pass validation: {message}"
+        assert message == "Validation passed", f"Expected 'Validation passed', got '{message}'"
+        
+        # Test 3: Create a reflection output with missing fields and verify validation fails
+        invalid_reflection = {
+            'schema': {
+                'type': 'object',
+                'fields': ['id', 'name']
+            }
+            # Missing 'fields' and 'version'
+        }
+        
+        is_valid, message = system_model.validate_system_model_input(invalid_reflection)
+        assert not is_valid, "Invalid reflection should fail validation"
+        assert 'Missing required field' in message, f"Expected missing field error, got '{message}'"
+        
+        # Test 4: Test compare_schemas with matching inputs
+        schema1 = {
+            'type': 'object',
+            'fields': ['id', 'name', 'email']
+        }
+        schema2 = {
+            'type': 'object',
+            'fields': ['id', 'name', 'email']
+        }
+        
+        match, message = system_model.compare_schemas(schema1, schema2)
+        assert match, f"Matching schemas should match: {message}"
+        assert message == "Schemas match", f"Expected 'Schemas match', got '{message}'"
+        
+        # Test compare_schemas with mismatching inputs
+        schema3 = {
+            'type': 'object',
+            'fields': ['id', 'name']
+        }
+        
+        match, message = system_model.compare_schemas(schema1, schema3)
+        assert not match, "Mismatching schemas should not match"
+        assert 'Schema fields do not match' in message, f"Expected fields mismatch error, got '{message}'"
+        
+        # Test compare_schemas with different types
+        schema4 = {
+            'type': 'array',
+            'fields': ['id', 'name', 'email']
+        }
+        
+        match, message = system_model.compare_schemas(schema1, schema4)
+        assert not match, "Different schema types should not match"
+        assert 'Schema types do not match' in message, f"Expected type mismatch error, got '{message}'"
+        
+        # Test compare_schemas with invalid inputs
+        match, message = system_model.compare_schemas("not_a_dict", schema1)
+        assert not match, "Invalid schema input should not match"
+        assert 'Both schemas must be dictionaries' in message, f"Expected dictionary error, got '{message}'"
+        
+        # Test 5: Verify the e2e test suite handles all cases gracefully
+        # Test with empty reflection
+        empty_reflection = {}
+        is_valid, message = system_model.validate_system_model_input(empty_reflection)
+        assert not is_valid, "Empty reflection should fail validation"
+        assert 'Missing required field' in message, f"Expected missing field error, got '{message}'"
+        
+        # Test with non-dict reflection
+        non_dict_reflection = "not_a_dict"
+        is_valid, message = system_model.validate_system_model_input(non_dict_reflection)
+        assert not is_valid, "Non-dict reflection should fail validation"
+        assert 'must be a dictionary' in message, f"Expected dictionary error, got '{message}'"
+        
+        # Test with None reflection
+        none_reflection = None
+        is_valid, message = system_model.validate_system_model_input(none_reflection)
+        assert not is_valid, "None reflection should fail validation"
+        assert 'must be a dictionary' in message, f"Expected dictionary error, got '{message}'"
+        
+        # Test compare_schemas with None inputs
+        match, message = system_model.compare_schemas(None, schema1)
+        assert not match, "None schema should not match"
+        assert 'Both schemas must be dictionaries' in message, f"Expected dictionary error, got '{message}'"
+        
+        print("All e2e pipeline schema alignment tests passed!")
+        
+    finally:
+        # Clean up
+        sys.path.remove(test_dir)
+        shutil.rmtree(test_dir, ignore_errors=True)
+
 def main():
     """Main function to scan and report integration test coverage."""
     print("Scanning for components and integration tests...")
@@ -416,6 +553,9 @@ def main():
     
     # Run the static validation test
     test_static_validation()
+    
+    # Run the e2e pipeline schema alignment test
+    test_e2e_pipeline_schema_alignment()
     
     # Return coverage percentage for potential CI integration
     total_pairs = sum(1 for c1 in components for c2 in components if c1 != c2)

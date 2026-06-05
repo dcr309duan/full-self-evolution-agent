@@ -8,6 +8,7 @@ from agents.goal_manager import GoalManager
 from agents.execution_logger import ExecutionLogger
 from agents.clone_and_promote import clone_and_promote_integration_test
 from agents.mutation_engine import static_validator
+from agents.e2e_pipeline_test import run_e2e_pipeline_tests
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ class Orchestrator:
         goal_manager: GoalManager,
         feasibility_estimator: FeasibilityEstimator,
         execution_logger: ExecutionLogger,
-        feasibility_threshold: float = 0.5
+        feasibility_threshold: float = 0.5,
+        e2e_test_enabled: bool = True
     ):
         self.goal_manager = goal_manager
         self.feasibility_estimator = feasibility_estimator
@@ -36,6 +38,8 @@ class Orchestrator:
         self.feasibility_threshold = feasibility_threshold
         self._mutation_operations_halted = False
         self.static_validation_failures = 0
+        self.e2e_pipeline_failures = 0
+        self.e2e_test_enabled = e2e_test_enabled
         
         # Run clone_and_promote integration test during initialization
         self._verify_clone_and_promote()
@@ -92,6 +96,38 @@ class Orchestrator:
             logger.error(
                 f"Static validation of mutation engine module raised an exception: {e}. "
                 "Incrementing static_validation_failures counter."
+            )
+
+    def _run_e2e_pipeline_test(self) -> None:
+        """
+        Run the e2e pipeline test suite after a mutation attempt.
+        If the test fails, log detailed failure info and increment the
+        e2e_pipeline_failures counter. Wrapped in try/except to avoid
+        crashing the orchestrator.
+        """
+        if not self.e2e_test_enabled:
+            return
+        
+        try:
+            test_result = run_e2e_pipeline_tests()
+            if not test_result.success:
+                self.e2e_pipeline_failures += 1
+                failure_details = test_result.failure_details
+                logger.error(
+                    f"E2E pipeline test FAILED after mutation attempt. "
+                    f"Failed step: {failure_details.get('failed_step', 'unknown')}. "
+                    f"Schema mismatches: {failure_details.get('schema_mismatches', 'N/A')}. "
+                    f"Coverage delta: {failure_details.get('coverage_delta', 'N/A')}. "
+                    f"Total e2e pipeline failures: {self.e2e_pipeline_failures}"
+                )
+            else:
+                logger.info("E2E pipeline test PASSED after mutation attempt.")
+        except Exception as e:
+            self.e2e_pipeline_failures += 1
+            logger.error(
+                f"E2E pipeline test raised an exception: {e}. "
+                f"Incrementing e2e_pipeline_failures counter. "
+                f"Total e2e pipeline failures: {self.e2e_pipeline_failures}"
             )
 
     def execute_goal(self, goal_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -154,6 +190,10 @@ class Orchestrator:
             execution_log["status"] = ExecutionStatus.EXECUTED.value
             execution_log["result"] = execution_result
             execution_log["message"] = "Goal executed successfully"
+            
+            # Run e2e pipeline test after successful mutation
+            self._run_e2e_pipeline_test()
+            
         except Exception as e:
             execution_log["status"] = ExecutionStatus.BLOCKED.value
             execution_log["message"] = f"Execution failed: {str(e)}"
@@ -197,9 +237,12 @@ class Orchestrator:
 
     def get_monitoring_dashboard(self) -> Dict[str, Any]:
         """
-        Returns monitoring dashboard data including static_validation_failures counter.
+        Returns monitoring dashboard data including static_validation_failures and
+        e2e_pipeline_failures counters.
         """
         return {
             "static_validation_failures": self.static_validation_failures,
-            "mutation_operations_halted": self._mutation_operations_halted
+            "e2e_pipeline_failures": self.e2e_pipeline_failures,
+            "mutation_operations_halted": self._mutation_operations_halted,
+            "e2e_test_enabled": self.e2e_test_enabled
         }

@@ -338,3 +338,91 @@ class SystemModel:
                 for fid, align in self.schema_alignments.items()
             }
         }
+
+
+def validate_system_model_input(input_dict: dict) -> None:
+    """Validate the system model input dictionary.
+    
+    Args:
+        input_dict: Dictionary to validate.
+        
+    Raises:
+        ValueError: If validation fails with a description of the issue.
+    """
+    if not isinstance(input_dict, dict):
+        raise ValueError("Input must be a dictionary")
+    
+    # Check 'current_assessment' field
+    if 'current_assessment' not in input_dict:
+        raise ValueError("Missing required field: 'current_assessment'")
+    if not isinstance(input_dict['current_assessment'], str):
+        raise ValueError("'current_assessment' must be a string")
+    
+    # Check 'key_gaps' field
+    if 'key_gaps' not in input_dict:
+        raise ValueError("Missing required field: 'key_gaps'")
+    if not isinstance(input_dict['key_gaps'], list):
+        raise ValueError("'key_gaps' must be a list")
+    
+    # Check 'next_priority' field
+    if 'next_priority' not in input_dict:
+        raise ValueError("Missing required field: 'next_priority'")
+    if not isinstance(input_dict['next_priority'], str):
+        raise ValueError("'next_priority' must be a string")
+
+
+def compare_schemas(reflection_output: dict, system_model_input: dict) -> dict:
+    """Compare reflection output schema with system model input schema.
+    
+    Args:
+        reflection_output: Dictionary representing the reflection output schema.
+        system_model_input: Dictionary representing the system model input schema.
+        
+    Returns:
+        Dictionary with:
+            - 'match': bool indicating if schemas match exactly
+            - 'reflection_only_fields': list of fields only in reflection_output
+            - 'system_model_only_fields': list of fields only in system_model_input
+            - 'type_mismatches': list of dicts with 'field', 'reflection_type', 'system_model_type'
+    """
+    reflection_only_fields = []
+    system_model_only_fields = []
+    type_mismatches = []
+    
+    # Get all field names from both schemas
+    reflection_fields = set(reflection_output.keys()) if isinstance(reflection_output, dict) else set()
+    system_model_fields = set(system_model_input.keys()) if isinstance(system_model_input, dict) else set()
+    
+    # Find fields only in reflection
+    for field in reflection_fields:
+        if field not in system_model_fields:
+            reflection_only_fields.append(field)
+    
+    # Find fields only in system model
+    for field in system_model_fields:
+        if field not in reflection_fields:
+            system_model_only_fields.append(field)
+    
+    # Find type mismatches for common fields
+    common_fields = reflection_fields & system_model_fields
+    for field in common_fields:
+        reflection_type = type(reflection_output[field]).__name__
+        system_model_type = type(system_model_input[field]).__name__
+        if reflection_type != system_model_type:
+            type_mismatches.append({
+                'field': field,
+                'reflection_type': reflection_type,
+                'system_model_type': system_model_type
+            })
+    
+    # Determine if schemas match
+    match = (len(reflection_only_fields) == 0 and 
+             len(system_model_only_fields) == 0 and 
+             len(type_mismatches) == 0)
+    
+    return {
+        'match': match,
+        'reflection_only_fields': reflection_only_fields,
+        'system_model_only_fields': system_model_only_fields,
+        'type_mismatches': type_mismatches
+    }
