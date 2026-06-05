@@ -225,6 +225,87 @@ class TestNashIntegration(unittest.TestCase):
         self.assertGreater(final_fitness, initial_fitness,
                          "System fitness should be greater after the evolution loop")
 
+    def test_mini_evolution_loop_with_mock_modules(self):
+        """Integration test that runs a mini evolution loop with 3 mock modules,
+        simulates stable success rates, triggers equilibrium detection, and verifies
+        that a coordinated change is applied (check that at least 2 modules are modified).
+        Uses unittest.mock to patch module interactions."""
+        # Create mock modules with stable success rates
+        self.module_a.success_rate = 0.5
+        self.module_b.success_rate = 0.5
+        self.module_c.success_rate = 0.5
+        
+        # Configure modules to return stable success rates
+        self.module_a.get_success_rate.return_value = 0.5
+        self.module_b.get_success_rate.return_value = 0.5
+        self.module_c.get_success_rate.return_value = 0.5
+        
+        # Create a mock orchestrator with Nash detection enabled
+        orchestrator = EvolutionOrchestrator(
+            modules=self.modules,
+            nash_detector=self.nash_detector,
+            coordinated_planner=self.planner,
+            dependency_graph=self.dependency_graph,
+            enable_nash_detection=True,
+            enable_coordinated_mutation=True
+        )
+
+        # Run a mini evolution loop (10 cycles)
+        equilibrium_reached = False
+        coordinated_change_executed = False
+        modules_modified = set()
+        
+        for cycle in range(10):
+            # Simulate mutation cycle with stable success rates
+            for mod in self.modules:
+                mod.mutate()
+                # Simulate stable success rate (no improvement)
+                mod.get_success_rate.return_value = 0.5
+            
+            # Check for equilibrium
+            if self.nash_detector.detect_equilibrium(self.modules):
+                equilibrium_reached = True
+                
+                # Generate and execute coordinated change
+                plan = self.planner.generate_plan(self.dependency_graph, {"is_equilibrium": True})
+                if plan and len(plan) >= 2:
+                    coordinated_change_executed = True
+                    
+                    # Execute the coordinated mutation and track modified modules
+                    for mutation in plan:
+                        module_name = mutation.get("module")
+                        for mod in self.modules:
+                            if mod.name == module_name:
+                                mod.mutate()
+                                # Simulate improvement by increasing success rate
+                                mod.success_rate += 0.1
+                                mod.get_success_rate.return_value = mod.success_rate
+                                modules_modified.add(mod.name)
+                                break
+                    
+                    # Verify that at least 2 modules were modified
+                    self.assertGreaterEqual(len(modules_modified), 2,
+                                           "At least 2 modules should be modified in coordinated change")
+                    break
+        
+        # Verify equilibrium was reached
+        self.assertTrue(equilibrium_reached,
+                       "Nash equilibrium should be reached within 10 cycles")
+        
+        # Verify coordinated change was executed
+        self.assertTrue(coordinated_change_executed,
+                       "Coordinated change should be executed when equilibrium is reached")
+        
+        # Verify that at least 2 modules were modified
+        self.assertGreaterEqual(len(modules_modified), 2,
+                               "At least 2 modules should be modified in coordinated change")
+        
+        # Verify that the modified modules have improved success rates
+        for mod in self.modules:
+            if mod.name in modules_modified:
+                self.assertGreater(mod.success_rate, 0.5,
+                                 f"Module {mod.name} should have improved success rate after coordinated change")
+
 
 if __name__ == '__main__':
     unittest.main()

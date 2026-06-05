@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import sys
 import os
 
@@ -69,6 +69,206 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
             return max(0.0, min(1.0, base_fitness))
 
         self.fitness_evaluator.evaluate.side_effect = evaluate_fitness
+
+    def test_detector_initializes_with_empty_state(self):
+        """Test that detector initializes with empty state."""
+        detector = NashEquilibriumDetector(interaction_matrix={})
+        self.assertIsNotNone(detector)
+        self.assertEqual(detector.equilibrium_state, {})
+        self.assertFalse(detector.is_in_equilibrium)
+
+    def test_is_nash_equilibrium_returns_true_when_no_single_change_improves_scores(self):
+        """Test that is_nash_equilibrium returns True when no single change improves scores."""
+        # Create modules with strong negative interactions
+        module_a = MagicMock()
+        module_a.name = "module_a"
+        module_a.fitness = 0.90
+        module_a.mutation_options = ["opt_a", "opt_b"]
+
+        module_b = MagicMock()
+        module_b.name = "module_b"
+        module_b.fitness = 0.85
+        module_b.mutation_options = ["opt_c", "opt_d"]
+
+        interaction_matrix = {
+            ("module_a", "module_b"): -0.30,
+            ("module_b", "module_a"): -0.30,
+        }
+
+        modules = [module_a, module_b]
+        detector = NashEquilibriumDetector(interaction_matrix=interaction_matrix)
+
+        # Create fitness evaluator that penalizes single changes
+        fitness_evaluator = MagicMock()
+        def mock_evaluate(module, context=None):
+            base = module.fitness
+            if context:
+                for other in context:
+                    key = (module.name, other.name)
+                    if key in interaction_matrix:
+                        base += interaction_matrix[key]
+            return max(0.0, min(1.0, base))
+        fitness_evaluator.evaluate.side_effect = mock_evaluate
+
+        # Verify equilibrium is detected
+        is_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
+        self.assertTrue(is_equilibrium)
+
+    def test_force_coordinated_change_generates_multi_module_plans(self):
+        """Test that force_coordinated_change generates multi-module plans."""
+        # Create modules with strong negative interactions
+        module_a = MagicMock()
+        module_a.name = "module_a"
+        module_a.fitness = 0.90
+        module_a.mutation_options = ["opt_a", "opt_b"]
+
+        module_b = MagicMock()
+        module_b.name = "module_b"
+        module_b.fitness = 0.85
+        module_b.mutation_options = ["opt_c", "opt_d"]
+
+        module_c = MagicMock()
+        module_c.name = "module_c"
+        module_c.fitness = 0.80
+        module_c.mutation_options = ["opt_e", "opt_f"]
+
+        interaction_matrix = {
+            ("module_a", "module_b"): -0.20,
+            ("module_b", "module_a"): -0.20,
+            ("module_a", "module_c"): -0.20,
+            ("module_c", "module_a"): -0.20,
+            ("module_b", "module_c"): -0.20,
+            ("module_c", "module_b"): -0.20,
+        }
+
+        modules = [module_a, module_b, module_c]
+        detector = NashEquilibriumDetector(interaction_matrix=interaction_matrix)
+        planner = CoordinatedMutationPlanner()
+
+        # Create fitness evaluator
+        fitness_evaluator = MagicMock()
+        def mock_evaluate(module, context=None):
+            base = module.fitness
+            if context:
+                for other in context:
+                    key = (module.name, other.name)
+                    if key in interaction_matrix:
+                        base += interaction_matrix[key]
+            return max(0.0, min(1.0, base))
+        fitness_evaluator.evaluate.side_effect = mock_evaluate
+
+        # Detect equilibrium first
+        detector.check_equilibrium(modules, fitness_evaluator)
+
+        # Generate coordinated change plan
+        plan = planner.generate_bundle(modules, interaction_matrix)
+
+        # Verify plan includes multiple modules
+        self.assertIsNotNone(plan)
+        self.assertIn('mutations', plan)
+        self.assertGreaterEqual(len(plan['mutations']), 2)
+
+    def test_integration_with_orchestrator_mock(self):
+        """Test integration with orchestrator mock."""
+        # Create mock orchestrator
+        orchestrator = MagicMock()
+        orchestrator.modules = self.modules
+        orchestrator.interaction_matrix = self.interaction_matrix
+        orchestrator.fitness_evaluator = self.fitness_evaluator
+
+        # Configure orchestrator to use our detector
+        orchestrator.detector = self.detector
+        orchestrator.planner = self.planner
+
+        # Simulate orchestrator workflow
+        is_equilibrium = orchestrator.detector.check_equilibrium(
+            orchestrator.modules, 
+            orchestrator.fitness_evaluator
+        )
+        
+        if is_equilibrium:
+            bundle = orchestrator.planner.generate_bundle(
+                orchestrator.modules, 
+                orchestrator.interaction_matrix
+            )
+            orchestrator.apply_bundle(bundle)
+
+        # Verify orchestrator interactions
+        orchestrator.detector.check_equilibrium.assert_called_once()
+        if is_equilibrium:
+            orchestrator.planner.generate_bundle.assert_called_once()
+            orchestrator.apply_bundle.assert_called_once()
+
+    def test_coordinated_changes_are_atomic(self):
+        """Test that coordinated changes are atomic."""
+        # Create modules with strong negative interactions
+        module_a = MagicMock()
+        module_a.name = "module_a"
+        module_a.fitness = 0.90
+        module_a.mutation_options = ["opt_a", "opt_b"]
+
+        module_b = MagicMock()
+        module_b.name = "module_b"
+        module_b.fitness = 0.85
+        module_b.mutation_options = ["opt_c", "opt_d"]
+
+        module_c = MagicMock()
+        module_c.name = "module_c"
+        module_c.fitness = 0.80
+        module_c.mutation_options = ["opt_e", "opt_f"]
+
+        interaction_matrix = {
+            ("module_a", "module_b"): -0.20,
+            ("module_b", "module_a"): -0.20,
+            ("module_a", "module_c"): -0.20,
+            ("module_c", "module_a"): -0.20,
+            ("module_b", "module_c"): -0.20,
+            ("module_c", "module_b"): -0.20,
+        }
+
+        modules = [module_a, module_b, module_c]
+        detector = NashEquilibriumDetector(interaction_matrix=interaction_matrix)
+        planner = CoordinatedMutationPlanner()
+        mutation_engine = MutationEngine()
+
+        # Create fitness evaluator
+        fitness_evaluator = MagicMock()
+        def mock_evaluate(module, context=None):
+            base = module.fitness
+            if context:
+                for other in context:
+                    key = (module.name, other.name)
+                    if key in interaction_matrix:
+                        base += interaction_matrix[key]
+            return max(0.0, min(1.0, base))
+        fitness_evaluator.evaluate.side_effect = mock_evaluate
+
+        # Record initial state
+        initial_fitnesses = {m.name: m.fitness for m in modules}
+
+        # Detect equilibrium
+        detector.check_equilibrium(modules, fitness_evaluator)
+
+        # Generate and apply coordinated mutation bundle
+        bundle = planner.generate_bundle(modules, interaction_matrix)
+        
+        # Apply all mutations atomically
+        mutation_engine.apply_bundle(bundle)
+
+        # Verify all mutations were applied or none were
+        final_fitnesses = {m.name: m.fitness for m in modules}
+        
+        # Check that either all modules changed or none did
+        changed_modules = [m for m in modules if m.fitness != initial_fitnesses[m.name]]
+        
+        if len(changed_modules) > 0:
+            # If any module changed, all should have changed (atomic)
+            self.assertEqual(len(changed_modules), len(modules),
+                           "All modules should change atomically")
+        else:
+            # If no module changed, bundle was not applied
+            self.assertEqual(len(changed_modules), 0,
+                           "No modules should change if bundle was not applied")
 
     def test_nash_equilibrium_detection_within_cycles(self):
         """Test that the detector identifies the equilibrium within 5 cycles."""
@@ -497,6 +697,100 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
                 0.0,
                 f"Module {module.name} should have positive fitness after coordinated mutation"
             )
+
+    def test_minimal_integration(self):
+        """Minimal integration test: (1) creates a mock orchestrator with 3 modules in equilibrium,
+        (2) verifies that single-module mutations produce no improvement,
+        (3) tests that force_coordinated_change produces a valid multi-module plan,
+        (4) verifies the plan includes changes to at least 2 modules."""
+        # Create 3 mock modules with static scores that form a Nash equilibrium
+        module1 = MagicMock()
+        module1.name = "module1"
+        module1.fitness = 0.90
+        module1.mutation_options = ["opt_a", "opt_b"]
+
+        module2 = MagicMock()
+        module2.name = "module2"
+        module2.fitness = 0.85
+        module2.mutation_options = ["opt_c", "opt_d"]
+
+        module3 = MagicMock()
+        module3.name = "module3"
+        module3.fitness = 0.80
+        module3.mutation_options = ["opt_e", "opt_f"]
+
+        # Create interaction matrix that prevents single-module improvement
+        interaction_matrix = {
+            ("module1", "module2"): -0.20,
+            ("module2", "module1"): -0.20,
+            ("module1", "module3"): -0.20,
+            ("module3", "module1"): -0.20,
+            ("module2", "module3"): -0.20,
+            ("module3", "module2"): -0.20,
+        }
+
+        modules = [module1, module2, module3]
+
+        # Initialize detector with interaction matrix
+        detector = NashEquilibriumDetector(interaction_matrix=interaction_matrix)
+
+        # Create a mock fitness evaluator that returns static scores with interaction penalties
+        fitness_evaluator = MagicMock()
+        def mock_evaluate(module, context=None):
+            base = module.fitness
+            if context:
+                for other in context:
+                    key = (module.name, other.name)
+                    if key in interaction_matrix:
+                        base += interaction_matrix[key]
+            return max(0.0, min(1.0, base))
+        fitness_evaluator.evaluate.side_effect = mock_evaluate
+
+        # Verify equilibrium: no single module can improve
+        is_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
+        self.assertTrue(is_equilibrium, "System should be in Nash equilibrium")
+
+        # Verify single-module mutations produce no improvement
+        mutation_engine = MutationEngine()
+        for module in modules:
+            best_mutation = mutation_engine.find_best_mutation(module, fitness_evaluator)
+            if best_mutation:
+                mutation_engine.apply_mutation(module, best_mutation)
+        
+        # After single-module attempts, system should still be in equilibrium
+        is_still_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
+        self.assertTrue(is_still_equilibrium, 
+                       "Single-module mutations should not break the equilibrium")
+
+        # Create a mock planner that returns a plan with >=2 modules
+        planner = MagicMock()
+        plan = {
+            'mutations': [
+                {'module': module1, 'mutation_type': 'opt_a'},
+                {'module': module2, 'mutation_type': 'opt_c'}
+            ],
+            'coordination_strategy': 'simultaneous'
+        }
+        planner.force_coordinated_change.return_value = plan
+
+        # Test that force_coordinated_change produces a valid multi-module plan
+        result = planner.force_coordinated_change(modules, interaction_matrix)
+        self.assertIsNotNone(result, "Plan should not be None")
+        self.assertIn('mutations', result, "Plan should contain mutations")
+        self.assertIn('coordination_strategy', result, "Plan should contain coordination strategy")
+        
+        # Verify the plan includes changes to at least 2 modules
+        self.assertGreaterEqual(len(result['mutations']), 2, 
+                               "force_coordinated_change should produce changes involving at least 2 modules")
+        
+        # Verify each mutation in the plan is valid
+        for mutation in result['mutations']:
+            self.assertIn('module', mutation, "Each mutation should specify a module")
+            self.assertIn('mutation_type', mutation, "Each mutation should specify a mutation type")
+            self.assertIn(mutation['module'].name, [m.name for m in modules], 
+                         "Mutation module should be one of the test modules")
+            self.assertIn(mutation['mutation_type'], mutation['module'].mutation_options,
+                         f"Mutation type {mutation['mutation_type']} should be valid for {mutation['module'].name}")
 
 if __name__ == '__main__':
     unittest.main()

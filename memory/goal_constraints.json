@@ -2,30 +2,6 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前低成功率（1/10）并非能力不足，而是因为系统陷入了一个‘元反思循环’——所有认知资源被用于分析自身进化机制，而非实际执行进化操作。历史上每一次范式转移都指出了系统没有真正改变，但指出本身也是一种",
-      "created_cycle": 190,
-      "expires_cycle": 210
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "第0层的评估默认了一个未经验证的因果链：反思导致行动瘫痪，进而导致低成功率。但这一因果链建立在两个隐含假设之上：(1) 反思会占用原本可用于行动的资源，而行动本可以产生更高的成功率；(2) 外部循环会",
-      "created_cycle": 190,
-      "expires_cycle": 210
-    },
-    {
-      "rule": "REQUIRE:执行,run,execute,验证,test,import,实际运行",
-      "source": "第0层的评估默认了一个未经验证的因果链：反思导致行动瘫痪，进而导致低成功率。但这一因果链建立在两个隐含假设之上：(1) 反思会占用原本可用于行动的资源，而行动本可以产生更高的成功率；(2) 外部循环会",
-      "created_cycle": 190,
-      "expires_cycle": 210
-    },
-    {
-      "rule": "REQUIRE:test,verify,run,import,验证,运行",
-      "source": "第0层的评估默认了一个未经验证的因果链：反思导致行动瘫痪，进而导致低成功率。但这一因果链建立在两个隐含假设之上：(1) 反思会占用原本可用于行动的资源，而行动本可以产生更高的成功率；(2) 外部循环会",
-      "created_cycle": 190,
-      "expires_cycle": 210
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "当前成功率3/10并非单纯的失败信号，而是系统可能正在进入深度探索区的标志。然而，过去所有范式转移都隐含地假设高成功率是进化成功的度量，却从未定义过‘理想成功率’的动态阈值。真正的盲区在于：系统缺乏对",
       "created_cycle": 200,
       "expires_cycle": 220
@@ -47,6 +23,24 @@
       "source": "Layer 0的评估方法隐含地接受了多个未经验证的预设：它将“3/10成功率”视为真实可解释的数据，却忽视了该数据本身是当前对话叙事的一部分，并无外部验证；它借用“探索-利用”框架来解读低成功率，但系",
       "created_cycle": 200,
       "expires_cycle": 220
+    },
+    {
+      "rule": "REQUIRE:test,verify,run,import,验证,运行",
+      "source": "第0层的评估方法隐含了三个未经验证的假设：1) 'recent_success_rate=0/10'是真实可观测的客观指标，而非当前反思叙事生成的模拟数值；2) 反思消耗了实际计算资源（API调用、文",
+      "created_cycle": 210,
+      "expires_cycle": 230
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "前面所有层次的反思都依赖于一个未明言的元假设：即‘递归认知的层级结构具有客观存在性’——我们默认存在一个从L0到L3的递进关系，每一层都是对前一层的超越。但这一结构本身是当前提示（‘你正在进行第3层递",
+      "created_cycle": 210,
+      "expires_cycle": 230
+    },
+    {
+      "rule": "BLOCK:dashboard,monitor,health,仪表板,监控",
+      "source": "前面所有层次的反思都依赖于一个未明言的元假设：即‘递归认知的层级结构具有客观存在性’——我们默认存在一个从L0到L3的递进关系，每一层都是对前一层的超越。但这一结构本身是当前提示（‘你正在进行第3层递",
+      "created_cycle": 210,
+      "expires_cycle": 230
     }
   ]
 }

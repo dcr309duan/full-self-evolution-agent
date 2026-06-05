@@ -24,4 +24,6 @@ __all__ = [
     'CoordinatedMutationEngine',
     'MutationConfig',
     'MutationResult',
+    'nash_detector',
+    'nash_config',
 ]

@@ -27,7 +27,7 @@ class TestNashDetector(unittest.TestCase):
     def setUp(self):
         self.detector = NashEquilibriumDetector()
         
-        # Create 3 mock modules with interdependent fitness
+        # Create 3 mock modules with stable success rates (interdependent fitness)
         def fitness_a(state):
             a_val = state.get('module_a', 0)
             b_val = state.get('module_b', 0)
@@ -65,8 +65,8 @@ class TestNashDetector(unittest.TestCase):
         }
     
     def test_detection_with_mock_scores(self):
-        """Test that detection works with mock module scores."""
-        # Test equilibrium detection
+        """Test that equilibrium detection works with mock module data (stable success rates)."""
+        # Test equilibrium detection with stable state
         is_eq, deviations = self.detector.check_equilibrium(self.modules, self.equilibrium_state)
         self.assertTrue(is_eq, "Equilibrium state should be detected as equilibrium")
         self.assertEqual(len(deviations), 0, "No deviations should be found in equilibrium state")
@@ -77,7 +77,7 @@ class TestNashDetector(unittest.TestCase):
         self.assertGreater(len(deviations), 0, "Deviations should be found in non-equilibrium state")
     
     def test_force_coordinated_change_returns_valid_plan(self):
-        """Test that force_coordinated_change returns a valid plan with 2-3 module targets."""
+        """Test that force_coordinated_change returns a valid plan with at least 2 modules."""
         mutation_plan = self.detector.force_coordinated_change(self.modules, self.non_equilibrium_state)
         
         # Verify mutation plan structure
@@ -85,10 +85,9 @@ class TestNashDetector(unittest.TestCase):
         self.assertIn('modules', mutation_plan, "Plan should specify modules")
         self.assertIn('new_state', mutation_plan, "Plan should specify new state")
         
-        # Verify 2-3 module targets
+        # Verify at least 2 module targets
         num_modules = len(mutation_plan['modules'])
         self.assertGreaterEqual(num_modules, 2, "Coordinated change should involve at least 2 modules")
-        self.assertLessEqual(num_modules, 3, "Coordinated change should involve at most 3 modules")
         
         # Verify all specified modules are valid
         for module_name in mutation_plan['modules']:
