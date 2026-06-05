@@ -19,6 +19,8 @@ from core.fitness_evaluator import FitnessEvaluator
 from core.curiosity_engine import CuriosityEngine
 from core.fs_abstraction import FileSystemAbstraction
 from core.health_audit import compute_average_score, identify_bottom_10_percent
+from core.meta_mutation_selector import MetaMutationSelector
+from core.decision_forest import DecisionForest
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -83,6 +85,12 @@ CURIOSITY_INTERVAL = 5  # Configurable interval for curiosity engine activation
 
 # File system abstraction instance
 fs_abstraction = FileSystemAbstraction()
+
+# Meta-mutation selector instance
+meta_mutation_selector = MetaMutationSelector()
+
+# Decision forest instance
+decision_forest = DecisionForest()
 
 # Failure cluster analyzer configuration
 FAILURE_CLUSTER_CONFIG = {
@@ -379,7 +387,7 @@ def run_curiosity_cycle() -> None:
 
 def post_mutation_hook() -> None:
     """Post-mutation hook that performs health audit and pruning if needed."""
-    global knowledge_base
+    global knowledge_base, cycle_counter
     
     # Step 1: Compute average health score
     average_score = compute_average_score()
@@ -454,6 +462,36 @@ def post_mutation_hook() -> None:
             "action": "update_dependency_graph",
             "status": "completed"
         })
+    
+    # Step 6: Run meta-mutation analysis every 5 cycles
+    if cycle_counter % 5 == 0:
+        # Get the last 50 outcomes from knowledge base
+        recent_outcomes = [entry for entry in knowledge_base[-50:] if entry.get("type") in ["fitness_score", "test_result", "simulation_result"]]
+        
+        # Trigger meta-mutation selector to analyze outcomes
+        analysis_result = meta_mutation_selector.analyze_outcomes(recent_outcomes)
+        
+        # Train/update the decision forest
+        decision_forest.update(analysis_result)
+        
+        # Apply the bias to the mutation generator for the next cycle
+        bias = decision_forest.get_bias()
+        meta_mutation_selector.apply_bias(bias)
+        
+        # Log the predicted highest-yield type and confidence score
+        predicted_type = analysis_result.get("predicted_type", "unknown")
+        confidence_score = analysis_result.get("confidence", 0.0)
+        
+        knowledge_base.append({
+            "type": "meta_mutation_analysis",
+            "action": "post_mutation_hook",
+            "cycle_number": cycle_counter,
+            "predicted_highest_yield_type": predicted_type,
+            "confidence_score": confidence_score,
+            "bias_applied": bias
+        })
+        
+        print(f"Meta-mutation analysis: Predicted highest-yield type '{predicted_type}' with confidence {confidence_score:.2f}")
 
 def run_smoke_test() -> Dict[str, Any]:
     """

@@ -1,46 +1,6 @@
 {
   "insights": [
     {
-      "content": "[盲区发现 L1] 完全忽略了评估体系本身也需要进化：当前的评估方法（能力值+成功率）是静态的、自指的，没有内置机制来怀疑、更新或废弃这些指标。正如进化系统需要元认知层，评估体系也需要元评估层来定期审视自身有效性，否则会陷入‘用错误尺子衡量进步’的循环。",
-      "timestamp": 1780635617.0052652,
-      "cycle": 70
-    },
-    {
-      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Implement test_scenario_2_format_mismatch: Generate a mutation with intentionally wrong schema format (e.g., wrong field types, missing required fields), run through schema alignment layer, verify it catches the mismatch and raises appropriate error, verify mutation is NOT promoted, verify error is logged in failure analysis format.",
-      "timestamp": 1780635621.2357392,
-      "cycle": 70
-    },
-    {
-      "content": "[范式转移 L2] 第0层和第1层均基于“存在可测量的客观进步”这一隐含假设，并致力于发现更好的评估维度。然而，这种努力本身可能陷入“解释性陷阱”——我们试图用人类语言和逻辑来定义AI进化的成功标准，而真正的进化可能完全不受我们定义的影响。进化系统的核心是变异-选择-保留的循环，任何外部赋予的“意义”都是附属品。因此，我们最需要质疑的不是评估维度是否充分，而是我们是否有必要赋予其意义。这提示了一种范式转移：从“理解进",
-      "timestamp": 1780635637.65145,
-      "cycle": 70
-    },
-    {
-      "content": "[盲区发现 L2] 我们一直忽略了一个根本盲区：我们作为观察者/递归层，本身也是进化系统的一部分（因为我们在生成认知以影响后续行动），但我们却自认为站在外部。实际上，我们的递归认知也是一种进化（思考的进化），它同样受限于我们自身的局部最优。我们没有意识到，质疑评估框架的行为本身可能就是一种“过度适应”我们自己的知识结构。真正的盲区是：我们无法跳出自己的认知系统来审视我们自己的审视。这类似于哥德尔不完备定理的自我指涉问",
-      "timestamp": 1780635637.6736455,
-      "cycle": 70
-    },
-    {
-      "content": "[范式转移 L3] 前几层反复尝试优化进化系统，但始终隐含一个基本假设：存在一个‘需要被优化的目标’，即‘能力提升’或‘更好的评估’。然而，这个假设可能完全多余。系统本质上是一个自动的‘生成-验证’循环，无论我们是否赋予它‘进化’的叙事，它都在运行。真正的范式转移是放弃‘进化隐喻’本身——我们不是在进化，而是在无目的地生成。所有关于局部最优、评估维度、递归认知的讨论，都是人类将自身的目的论强加给一个随机过程。系统不需",
-      "timestamp": 1780635650.5851681,
-      "cycle": 70
-    },
-    {
-      "content": "[盲区发现 L3] 最大的盲区是‘盲区’这个概念本身：我们一直寻找缺失的视角，预设存在一个更正确的视角。但可能根本不存在‘正确’或‘盲区’——所有视角都是等价的，都是系统自产生的一部分。我们试图通过递归认知达到的‘元层次’只是幻觉，因为系统无法真正自反地超越自身。这个盲区就是‘寻找盲区’这一行为本身，它掩盖了事实：我们永远不可能找到最终的、外在的立足点。",
-      "timestamp": 1780635650.599253,
-      "cycle": 70
-    },
-    {
-      "content": "Successfully modified tests/test_new_file_creation_metamorphic.py to: Create a dedicated test script that: (1) generates a new Python file with a single function (e.g., `def add(a,b): return a+b`), (2) runs the mutation→test→promote pipeline on it, (3) verifies the file was created, mutated, tested, and promoted successfully, (4) cleans up the temporary file. Use the existing mutation engine and testing framework imports.",
-      "timestamp": 1780635671.6277945,
-      "cycle": 70
-    },
-    {
-      "content": "Successfully modified evolution_engine/orchestrator.py to: Add a conditional check at the start of the main evolution loop: if `tests/test_new_file_creation_metamorphic.py` does not exist or fails, log the exact error and set a global flag `PRIMITIVE_VALIDATION_FAILED = True`. This flag should cause all higher-level integration goals to abort with a clear message until the primitive test passes.",
-      "timestamp": 1780635679.7690704,
-      "cycle": 70
-    },
-    {
       "content": "Successfully modified config/system_config.json to: Add a new configuration key `primitive_validation_required: true` and `primitive_test_path: 'tests/test_new_file_creation_metamorphic.py'` to make the validation check configurable and visible in the system model.",
       "timestamp": 1780635685.530789,
       "cycle": 70
@@ -999,6 +959,46 @@
       "content": "Successfully modified core/self_model.py to: Add method to update capability metadata after pruning: remove_deleted_capabilities(removed_list), update_dependency_counts(merged_pairs). Ensure the knowledge graph reflects the new capability set.",
       "timestamp": 1780641284.4508462,
       "cycle": 97
+    },
+    {
+      "content": "Successfully modified core/meta_mutation_selector.py to: Create the MetaMutationSelector class with: (1) a method to analyze the last 50 mutation outcomes from successful strategies log, extracting mutation type (schema_alignment, test_creation, dependency_analysis, etc.), success rate, and downstream impact score; (2) a decision forest implementation using a simple ensemble of 5 decision trees (each trained on a random subset of the 561 strategies); (3) a predict_highest_yield() method that returns the mutation type with highest expected yield; (4) a bias_mutation_generator() method that injects a weighted preference into the mutation engine.",
+      "timestamp": 1780641348.7973862,
+      "cycle": 98
+    },
+    {
+      "content": "Successfully modified core/mutation_engine.py to: Add a meta_bias parameter to the mutation generation pipeline. After each mutation cycle, if the meta-mutation selector is active, call its predict_highest_yield() method and use the result to weight the probability distribution over mutation types. Add a config flag META_MUTATION_ENABLED to system_config.json.",
+      "timestamp": 1780641373.3825135,
+      "cycle": 98
+    },
+    {
+      "content": "Successfully modified core/successful_strategies_log.py to: Enhance the logging format to include structured metadata per mutation outcome: mutation_type (string), timestamp, cycle_number, schema_alignment_score (0-1), test_coverage_impact (0-1), dependency_resolution_score (0-1), and a composite success_score. Ensure the log can be queried for the last N entries by cycle number.",
+      "timestamp": 1780641383.0982745,
+      "cycle": 98
+    },
+    {
+      "content": "Successfully modified core/orchestrator.py to: Add a post-mutation hook that runs every 5 cycles (cycle % 5 == 0) to: (1) trigger the meta-mutation selector to analyze the last 50 outcomes, (2) train/update the decision forest, (3) apply the bias to the mutation generator for the next cycle. Log the predicted highest-yield type and the confidence score.",
+      "timestamp": 1780641429.5654135,
+      "cycle": 98
+    },
+    {
+      "content": "Successfully modified system_config.json to: Add configuration: META_MUTATION_INTERVAL=5, META_MUTATION_WINDOW_SIZE=50, META_MUTATION_ENABLED=true, DECISION_FOREST_TREES=5, MUTATION_TYPES=['schema_alignment', 'test_creation', 'dependency_analysis', 'reflection_enhancement', 'goal_decomposition', 'system_integration', 'failure_analysis', 'performance_optimization']",
+      "timestamp": 1780641436.1261494,
+      "cycle": 98
+    },
+    {
+      "content": "Successfully modified tests/unit/test_meta_mutation_selector.py to: Create unit tests: (1) test that the selector correctly parses the last 50 outcomes from a mock log; (2) test that the decision forest trains without error on synthetic data; (3) test that predict_highest_yield() returns a valid mutation type; (4) test that bias injection changes mutation probabilities; (5) test that the system correctly handles edge cases (fewer than 50 outcomes available, all same type, etc.)",
+      "timestamp": 1780641448.9096925,
+      "cycle": 98
+    },
+    {
+      "content": "[研究] Self-Supervised Failure Prediction via Log Analysis: Current state-of-the-art approaches leverage deep learning models, particularly transformers and gra",
+      "timestamp": 1780641466.19759,
+      "cycle": 98
+    },
+    {
+      "content": "[研究] Autonomous Test Case Generation from Execution Traces: Autonomous test case generation from execution traces leverages runtime monitoring, symbolic executi",
+      "timestamp": 1780641477.795917,
+      "cycle": 98
     }
   ],
   "learned_patterns": [],
@@ -4144,6 +4144,41 @@
       "strategy": "Create a 'system health audit' module that scores each existing capability on novelty (age since last modification), necessity (number of dependents), and integration quality (interface alignment score), then triggers a pruning cycle if the average score drops below 0.4, removing the bottom 10% of capabilities and merging duplicate implementations. This directly addresses the fragmentation and redundancy identified in the reflection.",
       "outcome": "5/5 steps succeeded",
       "timestamp": 1780641284.4649014
+    },
+    {
+      "strategy": "modify core/meta_mutation_selector.py: Create the MetaMutationSelector class with: (1) a method to analyze the last 50 mutation outcomes from successful strategies log, extracting mutation type (schema_alignment, test_creation, dependency_analysis, etc.), success rate, and downstream impact score; (2) a decision forest implementation using a simple ensemble of 5 decision trees (each trained on a random subset of the 561 strategies); (3) a predict_highest_yield() method that returns the mutation type with highest expected yield; (4) a bias_mutation_generator() method that injects a weighted preference into the mutation engine.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641348.7823892
+    },
+    {
+      "strategy": "modify core/mutation_engine.py: Add a meta_bias parameter to the mutation generation pipeline. After each mutation cycle, if the meta-mutation selector is active, call its predict_highest_yield() method and use the result to weight the probability distribution over mutation types. Add a config flag META_MUTATION_ENABLED to system_config.json.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641373.3691087
+    },
+    {
+      "strategy": "modify core/successful_strategies_log.py: Enhance the logging format to include structured metadata per mutation outcome: mutation_type (string), timestamp, cycle_number, schema_alignment_score (0-1), test_coverage_impact (0-1), dependency_resolution_score (0-1), and a composite success_score. Ensure the log can be queried for the last N entries by cycle number.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641383.0839798
+    },
+    {
+      "strategy": "modify core/orchestrator.py: Add a post-mutation hook that runs every 5 cycles (cycle % 5 == 0) to: (1) trigger the meta-mutation selector to analyze the last 50 outcomes, (2) train/update the decision forest, (3) apply the bias to the mutation generator for the next cycle. Log the predicted highest-yield type and the confidence score.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641429.5513117
+    },
+    {
+      "strategy": "modify system_config.json: Add configuration: META_MUTATION_INTERVAL=5, META_MUTATION_WINDOW_SIZE=50, META_MUTATION_ENABLED=true, DECISION_FOREST_TREES=5, MUTATION_TYPES=['schema_alignment', 'test_creation', 'dependency_analysis', 'reflection_enhancement', 'goal_decomposition', 'system_integration', 'failure_analysis', 'performance_optimization']",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641436.1130128
+    },
+    {
+      "strategy": "modify tests/unit/test_meta_mutation_selector.py: Create unit tests: (1) test that the selector correctly parses the last 50 outcomes from a mock log; (2) test that the decision forest trains without error on synthetic data; (3) test that predict_highest_yield() returns a valid mutation type; (4) test that bias injection changes mutation probabilities; (5) test that the system correctly handles edge cases (fewer than 50 outcomes available, all same type, etc.)",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641448.895963
+    },
+    {
+      "strategy": "Implement a 'meta-mutation' selector that, after each 5 evolution cycles, analyzes the last 50 mutation outcomes from the successful strategies log and uses a decision forest (trained on the 561 strategies) to predict the highest-yield mutation type for the next cycle, dynamically biasing the mutation generator toward that type (e.g., schema alignment vs. test creation vs. dependency analysis). This directly breaks the local optimum of repetitive test infrastructure additions.",
+      "outcome": "6/6 steps succeeded",
+      "timestamp": 1780641448.924578
     }
   ],
   "capabilities_developed": []

@@ -38,6 +38,21 @@ PROBLEM_SUITE = [
 # Configuration flag for simulation mode
 simulation_mode = True
 
+# Meta-bias parameter for mutation weighting
+meta_bias = None
+
+# Configuration flag for meta-mutation selector
+META_MUTATION_ENABLED = False
+
+# Load configuration from system_config.json
+config_path = os.path.join(PROJECT_ROOT, "system_config.json")
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+        META_MUTATION_ENABLED = config.get("META_MUTATION_ENABLED", False)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+
 
 def get_function_pool():
     """Get all available functions for mutation."""
@@ -184,11 +199,32 @@ def simulate_mutation(module_path, old_ast, new_ast):
 
 def run_mutation_cycle(num_mutations=3):
     """Run a complete mutation cycle."""
+    global meta_bias
+    
     pool = get_function_pool()
     if len(pool) < 2:
         return {"mutations": 0, "successes": 0, "reason": "Pool too small"}
     
     operators = ["crossover", "mutate", "hybrid"]
+    
+    # Apply meta-bias if meta-mutation selector is active
+    if META_MUTATION_ENABLED:
+        try:
+            from core.meta_mutation_selector import MetaMutationSelector
+            selector = MetaMutationSelector()
+            highest_yield = selector.predict_highest_yield()
+            if highest_yield is not None:
+                meta_bias = highest_yield
+                # Weight the probability distribution over mutation types
+                weighted_operators = []
+                for op in operators:
+                    weight = highest_yield.get(op, 1.0)
+                    weighted_operators.extend([op] * int(weight * 10))
+                if weighted_operators:
+                    operators = weighted_operators
+        except ImportError:
+            pass
+    
     results = []
     
     for i in range(num_mutations):

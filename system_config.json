@@ -23,5 +23,10 @@
   "PRUNING_THRESHOLD": 0.4,
   "BOTTOM_PERCENT": 10,
   "ENABLE_AUTO_MERGE": true,
-  "MAX_MERGE_CANDIDATES": 5
+  "MAX_MERGE_CANDIDATES": 5,
+  "META_MUTATION_INTERVAL": 5,
+  "META_MUTATION_WINDOW_SIZE": 50,
+  "META_MUTATION_ENABLED": true,
+  "DECISION_FOREST_TREES": 5,
+  "MUTATION_TYPES": ["schema_alignment", "test_creation", "dependency_analysis", "reflection_enhancement", "goal_decomposition", "system_integration", "failure_analysis", "performance_optimization"]
 }
