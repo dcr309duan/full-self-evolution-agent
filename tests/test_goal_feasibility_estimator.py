@@ -207,3 +207,105 @@ class TestGoalFeasibilityEstimator:
         
         assert not result.is_feasible
         assert "error" in result.block_reason.lower()
+
+    # Integration tests for orchestrator behavior
+    def test_orchestrator_blocks_goal_with_zero_percent_success_rate(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: orchestrator blocks a goal with 0% historical success rate."""
+        mock_orchestrator.get_historical_success_rate.return_value = 0.0
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_goal_generator.get_goal_complexity.return_value = 0.5
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert not result.is_feasible
+        assert result.success_rate == 0.0
+        assert result.block_reason is not None
+        assert "success rate" in result.block_reason.lower()
+
+    def test_orchestrator_adjusts_complexity_for_thirty_percent_success_rate(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: orchestrator adjusts complexity for a goal with 30% success rate."""
+        mock_orchestrator.get_historical_success_rate.return_value = 0.3
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_goal_generator.get_goal_complexity.return_value = 0.5
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible
+        assert result.success_rate == 0.3
+        assert result.complexity_adjustment is not None
+        assert result.complexity_adjustment > 0.5  # Complexity should increase due to moderate success rate
+
+    def test_orchestrator_proceeds_normally_for_eighty_percent_success_rate(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: orchestrator proceeds normally for a goal with 80% success rate."""
+        mock_orchestrator.get_historical_success_rate.return_value = 0.8
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_goal_generator.get_goal_complexity.return_value = 0.5
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible
+        assert result.block_reason is None
+        assert result.confidence_score >= 0.8
+        assert result.complexity_adjustment is None or result.complexity_adjustment == 0.5  # No adjustment needed
+
+    def test_estimator_updates_success_rates_after_goal_completion(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: estimator correctly updates success rates after goal completion."""
+        # Simulate initial state
+        mock_orchestrator.get_historical_success_rate.return_value = 0.5
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_goal_generator.get_goal_complexity.return_value = 0.5
+        
+        # First estimation
+        result_before = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        assert result_before.success_rate == 0.5
+        
+        # Simulate goal completion and update
+        estimator.update_success_rate("test_goal", True)
+        mock_orchestrator.get_historical_success_rate.return_value = 0.6  # Updated after success
+        
+        # Re-estimate after update
+        result_after = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        assert result_after.success_rate == 0.6
+        assert result_after.success_rate > result_before.success_rate
+
+    def test_edge_case_unknown_goal_type_integration(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: edge case with unknown goal type."""
+        mock_goal_generator.get_required_capabilities.side_effect = ValueError("Unknown goal type: unknown_type")
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_orchestrator.get_historical_success_rate.return_value = 0.5
+        
+        result = estimator.estimate_feasibility("unknown_type", mock_goal_generator, mock_orchestrator)
+        
+        assert not result.is_feasible
+        assert result.block_reason is not None
+        assert "unknown" in result.block_reason.lower()
+
+    def test_edge_case_empty_capabilities_list_integration(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: edge case with empty capabilities list."""
+        mock_orchestrator.get_available_capabilities.return_value = set()
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_orchestrator.get_historical_success_rate.return_value = 0.5
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert not result.is_feasible
+        assert len(result.missing_capabilities) == 3
+        assert result.block_reason is not None
+        assert "missing" in result.block_reason.lower()
+
+    def test_edge_case_first_time_goal_type_integration(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Integration test: edge case with first-time goal type (no history)."""
+        mock_orchestrator.get_historical_success_rate.return_value = None  # No history for first-time goal
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_goal_generator.get_goal_complexity.return_value = 0.5
+        
+        result = estimator.estimate_feasibility("first_time_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible  # Should proceed with default assumptions
+        assert result.success_rate is None or result.success_rate == 0.5  # Default assumption for new goal type
+        assert result.block_reason is None
