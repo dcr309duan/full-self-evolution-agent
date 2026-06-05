@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified self_model/builder.py to: Extend SelfModelBuilder to expose a method get_dependency_graph() that returns the current dependency graph in a format consumable by the DependencyResolver.",
-      "timestamp": 1780632460.8703737,
-      "cycle": 51
-    },
-    {
-      "content": "Self-reflection: The evolution process has developed a strong bias toward adding new capabilities without consolidating existing ones into a robust core. This has led to a complex system where failures are often due t",
-      "timestamp": 1780632517.4405046,
-      "cycle": 52
-    },
-    {
-      "content": "Successfully modified mutation_engine/validator.py to: Create a new module for the multi-phase mutation validator. Phase 1: Implement static AST-level checks (syntax validity, structural integrity, import consistency) using Python's ast module. Phase 2: Integrate with self_model/builder.py to call get_dependency_graph() and check if the mutation affects any critical interfaces (e.g., functions, classes, or modules that are depended upon by other components). Phase 3: Define a sandboxed execution mechanism that copies the relevant module, applies the mutation, runs the existing test suite (from testing_framework), and reports results. The validator should return a structured result with pass/fail per phase and details.",
-      "timestamp": 1780632557.5259998,
-      "cycle": 52
-    },
-    {
-      "content": "Successfully modified mutation_engine/engine.py to: Integrate the new validator into the mutation engine's main loop. Before applying any mutation, call the validator. If any phase fails, log the failure, skip the mutation, and optionally trigger a strategy switch (if consecutive failures occur). If all phases pass, proceed with applying the mutation and committing it. Update the mutation logging to include validation results.",
-      "timestamp": 1780632568.76402,
-      "cycle": 52
-    },
-    {
       "content": "Successfully modified tests/test_mutation_validator.py to: Create a comprehensive test suite for the validator. Test cases: (1) valid mutation that passes all phases, (2) mutation with syntax error (should fail phase 1), (3) mutation that breaks a critical interface (should fail phase 2), (4) mutation that passes phases 1-2 but fails tests (should fail phase 3), (5) edge cases like empty mutation, mutation on non-existent module, and circular dependency scenarios.",
       "timestamp": 1780632593.0887961,
       "cycle": 52
@@ -999,6 +979,26 @@
       "content": "Successfully modified evolution_engine/capability_fitness_tracker.py to: Create CapabilityFitnessTracker class that: (1) maintains a registry of all capabilities with unique IDs, (2) tracks which downstream tasks/goals each capability is used by via a dependency graph, (3) computes fitness score = count of downstream uses, (4) provides method to get capabilities below threshold, (5) supports configurable threshold (default=2) and cycles_before_deprecation (default=10), (6) logs deprecation events with timestamp and reason",
       "timestamp": 1780636900.3200872,
       "cycle": 78
+    },
+    {
+      "content": "Successfully modified evolution_engine/goal_generator.py to: Add instrumentation to goal_generator to: (1) when generating a new goal, record which capabilities are required to achieve it, (2) pass this dependency info to CapabilityFitnessTracker via a method like register_goal_capability_usage(goal_id, capability_ids), (3) before generating goals, check if any capabilities are marked for deprecation and exclude them from consideration",
+      "timestamp": 1780636921.6852858,
+      "cycle": 78
+    },
+    {
+      "content": "Successfully modified evolution_engine/capability_dashboard.py to: Create a dashboard module that: (1) reads fitness scores from CapabilityFitnessTracker, (2) generates a formatted report showing capability name, fitness score, deprecation status, and cycles since last use, (3) outputs as structured JSON for API consumption, (4) includes summary statistics (total capabilities, avg fitness, number deprecated, number at risk)",
+      "timestamp": 1780636930.7373123,
+      "cycle": 78
+    },
+    {
+      "content": "Successfully modified tests/test_capability_fitness.py to: Create comprehensive test suite: (1) test that new capabilities start with fitness=0, (2) test that registering downstream uses increments fitness, (3) test that capabilities below threshold are flagged after correct number of cycles, (4) test that deprecation removes capability from active set, (5) test that dashboard output contains all required fields, (6) test configurable threshold and cycles_before_deprecation, (7) test that re-registering a deprecated capability re-activates it",
+      "timestamp": 1780636993.4430687,
+      "cycle": 78
+    },
+    {
+      "content": "Successfully modified evolution_engine/reflection_parser.py to: Add a 'capability_fitness' section to the structured reflection output that: (1) reports current fitness scores for top 5 and bottom 5 capabilities, (2) notes any deprecation events since last reflection, (3) suggests capabilities that could be merged or consolidated based on overlapping downstream usage patterns",
+      "timestamp": 1780637027.6411097,
+      "cycle": 78
     }
   ],
   "learned_patterns": [],
@@ -1202,6 +1202,11 @@
       "approach": "modify evolution_engine/archive/README.md: Create the archive directory with a README explaining that archived modules are preserved for potential recovery, with timestamps and original paths recorded.",
       "reason": "Syntax error: invalid syntax (<unknown>, line 3)",
       "timestamp": 1780636276.5724132
+    },
+    {
+      "approach": "modify evolution_engine/orchestrator.py: Integrate fitness tracking into the main evolution loop: (1) after each cycle, call CapabilityFitnessTracker.update_fitness_scores() to recalculate, (2) check for capabilities below threshold that have persisted for cycles_before_deprecation, (3) automatically remove deprecated capabilities from the active registry, (4) log deprecation events to the knowledge base, (5) expose dashboard endpoint or periodic print",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 922)",
+      "timestamp": 1780636972.7940989
     }
   ],
   "successful_strategies": [
@@ -3369,6 +3374,31 @@
       "strategy": "modify evolution_engine/capability_fitness_tracker.py: Create CapabilityFitnessTracker class that: (1) maintains a registry of all capabilities with unique IDs, (2) tracks which downstream tasks/goals each capability is used by via a dependency graph, (3) computes fitness score = count of downstream uses, (4) provides method to get capabilities below threshold, (5) supports configurable threshold (default=2) and cycles_before_deprecation (default=10), (6) logs deprecation events with timestamp and reason",
       "outcome": "Applied successfully",
       "timestamp": 1780636900.3065283
+    },
+    {
+      "strategy": "modify evolution_engine/goal_generator.py: Add instrumentation to goal_generator to: (1) when generating a new goal, record which capabilities are required to achieve it, (2) pass this dependency info to CapabilityFitnessTracker via a method like register_goal_capability_usage(goal_id, capability_ids), (3) before generating goals, check if any capabilities are marked for deprecation and exclude them from consideration",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636921.6726599
+    },
+    {
+      "strategy": "modify evolution_engine/capability_dashboard.py: Create a dashboard module that: (1) reads fitness scores from CapabilityFitnessTracker, (2) generates a formatted report showing capability name, fitness score, deprecation status, and cycles since last use, (3) outputs as structured JSON for API consumption, (4) includes summary statistics (total capabilities, avg fitness, number deprecated, number at risk)",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636930.7227268
+    },
+    {
+      "strategy": "modify tests/test_capability_fitness.py: Create comprehensive test suite: (1) test that new capabilities start with fitness=0, (2) test that registering downstream uses increments fitness, (3) test that capabilities below threshold are flagged after correct number of cycles, (4) test that deprecation removes capability from active set, (5) test that dashboard output contains all required fields, (6) test configurable threshold and cycles_before_deprecation, (7) test that re-registering a deprecated capability re-activates it",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636993.4299405
+    },
+    {
+      "strategy": "modify evolution_engine/reflection_parser.py: Add a 'capability_fitness' section to the structured reflection output that: (1) reports current fitness scores for top 5 and bottom 5 capabilities, (2) notes any deprecation events since last reflection, (3) suggests capabilities that could be merged or consolidated based on overlapping downstream usage patterns",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637027.6229908
+    },
+    {
+      "strategy": "Create a 'capability fitness function' that measures the number of downstream tasks each capability enables and automatically deprecates capabilities with fitness below a configurable threshold (e.g., < 2 downstream uses) after a set number of cycles. Implement a dashboard that displays fitness scores per capability.",
+      "outcome": "5/6 steps succeeded",
+      "timestamp": 1780637027.6595888
     }
   ],
   "capabilities_developed": []
