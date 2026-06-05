@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780635284.2157538
-    },
-    {
       "description": "Add a meta-level monitor that detects when 3+ consecutive goals fail in the same category (e.g., 'file creation', 'integration test'), triggers a full reprioritization, and forces the agent to generate a root cause hypothesis before retrying any goal in that category.",
       "priority": 8,
       "status": "pending",
@@ -403,6 +397,13 @@
       "status": "completed",
       "created_at": 1780635587.099488,
       "completed_at": 1780635848.2241583
+    },
+    {
+      "description": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780635284.2157538,
+      "completed_at": 1780635988.8394232
     }
   ],
   "generated_goals": []

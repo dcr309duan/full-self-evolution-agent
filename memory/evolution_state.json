@@ -1,9 +1,8 @@
 {
-  "cycle_count": 71,
-  "current_generation": 43,
-  "last_evolution_time": 1780635772.2717054,
+  "cycle_count": 72,
+  "current_generation": 44,
+  "last_evolution_time": 1780635882.286582,
   "capabilities": [
-    "Implement a testing framework to validate self-modifications",
     "Mutation engine - genetic programming for capability evolution",
     "Build an AST-based code rewriter with automatic rollback: implement a function that can safely modif",
     "Create a meta-evaluation loop that scores the evolution engine's own performance (e.g., rate of impr",
@@ -52,7 +51,8 @@
     "Implement a canonical schema alignment layer that normalizes data formats between all core modules (",
     "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote ",
     "Build a minimal 'new file creation' metamorphic test: write a script that creates a new Python file ",
-    "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of t"
+    "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of t",
+    "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries "
   ],
   "history": [
     {
@@ -426,6 +426,12 @@
       "goal": "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of the target file, the test output, the schema version, and the mutation parameters, then automatically generates a minimal reproducible example and logs it to the failure analysis module for deep root cause tracing.",
       "success": true,
       "timestamp": 1780635848.2324624
+    },
+    {
+      "cycle": 72,
+      "goal": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
+      "success": true,
+      "timestamp": 1780635988.8550549
     }
   ],
   "status": "evolving"

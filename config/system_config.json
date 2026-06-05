@@ -3,5 +3,10 @@
   "primitive_test_path": "tests/test_new_file_creation_metamorphic.py",
   "failure_context_recorder.enabled": true,
   "failure_context_recorder.max_contexts_per_module": 10,
-  "failure_context_recorder.reproducible_examples_dir": "failure_examples/"
+  "failure_context_recorder.reproducible_examples_dir": "failure_examples/",
+  "dependency_graph.enabled": true,
+  "dependency_graph.auto_discover": true,
+  "dependency_graph.persistence_path": "data/dependency_graph.yaml",
+  "feasibility_estimator.block_on_incomplete_deps": true,
+  "feasibility_estimator.max_blocked_logs_per_goal": 5
 }

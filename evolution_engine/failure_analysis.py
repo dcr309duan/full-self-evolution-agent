@@ -3,12 +3,14 @@
 This module extends basic failure analysis to leverage detailed context from
 FailureContextRecorder, including AST dumps and test outputs, for deeper
 root cause classification and minimal reproducible example tracking.
+It also supports analysis of 'blocked goal' events for dependency management.
 """
 
 import ast
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
 
 from evolution_engine.failure_context_recorder import FailureContextRecorder
 
@@ -32,6 +34,7 @@ class FailureAnalyzer:
         "runtime_error": "General runtime exception",
         "logical_error": "Incorrect logic producing wrong output",
         "performance_error": "Performance or timeout related failure",
+        "dependency_blocked": "Goal blocked due to missing dependencies",
         "unknown": "Unclassified failure",
     }
 
@@ -43,6 +46,7 @@ class FailureAnalyzer:
         """
         self.log_dir = log_dir
         self.failure_history: List[Dict[str, Any]] = []
+        self.blocked_goal_history: List[Dict[str, Any]] = []
         self._ensure_log_directory()
 
     def _ensure_log_directory(self) -> None:
@@ -105,6 +109,51 @@ class FailureAnalyzer:
         self._log_failure(analysis_result)
 
         return analysis_result
+
+    def log_blocked_goal(self, goal: str, missing_dependencies: List[str]) -> Dict[str, Any]:
+        """Log a blocked goal event with its missing dependencies and timestamp.
+
+        Args:
+            goal: The goal that was blocked
+            missing_dependencies: List of dependencies that are missing
+
+        Returns:
+            Dictionary containing the blocked goal record
+        """
+        blocked_record = {
+            "goal": goal,
+            "missing_dependencies": missing_dependencies,
+            "timestamp": datetime.now().isoformat(),
+            "root_cause": "dependency_blocked",
+            "classification": self.ROOT_CAUSE_CATEGORIES["dependency_blocked"],
+        }
+
+        self.blocked_goal_history.append(blocked_record)
+        self._log_blocked_goal(blocked_record)
+
+        logger.info(f"Logged blocked goal: {goal} with missing deps: {missing_dependencies}")
+        return blocked_record
+
+    def _log_blocked_goal(self, blocked_record: Dict[str, Any]) -> None:
+        """Log blocked goal details to a structured log file.
+
+        Args:
+            blocked_record: Dictionary containing blocked goal information
+        """
+        try:
+            log_file = os.path.join(self.log_dir, "blocked_goals.log")
+            with open(log_file, "a") as f:
+                f.write(f"\n{'='*60}\n")
+                f.write(f"Blocked Goal Report\n")
+                f.write(f"{'='*60}\n")
+                f.write(f"Goal: {blocked_record['goal']}\n")
+                f.write(f"Missing Dependencies: {blocked_record['missing_dependencies']}\n")
+                f.write(f"Timestamp: {blocked_record['timestamp']}\n")
+                f.write(f"Root Cause: {blocked_record['root_cause']}\n")
+                f.write(f"Classification: {blocked_record['classification']}\n")
+                f.write(f"{'='*60}\n")
+        except Exception as e:
+            logger.error(f"Failed to log blocked goal: {e}")
 
     def _classify_root_cause(
         self,
@@ -261,7 +310,7 @@ class FailureAnalyzer:
             Severity level: 'critical', 'high', 'medium', or 'low'
         """
         critical_errors = {"syntax_error", "import_error"}
-        high_errors = {"type_error", "name_error", "attribute_error"}
+        high_errors = {"type_error", "name_error", "attribute_error", "dependency_blocked"}
         medium_errors = {"index_error", "key_error", "value_error", "assertion_error"}
         low_errors = {"logical_error", "performance_error"}
 
@@ -376,7 +425,104 @@ class FailureAnalyzer:
             else None,
         }
 
+    def get_blocked_goal_statistics(self) -> Dict[str, Any]:
+        """Get statistics about blocked goals.
+
+        Returns:
+            Dictionary with blocked goal statistics
+        """
+        if not self.blocked_goal_history:
+            return {"total_blocked_goals": 0, "blocked_goal_distribution": {}}
+
+        goal_counts = {}
+        dependency_counts = {}
+
+        for record in self.blocked_goal_history:
+            goal = record["goal"]
+            goal_counts[goal] = goal_counts.get(goal, 0) + 1
+
+            for dep in record["missing_dependencies"]:
+                dependency_counts[dep] = dependency_counts.get(dep, 0) + 1
+
+        return {
+            "total_blocked_goals": len(self.blocked_goal_history),
+            "blocked_goal_distribution": goal_counts,
+            "dependency_distribution": dependency_counts,
+            "most_blocked_goal": max(goal_counts, key=goal_counts.get) if goal_counts else None,
+            "most_missing_dependency": max(dependency_counts, key=dependency_counts.get) if dependency_counts else None,
+        }
+
+    def analyze_blocked_goal_patterns(self) -> Dict[str, Any]:
+        """Analyze patterns in blocked goals to identify systemic dependency gaps.
+
+        This method looks for repeatedly blocked goals and common missing dependencies
+        that may indicate systemic issues.
+
+        Returns:
+            Dictionary with pattern analysis results
+        """
+        if not self.blocked_goal_history:
+            return {"patterns_found": False, "message": "No blocked goals recorded"}
+
+        # Count occurrences of each goal and dependency
+        goal_counts = {}
+        dependency_counts = {}
+        goal_dependency_pairs = {}
+
+        for record in self.blocked_goal_history:
+            goal = record["goal"]
+            goal_counts[goal] = goal_counts.get(goal, 0) + 1
+
+            for dep in record["missing_dependencies"]:
+                dependency_counts[dep] = dependency_counts.get(dep, 0) + 1
+                pair_key = (goal, dep)
+                goal_dependency_pairs[pair_key] = goal_dependency_pairs.get(pair_key, 0) + 1
+
+        # Identify patterns
+        patterns = []
+        systemic_gaps = []
+
+        # Check for repeatedly blocked goals (blocked more than once)
+        for goal, count in goal_counts.items():
+            if count > 1:
+                patterns.append({
+                    "type": "repeatedly_blocked_goal",
+                    "goal": goal,
+                    "block_count": count,
+                    "severity": "high" if count > 3 else "medium",
+                })
+
+        # Check for common missing dependencies (appearing in multiple goals)
+        for dep, count in dependency_counts.items():
+            if count > 1:
+                patterns.append({
+                    "type": "common_missing_dependency",
+                    "dependency": dep,
+                    "occurrence_count": count,
+                    "severity": "high" if count > 3 else "medium",
+                })
+
+        # Check for systemic dependency gaps (same goal-dependency pair blocked multiple times)
+        for (goal, dep), count in goal_dependency_pairs.items():
+            if count > 1:
+                systemic_gaps.append({
+                    "goal": goal,
+                    "missing_dependency": dep,
+                    "block_count": count,
+                    "severity": "critical" if count > 3 else "high",
+                })
+
+        return {
+            "patterns_found": len(patterns) > 0,
+            "patterns": patterns,
+            "systemic_dependency_gaps": systemic_gaps,
+            "total_blocked_goals": len(self.blocked_goal_history),
+            "unique_goals_blocked": len(goal_counts),
+            "unique_missing_dependencies": len(dependency_counts),
+        }
+
     def clear_history(self) -> None:
-        """Clear the failure analysis history."""
+        """Clear the failure analysis history and blocked goal history."""
         self.failure_history.clear()
-        logger.info("Failure analysis history cleared")
+        self.blocked_goal_history.clear()
+        logger.info("Failure analysis history and blocked goal history cleared")
