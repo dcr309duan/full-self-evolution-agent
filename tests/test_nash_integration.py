@@ -366,6 +366,99 @@ class TestNashIntegration(unittest.TestCase):
             self.assertIn("ModuleC", plan_module_names,
                          "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
 
+    def test_mini_evolution_loop_with_two_mock_modules(self):
+        """Integration test that runs a mini evolution loop with 2 mock modules,
+        triggers Nash equilibrium, and verifies that multi_module_forcer produces a non-empty change plan."""
+        # Create 2 mock modules
+        module_x = MagicMock()
+        module_y = MagicMock()
+        
+        # Configure modules to show no improvement with single mutations
+        module_x.mutate.return_value = module_x
+        module_y.mutate.return_value = module_y
+        
+        # Set fitness values such that single mutations don't improve fitness
+        module_x.fitness = 0.5
+        module_y.fitness = 0.5
+        
+        # Configure module names
+        module_x.name = "ModuleX"
+        module_y.name = "ModuleY"
+        
+        # Dependency graph: X -> Y (X depends on Y)
+        dependency_graph = {
+            "ModuleX": ["ModuleY"],
+            "ModuleY": []
+        }
+        
+        # Create the Nash detector and coordinated planner
+        nash_detector = NashDetector()
+        planner = CoordinatedMutationPlanner()
+        
+        # Register modules with the detector
+        modules = [module_x, module_y]
+        for mod in modules:
+            nash_detector.register_module(mod)
+        
+        # Create a mock orchestrator with Nash detection enabled
+        orchestrator = EvolutionOrchestrator(
+            modules=modules,
+            nash_detector=nash_detector,
+            coordinated_planner=planner,
+            dependency_graph=dependency_graph,
+            enable_nash_detection=True,
+            enable_coordinated_mutation=True
+        )
+
+        # Run a mini evolution loop (10 cycles)
+        equilibrium_reached = False
+        change_plan_generated = False
+        
+        for cycle in range(10):
+            # Simulate mutation cycle
+            for mod in modules:
+                mod.mutate()
+            
+            # Check for equilibrium
+            if nash_detector.detect_equilibrium(modules):
+                equilibrium_reached = True
+                
+                # Generate coordinated change plan using multi_module_forcer
+                plan = planner.generate_plan(dependency_graph, {"is_equilibrium": True})
+                
+                # Verify that multi_module_forcer produces a non-empty change plan
+                if plan:
+                    change_plan_generated = True
+                    self.assertGreater(len(plan), 0, "Change plan should not be empty")
+                    
+                    # Verify the plan contains valid module names
+                    plan_module_names = [m.get("module") for m in plan]
+                    for module_name in plan_module_names:
+                        self.assertIn(module_name, [mod.name for mod in modules],
+                                      f"Module {module_name} in plan should exist in the system")
+                    
+                    # Verify the plan respects dependencies (if ModuleX is targeted, ModuleY must also be targeted)
+                    if "ModuleX" in plan_module_names:
+                        self.assertIn("ModuleY", plan_module_names,
+                                      "If ModuleX is targeted, ModuleY must also be targeted due to dependency")
+                    
+                    # Execute the coordinated mutation
+                    for mutation in plan:
+                        module_name = mutation.get("module")
+                        for mod in modules:
+                            if mod.name == module_name:
+                                mod.mutate()
+                                break
+                    break
+        
+        # Verify equilibrium was reached
+        self.assertTrue(equilibrium_reached,
+                       "Nash equilibrium should be reached within 10 cycles")
+        
+        # Verify that multi_module_forcer produced a non-empty change plan
+        self.assertTrue(change_plan_generated,
+                       "multi_module_forcer should produce a non-empty change plan when equilibrium is reached")
+
 
 if __name__ == '__main__':
     unittest.main()

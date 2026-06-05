@@ -292,3 +292,52 @@ def test_nash_detector_and_forcer_integration(mock_modules_in_equilibrium, nash_
     # Verify the forcer correctly identifies that multi-module changes are needed
     needs_multi_module = multi_module_forcer.needs_multi_module_change(mock_modules_in_equilibrium)
     assert needs_multi_module, "Forcer should identify that multi-module changes are needed"
+
+
+def test_force_multi_mutation_returns_valid_plan(mock_modules_in_equilibrium, multi_module_forcer):
+    """
+    Integration test that simulates a Nash equilibrium state and calls force_multi_mutation()
+    to verify it returns a valid plan.
+    """
+    # Simulate a Nash equilibrium state using the mock modules
+    # The mock_modules_in_equilibrium fixture already provides modules in equilibrium
+    
+    # Call force_multi_mutation() to get a plan for breaking the equilibrium
+    plan = multi_module_forcer.force_multi_mutation(mock_modules_in_equilibrium)
+    
+    # Verify the plan is valid
+    assert plan is not None, "force_multi_mutation() should return a valid plan"
+    assert isinstance(plan, dict), "The plan should be a dictionary"
+    
+    # Check that the plan contains expected keys
+    assert "coordinated_changes" in plan, "Plan should contain 'coordinated_changes'"
+    assert "expected_improvement" in plan, "Plan should contain 'expected_improvement'"
+    assert "new_equilibrium_status" in plan, "Plan should contain 'new_equilibrium_status'"
+    
+    # Verify coordinated_changes is a list with 3 entries
+    coordinated_changes = plan["coordinated_changes"]
+    assert isinstance(coordinated_changes, list), "coordinated_changes should be a list"
+    assert len(coordinated_changes) == 3, "coordinated_changes should have 3 entries"
+    
+    # Verify expected_improvement is positive
+    expected_improvement = plan["expected_improvement"]
+    assert isinstance(expected_improvement, (int, float)), "expected_improvement should be numeric"
+    assert expected_improvement > 0, "expected_improvement should be positive"
+    
+    # Verify new_equilibrium_status indicates the system will no longer be in equilibrium
+    new_equilibrium_status = plan["new_equilibrium_status"]
+    assert isinstance(new_equilibrium_status, bool), "new_equilibrium_status should be a boolean"
+    assert not new_equilibrium_status, "new_equilibrium_status should be False (system escapes equilibrium)"
+    
+    # Apply the plan and verify it works
+    improved_modules = []
+    for module, change in zip(mock_modules_in_equilibrium, coordinated_changes):
+        improved_module = module.mutate("coordinated")
+        improved_modules.append(improved_module)
+    
+    # Verify total performance improves as expected
+    original_total = sum(m.evaluate() for m in mock_modules_in_equilibrium)
+    improved_total = sum(m.evaluate() for m in improved_modules)
+    actual_improvement = improved_total - original_total
+    assert actual_improvement > 0, "Actual improvement should be positive"
+    assert actual_improvement == expected_improvement, f"Actual improvement ({actual_improvement}) should match expected ({expected_improvement})"

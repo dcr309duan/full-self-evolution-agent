@@ -18,6 +18,7 @@ class MultiModuleForcer:
     def __init__(self, detector: Optional[NashEquilibriumDetector] = None):
         self.detector = detector or NashEquilibriumDetector()
         self.mutation_history: List[Dict[str, Any]] = []
+        self.multi_mutation_success: Dict[str, bool] = {}  # Track multi-module success
 
     def analyze_equilibrium_clusters(self) -> List[Set[str]]:
         """
@@ -229,6 +230,11 @@ class MultiModuleForcer:
         }
 
         self.mutation_history.append(outcome)
+        
+        # Track multi-module success for feedback
+        for module in modules:
+            self.multi_mutation_success[module] = outcome.get("success", False)
+        
         return outcome
 
     def _measure_system_metrics(self) -> Dict[str, float]:
@@ -443,6 +449,54 @@ class MultiModuleForcer:
         
         return proposals
 
+    def force_multi_mutation(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Applies changes to multiple modules simultaneously and tracks success.
+        This is the main entry point for multi-module forcing.
+        
+        Args:
+            plan: The coordinated mutation plan to execute.
+            
+        Returns:
+            A result dictionary with success status and feedback for the detector.
+        """
+        if not plan or "modules" not in plan:
+            return {
+                "success": False,
+                "error": "Invalid plan: no modules specified",
+                "feedback": {}
+            }
+        
+        # Execute the coordinated mutation
+        result = self.execute_coordinated_mutation(plan)
+        
+        # Prepare feedback for the detector
+        feedback = {
+            "multi_mutation_success": result.get("success", False),
+            "modules_changed": plan.get("modules", []),
+            "improvement": result.get("improvement", 0.0),
+            "coordinated_advantage": result.get("coordinated_advantage", 0.0),
+            "exceeds_single_optimization": result.get("exceeds_single_optimization", False),
+            "timestamp": len(self.mutation_history)
+        }
+        
+        # Feed back into the detector's state
+        if self.detector and hasattr(self.detector, 'update_from_feedback'):
+            self.detector.update_from_feedback(feedback)
+        
+        result["feedback"] = feedback
+        return result
+
+    def get_multi_mutation_success_rate(self) -> float:
+        """
+        Calculate the success rate of multi-module mutations.
+        """
+        if not self.multi_mutation_success:
+            return 0.0
+        
+        successful = sum(1 for v in self.multi_mutation_success.values() if v)
+        return successful / len(self.multi_mutation_success)
+
 
 class MultiModuleOrchestrator:
     """
@@ -502,7 +556,7 @@ class MultiModuleOrchestrator:
                 if resolved_plan:
                     # Take snapshot for rollback
                     self._take_snapshot()
-                    result = self.forcer.execute_coordinated_mutation(resolved_plan)
+                    result = self.forcer.force_multi_mutation(resolved_plan)
                     self.log_forced_change("coordinated_mutation", resolved_plan, result)
                     if not result.get("success", False):
                         self._rollback()
@@ -584,7 +638,7 @@ class MultiModuleOrchestrator:
         Returns the execution result.
         """
         self._take_snapshot()
-        result = self.forcer.execute_coordinated_mutation(plan)
+        result = self.forcer.force_multi_mutation(plan)
         if not result.get("success", False):
             self._rollback()
             result["rolled_back"] = True
@@ -621,7 +675,7 @@ class MultiModuleOrchestrator:
         
         try:
             # Apply all changes atomically through the pipeline
-            result = self.forcer.execute_coordinated_mutation(plan)
+            result = self.forcer.force_multi_mutation(plan)
             
             if result.get("success", False):
                 # Record successful atomic operation
@@ -702,7 +756,7 @@ def analyze_and_force_coordination(
         plans = forcer.generate_coordinated_mutation_plan(cluster)
         if plans:
             # Execute the best plan for this cluster
-            result = forcer.execute_coordinated_mutation(plans[0])
+            result = forcer.force_multi_mutation(plans[0])
             results.append(result)
             executed_count += 1
 
@@ -930,60 +984,4 @@ def _vote_on_modules(modules: List[str], detector: NashEquilibriumDetector) -> L
     
     # Select top 2-3 modules (randomly choose between 2 or 3)
     num_to_select = random.choice([2, 3])
-    selected = [m[0] for m in sorted_modules[:num_to_select]]
-    
-    return selected
-
-
-def generate_coordinated_change_plan(detector: NashEquilibriumDetector) -> Optional[Dict[str, Any]]:
-    """
-    When nash_detector signals equilibrium, generate a coordinated change plan
-    affecting 2-3 modules simultaneously using a voting mechanism.
-    
-    Args:
-        detector: The NashEquilibriumDetector instance.
-        
-    Returns:
-        A coordinated change plan, or None if no equilibrium detected.
-    """
-    # Check for equilibrium
-    equilibrium_result = detector.detect_equilibrium()
-    if not equilibrium_result.get("equilibrium_detected", False):
-        return None
-    
-    # Get all modules
-    modules = list(detector.module_interactions.keys())
-    if len(modules) < 2:
-        return None
-    
-    # Use voting to select which modules to change together
-    selected_modules = _vote_on_modules(modules, detector)
-    
-    # Create a coordinated change plan
-    forcer = MultiModuleForcer(detector)
-    plan = forcer._create_mutation_plan(set(selected_modules))
-    
-    if plan:
-        plan["source"] = "voting_mechanism"
-        plan["voting_results"] = {m: detector.module_interactions.get(m, {}).get("stability", 0.5) for m in selected_modules}
-    
-    return plan
-
-
-def execute_atomic_coordinated_change(
-    plan: Dict[str, Any],
-    detector: NashEquilibriumDetector
-) -> Dict[str, Any]:
-    """
-    Implement the changes in a single atomic operation.
-    Roll back all changes if any single change fails.
-    
-    Args:
-        plan: The coordinated change plan to execute.
-        detector: The NashEquilibriumDetector instance.
-        
-    Returns:
-        A result dictionary indicating success/failure and rollback status.
-    """
-    orchestrator = MultiModuleOrchestrator(detector)
-    return orchestrator.integrate_with_mutation_pipeline(plan)
+    selected

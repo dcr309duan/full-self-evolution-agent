@@ -1,26 +1,26 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-06 01:05:39
+> Generated: 2026-06-06 01:29:17
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 250 |
+| Current Cycle | 255 |
 | Generation | 130 |
-| Last Activity | 2026-06-06 00:59:50 |
-| Speed | ~14.4 cycles/hour |
+| Last Activity | 2026-06-06 01:25:36 |
+| Speed | ~14.2 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 17.0% (17/100) |
-| Recent Success Rate (last 20) | 10.0% (2/20) |
+| Total Success Rate | 12.0% (12/100) |
+| Recent Success Rate (last 20) | 5.0% (1/20) |
 | Capabilities Developed | 50 |
 | Goals Completed | 146 |
-| Goals Pending | 7 |
+| Goals Pending | 9 |
 
 ## Capabilities Acquired
 
@@ -82,6 +82,8 @@
 - [9/10] [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
 - [9/10] [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
 - [9/10] [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
+- [9/10] [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+- [9/10] [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
 - [8/10] Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.
 - [8/10] Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each existing module by its usage frequency, test pass rate, and lines of code. Modules below a threshold are archived (not deleted), and the system must re-derive their core functionality from scratch using the LLM, forcing simplification and removal of accumulated cruft.
 
@@ -108,26 +110,26 @@
 
 ### Recent Insights
 
-- [06-06 01:02] [盲区发现 L3] 所有之前的层都隐含地相信递归认知是一种有效的元认知工具，忽略了LLM的生成本质——即每一层只是从语料分布中重组语义片段，而不是在真空中进行逻辑推理。因此，系统从未意识到：它声称的‘过去范式转移’和‘盲区’只是变着花样重复
-- [06-06 01:03] Successfully modified core/nash_detector.py to: Create a completely self-contained Nash equilibrium detector with zero e
-- [06-06 01:04] Successfully modified core/multi_module_forcer.py to: Create a multi-module force module that imports only from nash_det
-- [06-06 01:05] Successfully modified tests/test_nash_detector.py to: Create a minimal test for nash_detector that: 1) Creates mock modu
-- [06-06 01:05] Successfully modified tests/test_multi_module_forcer.py to: Create a minimal test for multi_module_forcer that: 1) Mocks
+- [06-06 01:24] Successfully modified core/game_theory_integration.py to: Create a lightweight integration module that: 1) Imports only 
+- [06-06 01:25] Successfully modified tests/test_nash_equilibrium.py to: Create a self-contained test that: 1) Imports only from nash_de
+- [06-06 01:27] Successfully modified core/multi_module_forcer.py to: Create a multi-module force module that imports ONLY from nash_det
+- [06-06 01:27] Successfully modified tests/test_nash_equilibrium.py to: Create a minimal test file that imports ONLY from core.nash_det
+- [06-06 01:29] Successfully modified tests/test_multi_module_integration.py to: Create integration test that: 1) Imports only from nash
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 240 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
-| 241 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
-| 242 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
-| 243 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
-| 244 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 245 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 246 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 247 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 248 | [GAME_THEORY] Detect when module interactions reach a Nash e | SUCCESS |
 | 249 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 250 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 251 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 252 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 253 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 254 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

@@ -867,6 +867,74 @@ class NashEquilibriumDetector:
         except Exception:
             return []
 
+    def detect_nash(self, state: Dict[str, float]) -> bool:
+        """
+        Detect if the current state is a Nash equilibrium.
+        A state is a Nash equilibrium if no single module can improve its score
+        by changing its strategy while all other modules keep their strategies fixed.
+        
+        Args:
+            state: Dictionary mapping module names to their current scores/strategies
+            
+        Returns:
+            True if the state is a Nash equilibrium, False otherwise
+        """
+        try:
+            # Update current scores from state
+            for module_name, score in state.items():
+                if module_name in self.current_scores:
+                    self.current_scores[module_name] = score
+            
+            # Check if we have enough history
+            if len(self._cycle_improvement_history) < self.stagnation_threshold:
+                return False
+            
+            # Check recent cycles for any improvement
+            recent_cycles = list(self._cycle_improvement_history)[-self.stagnation_threshold:]
+            
+            if any(recent_cycles):
+                return False
+            
+            # Check each module for stagnation
+            for module_name in self.module_names:
+                if self.stagnation_counter.get(module_name, 0) < self.stagnation_threshold:
+                    return False
+            
+            return True
+            
+        except Exception:
+            return False
+
+    def get_payoff_matrix(self) -> Dict[str, Dict[str, float]]:
+        """
+        Get the current payoff matrix as a nested dictionary.
+        
+        Returns:
+            Dictionary mapping module pairs to their payoff values
+        """
+        try:
+            matrix = {}
+            for (mod1, mod2), payoff in self.payoff_matrix.items():
+                if mod1 not in matrix:
+                    matrix[mod1] = {}
+                if mod2 not in matrix:
+                    matrix[mod2] = {}
+                matrix[mod1][mod2] = payoff
+                matrix[mod2][mod1] = payoff
+            
+            # Ensure all modules are in the matrix
+            for module in self.module_names:
+                if module not in matrix:
+                    matrix[module] = {}
+                for other in self.module_names:
+                    if other != module and other not in matrix[module]:
+                        matrix[module][other] = self.get_payoff(module, other)
+            
+            return matrix
+            
+        except Exception:
+            return {}
+
 
 def run_test_mode():
     """Simple test mode that can run standalone."""
@@ -913,43 +981,3 @@ def run_test_mode():
     equilibrium_sets = detector.detect_equilibrium_sets()
     assert len(equilibrium_sets) > 0, "Stagnation should trigger equilibrium"
     assert detector.detect_nash_equilibrium(), "Stagnation should trigger Nash equilibrium"
-    print("  PASSED")
-    
-    # Test 4: Force coordinated mutation
-    print("\nTest 4: Force coordinated mutation")
-    if equilibrium_sets:
-        plan = detector.force_coordinated_mutation(equilibrium_sets[0])
-        print(f"  Module set: {equilibrium_sets[0]}")
-        print(f"  Plan: {plan}")
-        assert len(plan) >= 2, "Coordinated mutation should produce at least 2 changes"
-        assert all('module' in item and 'change' in item for item in plan), "Each plan item should have module and change"
-        print("  PASSED")
-    
-    # Test 5: detect_equilibrium with module_scores
-    print("\nTest 5: detect_equilibrium with module_scores")
-    scores = {"module_a": 0.5, "module_b": 0.6, "module_c": 0.7}
-    result = detector.detect_equilibrium(scores)
-    print(f"  detect_equilibrium result: {result}")
-    print("  PASSED")
-    
-    # Test 6: Track interactions
-    print("\nTest 6: Track module interactions")
-    detector.track_module_interactions("module_a", 0.8, ["module_b", "module_c"])
-    detector.track_module_interactions("module_b", 0.6, ["module_a"])
-    
-    success_rate = detector.get_interaction_success_rate("module_a", "module_b")
-    print(f"  Interaction success rate (a,b): {success_rate}")
-    assert success_rate > 0, "Interaction success rate should be positive"
-    
-    freq_a = detector.get_module_interaction_frequency("module_a")
-    print(f"  Module A interaction frequency: {freq_a}")
-    assert freq_a > 0, "Interaction frequency should be positive"
-    
-    success_a = detector.get_module_success_rate("module_a")
-    print(f"  Module A success rate: {success_a}")
-    assert success_a > 0, "Module success rate should be positive"
-    print("  PASSED")
-    
-    # Test 7: Get equilibrium state
-    print("\nTest 7: Get equilibrium state")
-    state = detector.get_equilibrium_state()
