@@ -4,6 +4,7 @@ import os
 import json
 import re
 from typing import List, Dict, Any, Optional
+import glob
 
 def run_tests(test_paths: List[str], timeout: int = 30) -> Dict[str, Any]:
     """
@@ -250,6 +251,55 @@ def get_coverage(modules: List[str]) -> Dict[str, Any]:
             "module_coverage": {},
             "error": f"Failed to get coverage: {str(e)}"
         }
+
+
+def discover_test_files(root_dir: str = ".") -> List[str]:
+    """
+    Discover all test files in the project using glob pattern *test*.py.
+    
+    Args:
+        root_dir: Root directory to search from (default: current directory)
+    
+    Returns:
+        List of test file paths found
+    """
+    test_files = []
+    pattern = os.path.join(root_dir, "**", "*test*.py")
+    test_files = glob.glob(pattern, recursive=True)
+    return test_files
+
+
+def inject_test_function(file_path: str, test_function_code: str) -> bool:
+    """
+    Inject a new test function into a given file by appending it to the end.
+    
+    Args:
+        file_path: Path to the test file to modify
+        test_function_code: The complete test function code to inject
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Read the existing file content
+        with open(file_path, 'r') as f:
+            content = f.read()
+        
+        # Ensure the file ends with a newline before appending
+        if not content.endswith('\n'):
+            content += '\n'
+        
+        # Append the new test function
+        content += '\n' + test_function_code + '\n'
+        
+        # Write the modified content back to the file
+        with open(file_path, 'w') as f:
+            f.write(content)
+        
+        return True
+    except Exception as e:
+        print(f"Error injecting test function into {file_path}: {str(e)}", file=sys.stderr)
+        return False
 
 
 def _validate_paths(paths: List[str]) -> List[str]:

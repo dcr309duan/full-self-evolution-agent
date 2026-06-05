@@ -79,7 +79,7 @@ class DependencyValidator:
                         imports[module] = []
                     imports[module].append(asname if asname else name)
         
-        # Extract function calls (simple detection)
+        # Extract function calls (comprehensive detection)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 func = node.func
@@ -96,6 +96,22 @@ class DependencyValidator:
                         if obj_name not in calls:
                             calls[obj_name] = []
                         calls[obj_name].append(method_name)
+                    elif isinstance(func.value, ast.Call):
+                        # Handle chained calls like func().method()
+                        inner_func = func.value.func
+                        if isinstance(inner_func, ast.Name):
+                            inner_name = inner_func.id
+                            method_name = func.attr
+                            if inner_name not in calls:
+                                calls[inner_name] = []
+                            calls[inner_name].append(method_name)
+                elif isinstance(func, ast.Subscript):
+                    # Handle array access like obj[key]()
+                    if isinstance(func.value, ast.Name):
+                        obj_name = func.value.id
+                        if obj_name not in calls:
+                            calls[obj_name] = []
+                        calls[obj_name].append("__getitem__")
         
         return imports, calls
 
@@ -128,13 +144,11 @@ class DependencyValidator:
 
     def _find_circular_dependencies(self, source_name: str, 
                                      imports: Dict[str, List[str]]) -> List[str]:
-        """Check for circular dependencies involving the given source."""
+        """Check for circular dependencies involving the given source using DFS."""
         circular = []
-        visited = set()
-        path = []
         
-        def dfs(current: str, target: str, depth: int = 0) -> bool:
-            if current == target and depth > 0:
+        def dfs(current: str, target: str, visited: Set[str], path: List[str]) -> bool:
+            if current == target and len(path) > 0:
                 return True
             if current in visited:
                 return False
@@ -147,24 +161,34 @@ class DependencyValidator:
                     if module == target or module.startswith(target + '.'):
                         path.append(module)
                         return True
-                    if dfs(module, target, depth + 1):
+                    if dfs(module, target, visited, path):
                         return True
             path.pop()
+            visited.discard(current)
             return False
         
         # Check if any new import creates a cycle
         for module in imports:
-            visited.clear()
-            path.clear()
-            if dfs(module, source_name):
+            visited: Set[str] = set()
+            path: List[str] = []
+            if dfs(module, source_name, visited, path):
                 circular.append(f"Circular dependency: {source_name} -> {' -> '.join(path)}")
+        
+        # Also check for cycles within the existing dependency map
+        for module in self.dependency_map["imports"]:
+            visited = set()
+            path = []
+            if dfs(module, module, visited, path):
+                cycle_str = " -> ".join(path)
+                if cycle_str not in [str(c) for c in circular]:
+                    circular.append(f"Circular dependency: {cycle_str}")
         
         return circular
 
     def _check_non_existent_modules(self, imports: Dict[str, List[str]]) -> List[str]:
         """Check if imported modules exist in the dependency map or are standard library modules."""
         non_existent = []
-        # Common standard library modules (simplified list)
+        # Common standard library modules (comprehensive list)
         stdlib_modules = {
             'os', 'sys', 're', 'json', 'math', 'datetime', 'collections',
             'itertools', 'functools', 'pathlib', 'typing', 'abc', 'io',
@@ -180,8 +204,48 @@ class DependencyValidator:
             'dataclasses', 'contextlib', 'importlib', 'pkgutil',
             'unittest', 'doctest', 'profile', 'pstats', 'timeit',
             'venv', 'ensurepip', 'ctypes', 'curses', 'turtle', 'tkinter',
-            'webbrowser', 'antigravity'
+            'webbrowser', 'antigravity', 'array', 'bisect', 'calendar',
+            'cmath', 'collections.abc', 'concurrent', 'contextvars',
+            'copyreg', 'cProfile', 'crypt', 'csv', 'ctypes', 'curses',
+            'dataclasses', 'datetime', 'dbm', 'decimal', 'difflib',
+            'dis', 'distutils', 'doctest', 'email', 'encodings',
+            'enum', 'errno', 'faulthandler', 'fcntl', 'filecmp',
+            'fileinput', 'fnmatch', 'fractions', 'ftplib', 'functools',
+            'gc', 'getopt', 'getpass', 'gettext', 'glob', 'grp',
+            'gzip', 'hashlib', 'heapq', 'hmac', 'html', 'http',
+            'idlelib', 'imaplib', 'imghdr', 'imp', 'importlib',
+            'inspect', 'io', 'ipaddress', 'itertools', 'json',
+            'keyword', 'lib2to3', 'linecache', 'locale', 'logging',
+            'lzma', 'mailbox', 'mailcap', 'marshal', 'math', 'mimetypes',
+            'mmap', 'modulefinder', 'multiprocessing', 'netrc', 'nis',
+            'nntplib', 'numbers', 'operator', 'optparse', 'os',
+            'ossaudiodev', 'parser', 'pathlib', 'pdb', 'pickle',
+            'pickletools', 'pipes', 'pkgutil', 'platform', 'plistlib',
+            'poplib', 'posix', 'posixpath', 'pprint', 'profile',
+            'pstats', 'pty', 'pwd', 'py_compile', 'pyclbr', 'pydoc',
+            'queue', 'quopri', 'random', 're', 'readline', 'reprlib',
+            'resource', 'rlcompleter', 'runpy', 'sched', 'secrets',
+            'select', 'selectors', 'shelve', 'shlex', 'shutil',
+            'signal', 'site', 'smtpd', 'smtplib', 'sndhdr', 'socket',
+            'socketserver', 'sqlite3', 'ssl', 'stat', 'statistics',
+            'string', 'stringprep', 'struct', 'subprocess', 'sunau',
+            'symtable', 'sys', 'sysconfig', 'syslog', 'tabnanny',
+            'tarfile', 'telnetlib', 'tempfile', 'termios', 'test',
+            'textwrap', 'threading', 'time', 'timeit', 'tkinter',
+            'token', 'tokenize', 'trace', 'traceback', 'tracemalloc',
+            'tty', 'turtle', 'types', 'typing', 'unicodedata',
+            'unittest', 'urllib', 'uu', 'uuid', 'venv', 'warnings',
+            'wave', 'weakref', 'webbrowser', 'winreg', 'winsound',
+            'wsgiref', 'xdrlib', 'xml', 'xmlrpc', 'zipapp', 'zipfile',
+            'zipimport', 'zlib'
         }
+        
+        # Build a set of known modules from the dependency map
+        known_modules = set(self.dependency_map["imports"].keys())
+        # Also include modules that are imported by others
+        for source, imports_dict in self.dependency_map["imports"].items():
+            for module in imports_dict:
+                known_modules.add(module)
         
         for module in imports:
             if module == '':
@@ -190,7 +254,7 @@ class DependencyValidator:
             if module.startswith('.'):
                 continue
             # Check if it's in the dependency map
-            if module in self.dependency_map["imports"]:
+            if module in known_modules:
                 continue
             # Check if it's a standard library module
             base_module = module.split('.')[0]
@@ -280,13 +344,19 @@ class DependencyValidator:
                         except SyntaxError:
                             pass
         
+        # Build a set of known modules from the dependency map
+        known_modules = set(dependency_map.get("imports", {}).keys())
+        for source, imports_dict in dependency_map.get("imports", {}).items():
+            for module in imports_dict:
+                known_modules.add(module)
+        
         # Validate new imports against dependency map
         for module, names in new_imports.items():
             if module == '' or module.startswith('.'):
                 continue
             
             # Check if module exists in dependency map
-            if module not in dependency_map.get("imports", {}):
+            if module not in known_modules:
                 # Check if it's a standard library module
                 stdlib_modules = {
                     'os', 'sys', 're', 'json', 'math', 'datetime', 'collections',
@@ -310,7 +380,7 @@ class DependencyValidator:
                     result["passed"] = False
                     result["errors"].append(f"Non-existent module reference: '{module}'")
         
-        # Check for circular dependencies
+        # Check for circular dependencies using DFS
         for module in new_imports:
             visited = set()
             path = []
@@ -332,6 +402,7 @@ class DependencyValidator:
                         if dfs(dep_module, target, depth + 1):
                             return True
                 path.pop()
+                visited.discard(current)
                 return False
             
             # We need a source name for the mutation; use a placeholder
@@ -350,7 +421,7 @@ class DependencyValidator:
             elif obj != "<mutation>":
                 # If the object is not in the calls map, it might be a new module
                 # Check if it exists in imports
-                if obj not in dependency_map.get("imports", {}):
+                if obj not in known_modules:
                     result["passed"] = False
                     result["errors"].append(f"Non-existent module for function call: '{obj}'")
         

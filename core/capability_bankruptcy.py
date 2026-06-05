@@ -1,7 +1,8 @@
 """Capability Bankruptcy & Consolidation Engine.
 
 Scans capabilities from knowledge base and module registry, computes usage scores,
-flags underperforming capabilities for removal or merge, and enforces execution every 50 cycles.
+flags underperforming capabilities for removal or merge, and enforces execution every 10 cycles.
+Uses goal_impact_prioritizer for scoring consistency.
 """
 
 import logging
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_THRESHOLD = 0.3
-EXECUTION_INTERVAL = 50  # cycles
+EXECUTION_INTERVAL = 10  # cycles - changed from 50 to 10
 RECENCY_DECAY_CYCLES = 20
 COVERAGE_THRESHOLD = 0.6  # 60% functionality coverage for merge suggestion
 MAX_LOC = 1000  # Maximum lines of code for normalization
@@ -26,7 +27,8 @@ class CapabilityBankruptcyEngine:
     """Engine for detecting and handling capability bankruptcy."""
 
     def __init__(self, knowledge_base: Dict[str, Any], module_registry: Dict[str, Any],
-                 threshold: float = DEFAULT_THRESHOLD):
+                 threshold: float = DEFAULT_THRESHOLD,
+                 goal_impact_prioritizer: Optional[Any] = None):
         self.knowledge_base = knowledge_base
         self.module_registry = module_registry
         self.threshold = threshold
@@ -34,6 +36,7 @@ class CapabilityBankruptcyEngine:
         self.rollback_snapshots: List[Dict[str, Any]] = []
         self.capability_scores: Dict[str, float] = {}
         self.bankruptcy_log: List[Dict[str, Any]] = []
+        self.goal_impact_prioritizer = goal_impact_prioritizer
 
     def _get_capabilities(self) -> Dict[str, Dict[str, Any]]:
         """Retrieve all capabilities from knowledge base and module registry."""
@@ -277,41 +280,53 @@ def core_functionality():
             logger.info("No capabilities found")
             return {"status": "no_capabilities", "cycle": self.cycle_count}
 
-        # Step 2: Compute composite scores for each module
+        # Step 2: Compute scores using goal_impact_prioritizer if available
         self.capability_scores = {}
-        for module_name in self.module_registry:
-            score = self._compute_composite_score(module_name)
-            self.capability_scores[module_name] = score
+        for cap_name, cap_data in capabilities.items():
+            if self.goal_impact_prioritizer is not None:
+                # Use goal_impact_prioritizer's score_goal for each capability
+                try:
+                    score = self.goal_impact_prioritizer.score_goal(cap_name, cap_data)
+                    self.capability_scores[cap_name] = score
+                except Exception as e:
+                    logger.error("Failed to score capability '%s' with prioritizer: %s", cap_name, str(e))
+                    self.capability_scores[cap_name] = 0.0
+            else:
+                # Fallback to composite scoring if prioritizer not available
+                module_name = cap_name.split('.')[0] if '.' in cap_name else cap_name
+                score = self._compute_composite_score(module_name)
+                self.capability_scores[cap_name] = score
 
-        # Step 3: Flag low-scoring modules
+        # Step 3: Flag low-scoring capabilities (score < 0.3)
         flagged = [name for name, score in self.capability_scores.items() if score < self.threshold]
-        logger.info("Flagged %d modules with score < %.2f", len(flagged), self.threshold)
+        logger.info("Flagged %d capabilities with score < %.2f", len(flagged), self.threshold)
 
         if not flagged:
             return {"status": "no_action", "cycle": self.cycle_count, "scores": self.capability_scores}
 
-        # Step 4: Find merge candidates for flagged modules
+        # Step 4: Find merge candidates for flagged capabilities
         merge_suggestions = self._find_merge_candidates(flagged)
 
         # Step 5: Create rollback snapshot
         snapshot = self._create_rollback_snapshot()
         logger.info("Created rollback snapshot at cycle %d", self.cycle_count)
 
-        # Step 6: Apply changes (archive and re-derive)
+        # Step 6: Apply changes (archive capabilities with score < 0.3)
         changes_made = []
-        for module_name in flagged:
-            # Archive module
+        for cap_name in flagged:
+            # Archive capability
+            module_name = cap_name.split('.')[0] if '.' in cap_name else cap_name
             self._archive_module(module_name)
-            self._log_action("archive", module_name, {"score": self.capability_scores[module_name]})
+            self._log_action("archive", cap_name, {"score": self.capability_scores[cap_name]})
 
-            # Re-derive module
+            # Re-derive capability
             self._rederive_module(module_name)
-            self._log_action("rederive", module_name, {"v2_suffix": True})
+            self._log_action("rederive", cap_name, {"v2_suffix": True})
 
             changes_made.append({
                 "action": "archive_and_rederive",
-                "module": module_name,
-                "score": self.capability_scores[module_name]
+                "capability": cap_name,
+                "score": self.capability_scores[cap_name]
             })
 
         # Step 7: Run critical tests and revert if needed

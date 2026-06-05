@@ -16,30 +16,17 @@
       "consecutive_failures": 3
     },
     {
-      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780656987.5989387
-    },
-    {
       "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "priority": 9,
       "status": "pending",
       "created_at": 1780656987.6025417
     },
     {
-      "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780653063.2412038,
-      "consecutive_failures": 1
-    },
-    {
       "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780654501.1373088,
-      "consecutive_failures": 1
+      "consecutive_failures": 3
     },
     {
       "description": "Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each existing module by its usage frequency, test pass rate, and lines of code. Modules below a threshold are archived (not deleted), and the system must re-derive their core functionality from scratch using the LLM, forcing simplification and removal of accumulated cruft.",
@@ -1008,6 +995,22 @@
       "status": "completed",
       "created_at": 1780653703.3882256,
       "completed_at": 1780655646.7311938
+    },
+    {
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780656987.5989387,
+      "consecutive_failures": 1,
+      "completed_at": 1780657417.2828302
+    },
+    {
+      "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780653063.2412038,
+      "consecutive_failures": 1,
+      "completed_at": 1780657636.8566504
     }
   ],
   "generated_goals": []

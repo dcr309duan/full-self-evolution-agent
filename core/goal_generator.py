@@ -61,6 +61,92 @@ success_threshold: int = 10  # Number of consecutive successes before triggering
 current_accuracy_threshold: float = 0.8  # Current accuracy threshold, can be lowered
 
 
+def prioritize_pending_goals() -> List[Goal]:
+    """Load all pending goals from memory, score them, and return only high-impact ones.
+
+    This function:
+    (1) Loads all pending goals from the goal_registry.
+    (2) Calls goal_impact_prioritizer.score_goal() for each.
+    (3) Returns only goals with score > 0.7 for mutation consideration.
+    (4) Archives goals with score < 0.3.
+
+    Returns:
+        List of goals with impact score > 0.7.
+    """
+    try:
+        from goal_impact_prioritizer import score_goal
+    except ImportError:
+        logger.warning("goal_impact_prioritizer not available, returning all pending goals")
+        return list(goal_registry.values())
+
+    high_impact_goals = []
+    for goal_key, goal in list(goal_registry.items()):
+        if goal.archived:
+            continue
+        try:
+            score = score_goal(goal)
+            if score > 0.7:
+                high_impact_goals.append(goal)
+                logger.debug("Goal %s has high impact score: %.2f", goal.description, score)
+            elif score < 0.3:
+                # Archive low-impact goals
+                archive_goal_with_lesson(goal, "Low impact score, archived automatically")
+                logger.info("Archived low-impact goal: %s (score: %.2f)", goal.description, score)
+            else:
+                # Keep medium-impact goals as pending
+                logger.debug("Goal %s has medium impact score: %.2f", goal.description, score)
+        except Exception as e:
+            logger.error("Error scoring goal %s: %s", goal.description, e)
+            # Keep goal as pending if scoring fails
+            high_impact_goals.append(goal)
+
+    return high_impact_goals
+
+
+def prioritize_and_filter_goals(goals: List[Goal]) -> List[Goal]:
+    """Score each goal using the prioritizer, archive low-scoring goals, and return only high-scoring ones.
+
+    This method runs before mutation selection each cycle. It:
+    (1) Calls goal_impact_prioritizer.score_goal() for each goal.
+    (2) Archives goals with score < 0.3.
+    (3) Returns only goals with score > 0.7 for mutation consideration.
+
+    Args:
+        goals: List of goals to prioritize and filter.
+
+    Returns:
+        List of goals with impact score > 0.7.
+    """
+    try:
+        from goal_impact_prioritizer import score_goal
+    except ImportError:
+        logger.warning("goal_impact_prioritizer not available, returning all goals unfiltered")
+        return goals
+
+    filtered_goals = []
+    for goal in goals:
+        if goal.archived:
+            continue
+        try:
+            score = score_goal(goal)
+            if score > 0.7:
+                filtered_goals.append(goal)
+                logger.debug("Goal %s has high impact score: %.2f", goal.description, score)
+            elif score < 0.3:
+                # Archive low-impact goals
+                archive_goal_with_lesson(goal, "Low impact score, archived automatically")
+                logger.info("Archived low-impact goal: %s (score: %.2f)", goal.description, score)
+            else:
+                # Keep medium-impact goals as pending
+                logger.debug("Goal %s has medium impact score: %.2f", goal.description, score)
+        except Exception as e:
+            logger.error("Error scoring goal %s: %s", goal.description, e)
+            # Keep goal as pending if scoring fails
+            filtered_goals.append(goal)
+
+    return filtered_goals
+
+
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
@@ -86,6 +172,12 @@ def generate_goals(
     """
     global consecutive_successes, current_accuracy_threshold
     
+    # Run prioritization before generating new goals
+    high_impact_pending = prioritize_pending_goals()
+    if high_impact_pending:
+        logger.info("Found %d high-impact pending goals, returning them instead of generating new ones", len(high_impact_pending))
+        return high_impact_pending
+
     goals: List[Goal] = []
 
     # Check health_dashboard before generating new goals
@@ -293,6 +385,9 @@ def generate_goals(
         0 if g.source == "curiosity" else 1,
         -_coverage_score(g, metrics_list)
     ))
+
+    # After generating new goals, apply prioritization and filtering
+    goals = prioritize_and_filter_goals(goals)
 
     return goals
 
@@ -811,111 +906,4 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
         hardening_key = f"hardening:{goal.module}:{goal.description}"
         knowledge_base[hardening_key] = f"Improved: {lesson}"
     
-    # If this was a cluster resolution goal, store the resolution
-    if "cluster_resolution" in goal.tags:
-        cluster_key = f"cluster:{goal.module}:{goal.description}"
-        knowledge_base[cluster_key] = f"Resolved: {lesson}"
-    
-    # If this was a meta-goal, store the test suite modification
-    if "meta_goal" in goal.tags:
-        meta_key = f"meta_goal:{goal.module}:{goal.description}"
-        knowledge_base[meta_key] = f"Test suite modified: {lesson}"
-    
-    logger.info(
-        "Archived goal '%s' with lesson: %s",
-        goal.description, lesson
-    )
-
-
-# Example usage (for testing)
-if __name__ == "__main__":
-    # Example metrics
-    example_metrics = [
-        SimulationMetrics(
-            module="module_a",
-            accuracy=0.65,
-            has_unexpected_side_effects=True,
-            coverage=0.3
-        ),
-        SimulationMetrics(
-            module="module_b",
-            accuracy=0.95,
-            has_unexpected_side_effects=False,
-            coverage=0.9
-        ),
-        SimulationMetrics(
-            module="module_c",
-            accuracy=0.75,
-            has_unexpected_side_effects=True,
-            coverage=0.5
-        ),
-        SimulationMetrics(
-            module="fs_abstraction",
-            accuracy=0.85,
-            has_unexpected_side_effects=False,
-            coverage=0.7,
-            fs_abstraction_retry_rate=0.45,
-            permission_failure_spike=True
-        ),
-        SimulationMetrics(
-            module="module_d",
-            accuracy=0.5,
-            has_unexpected_side_effects=False,
-            coverage=0.4,
-            failure_cluster=True
-        ),
-    ]
-
-    # Add some fitness scores to knowledge base for testing
-    knowledge_base["fitness_score:FizzBuzz"] = "0.0"
-    knowledge_base["fitness_score:BinarySearch"] = "0.85"
-    knowledge_base["fitness_score:QuickSort"] = "0.0"
-
-    # Example curiosity goals
-    curiosity_goals = [
-        Goal(
-            description="Explore novel interaction patterns in module_a",
-            priority=GoalPriority.HIGH,
-            module="module_a",
-            goal_type="curiosity",
-            source="curiosity",
-            tags=["curiosity", "exploration"]
-        ),
-        Goal(
-            description="Investigate emergent behavior in module_c",
-            priority=GoalPriority.MEDIUM,
-            module="module_c",
-            goal_type="curiosity",
-            source="curiosity",
-            tags=["curiosity", "emergent"]
-        )
-    ]
-
-    generated = generate_goals(example_metrics, curiosity_goals=curiosity_goals)
-    print("Generated goals:")
-    for goal in generated:
-        print(f"  {goal} (source: {goal.source}, type: {goal.goal_type})")
-
-    print("\nPrioritized goals:")
-    prioritized = prioritize_goals(generated)
-    for goal in prioritized:
-        print(f"  {goal} (source: {goal.source}, type: {goal.goal_type})")
-
-    # Test sub-goal generation with different strategies
-    print("\nSub-goals for first goal (sequential):")
-    if generated:
-        sub_goals = generate_sub_goals(generated[0], decomposition_strategy="sequential")
-        for sub_goal in sub_goals:
-            deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
-            print(f"  {sub_goal}{deps}")
-
-    print("\nSub-goals for first goal (parallel):")
-    if generated:
-        sub_goals = generate_sub_goals(generated[0], decomposition_strategy="parallel")
-        for sub_goal in sub_goals:
-            deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
-            print(f"  {sub_goal}{deps}")
-
-    print("\nSub-goals for first goal (dependency-based):")
-    if generated:
-        sub_goals = generate_sub_go
+    # If this was a cluster resolution

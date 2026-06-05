@@ -1,4 +1,77 @@
 {
-  "modules": {},
+  "modules": {
+    "core/evolution_orchestrator.py": {
+      "imports": ["os", "sys", "json", "ast", "logging", "datetime", "random", "copy", "typing", "collections"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.makedirs", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "random.randint", "random.choice", "copy.deepcopy", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/dependency_validator.py": {
+      "imports": ["os", "sys", "json", "ast", "logging", "typing", "collections"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "ast.parse", "ast.walk", "ast.Import", "ast.ImportFrom", "ast.Call", "ast.Attribute", "ast.Name", "typing.List", "typing.Dict", "typing.Set", "typing.Tuple", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/mutation_engine.py": {
+      "imports": ["os", "sys", "json", "ast", "logging", "random", "copy", "typing", "collections"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "random.randint", "random.choice", "random.shuffle", "copy.deepcopy", "ast.parse", "ast.walk", "ast.Import", "ast.ImportFrom", "ast.FunctionDef", "ast.ClassDef", "ast.Assign", "ast.Call", "ast.Attribute", "ast.Name", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/self_modifier.py": {
+      "imports": ["os", "sys", "json", "ast", "logging", "typing", "collections"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "os.remove", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "ast.parse", "ast.walk", "ast.Import", "ast.ImportFrom", "ast.FunctionDef", "ast.ClassDef", "ast.Assign", "ast.Call", "ast.Attribute", "ast.Name", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/state_manager.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "os.remove", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/self_awareness.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "hashlib"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "os.remove", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "hashlib.sha256", "hashlib.md5", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_metrics.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "math"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "math.sqrt", "math.log", "math.exp", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_controller.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "threading", "queue"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "threading.Thread", "threading.Lock", "threading.Event", "queue.Queue", "queue.Empty", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_loop.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "time"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "time.sleep", "time.time", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_analyzer.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "statistics"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "statistics.mean", "statistics.median", "statistics.stdev", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_optimizer.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "math", "random"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "math.sqrt", "math.log", "math.exp", "random.random", "random.gauss", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_planner.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "itertools"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "itertools.chain", "itertools.combinations", "itertools.permutations", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_scheduler.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "time", "heapq"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "time.sleep", "time.time", "heapq.heappush", "heapq.heappop", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_visualizer.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "matplotlib", "numpy"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "matplotlib.pyplot.figure", "matplotlib.pyplot.plot", "matplotlib.pyplot.savefig", "matplotlib.pyplot.close", "numpy.array", "numpy.mean", "numpy.std", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_reporter.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "csv", "io"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "csv.writer", "csv.DictWriter", "io.StringIO", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_logger.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "datetime", "traceback"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "datetime.now", "datetime.timedelta", "traceback.format_exc", "traceback.print_exc", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_config.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections", "configparser"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "configparser.ConfigParser", "configparser.ConfigParser.read", "configparser.ConfigParser.sections", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    },
+    "core/evolution_exception.py": {
+      "imports": ["os", "sys", "json", "logging", "typing", "collections"],
+      "function_calls": ["open", "json.load", "json.dump", "os.path.exists", "os.path.join", "logging.getLogger", "logging.info", "logging.error", "logging.debug", "typing.List", "typing.Dict", "typing.Optional", "collections.defaultdict", "collections.OrderedDict"]
+    }
+  },
   "circular_dependencies": []
 }
