@@ -12,6 +12,7 @@ from core.mutation_engine import mutate_file
 from core.test_runner import run_tests
 from core.reflection import analyze_result
 from core.simulation_engine import simulate_change, SimulationResult
+from core.goal_triage import triage_pending_goals
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -91,10 +92,40 @@ def get_simulation_accuracy() -> Dict[str, Any]:
         "average_confidence": avg_confidence
     }
 
+def is_critical_goal(goal: Dict[str, Any]) -> bool:
+    """Check if a goal is critical (high priority or has dependencies from other goals)."""
+    priority = goal.get("priority", "low")
+    dependencies = goal.get("dependencies", [])
+    return priority == "high" or len(dependencies) > 0
+
+def validate_triage_result(triage_result: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate triage results to ensure no critical goals were archived without confirmation."""
+    archived_goals = triage_result.get("archived_goals", [])
+    reverted_goals = []
+    warnings = []
+    
+    for goal in archived_goals:
+        if is_critical_goal(goal):
+            # Revert the archive for critical goals
+            reverted_goals.append(goal)
+            warnings.append(f"Critical goal '{goal.get('name', 'unknown')}' was archived without explicit confirmation. Reverting archive.")
+    
+    if reverted_goals:
+        # Remove reverted goals from archived list
+        triage_result["archived_goals"] = [g for g in archived_goals if g not in reverted_goals]
+        # Add reverted goals back to pending goals
+        pending_goals = triage_result.get("pending_goals", [])
+        pending_goals.extend(reverted_goals)
+        triage_result["pending_goals"] = pending_goals
+        triage_result["warnings"] = triage_result.get("warnings", []) + warnings
+    
+    return triage_result
+
 def run_smoke_test() -> Dict[str, Any]:
     """
     Execute the evolution smoke test in an isolated temporary directory.
     Integrates simulation engine to predict outcomes before mutation.
+    Integrates goal triage to avoid re-generating archived goals.
 
     Returns:
         A structured dictionary containing:
@@ -221,7 +252,41 @@ def run_smoke_test() -> Dict[str, Any]:
             "details": f"Analysis result: {analysis}"
         })
 
-        # Step 7: Return structured result with simulation data
+        # Step 7: Goal triage - triage pending goals after reflection
+        triage_result = triage_pending_goals()
+        logs.append({
+            "step": 6,
+            "action": "goal_triage",
+            "status": "success",
+            "details": f"Triage result: {triage_result}"
+        })
+
+        # Step 7.5: Post-triage validation - check for critical goals archived without confirmation
+        validated_triage = validate_triage_result(triage_result)
+        if validated_triage.get("warnings"):
+            for warning in validated_triage["warnings"]:
+                logs.append({
+                    "step": 6.5,
+                    "action": "post_triage_validation",
+                    "status": "warning",
+                    "details": warning
+                })
+            # Update triage result with validated version
+            triage_result = validated_triage
+
+        # Step 8: Goal generation with archived goals excluded
+        archived_goals = triage_result.get("archived_goals", [])
+        # Pass archived goals to goal generator to avoid re-generating them
+        # This is a placeholder for actual goal generation logic
+        new_goal = select_goal(goal, exclude_goals=archived_goals)
+        logs.append({
+            "step": 7,
+            "action": "goal_generation",
+            "status": "success",
+            "details": f"Generated new goal: {new_goal}, excluding {len(archived_goals)} archived goals"
+        })
+
+        # Step 9: Return structured result with simulation data
         result = {
             "success": True,
             "logs": logs,

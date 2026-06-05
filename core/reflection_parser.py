@@ -8,6 +8,85 @@ class SimulationPrediction(str, Enum):
     FAIL = "fail"
 
 
+class GoalTriageResults(BaseModel):
+    """Schema for goal triage results fields."""
+    goals_triaged: int = Field(
+        ...,
+        ge=0,
+        description="Number of goals that were triaged in this reflection cycle."
+    )
+    goals_flagged_stale: int = Field(
+        ...,
+        ge=0,
+        description="Number of goals flagged as stale during triage."
+    )
+    goals_decomposed: int = Field(
+        ...,
+        ge=0,
+        description="Number of goals that were decomposed into sub-goals."
+    )
+    goals_archived: int = Field(
+        ...,
+        ge=0,
+        description="Number of goals archived during triage."
+    )
+    goals_correctly_archived: int = Field(
+        default=0,
+        ge=0,
+        description="Number of archived goals that would have failed anyway (correctly archived)."
+    )
+    goals_incorrectly_archived: int = Field(
+        default=0,
+        ge=0,
+        description="Number of archived goals that would have succeeded (incorrectly archived)."
+    )
+    sub_goals_generated: int = Field(
+        default=0,
+        ge=0,
+        description="Total number of sub-goals generated from decomposition."
+    )
+    sub_goals_succeeded: int = Field(
+        default=0,
+        ge=0,
+        description="Number of sub-goals that succeeded."
+    )
+    triage_quality_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Triage quality score based on archival accuracy and sub-goal success rate."
+    )
+    lessons_learned: List[str] = Field(
+        default_factory=list,
+        description="List of lessons learned from the triage process."
+    )
+
+    @validator("triage_quality_score", always=True)
+    def compute_triage_quality_score(cls, v: float, values: Dict[str, Any]) -> float:
+        """Compute triage quality score based on archival accuracy and sub-goal success rate."""
+        correctly_archived = values.get("goals_correctly_archived", 0)
+        incorrectly_archived = values.get("goals_incorrectly_archived", 0)
+        sub_goals_generated = values.get("sub_goals_generated", 0)
+        sub_goals_succeeded = values.get("sub_goals_succeeded", 0)
+
+        # Calculate archival accuracy ratio
+        total_archived = correctly_archived + incorrectly_archived
+        if total_archived > 0:
+            archival_accuracy = correctly_archived / total_archived
+        else:
+            archival_accuracy = 0.0
+
+        # Calculate sub-goal success rate
+        if sub_goals_generated > 0:
+            sub_goal_success_rate = sub_goals_succeeded / sub_goals_generated
+        else:
+            sub_goal_success_rate = 0.0
+
+        # Combine both metrics (weighted average, equal weight)
+        quality_score = (archival_accuracy + sub_goal_success_rate) / 2.0
+        return min(max(quality_score, 0.0), 1.0)
+
+
 class SimulationResult(BaseModel):
     """Schema for simulation result fields."""
     simulation_prediction: SimulationPrediction = Field(
@@ -46,22 +125,24 @@ class SimulationResult(BaseModel):
 class SchemaAlignmentLayer:
     """
     Schema alignment layer that integrates simulation result fields
-    into the existing schema structure.
+    and goal triage results into the existing schema structure.
     """
 
     def __init__(self, base_schema: Optional[Dict[str, Any]] = None):
         self.base_schema = base_schema or {}
         self.simulation_fields = SimulationResult.schema()
+        self.goal_triage_fields = GoalTriageResults.schema()
 
     def align_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Align the given schema by injecting simulation result fields.
+        Align the given schema by injecting simulation result fields
+        and goal triage results.
 
         Args:
             schema: The existing schema dictionary to be updated.
 
         Returns:
-            Updated schema dictionary with simulation fields added.
+            Updated schema dictionary with simulation and triage fields added.
         """
         aligned = schema.copy()
         aligned.setdefault("properties", {}).update(
@@ -70,11 +151,28 @@ class SchemaAlignmentLayer:
                 "simulation_confidence": self.simulation_fields["properties"]["simulation_confidence"],
                 "simulation_side_effects": self.simulation_fields["properties"]["simulation_side_effects"],
                 "simulation_accuracy_trend": self.simulation_fields["properties"]["simulation_accuracy_trend"],
+                "goal_triage_results": {
+                    "type": "object",
+                    "properties": {
+                        "goals_triaged": self.goal_triage_fields["properties"]["goals_triaged"],
+                        "goals_flagged_stale": self.goal_triage_fields["properties"]["goals_flagged_stale"],
+                        "goals_decomposed": self.goal_triage_fields["properties"]["goals_decomposed"],
+                        "goals_archived": self.goal_triage_fields["properties"]["goals_archived"],
+                        "goals_correctly_archived": self.goal_triage_fields["properties"]["goals_correctly_archived"],
+                        "goals_incorrectly_archived": self.goal_triage_fields["properties"]["goals_incorrectly_archived"],
+                        "sub_goals_generated": self.goal_triage_fields["properties"]["sub_goals_generated"],
+                        "sub_goals_succeeded": self.goal_triage_fields["properties"]["sub_goals_succeeded"],
+                        "triage_quality_score": self.goal_triage_fields["properties"]["triage_quality_score"],
+                        "lessons_learned": self.goal_triage_fields["properties"]["lessons_learned"],
+                    },
+                    "required": ["goals_triaged", "goals_flagged_stale", "goals_decomposed", "goals_archived"],
+                    "description": "Triage results for goals in this reflection cycle."
+                }
             }
         )
         # Ensure required fields are present
         required = aligned.get("required", [])
-        for field in ["simulation_prediction", "simulation_confidence"]:
+        for field in ["simulation_prediction", "simulation_confidence", "goal_triage_results"]:
             if field not in required:
                 required.append(field)
         aligned["required"] = required
@@ -94,3 +192,18 @@ class SchemaAlignmentLayer:
             ValidationError: If data does not conform to the schema.
         """
         return SimulationResult(**data)
+
+    def validate_goal_triage_data(self, data: Dict[str, Any]) -> GoalTriageResults:
+        """
+        Validate and return a GoalTriageResults instance from raw data.
+
+        Args:
+            data: Dictionary containing goal triage result fields.
+
+        Returns:
+            GoalTriageResults instance if validation passes.
+
+        Raises:
+            ValidationError: If data does not conform to the schema.
+        """
+        return GoalTriageResults(**data)

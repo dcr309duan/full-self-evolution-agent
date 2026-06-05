@@ -1,61 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified orchestrator/core.py to: Integrate the dependency graph into the evolution loop: (1) import DependencyGraph from planner.dependency_graph, (2) after each reflection cycle, rebuild the dependency graph from the current capability list, (3) before executing any goal, call get_ready_goals() and only execute those, (4) move blocked goals to a 'pending' queue, (5) log the dependency status and any re-prioritization decisions.",
-      "timestamp": 1780633303.0905857,
-      "cycle": 56
-    },
-    {
-      "content": "Successfully modified planner/goal_prioritizer.py to: Implement a GoalPrioritizer that: (1) takes the topological order from DependencyGraph, (2) assigns priority scores based on depth in the DAG (deeper = higher priority after prerequisites are met), (3) provides a method to reorder the goal queue dynamically when dependencies resolve, (4) supports manual override via a configuration file.",
-      "timestamp": 1780633315.1693099,
-      "cycle": 56
-    },
-    {
-      "content": "Successfully modified orchestrator/core.py to: Add dependency-aware scheduling: (1) after each goal completion, re-evaluate the dependency graph (some blocked goals may now be unblocked), (2) if a goal fails, check if its failure is due to missing dependencies (log as 'BLOCKED' instead of 'FAILED'), (3) implement a maximum retry count for blocked goals to avoid infinite loops.",
-      "timestamp": 1780633337.459605,
-      "cycle": 56
-    },
-    {
-      "content": "Successfully modified tests/test_dependency_planner.py to: Create comprehensive tests: (1) test that DependencyGraph correctly identifies 'pre-mutation validation' depends on 'mutation engine', (2) test topological sort produces valid order, (3) test that blocked goals are correctly identified, (4) test that GoalPrioritizer reorders correctly, (5) test integration with orchestrator mock.",
-      "timestamp": 1780633353.950184,
-      "cycle": 56
-    },
-    {
-      "content": "Successfully modified planner/__init__.py to: Export DependencyGraph and GoalPrioritizer classes for easy import by orchestrator and other modules.",
-      "timestamp": 1780633356.1715508,
-      "cycle": 56
-    },
-    {
-      "content": "[研究] Self-Healing Code Generation via Schema-Aware Repair Synthesis: The field of self-healing code generation via schema-aware repair synthesis is an emerging intersect",
-      "timestamp": 1780633373.9826705,
-      "cycle": 56
-    },
-    {
-      "content": "[研究] Autonomous Failure Anticipation through Predictive Schema Evolution Modeling: The field of autonomous failure anticipation is evolving rapidly, with predictive schema evolution m",
-      "timestamp": 1780633385.2060654,
-      "cycle": 56
-    },
-    {
-      "content": "Successfully modified mutation/failure_classifier.py to: Create a FailurePatternClassifier class that: (1) accepts failure logs from mutation engine, (2) classifies failures into categories: AST_PARSE_ERROR, SEMANTIC_ERROR, TEST_FAILURE, TIMEOUT, DEPENDENCY_MISSING, (3) maintains a failure history per mutation target, (4) computes 'failure signature' (hash of error type + target module), (5) exposes method to get recommended strategy change based on failure pattern (e.g., 3 AST errors → switch to wrapper strategy).",
-      "timestamp": 1780633439.5211554,
-      "cycle": 57
-    },
-    {
-      "content": "Successfully modified mutation/strategy_selector.py to: Create or modify the strategy selector to: (1) maintain a list of available strategies: ['ast_rewrite', 'wrapper_inject', 'monkey_patch', 'config_change'], (2) accept recommendations from FailurePatternClassifier, (3) implement a 'strategy switch' that picks the next untried strategy for the target module, (4) log strategy selection decisions, (5) expose current strategy for each target.",
-      "timestamp": 1780633447.412277,
-      "cycle": 57
-    },
-    {
-      "content": "Successfully modified mutation/engine.py to: Integrate FailurePatternClassifier and strategy selector into mutation engine: (1) after each mutation attempt, log result to classifier, (2) if failure, query classifier for recommended strategy change, (3) before next mutation on same target, check if strategy switch is needed, (4) implement wrapper-based mutation strategy as alternative to AST rewriting: wrap function calls with modified behavior instead of modifying AST.",
-      "timestamp": 1780633466.1546874,
-      "cycle": 57
-    },
-    {
-      "content": "Successfully modified mutation/wrapper_strategy.py to: Implement wrapper-based mutation strategy: (1) analyze target function signature, (2) generate a wrapper function that intercepts calls, applies transformation to inputs/outputs, (3) inject wrapper via module-level patching, (4) include rollback capability to restore original function, (5) test with simple cases (e.g., wrap a function to double its return value).",
-      "timestamp": 1780633481.6355813,
-      "cycle": 57
-    },
-    {
       "content": "Successfully modified tests/test_self_repair.py to: Create integration tests for self-repair: (1) test that 3 consecutive AST failures trigger switch to wrapper strategy, (2) test that wrapper strategy produces valid mutations, (3) test that failure classifier correctly categorizes different error types, (4) test that strategy selector avoids repeating failed strategies on same target.",
       "timestamp": 1780633509.377124,
       "cycle": 57
@@ -999,6 +944,61 @@
       "content": "Successfully modified core/self_model.py to: Update the self-model knowledge graph to include: (1) Simulation nodes for each module with accuracy metrics, (2) Dependency edges used by the simulation engine, (3) Simulation history as a property of each module node, (4) Cross-reference between simulation predictions and actual mutation outcomes.",
       "timestamp": 1780637637.862654,
       "cycle": 81
+    },
+    {
+      "content": "Successfully modified core/goal_triage.py to: Create a new goal triage module that: (1) Scans all pending and in-progress goals from the goal registry, (2) Checks each goal's 'last_active_generation' field against the current generation, (3) Flags goals that have been unfished (no progress) for 3+ consecutive generations, (4) For flagged goals, either breaks them into smaller sub-goals (if feasible) or archives them with a lesson recorded in the knowledge base.",
+      "timestamp": 1780637713.2206035,
+      "cycle": 82
+    },
+    {
+      "content": "Successfully modified core/goal_generator.py to: Add a new method `generate_sub_goals(parent_goal)` that takes a complex goal and breaks it into 2-3 smaller, more achievable sub-goals. Also add a method `archive_goal_with_lesson(goal, lesson)` that records the goal as archived in the goal registry and stores the lesson in the knowledge base.",
+      "timestamp": 1780637730.1650465,
+      "cycle": 82
+    },
+    {
+      "content": "Successfully modified core/reflection_parser.py to: Add a new schema field 'goal_triage_results' to the reflection output that captures: number of goals triaged, number flagged as stale, number decomposed, number archived, and lessons learned. This allows the reflection system to analyze triage effectiveness.",
+      "timestamp": 1780637740.6345232,
+      "cycle": 82
+    },
+    {
+      "content": "Successfully modified core/orchestrator.py to: Integrate the goal triage routine into the main evolution loop. After the reflection phase and before goal generation, call `goal_triage.triage_pending_goals()`. Pass the results to the goal generator so it can avoid re-generating archived goals.",
+      "timestamp": 1780637756.577097,
+      "cycle": 82
+    },
+    {
+      "content": "Successfully modified core/goal_triage.py to: Add a progress tracking field to each goal in the registry: 'last_progress_update' (timestamp) and 'progress_indicator' (e.g., 'no_change', 'partial', 'significant'). Update the triage logic to flag goals that have had 'no_change' for 3+ consecutive generations, not just based on generation gap.",
+      "timestamp": 1780637787.8241541,
+      "cycle": 83
+    },
+    {
+      "content": "Successfully modified core/goal_triage.py to: Implement a 'triage_effectiveness_monitor' that tracks how many archived goals later become unarchived (i.e., were incorrectly archived) and how many sub-goals lead to successful completion. Log these metrics to the knowledge base for self-improvement.",
+      "timestamp": 1780637809.0736873,
+      "cycle": 83
+    },
+    {
+      "content": "Successfully modified core/goal_registry.py to: Add a 'triage_history' field to the goal schema that records each triage action (flagged, decomposed, archived) with timestamps and reasons. This enables traceability and rollback if a triage decision is later found to be incorrect.",
+      "timestamp": 1780637819.119338,
+      "cycle": 83
+    },
+    {
+      "content": "Successfully modified core/orchestrator.py to: Add a post-triage validation step: after triage runs, verify that no critical goals (those with high priority or dependencies from other goals) were archived without explicit confirmation. If such a goal is found, revert the archive and log a warning.",
+      "timestamp": 1780637836.5713294,
+      "cycle": 83
+    },
+    {
+      "content": "Successfully modified core/goal_generator.py to: Enhance the `generate_sub_goals` method to accept a 'decomposition_strategy' parameter (e.g., 'sequential', 'parallel', 'dependency-based') and generate sub-goals with explicit dependency edges between them, enabling the dependency-aware scheduler to optimize execution order.",
+      "timestamp": 1780637857.6831641,
+      "cycle": 83
+    },
+    {
+      "content": "Successfully modified tests/test_goal_triage_integration.py to: Create an integration test that: (1) seeds the goal registry with 5 goals of varying staleness, (2) runs the triage routine, (3) verifies that only goals with 3+ generations of no progress are flagged, (4) verifies that archived goals have lessons recorded in the knowledge base, (5) verifies that decomposed goals appear as sub-goals in the registry.",
+      "timestamp": 1780637873.9958777,
+      "cycle": 83
+    },
+    {
+      "content": "Successfully modified core/reflection_parser.py to: Add a new analysis field 'triage_quality_score' that evaluates the triage effectiveness based on: (a) ratio of correctly archived goals (those that would have failed anyway) vs incorrectly archived, (b) success rate of sub-goals generated from decomposition. This feeds back into the triage module's threshold tuning.",
+      "timestamp": 1780637887.7284715,
+      "cycle": 83
     }
   ],
   "learned_patterns": [],
@@ -3534,6 +3534,66 @@
       "strategy": "Build a lightweight 'mutation simulation' module that, given a proposed mutation, clones the affected module's dependency subgraph, applies the change to the clone, runs the relevant test suite on the clone, and returns predicted pass/fail and side-effect impact without touching production code.",
       "outcome": "10/10 steps succeeded",
       "timestamp": 1780637637.8747573
+    },
+    {
+      "strategy": "modify core/goal_triage.py: Create a new goal triage module that: (1) Scans all pending and in-progress goals from the goal registry, (2) Checks each goal's 'last_active_generation' field against the current generation, (3) Flags goals that have been unfished (no progress) for 3+ consecutive generations, (4) For flagged goals, either breaks them into smaller sub-goals (if feasible) or archives them with a lesson recorded in the knowledge base.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637713.2090552
+    },
+    {
+      "strategy": "modify core/goal_generator.py: Add a new method `generate_sub_goals(parent_goal)` that takes a complex goal and breaks it into 2-3 smaller, more achievable sub-goals. Also add a method `archive_goal_with_lesson(goal, lesson)` that records the goal as archived in the goal registry and stores the lesson in the knowledge base.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637730.1480696
+    },
+    {
+      "strategy": "modify core/reflection_parser.py: Add a new schema field 'goal_triage_results' to the reflection output that captures: number of goals triaged, number flagged as stale, number decomposed, number archived, and lessons learned. This allows the reflection system to analyze triage effectiveness.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637740.6214726
+    },
+    {
+      "strategy": "modify core/orchestrator.py: Integrate the goal triage routine into the main evolution loop. After the reflection phase and before goal generation, call `goal_triage.triage_pending_goals()`. Pass the results to the goal generator so it can avoid re-generating archived goals.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637756.5455623
+    },
+    {
+      "strategy": "modify core/goal_triage.py: Add a progress tracking field to each goal in the registry: 'last_progress_update' (timestamp) and 'progress_indicator' (e.g., 'no_change', 'partial', 'significant'). Update the triage logic to flag goals that have had 'no_change' for 3+ consecutive generations, not just based on generation gap.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637787.811539
+    },
+    {
+      "strategy": "modify core/goal_triage.py: Implement a 'triage_effectiveness_monitor' that tracks how many archived goals later become unarchived (i.e., were incorrectly archived) and how many sub-goals lead to successful completion. Log these metrics to the knowledge base for self-improvement.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637809.0612843
+    },
+    {
+      "strategy": "modify core/goal_registry.py: Add a 'triage_history' field to the goal schema that records each triage action (flagged, decomposed, archived) with timestamps and reasons. This enables traceability and rollback if a triage decision is later found to be incorrect.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637819.106414
+    },
+    {
+      "strategy": "modify core/orchestrator.py: Add a post-triage validation step: after triage runs, verify that no critical goals (those with high priority or dependencies from other goals) were archived without explicit confirmation. If such a goal is found, revert the archive and log a warning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637836.5579903
+    },
+    {
+      "strategy": "modify core/goal_generator.py: Enhance the `generate_sub_goals` method to accept a 'decomposition_strategy' parameter (e.g., 'sequential', 'parallel', 'dependency-based') and generate sub-goals with explicit dependency edges between them, enabling the dependency-aware scheduler to optimize execution order.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637857.6654487
+    },
+    {
+      "strategy": "modify tests/test_goal_triage_integration.py: Create an integration test that: (1) seeds the goal registry with 5 goals of varying staleness, (2) runs the triage routine, (3) verifies that only goals with 3+ generations of no progress are flagged, (4) verifies that archived goals have lessons recorded in the knowledge base, (5) verifies that decomposed goals appear as sub-goals in the registry.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637873.9844193
+    },
+    {
+      "strategy": "modify core/reflection_parser.py: Add a new analysis field 'triage_quality_score' that evaluates the triage effectiveness based on: (a) ratio of correctly archived goals (those that would have failed anyway) vs incorrectly archived, (b) success rate of sub-goals generated from decomposition. This feeds back into the triage module's threshold tuning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637887.7163522
+    },
+    {
+      "strategy": "Implement a 'goal triage' routine that scans all pending and in-progress goals, flags those that have appeared unfished for 3+ consecutive generations, and either breaks them into smaller sub-goals or archives them with a lesson recorded in the knowledge base.",
+      "outcome": "7/7 steps succeeded",
+      "timestamp": 1780637887.7420192
     }
   ],
   "capabilities_developed": []

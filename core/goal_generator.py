@@ -27,6 +27,9 @@ class Goal:
     priority: GoalPriority
     module: str
     goal_type: str  # 'accuracy' or 'dependency_tracking'
+    archived: bool = False
+    lesson: Optional[str] = None
+    dependencies: List[str] = field(default_factory=list)  # List of sub-goal descriptions this goal depends on
 
     def __str__(self) -> str:
         return f"[{self.priority.name}] {self.description}"
@@ -39,6 +42,11 @@ class SimulationMetrics:
     accuracy: float  # 0.0 to 1.0
     has_unexpected_side_effects: bool = False
     coverage: float = 0.0  # 0.0 to 1.0, how much of the module is covered
+
+
+# Global registries for goals and knowledge
+goal_registry: Dict[str, Goal] = {}
+knowledge_base: Dict[str, str] = {}
 
 
 def generate_goals(
@@ -188,6 +196,159 @@ def prioritize_goals(goals: List[Goal]) -> List[Goal]:
     return sorted(goals, key=lambda g: (g.priority.value, g.description))
 
 
+def generate_sub_goals(
+    parent_goal: Goal,
+    decomposition_strategy: str = "sequential"
+) -> List[Goal]:
+    """Break a complex goal into 2-3 smaller, more achievable sub-goals with explicit dependencies.
+
+    Args:
+        parent_goal: The complex goal to break down.
+        decomposition_strategy: Strategy for generating sub-goals and dependencies.
+            Supported strategies:
+            - 'sequential': Sub-goals are generated in a linear chain where each depends on the previous.
+            - 'parallel': Sub-goals are generated with no dependencies between them.
+            - 'dependency-based': Sub-goals are generated with explicit dependencies based on goal type.
+
+    Returns:
+        List of 2-3 sub-goals derived from the parent goal, with dependency edges set.
+    """
+    sub_goals: List[Goal] = []
+    
+    if parent_goal.goal_type == "accuracy":
+        # Break accuracy improvement into smaller steps
+        analyze_goal = Goal(
+            description=f"Analyze accuracy gaps in {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="accuracy"
+        )
+        implement_goal = Goal(
+            description=f"Implement targeted fixes for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="accuracy"
+        )
+        validate_goal = Goal(
+            description=f"Validate accuracy improvements for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="accuracy"
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: analyze -> implement -> validate
+            implement_goal.dependencies.append(analyze_goal.description)
+            validate_goal.dependencies.append(implement_goal.description)
+            sub_goals = [analyze_goal, implement_goal, validate_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [analyze_goal, implement_goal, validate_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: analyze is independent, implement depends on analyze, validate depends on implement
+            implement_goal.dependencies.append(analyze_goal.description)
+            validate_goal.dependencies.append(implement_goal.description)
+            sub_goals = [analyze_goal, implement_goal, validate_goal]
+        else:
+            # Default to sequential for unknown strategies
+            implement_goal.dependencies.append(analyze_goal.description)
+            validate_goal.dependencies.append(implement_goal.description)
+            sub_goals = [analyze_goal, implement_goal, validate_goal]
+            
+    elif parent_goal.goal_type == "dependency_tracking":
+        # Break dependency tracking into smaller steps
+        identify_goal = Goal(
+            description=f"Identify dependencies for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="dependency_tracking"
+        )
+        implement_goal = Goal(
+            description=f"Implement dependency tracking for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="dependency_tracking"
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: identify -> implement
+            implement_goal.dependencies.append(identify_goal.description)
+            sub_goals = [identify_goal, implement_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [identify_goal, implement_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: implement depends on identify
+            implement_goal.dependencies.append(identify_goal.description)
+            sub_goals = [identify_goal, implement_goal]
+        else:
+            # Default to sequential for unknown strategies
+            implement_goal.dependencies.append(identify_goal.description)
+            sub_goals = [identify_goal, implement_goal]
+    else:
+        # Generic breakdown for unknown goal types
+        research_goal = Goal(
+            description=f"Research requirements for {parent_goal.description}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type=parent_goal.goal_type
+        )
+        implement_goal = Goal(
+            description=f"Implement solution for {parent_goal.description}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type=parent_goal.goal_type
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: research -> implement
+            implement_goal.dependencies.append(research_goal.description)
+            sub_goals = [research_goal, implement_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [research_goal, implement_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: implement depends on research
+            implement_goal.dependencies.append(research_goal.description)
+            sub_goals = [research_goal, implement_goal]
+        else:
+            # Default to sequential for unknown strategies
+            implement_goal.dependencies.append(research_goal.description)
+            sub_goals = [research_goal, implement_goal]
+    
+    logger.debug(
+        "Generated %d sub-goals for parent goal: %s using strategy: %s",
+        len(sub_goals), parent_goal.description, decomposition_strategy
+    )
+    
+    return sub_goals
+
+
+def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
+    """Record the goal as archived in the goal registry and store the lesson in the knowledge base.
+
+    Args:
+        goal: The goal to archive.
+        lesson: The lesson learned from working on this goal.
+    """
+    # Mark the goal as archived and store the lesson
+    goal.archived = True
+    goal.lesson = lesson
+    
+    # Store in goal registry
+    goal_key = f"{goal.module}:{goal.goal_type}:{goal.description}"
+    goal_registry[goal_key] = goal
+    
+    # Store lesson in knowledge base
+    lesson_key = f"lesson:{goal.module}:{goal.goal_type}"
+    knowledge_base[lesson_key] = lesson
+    
+    logger.info(
+        "Archived goal '%s' with lesson: %s",
+        goal.description, lesson
+    )
+
+
 # Example usage (for testing)
 if __name__ == "__main__":
     # Example metrics
@@ -221,3 +382,34 @@ if __name__ == "__main__":
     prioritized = prioritize_goals(generated)
     for goal in prioritized:
         print(f"  {goal}")
+
+    # Test sub-goal generation with different strategies
+    print("\nSub-goals for first goal (sequential):")
+    if generated:
+        sub_goals = generate_sub_goals(generated[0], decomposition_strategy="sequential")
+        for sub_goal in sub_goals:
+            deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
+            print(f"  {sub_goal}{deps}")
+
+    print("\nSub-goals for first goal (parallel):")
+    if generated:
+        sub_goals = generate_sub_goals(generated[0], decomposition_strategy="parallel")
+        for sub_goal in sub_goals:
+            deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
+            print(f"  {sub_goal}{deps}")
+
+    print("\nSub-goals for first goal (dependency-based):")
+    if generated:
+        sub_goals = generate_sub_goals(generated[0], decomposition_strategy="dependency-based")
+        for sub_goal in sub_goals:
+            deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
+            print(f"  {sub_goal}{deps}")
+
+    # Test archiving
+    print("\nArchiving first goal with lesson:")
+    if generated:
+        archive_goal_with_lesson(generated[0], "Found critical accuracy issue in module_a")
+        print(f"  Archived: {generated[0].archived}")
+        print(f"  Lesson: {generated[0].lesson}")
+        print(f"  Registry size: {len(goal_registry)}")
+        print(f"  Knowledge base size: {len(knowledge_base)}")

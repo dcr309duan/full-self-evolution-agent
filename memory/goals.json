@@ -2,6 +2,12 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Add a 'prerequisite verification' step to the goal execution pipeline: before executing any goal, check that all hard prerequisites (e.g., 'mutation engine exists') are satisfied by querying the dependency graph; if not, automatically defer the goal and log the blocking dependency to prevent repeated wasted cycles.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780637689.1628916
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -467,6 +473,13 @@
       "status": "completed",
       "created_at": 1780637080.7282043,
       "completed_at": 1780637637.883533
+    },
+    {
+      "description": "Implement a 'goal triage' routine that scans all pending and in-progress goals, flags those that have appeared unfished for 3+ consecutive generations, and either breaks them into smaller sub-goals or archives them with a lesson recorded in the knowledge base.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780637689.1607938,
+      "completed_at": 1780637887.7503107
     }
   ],
   "generated_goals": []
