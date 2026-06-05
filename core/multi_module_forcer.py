@@ -1,5 +1,5 @@
 """
-Multi-Module Forcer: Escapes local optima by coordinating mutations across 2-3 modules.
+Multi-Module Forcer: Escapes local optima by coordinating mutations across 3+ modules.
 Imports from nash_detector_and_forcer for equilibrium detection and forcing.
 """
 
@@ -977,4 +977,4 @@ def check_and_force_coordinated_mutation(
         A result dictionary with the outcome of the coordinated mutation attempt.
     """
     forcer = MultiModuleForcer(detector)
-    orchestrator = MultiModuleOrchestr
+    orchestrator = MultiModuleOrchestrator

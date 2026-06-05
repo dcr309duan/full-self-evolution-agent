@@ -169,6 +169,9 @@ class EvolutionOrchestrator:
         self.goal_queue: List[Tuple[int, float, str, str]] = []
         self._initialize_goal_queue()
 
+        # Multi-mutation mode flag: when True, overrides normal single-mutation selection
+        self.multi_mutation_mode = False
+
         # Load persisted state if available
         self._load_state()
 
@@ -561,6 +564,7 @@ class EvolutionOrchestrator:
             "goal_queue": list(self.goal_queue),
             "evolution_history": self.evolution_history[-100:],  # Keep last 100 entries
             "cycle_count": self.cycle_count,
+            "multi_mutation_mode": self.multi_mutation_mode,
             "timestamp": time.time()
         }
         
@@ -606,6 +610,11 @@ class EvolutionOrchestrator:
             if "cycle_count" in state:
                 self.cycle_count = state["cycle_count"]
                 logger.info("Restored cycle count to %d from saved state", self.cycle_count)
+            
+            # Restore multi_mutation_mode
+            if "multi_mutation_mode" in state:
+                self.multi_mutation_mode = state["multi_mutation_mode"]
+                logger.info("Restored multi_mutation_mode to %s from saved state", self.multi_mutation_mode)
             
             logger.info("Orchestrator state loaded successfully from %s", STATE_FILE)
         except Exception as e:
@@ -847,13 +856,4 @@ class EvolutionOrchestrator:
             logger.info("Fitness landscape mutation phase completed with %d new tests generated", num_tests)
             
         except Exception as e:
-            logger.exception("Error during fitness landscape mutation phase: %s", e)
-
-    def _run_meta_goal_analysis(self):
-        """Run meta goal generator analysis and inject disruptive goals if returned.
-        
-        This method is called every META_GOAL_INTERVAL cycles. It collects current statistics,
-        calls meta_goal_generator.analyze(), and if a disruptive goal is returned, injects it
-        into the goal queue with high priority, bypassing normal feasibility checks.
-        """
-       
+            logger
