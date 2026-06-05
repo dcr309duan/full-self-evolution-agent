@@ -1,26 +1,26 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-05 12:23:05
+> Generated: 2026-06-05 12:25:41
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 56 |
-| Generation | 28 |
-| Last Activity | 2026-06-05 12:21:02 |
-| Speed | ~17.2 cycles/hour |
+| Current Cycle | 57 |
+| Generation | 29 |
+| Last Activity | 2026-06-05 12:23:39 |
+| Speed | ~17.3 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 78.7% (37/47) |
+| Total Success Rate | 79.2% (38/48) |
 | Recent Success Rate (last 20) | 100.0% (20/20) |
-| Capabilities Developed | 38 |
-| Goals Completed | 39 |
-| Goals Pending | 3 |
+| Capabilities Developed | 39 |
+| Goals Completed | 40 |
+| Goals Pending | 2 |
 
 ## Capabilities Acquired
 
@@ -62,16 +62,15 @@
 36. Build a causal dependency graph from the self-model that maps module interfaces and callers, enablin
 37. Create a failure pattern miner that analyzes the failure log to identify high-level architectural bo
 38. Implement a canonical schema alignment layer that validates and normalizes reflection_parser outputs
+39. Build a dependency-aware planning system that parses the current goal graph, identifies unmet prereq
 
 ## Current Goals (Pending)
 
-- [8/10] Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and generates a fundamentally different approach (e.g., if AST rewriting fails, try a wrapper-based strategy instead). Include a failure pattern classifier that logs the root cause and adjusts the mutation strategy selector to avoid repeating the same mistake.
 - [7/10] Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.
 - [6/10] Create a performance monitoring and optimization system
 
 ## Completed Goals
 
-- ~~Build a dependency-aware scheduling system that reads the system model (or a simple dependency manifest) to block modifications on reflection_parser or goal_generator until all prerequisite modules (e.g., schema definitions, base parsers) are verified as consistent, and prioritize mutations that unblock the current bottleneck.~~ (06-05 11:46)
 - ~~Create a self-consistency test suite for introspection modules: for each reflection cycle, automatically generate test cases that check that the reflection parser output can be parsed by the goal generator without errors, and that the goal generator output can be consumed by the mutation engine, failing and rolling back any change that breaks this contract.~~ (06-05 11:52)
 - ~~Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs into a normalized format consumable by goal_generator and mutation_engine, including runtime validation and automated adaptation on mismatch detection.~~ (06-05 11:58)
 - ~~Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.~~ (06-05 12:04)
@@ -81,28 +80,28 @@
 - ~~Create a failure pattern miner that analyzes the failure log to identify high-level architectural bottlenecks (e.g., 'schema alignment failures account for 40% of recent errors'), and generates targeted refactoring goals to address root causes rather than symptoms.~~ (06-05 12:17)
 - ~~Implement a canonical schema alignment layer that validates and normalizes reflection_parser outputs, goal_generator inputs, and failure_analysis module outputs into a unified representation (e.g., a shared JSON schema or typed interface). This should include a schema registry, a validator that checks consistency across modules, and an auto-converter that maps between formats. Test end-to-end with a single reflection cycle to confirm no schema mismatches occur.~~ (06-05 12:20)
 - ~~Build a dependency-aware planning system that parses the current goal graph, identifies unmet prerequisites (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unresolved. Integrate this with the orchestrator to prevent wasted cycles on disconnected implementations and to schedule changes in safe topological order.~~ (06-05 12:22)
+- ~~Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and generates a fundamentally different approach (e.g., if AST rewriting fails, try a wrapper-based strategy instead). Include a failure pattern classifier that logs the root cause and adjusts the mutation strategy selector to avoid repeating the same mistake.~~ (06-05 12:25)
 
 ## Knowledge Base
 
 | Category | Count |
 |----------|-------|
 | Insights | 200 |
-| Successful Strategies | 273 |
+| Successful Strategies | 280 |
 | Failed Approaches | 32 |
 
 ### Recent Insights
 
-- [06-05 12:22] Successfully modified orchestrator/core.py to: Add dependency-aware scheduling: (1) after each goal completion, re-evalu
-- [06-05 12:22] Successfully modified tests/test_dependency_planner.py to: Create comprehensive tests: (1) test that DependencyGraph cor
-- [06-05 12:22] Successfully modified planner/__init__.py to: Export DependencyGraph and GoalPrioritizer classes for easy import by orch
-- [06-05 12:22] [研究] Self-Healing Code Generation via Schema-Aware Repair Synthesis: The field of self-healing code generation via schem
-- [06-05 12:23] [研究] Autonomous Failure Anticipation through Predictive Schema Evolution Modeling: The field of autonomous failure antic
+- [06-05 12:24] Successfully modified mutation/strategy_selector.py to: Create or modify the strategy selector to: (1) maintain a list o
+- [06-05 12:24] Successfully modified mutation/engine.py to: Integrate FailurePatternClassifier and strategy selector into mutation engi
+- [06-05 12:24] Successfully modified mutation/wrapper_strategy.py to: Implement wrapper-based mutation strategy: (1) analyze target fun
+- [06-05 12:25] Successfully modified tests/test_self_repair.py to: Create integration tests for self-repair: (1) test that 3 consecutiv
+- [06-05 12:25] Successfully modified orchestrator/core.py to: Add self-repair monitoring to orchestrator: (1) after each mutation cycle
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 46 | Implement a schema alignment layer between the reflection pa | SUCCESS |
 | 47 | Build a dependency-aware scheduling system that reads the sy | SUCCESS |
 | 48 | Create a self-consistency test suite for introspection modul | SUCCESS |
 | 49 | Implement a canonical schema alignment layer that validates  | SUCCESS |
@@ -112,6 +111,7 @@
 | 53 | Build a causal dependency graph from the self-model that map | SUCCESS |
 | 54 | Create a failure pattern miner that analyzes the failure log | SUCCESS |
 | 55 | Implement a canonical schema alignment layer that validates  | SUCCESS |
+| 56 | Build a dependency-aware planning system that parses the cur | SUCCESS |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

@@ -1,36 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified reflection_parser.py to: Add a 'parse_failure_context' method that extracts structured insights from failure logs and error messages. This should output: failure_type, root_cause_hint, suggested_approach_change, and confidence_score. This feeds directly into the sub-goal generation process.",
-      "timestamp": 1780628006.6789448,
-      "cycle": 31
-    },
-    {
-      "content": "Successfully modified goal_feasibility_estimator.py to: Create a new module that: (1) maintains a success rate database per goal type (e.g., 'API server', 'mutation engine'), (2) checks current capabilities against required capabilities for a goal type, (3) estimates success probability based on capability overlap and historical success rates, (4) returns a decision: 'proceed', 'adjust_complexity', or 'block' with explanation.",
-      "timestamp": 1780628069.527191,
-      "cycle": 32
-    },
-    {
-      "content": "Successfully modified orchestrator.py to: Integrate goal_feasibility_estimator into the orchestrator's goal execution flow. Before executing any new goal, call estimator.estimate_success_probability(goal, capabilities, history). If probability < 0.2, block execution and log reason. If between 0.2 and 0.5, adjust goal complexity (e.g., split into sub-goals, reduce scope). Add a new method 'execute_with_feasibility_check(goal)' that wraps the existing execution logic.",
-      "timestamp": 1780628115.12447,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified goal_generator.py to: Integrate the feasibility estimator into the goal generation pipeline. Before generating a new goal, call the estimator. If 'block', log the reason and skip generation. If 'adjust_complexity', reduce the goal scope (e.g., fewer sub-steps, simpler target). Add a 'feasibility_check' parameter to control this behavior.",
-      "timestamp": 1780628115.6259232,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified orchestrator.py to: Modify the unified evolution loop orchestrator to call the feasibility estimator before enqueuing any new goal. If blocked, log the decision and optionally trigger a 'capability acquisition' sub-goal instead. Ensure the estimator's decision is recorded in the task metadata for future analysis.",
-      "timestamp": 1780628131.5895352,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified goal_feasibility_estimator.py to: Enhance the estimator to: (1) parse goal type from goal description using keyword matching (e.g., 'API server', 'mutation engine', 'web scraping'), (2) compute capability overlap score by checking if required capabilities (hardcoded per type) are in current capabilities list, (3) update success rate database after each goal completion/failure, (4) add a method 'adjust_complexity(goal, probability)' that returns a modified goal with reduced scope (e.g., fewer endpoints for API server, simpler mutation operators for engine).",
-      "timestamp": 1780628142.8729746,
-      "cycle": 33
-    },
-    {
       "content": "Successfully modified tests/test_goal_feasibility_estimator.py to: Create comprehensive tests: (1) test that estimator correctly identifies missing capabilities, (2) test that low historical success rate (<20%) triggers block, (3) test that partial capability overlap triggers complexity adjustment, (4) test that high success rate with full capabilities allows proceed, (5) test edge cases like empty history or unknown goal types, (6) test integration with goal generator and orchestrator.",
       "timestamp": 1780628153.6528664,
       "cycle": 33
@@ -999,6 +969,36 @@
       "content": "[研究] Autonomous Failure Anticipation through Predictive Schema Evolution Modeling: The field of autonomous failure anticipation is evolving rapidly, with predictive schema evolution m",
       "timestamp": 1780633385.2060654,
       "cycle": 56
+    },
+    {
+      "content": "Successfully modified mutation/failure_classifier.py to: Create a FailurePatternClassifier class that: (1) accepts failure logs from mutation engine, (2) classifies failures into categories: AST_PARSE_ERROR, SEMANTIC_ERROR, TEST_FAILURE, TIMEOUT, DEPENDENCY_MISSING, (3) maintains a failure history per mutation target, (4) computes 'failure signature' (hash of error type + target module), (5) exposes method to get recommended strategy change based on failure pattern (e.g., 3 AST errors → switch to wrapper strategy).",
+      "timestamp": 1780633439.5211554,
+      "cycle": 57
+    },
+    {
+      "content": "Successfully modified mutation/strategy_selector.py to: Create or modify the strategy selector to: (1) maintain a list of available strategies: ['ast_rewrite', 'wrapper_inject', 'monkey_patch', 'config_change'], (2) accept recommendations from FailurePatternClassifier, (3) implement a 'strategy switch' that picks the next untried strategy for the target module, (4) log strategy selection decisions, (5) expose current strategy for each target.",
+      "timestamp": 1780633447.412277,
+      "cycle": 57
+    },
+    {
+      "content": "Successfully modified mutation/engine.py to: Integrate FailurePatternClassifier and strategy selector into mutation engine: (1) after each mutation attempt, log result to classifier, (2) if failure, query classifier for recommended strategy change, (3) before next mutation on same target, check if strategy switch is needed, (4) implement wrapper-based mutation strategy as alternative to AST rewriting: wrap function calls with modified behavior instead of modifying AST.",
+      "timestamp": 1780633466.1546874,
+      "cycle": 57
+    },
+    {
+      "content": "Successfully modified mutation/wrapper_strategy.py to: Implement wrapper-based mutation strategy: (1) analyze target function signature, (2) generate a wrapper function that intercepts calls, applies transformation to inputs/outputs, (3) inject wrapper via module-level patching, (4) include rollback capability to restore original function, (5) test with simple cases (e.g., wrap a function to double its return value).",
+      "timestamp": 1780633481.6355813,
+      "cycle": 57
+    },
+    {
+      "content": "Successfully modified tests/test_self_repair.py to: Create integration tests for self-repair: (1) test that 3 consecutive AST failures trigger switch to wrapper strategy, (2) test that wrapper strategy produces valid mutations, (3) test that failure classifier correctly categorizes different error types, (4) test that strategy selector avoids repeating failed strategies on same target.",
+      "timestamp": 1780633509.377124,
+      "cycle": 57
+    },
+    {
+      "content": "Successfully modified orchestrator/core.py to: Add self-repair monitoring to orchestrator: (1) after each mutation cycle, check if strategy switches occurred, (2) log strategy effectiveness metrics (success rate per strategy per target), (3) if a target has exhausted all strategies, mark it as 'requires manual intervention' and generate a knowledge gap entry.",
+      "timestamp": 1780633541.3562,
+      "cycle": 57
     }
   ],
   "learned_patterns": [],
@@ -2529,6 +2529,41 @@
       "strategy": "Build a dependency-aware planning system that parses the current goal graph, identifies unmet prerequisites (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unresolved. Integrate this with the orchestrator to prevent wasted cycles on disconnected implementations and to schedule changes in safe topological order.",
       "outcome": "6/6 steps succeeded",
       "timestamp": 1780633356.180162
+    },
+    {
+      "strategy": "modify mutation/failure_classifier.py: Create a FailurePatternClassifier class that: (1) accepts failure logs from mutation engine, (2) classifies failures into categories: AST_PARSE_ERROR, SEMANTIC_ERROR, TEST_FAILURE, TIMEOUT, DEPENDENCY_MISSING, (3) maintains a failure history per mutation target, (4) computes 'failure signature' (hash of error type + target module), (5) exposes method to get recommended strategy change based on failure pattern (e.g., 3 AST errors → switch to wrapper strategy).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633439.5120702
+    },
+    {
+      "strategy": "modify mutation/strategy_selector.py: Create or modify the strategy selector to: (1) maintain a list of available strategies: ['ast_rewrite', 'wrapper_inject', 'monkey_patch', 'config_change'], (2) accept recommendations from FailurePatternClassifier, (3) implement a 'strategy switch' that picks the next untried strategy for the target module, (4) log strategy selection decisions, (5) expose current strategy for each target.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633447.4032245
+    },
+    {
+      "strategy": "modify mutation/engine.py: Integrate FailurePatternClassifier and strategy selector into mutation engine: (1) after each mutation attempt, log result to classifier, (2) if failure, query classifier for recommended strategy change, (3) before next mutation on same target, check if strategy switch is needed, (4) implement wrapper-based mutation strategy as alternative to AST rewriting: wrap function calls with modified behavior instead of modifying AST.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633466.145442
+    },
+    {
+      "strategy": "modify mutation/wrapper_strategy.py: Implement wrapper-based mutation strategy: (1) analyze target function signature, (2) generate a wrapper function that intercepts calls, applies transformation to inputs/outputs, (3) inject wrapper via module-level patching, (4) include rollback capability to restore original function, (5) test with simple cases (e.g., wrap a function to double its return value).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633481.6263778
+    },
+    {
+      "strategy": "modify tests/test_self_repair.py: Create integration tests for self-repair: (1) test that 3 consecutive AST failures trigger switch to wrapper strategy, (2) test that wrapper strategy produces valid mutations, (3) test that failure classifier correctly categorizes different error types, (4) test that strategy selector avoids repeating failed strategies on same target.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633509.367356
+    },
+    {
+      "strategy": "modify orchestrator/core.py: Add self-repair monitoring to orchestrator: (1) after each mutation cycle, check if strategy switches occurred, (2) log strategy effectiveness metrics (success rate per strategy per target), (3) if a target has exhausted all strategies, mark it as 'requires manual intervention' and generate a knowledge gap entry.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633541.3465981
+    },
+    {
+      "strategy": "Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and generates a fundamentally different approach (e.g., if AST rewriting fails, try a wrapper-based strategy instead). Include a failure pattern classifier that logs the root cause and adjusts the mutation strategy selector to avoid repeating the same mistake.",
+      "outcome": "6/6 steps succeeded",
+      "timestamp": 1780633541.3656323
     }
   ],
   "capabilities_developed": []

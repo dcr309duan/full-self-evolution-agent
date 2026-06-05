@@ -57,6 +57,11 @@ class EvolutionOrchestrator:
         self._pending_goals: List[Goal] = []
         self._blocked_goals: Dict[str, int] = {}  # goal_id -> retry_count
         self._completed_goals: Set[str] = set()  # set of completed goal IDs
+        # Self-repair monitoring state
+        self._strategy_switch_count: int = 0
+        self._strategy_effectiveness: Dict[str, Dict[str, Dict[str, float]]] = {}  # strategy -> target -> metrics
+        self._exhausted_targets: Set[str] = set()  # targets that have exhausted all strategies
+        self._knowledge_gaps: List[Dict[str, Any]] = []  # knowledge gap entries
 
     def after_mutation_cycle(self, mutation_results: List[dict]) -> None:
         """Called after each mutation cycle to mine patterns and generate goals.
@@ -102,7 +107,195 @@ class EvolutionOrchestrator:
         # Rebuild dependency graph from current capability list
         self._rebuild_dependency_graph()
 
+        # Self-repair monitoring: check for strategy switches
+        self._monitor_strategy_switches(mutation_results)
+
+        # Self-repair monitoring: log strategy effectiveness metrics
+        self._log_strategy_effectiveness(mutation_results)
+
+        # Self-repair monitoring: check for exhausted strategies
+        self._check_exhausted_strategies(mutation_results)
+
         self.state = OrchestrationState.IDLE
+
+    def _monitor_strategy_switches(self, mutation_results: List[dict]) -> None:
+        """Monitor and track strategy switches that occurred during mutation cycle.
+
+        Args:
+            mutation_results: List of mutation results from the evolution loop.
+        """
+        strategy_switches = 0
+        for result in mutation_results:
+            if result.get('strategy_switch', False):
+                strategy_switches += 1
+                logger.info("Strategy switch detected in mutation result: %s", result.get('id', 'unknown'))
+
+        if strategy_switches > 0:
+            self._strategy_switch_count += strategy_switches
+            logger.info("Total strategy switches this cycle: %d (cumulative: %d)", 
+                       strategy_switches, self._strategy_switch_count)
+
+    def _log_strategy_effectiveness(self, mutation_results: List[dict]) -> None:
+        """Log and track strategy effectiveness metrics per strategy per target.
+
+        Args:
+            mutation_results: List of mutation results from the evolution loop.
+        """
+        for result in mutation_results:
+            strategy = result.get('strategy', 'unknown')
+            target = result.get('target', 'unknown')
+            success = result.get('success', False)
+            
+            # Initialize nested dictionaries if not present
+            if strategy not in self._strategy_effectiveness:
+                self._strategy_effectiveness[strategy] = {}
+            if target not in self._strategy_effectiveness[strategy]:
+                self._strategy_effectiveness[strategy][target] = {
+                    'attempts': 0,
+                    'successes': 0,
+                    'failures': 0,
+                    'success_rate': 0.0
+                }
+            
+            # Update metrics
+            metrics = self._strategy_effectiveness[strategy][target]
+            metrics['attempts'] += 1
+            if success:
+                metrics['successes'] += 1
+            else:
+                metrics['failures'] += 1
+            
+            # Calculate success rate
+            if metrics['attempts'] > 0:
+                metrics['success_rate'] = metrics['successes'] / metrics['attempts']
+            
+            logger.debug(
+                "Strategy effectiveness: strategy='%s', target='%s', attempts=%d, successes=%d, success_rate=%.2f",
+                strategy, target, metrics['attempts'], metrics['successes'], metrics['success_rate']
+            )
+
+    def _check_exhausted_strategies(self, mutation_results: List[dict]) -> None:
+        """Check if any target has exhausted all available strategies.
+
+        Args:
+            mutation_results: List of mutation results from the evolution loop.
+        """
+        # Collect all targets and their used strategies
+        target_strategies: Dict[str, Set[str]] = defaultdict(set)
+        for result in mutation_results:
+            target = result.get('target', 'unknown')
+            strategy = result.get('strategy', 'unknown')
+            target_strategies[target].add(strategy)
+
+        # Get all available strategies from the system
+        all_strategies = self._get_available_strategies()
+
+        # Check each target for exhaustion
+        for target, used_strategies in target_strategies.items():
+            if target not in self._exhausted_targets:
+                # Check if all strategies have been tried on this target
+                if used_strategies == all_strategies:
+                    self._exhausted_targets.add(target)
+                    logger.warning(
+                        "Target '%s' has exhausted all available strategies. Marking for manual intervention.",
+                        target
+                    )
+                    
+                    # Generate knowledge gap entry
+                    gap_entry = {
+                        'target': target,
+                        'type': 'strategy_exhaustion',
+                        'description': f"Target '{target}' has exhausted all {len(all_strategies)} available strategies without success",
+                        'tried_strategies': list(used_strategies),
+                        'timestamp': self._get_current_timestamp(),
+                        'severity': 'high'
+                    }
+                    self._knowledge_gaps.append(gap_entry)
+                    
+                    # Mark target for manual intervention
+                    self._mark_target_for_intervention(target, gap_entry)
+
+    def _get_available_strategies(self) -> Set[str]:
+        """Get the set of all available strategies in the system.
+
+        Returns:
+            Set of strategy names.
+        """
+        # This would typically come from configuration or system registry
+        # For now, we derive it from the strategy_effectiveness tracking
+        return set(self._strategy_effectiveness.keys())
+
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp for logging purposes.
+
+        Returns:
+            Current timestamp as string.
+        """
+        from datetime import datetime
+        return datetime.now().isoformat()
+
+    def _mark_target_for_intervention(self, target: str, gap_entry: Dict[str, Any]) -> None:
+        """Mark a target as requiring manual intervention and log the knowledge gap.
+
+        Args:
+            target: The target that requires intervention.
+            gap_entry: The knowledge gap entry describing the issue.
+        """
+        logger.warning(
+            "MANUAL INTERVENTION REQUIRED: Target '%s' has exhausted all strategies. "
+            "Knowledge gap entry generated: %s",
+            target,
+            gap_entry['description']
+        )
+        
+        # Store the intervention requirement for external systems to query
+        if not hasattr(self, '_intervention_required'):
+            self._intervention_required = {}
+        self._intervention_required[target] = {
+            'timestamp': gap_entry['timestamp'],
+            'gap_entry': gap_entry,
+            'resolved': False
+        }
+
+    def get_strategy_switch_count(self) -> int:
+        """Get the total number of strategy switches detected.
+
+        Returns:
+            Total strategy switch count.
+        """
+        return self._strategy_switch_count
+
+    def get_strategy_effectiveness(self) -> Dict[str, Dict[str, Dict[str, float]]]:
+        """Get the strategy effectiveness metrics.
+
+        Returns:
+            Dictionary of strategy effectiveness metrics.
+        """
+        return self._strategy_effectiveness
+
+    def get_exhausted_targets(self) -> Set[str]:
+        """Get the set of targets that have exhausted all strategies.
+
+        Returns:
+            Set of exhausted target names.
+        """
+        return self._exhausted_targets
+
+    def get_knowledge_gaps(self) -> List[Dict[str, Any]]:
+        """Get the list of knowledge gap entries.
+
+        Returns:
+            List of knowledge gap dictionaries.
+        """
+        return self._knowledge_gaps
+
+    def get_intervention_required(self) -> Dict[str, Dict[str, Any]]:
+        """Get the targets requiring manual intervention.
+
+        Returns:
+            Dictionary of targets requiring intervention with details.
+        """
+        return getattr(self, '_intervention_required', {})
 
     def _rebuild_dependency_graph(self) -> None:
         """Rebuild the dependency graph from the current capability list."""
@@ -350,3 +543,10 @@ class EvolutionOrchestrator:
         self._pending_goals.clear()
         self._blocked_goals.clear()
         self._completed_goals.clear()
+        # Reset self-repair monitoring state
+        self._strategy_switch_count = 0
+        self._strategy_effectiveness.clear()
+        self._exhausted_targets.clear()
+        self._knowledge_gaps.clear()
+        if hasattr(self, '_intervention_required'):
+            del self._intervention_required
