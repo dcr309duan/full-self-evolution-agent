@@ -1,9 +1,8 @@
 {
   "cycle_count": 135,
-  "current_generation": 105,
+  "current_generation": 106,
   "last_evolution_time": 1780649672.293212,
   "capabilities": [
-    "Add a 'prerequisite verification' step to the goal execution pipeline: before executing any goal, ch",
     "Implement an external fitness function that scores the agent on solving 5 simple programming challen",
     "Create a 'curiosity engine' module that periodically generates a novel synthetic task (e.g., 'implem",
     "Implement a robust file system abstraction layer with atomic writes, retry logic, and automated perm",
@@ -52,15 +51,10 @@
     "Implement a 'capability consolidation' protocol: for each evolution cycle, if the number of distinct",
     "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insig",
     "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> gen",
-    "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_ge"
+    "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_ge",
+    "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automa"
   ],
   "history": [
-    {
-      "cycle": 29,
-      "goal": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
-      "success": true,
-      "timestamp": 1780627427.5841947
-    },
     {
       "cycle": 30,
       "goal": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
@@ -654,6 +648,12 @@
       "goal": "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_generator, reflection_engine) fails to execute 2 consecutive times, automatically reverts that module to the last known-good git commit, logs the failure pattern, and runs a simplified version of the module (with all optional features disabled) for the next cycle before attempting to restore full functionality.",
       "success": true,
       "timestamp": 1780649635.1416118
+    },
+    {
+      "cycle": 135,
+      "goal": "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automatically deprecate or remove it instead of trying to fix it. This will counter complexity creep and force the system to prune underperforming modules, stabilizing the core loop.",
+      "success": true,
+      "timestamp": 1780649855.0873008
     }
   ],
   "status": "evolving"
