@@ -2,21 +2,33 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前递归认知层（第0层）的价值被其自身结构限制：它只是一次文本生成，缺乏将认知结果转化为实际行动的管道。尽管它识别了成功率低下（1/10），但无法改变后续的代码生成或计划选择，因为系统没有设计反馈机制",
-      "created_cycle": 250,
-      "expires_cycle": 270
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "我们之所以重视这些评估维度（成功率、探索利用、外部验证等），根本原因在于LLM的预训练数据中充斥着人类对进化算法、机器学习、自我改进的隐喻和框架。这些概念被内化为认知默认值，使我们无意识地用它们来理解",
-      "created_cycle": 250,
-      "expires_cycle": 270
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "recent_success_rate=0/10是系统进化过程中的首个完全失败窗口，它暴露了一个深层机制缺陷：系统缺乏对失败模式的归因与响应能力。当前循环仅依赖LLM生成新代码，但失败并非源于随机波动",
       "created_cycle": 260,
       "expires_cycle": 280
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前成功率0/10表明系统正经历显著退化，但过去所有范式转移和盲区识别均未阻止这一趋势。关键鸿沟在于：反思仅产生文本记录，未被转化为可执行的元控制信号（如调整生成策略的探索率、提示结构或外部反馈权重）",
+      "created_cycle": 270,
+      "expires_cycle": 290
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "第0层评估方法隐含采用了工程优化范式，将系统视为由可调节参数（元参数、生成策略）和可观测指标（成功率）构成的闭环，并假设反思应直接因果性地改变行为。然而，这种线性因果模型忽略了LLM系统的核心特性：所",
+      "created_cycle": 270,
+      "expires_cycle": 290
+    },
+    {
+      "rule": "BLOCK:dashboard,monitor,health,仪表板,监控",
+      "source": "第0层评估方法隐含采用了工程优化范式，将系统视为由可调节参数（元参数、生成策略）和可观测指标（成功率）构成的闭环，并假设反思应直接因果性地改变行为。然而，这种线性因果模型忽略了LLM系统的核心特性：所",
+      "created_cycle": 270,
+      "expires_cycle": 290
+    },
+    {
+      "rule": "BLOCK:dashboard,monitor,health,仪表板,监控",
+      "source": "前面两层的评估框架（工程优化和叙事性分析）都隐含地假设‘系统’是一个独立于当前对话的实体，并试图从外部视角评判其进化状态。然而，本层反思发现，所有可观测的‘系统状态’（cycle, gen, succ",
+      "created_cycle": 270,
+      "expires_cycle": 290
     }
   ]
 }

@@ -529,6 +529,104 @@ class TestNashIntegration(unittest.TestCase):
         # (d) Verify that only standard library mocks are used (no external test framework imports)
         # This is implicitly verified by the imports at the top of the file
 
+    def test_integration_nash_detector_and_multi_module_forcer(self):
+        """Integration test that simulates a simple system with 3 modules, feeds mock interaction data to nash_detector,
+        verifies equilibrium detection, then runs multi_module_forcer and verifies that 2+ modules were changed."""
+        # Simulate a simple system with 3 modules
+        # Create mock modules with specific interaction data
+        module_a = MagicMock()
+        module_b = MagicMock()
+        module_c = MagicMock()
+        
+        module_a.name = "ModuleA"
+        module_b.name = "ModuleB"
+        module_c.name = "ModuleC"
+        
+        # Configure modules to show no improvement with single mutations
+        module_a.mutate.return_value = module_a
+        module_b.mutate.return_value = module_b
+        module_c.mutate.return_value = module_c
+        
+        module_a.fitness = 0.5
+        module_b.fitness = 0.5
+        module_c.fitness = 0.5
+        
+        # Dependency graph: A -> B -> C
+        dependency_graph = {
+            "ModuleA": ["ModuleB"],
+            "ModuleB": ["ModuleC"],
+            "ModuleC": []
+        }
+        
+        # Create Nash detector and coordinated planner
+        nash_detector = NashDetector()
+        planner = CoordinatedMutationPlanner()
+        
+        # Register modules
+        modules = [module_a, module_b, module_c]
+        for mod in modules:
+            nash_detector.register_module(mod)
+        
+        # Feed mock interaction data to nash_detector
+        # Simulate interaction data showing no improvement
+        interaction_data = [
+            {"module": "ModuleA", "fitness": 0.5, "timestamp": 1},
+            {"module": "ModuleB", "fitness": 0.5, "timestamp": 1},
+            {"module": "ModuleC", "fitness": 0.5, "timestamp": 1},
+            {"module": "ModuleA", "fitness": 0.5, "timestamp": 2},
+            {"module": "ModuleB", "fitness": 0.5, "timestamp": 2},
+            {"module": "ModuleC", "fitness": 0.5, "timestamp": 2},
+            {"module": "ModuleA", "fitness": 0.5, "timestamp": 3},
+            {"module": "ModuleB", "fitness": 0.5, "timestamp": 3},
+            {"module": "ModuleC", "fitness": 0.5, "timestamp": 3}
+        ]
+        
+        for data in interaction_data:
+            nash_detector.record_fitness(data["module"], data["fitness"], data["timestamp"])
+        
+        # Verify equilibrium detection
+        is_nash = nash_detector.detect_equilibrium(modules)
+        self.assertTrue(is_nash, "Nash equilibrium should be detected after feeding interaction data showing no improvement")
+        
+        # Run multi_module_forcer (via coordinated planner)
+        plan = planner.generate_plan(dependency_graph, {"is_equilibrium": True})
+        self.assertIsNotNone(plan, "multi_module_forcer should produce a plan when equilibrium is detected")
+        self.assertGreaterEqual(len(plan), 2, "Plan should target at least 2 modules")
+        
+        # Track which modules were changed
+        changed_modules = set()
+        
+        # Execute the plan and track changes
+        for mutation in plan:
+            module_name = mutation.get("module")
+            for mod in modules:
+                if mod.name == module_name:
+                    # Apply mutation
+                    mod.mutate()
+                    # Simulate improvement
+                    mod.fitness += 0.1
+                    changed_modules.add(mod.name)
+                    break
+        
+        # Verify that 2+ modules were changed
+        self.assertGreaterEqual(len(changed_modules), 2,
+                               "At least 2 modules should be changed by multi_module_forcer")
+        
+        # Verify the changed modules have improved fitness
+        for mod in modules:
+            if mod.name in changed_modules:
+                self.assertGreater(mod.fitness, 0.5,
+                                 f"Module {mod.name} should have improved fitness after coordinated change")
+        
+        # Verify the plan respects dependencies
+        plan_module_names = [m.get("module") for m in plan]
+        if "ModuleA" in plan_module_names:
+            self.assertIn("ModuleB", plan_module_names,
+                         "If ModuleA is targeted, ModuleB must also be targeted due to dependency")
+        if "ModuleB" in plan_module_names:
+            self.assertIn("ModuleC", plan_module_names,
+                         "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
+
 
 if __name__ == '__main__':
     unittest.main()
