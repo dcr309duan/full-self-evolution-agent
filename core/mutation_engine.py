@@ -9,6 +9,8 @@ import sys
 import random
 import time
 import ast
+import shutil
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -44,12 +46,19 @@ meta_bias = None
 # Configuration flag for meta-mutation selector
 META_MUTATION_ENABLED = False
 
+# Sandbox mode flag - when True, clone affected files before mutation
+sandbox_mode = False
+
+# Mutation provenance tracking
+mutation_provenance = []
+
 # Load configuration from system_config.json
 config_path = os.path.join(PROJECT_ROOT, "system_config.json")
 try:
     with open(config_path, 'r') as f:
         config = json.load(f)
         META_MUTATION_ENABLED = config.get("META_MUTATION_ENABLED", False)
+        sandbox_mode = config.get("sandbox_mode", False)
 except (FileNotFoundError, json.JSONDecodeError):
     pass
 
@@ -68,8 +77,87 @@ def get_function_pool():
     return pool
 
 
-def mutate(func_a, func_b, operator="crossover"):
+def emit_event(event_type, context=None):
+    """Emit an instrumentation event for the test harness."""
+    event = {
+        "type": event_type,
+        "timestamp": time.time(),
+        "context": context or {}
+    }
+    # Log to mutation log for test harness to read
+    log_path = os.path.join(MEMORY_DIR, "instrumentation_events.json")
+    fs = get_fs()
+    try:
+        content = fs.read_file(log_path)
+        events = json.loads(content)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
+        events = []
+    events.append(event)
+    if len(events) > 1000:
+        events = events[-1000:]
+    try:
+        fs.atomic_write(log_path, json.dumps(events, indent=2, ensure_ascii=False))
+    except Exception:
+        pass
+    return event
+
+
+def clone_file_for_sandbox(file_path):
+    """Clone a file to a sandbox location before mutation."""
+    if not sandbox_mode:
+        return file_path
+    
+    if not os.path.exists(file_path):
+        return file_path
+    
+    # Create sandbox directory
+    sandbox_dir = os.path.join(tempfile.gettempdir(), "mutation_sandbox", str(int(time.time())))
+    os.makedirs(sandbox_dir, exist_ok=True)
+    
+    # Clone the file
+    clone_path = os.path.join(sandbox_dir, os.path.basename(file_path))
+    shutil.copy2(file_path, clone_path)
+    
+    return clone_path
+
+
+def track_provenance(goal_id, mutation_details):
+    """Track which goal caused which mutation."""
+    global mutation_provenance
+    record = {
+        "goal_id": goal_id,
+        "timestamp": time.time(),
+        "mutation_details": mutation_details
+    }
+    mutation_provenance.append(record)
+    
+    # Persist provenance to file
+    provenance_path = os.path.join(MEMORY_DIR, "mutation_provenance.json")
+    fs = get_fs()
+    try:
+        content = fs.read_file(provenance_path)
+        provenance = json.loads(content)
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
+        provenance = []
+    provenance.append(record)
+    if len(provenance) > 1000:
+        provenance = provenance[-1000:]
+    try:
+        fs.atomic_write(provenance_path, json.dumps(provenance, indent=2, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def mutate(func_a, func_b, operator="crossover", goal_context=None):
     """Use LLM to create a mutation from two parent functions."""
+    # Emit mutation_start event
+    emit_event("mutation_start", {
+        "goal_context": goal_context,
+        "parent_a": func_a["name"],
+        "parent_b": func_b["name"],
+        "operator": operator
+    })
+    
     prompt = f"""You are a genetic programming engine. Create a NEW useful function by applying 
 the '{operator}' operator to these two parent functions:
 
@@ -96,13 +184,33 @@ Output ONLY the Python function definition, no explanation."""
         {"role": "user", "content": prompt}
     ]
     
-    result = call_deepseek(messages, temperature=0.8, max_tokens=1024)
-    
-    if result.startswith("```"):
-        lines = result.split('\n')
-        result = '\n'.join(lines[1:-1]) if lines[-1].strip() == '```' else '\n'.join(lines[1:])
-    
-    return result.strip()
+    try:
+        result = call_deepseek(messages, temperature=0.8, max_tokens=1024)
+        
+        if result.startswith("```"):
+            lines = result.split('\n')
+            result = '\n'.join(lines[1:-1]) if lines[-1].strip() == '```' else '\n'.join(lines[1:])
+        
+        # Emit mutation_success event
+        emit_event("mutation_success", {
+            "goal_context": goal_context,
+            "parent_a": func_a["name"],
+            "parent_b": func_b["name"],
+            "operator": operator,
+            "diff": result[:500]  # Truncate for event size
+        })
+        
+        return result.strip()
+    except Exception as e:
+        # Emit mutation_failure event
+        emit_event("mutation_failure", {
+            "goal_context": goal_context,
+            "parent_a": func_a["name"],
+            "parent_b": func_b["name"],
+            "operator": operator,
+            "error": str(e)
+        })
+        raise
 
 
 def test_mutation(code):
@@ -197,7 +305,7 @@ def simulate_mutation(module_path, old_ast, new_ast):
         }
 
 
-def run_mutation_cycle(num_mutations=3):
+def run_mutation_cycle(num_mutations=3, goal_context=None):
     """Run a complete mutation cycle."""
     global meta_bias
     
@@ -231,8 +339,16 @@ def run_mutation_cycle(num_mutations=3):
         func_a, func_b = random.sample(pool, 2)
         operator = random.choice(operators)
         
+        # Clone files if sandbox mode is enabled
+        if sandbox_mode:
+            # Clone the successful_mutations.json file for safety
+            mutations_path = os.path.join(MEMORY_DIR, "successful_mutations.json")
+            clone_path = clone_file_for_sandbox(mutations_path)
+            if clone_path != mutations_path:
+                print(f"Sandbox: Cloned {mutations_path} to {clone_path}")
+        
         try:
-            new_code = mutate(func_a, func_b, operator)
+            new_code = mutate(func_a, func_b, operator, goal_context=goal_context)
             
             # Optional pre-validation step using simulation
             if simulation_mode:
@@ -268,6 +384,10 @@ def run_mutation_cycle(num_mutations=3):
                 "timestamp": time.time()
             }
             results.append(mutation_record)
+            
+            # Track provenance for this mutation
+            if goal_context:
+                track_provenance(goal_context, mutation_record)
             
             if test_result["valid"] and test_result["score"] >= 0.4:
                 func_name = "unknown"
@@ -338,6 +458,11 @@ def log_mutations(results):
     
     # Use atomic write to prevent partial file states
     fs.atomic_write(path, json.dumps(log, indent=2, ensure_ascii=False))
+
+
+def get_mutation_provenance():
+    """Get the mutation provenance tracking data."""
+    return mutation_provenance
 
 
 if __name__ == "__main__":

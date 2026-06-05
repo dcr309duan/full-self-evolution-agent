@@ -2,11 +2,23 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780641769.477737
+    },
+    {
       "description": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780638152.1299891,
       "consecutive_failures": 1
+    },
+    {
+      "description": "Build a 'meta-parameter evolution' module that tracks the performance impact of key evolution engine parameters (mutation rate, goal selection weights, reflection depth) over the last 20 generations, and uses a simple hill-climbing algorithm to adjust these parameters once per 10 cycles to maximize fitness improvement rate.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780641769.4799135
     },
     {
       "description": "Create a self-model consistency validator that, after each successful evolution cycle, updates an internal dependency graph and verifies that all module interfaces, schemas, and call sites remain aligned, flagging mismatches for immediate repair.",
@@ -580,6 +592,13 @@
       "status": "completed",
       "created_at": 1780641168.5315,
       "completed_at": 1780641703.6329858
+    },
+    {
+      "description": "Create a 'systemic integration test harness' that runs the full evolution loop (reflection → goal selection → mutation → testing → promotion) on a realistic multi-step task (e.g., adding a new capability that requires schema updates and dependency changes), logs each failure point with context, and automatically generates repair goals for the next cycle.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780641769.4818769,
+      "completed_at": 1780642127.1626298
     }
   ],
   "generated_goals": []

@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import uuid
+import copy
 
 
 class SimulationNode:
@@ -239,3 +240,119 @@ class SelfModelKnowledgeGraph:
                             self.failure_clusters[cluster_id].add_affected_module(new_id)
                 # Remove old module
                 self.remove_deleted_capabilities([old_id])
+
+    def snapshot_state(self) -> Dict[str, Any]:
+        """Serialize the entire self-model state for integration testing."""
+        snapshot = {
+            "nodes": {},
+            "edges": [],
+            "failure_clusters": {}
+        }
+        # Deep copy nodes to avoid mutation of original data
+        for node_id, node in self.nodes.items():
+            snapshot["nodes"][node_id] = {
+                "id": node.id,
+                "name": node.name,
+                "accuracy": node.accuracy,
+                "simulation_history": copy.deepcopy(node.simulation_history),
+                "cross_references": copy.deepcopy(node.cross_references),
+                "failure_clusters": copy.deepcopy(node.failure_clusters)
+            }
+        # Deep copy edges
+        for edge in self.edges:
+            snapshot["edges"].append({
+                "id": edge.id,
+                "source_id": edge.source_id,
+                "target_id": edge.target_id,
+                "weight": edge.weight
+            })
+        # Deep copy failure clusters
+        for cluster_id, cluster in self.failure_clusters.items():
+            snapshot["failure_clusters"][cluster_id] = {
+                "id": cluster.id,
+                "description": cluster.description,
+                "affected_modules": copy.deepcopy(cluster.affected_modules),
+                "active": cluster.active
+            }
+        return snapshot
+
+    def restore_state(self, snapshot: Dict[str, Any]):
+        """Reset the self-model state from a snapshot for test cycle reset."""
+        # Clear current state
+        self.nodes.clear()
+        self.edges.clear()
+        self.failure_clusters.clear()
+        # Restore nodes
+        for node_id, node_data in snapshot["nodes"].items():
+            node = SimulationNode(node_data["id"], node_data["name"], node_data["accuracy"])
+            node.simulation_history = copy.deepcopy(node_data["simulation_history"])
+            node.cross_references = copy.deepcopy(node_data["cross_references"])
+            node.failure_clusters = copy.deepcopy(node_data["failure_clusters"])
+            self.nodes[node_id] = node
+        # Restore edges
+        for edge_data in snapshot["edges"]:
+            edge = DependencyEdge(edge_data["source_id"], edge_data["target_id"], edge_data["weight"])
+            edge.id = edge_data["id"]
+            self.edges.append(edge)
+        # Restore failure clusters
+        for cluster_id, cluster_data in snapshot["failure_clusters"].items():
+            cluster = FailureClusterNode(cluster_data["id"], cluster_data["description"])
+            cluster.affected_modules = copy.deepcopy(cluster_data["affected_modules"])
+            cluster.active = cluster_data["active"]
+            self.failure_clusters[cluster_id] = cluster
+
+    def validate_consistency(self) -> List[str]:
+        """Check for orphaned modules, circular dependencies, and missing schema references.
+        Returns a list of inconsistency descriptions."""
+        inconsistencies = []
+        # Check for orphaned modules (modules not referenced by any edge and not in any failure cluster)
+        all_module_ids = set(self.nodes.keys())
+        referenced_modules = set()
+        for edge in self.edges:
+            referenced_modules.add(edge.source_id)
+            referenced_modules.add(edge.target_id)
+        for cluster in self.failure_clusters.values():
+            for mod_id in cluster.affected_modules:
+                referenced_modules.add(mod_id)
+        orphaned = all_module_ids - referenced_modules
+        if orphaned:
+            inconsistencies.append(f"Orphaned modules (not referenced by any edge or failure cluster): {sorted(orphaned)}")
+        # Check for circular dependencies using DFS
+        visited = set()
+        rec_stack = set()
+        def dfs(node_id, path):
+            visited.add(node_id)
+            rec_stack.add(node_id)
+            for edge in self.edges:
+                if edge.source_id == node_id:
+                    neighbor = edge.target_id
+                    if neighbor not in visited:
+                        if dfs(neighbor, path + [neighbor]):
+                            return True
+                    elif neighbor in rec_stack:
+                        # Found a cycle
+                        cycle_path = path[path.index(neighbor):] + [neighbor]
+                        inconsistencies.append(f"Circular dependency detected: {' -> '.join(cycle_path)}")
+                        return True
+            rec_stack.discard(node_id)
+            return False
+        for node_id in self.nodes:
+            if node_id not in visited:
+                dfs(node_id, [node_id])
+        # Check for missing schema references (edges referencing non-existent nodes)
+        for edge in self.edges:
+            if edge.source_id not in self.nodes:
+                inconsistencies.append(f"Edge {edge.id} references non-existent source module '{edge.source_id}'")
+            if edge.target_id not in self.nodes:
+                inconsistencies.append(f"Edge {edge.id} references non-existent target module '{edge.target_id}'")
+        # Check for failure clusters referencing non-existent modules
+        for cluster_id, cluster in self.failure_clusters.items():
+            for mod_id in cluster.affected_modules:
+                if mod_id not in self.nodes:
+                    inconsistencies.append(f"Failure cluster '{cluster_id}' references non-existent module '{mod_id}'")
+        # Check for modules referencing non-existent failure clusters
+        for node_id, node in self.nodes.items():
+            for cluster_id in node.failure_clusters:
+                if cluster_id not in self.failure_clusters:
+                    inconsistencies.append(f"Module '{node_id}' references non-existent failure cluster '{cluster_id}'")
+        return inconsistencies

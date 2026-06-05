@@ -1,0 +1,45 @@
+{
+  "scenario": "multi_step_schema_dependency",
+  "description": "Add a new data schema for ExternalAPIResponse, create a dependent module api_client.py, update the dependency graph, and add a validation test for schema alignment across all dependent modules.",
+  "steps": [
+    {
+      "step": 1,
+      "action": "add_schema",
+      "schema_name": "ExternalAPIResponse",
+      "fields": {
+        "status": "int",
+        "data": "dict",
+        "error_code": "int",
+        "latency_ms": "float"
+      },
+      "description": "Add a new data schema for ExternalAPIResponse with fields: status (int), data (dict), error_code (int), latency_ms (float)."
+    },
+    {
+      "step": 2,
+      "action": "create_module",
+      "module_name": "api_client.py",
+      "dependencies": [
+        "ExternalAPIResponse",
+        "http_client"
+      ],
+      "description": "Create a new module 'api_client.py' that depends on the ExternalAPIResponse schema and the existing http_client module."
+    },
+    {
+      "step": 3,
+      "action": "update_dependency_graph",
+      "target": "self-model",
+      "add_modules": ["api_client"],
+      "add_schemas": ["ExternalAPIResponse"],
+      "description": "Update the dependency graph in self-model to include the new module 'api_client' and schema 'ExternalAPIResponse'."
+    },
+    {
+      "step": 4,
+      "action": "add_test",
+      "test_type": "validation",
+      "test_name": "test_schema_alignment_across_dependent_modules",
+      "description": "Add a validation test that checks schema alignment across all dependent modules, ensuring consistency between ExternalAPIResponse, api_client, and http_client."
+    }
+  ],
+  "expected_outcome": "All steps executed successfully: schema added, module created, dependency graph updated, and validation test passes.",
+  "tags": ["multi-step", "schema-dependency", "cross-module", "validation"]
+}
