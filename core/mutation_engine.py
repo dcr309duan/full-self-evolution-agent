@@ -56,6 +56,9 @@ sandbox_mode = False
 # Mutation provenance tracking
 mutation_provenance = []
 
+# Test-driven mutation mode flag - when True, mutations must pass a generated test
+TEST_DRIVEN_MUTATION_ENABLED = False
+
 # Load configuration from system_config.json
 config_path = os.path.join(PROJECT_ROOT, "system_config.json")
 try:
@@ -64,6 +67,7 @@ try:
         META_MUTATION_ENABLED = config.get("META_MUTATION_ENABLED", False)
         sandbox_mode = config.get("sandbox_mode", False)
         dry_run_mode = config.get("dry_run_mode", False)
+        TEST_DRIVEN_MUTATION_ENABLED = config.get("TEST_DRIVEN_MUTATION_ENABLED", False)
 except (FileNotFoundError, json.JSONDecodeError):
     pass
 
@@ -218,6 +222,65 @@ Output ONLY the Python function definition, no explanation."""
         raise
 
 
+def generate_test_for_code(code):
+    """Generate a test that the current code would fail.
+    
+    Uses LLM to create a test case that exposes a limitation or bug in the code.
+    
+    Args:
+        code: The current code to generate a failing test for
+        
+    Returns:
+        dict with 'test_code' (the test as Python code) and 'description' (human-readable)
+    """
+    prompt = f"""You are a test-driven development assistant. Given the following Python code, 
+generate a test case that the code would FAIL on. The test should expose a limitation, edge case, 
+or bug in the code. Output ONLY the test code as a Python assert statement or function.
+
+Code:
+```python
+{code}
+```
+
+Requirements:
+- The test must be a valid Python expression that evaluates to True if the code passes
+- The test must FAIL on the current code
+- The test should be specific and deterministic
+- Output ONLY the test code, no explanation"""
+
+    messages = [
+        {"role": "system", "content": "You output only Python test code. No markdown, no explanation."},
+        {"role": "user", "content": prompt}
+    ]
+    
+    try:
+        result = call_deepseek(messages, temperature=0.7, max_tokens=512)
+        
+        if result.startswith("```"):
+            lines = result.split('\n')
+            result = '\n'.join(lines[1:-1]) if lines[-1].strip() == '```' else '\n'.join(lines[1:])
+        
+        test_code = result.strip()
+        
+        # Validate the test code is syntactically valid
+        try:
+            ast.parse(test_code)
+        except SyntaxError:
+            # If not valid, wrap in a simple assert
+            test_code = f"assert {test_code}"
+            try:
+                ast.parse(test_code)
+            except SyntaxError:
+                return None
+        
+        return {
+            "test_code": test_code,
+            "description": f"Generated test: {test_code[:100]}"
+        }
+    except Exception:
+        return None
+
+
 def test_mutation(code):
     """Test a mutated function for basic validity."""
     valid, error = validate_python(code)
@@ -265,6 +328,51 @@ else:
                 pass
     
     return {"valid": True, "reason": "OK", "score": score, "stdout": stdout[:200]}
+
+
+def test_mutation_with_generated_test(code, test_spec):
+    """Test a mutated function against a generated test.
+    
+    Args:
+        code: The mutated code to test
+        test_spec: Dict with 'test_code' key containing the test to run
+        
+    Returns:
+        dict with 'passed' bool and 'reason' string
+    """
+    if not test_spec or "test_code" not in test_spec:
+        return {"passed": False, "reason": "No test specification provided"}
+    
+    test_code = test_spec["test_code"]
+    
+    # Execute the code with the test
+    full_code = f"""
+{code}
+
+# Run the generated test
+try:
+    {test_code}
+    print("TEST_PASSED")
+except AssertionError as e:
+    print(f"TEST_FAILED: {{str(e)}}")
+except Exception as e:
+    print(f"TEST_ERROR: {{str(e)}}")
+"""
+    
+    result = safe_execute(full_code, timeout=10)
+    
+    if not result["success"]:
+        return {"passed": False, "reason": f"Execution error: {result['stderr'][:200]}"}
+    
+    stdout = result["stdout"]
+    if "TEST_PASSED" in stdout:
+        return {"passed": True, "reason": "Generated test passed"}
+    elif "TEST_FAILED" in stdout:
+        return {"passed": False, "reason": f"Test failed: {stdout}"}
+    elif "TEST_ERROR" in stdout:
+        return {"passed": False, "reason": f"Test error: {stdout}"}
+    else:
+        return {"passed": False, "reason": f"Unexpected output: {stdout[:200]}"}
 
 
 def simulate_mutation(module_path, old_ast, new_ast):
@@ -464,6 +572,64 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                 print(f"Sandbox: Cloned {mutations_path} to {clone_path}")
         
         try:
+            # Test-driven mutation mode: generate failing test first
+            if TEST_DRIVEN_MUTATION_ENABLED:
+                # Generate a test that the current code (parent) would fail
+                test_spec = generate_test_for_code(func_a["code"])
+                if test_spec is None:
+                    # If we can't generate a test, skip this mutation
+                    results.append({
+                        "parent_a": func_a["name"],
+                        "parent_b": func_b["name"],
+                        "operator": operator,
+                        "skipped": True,
+                        "reason": "Could not generate failing test for parent code",
+                        "timestamp": time.time()
+                    })
+                    continue
+                
+                # Generate the mutation
+                new_code = mutate(func_a, func_b, operator, goal_context=goal_context)
+                
+                # Test the mutation against the generated test
+                test_result = test_mutation_with_generated_test(new_code, test_spec)
+                
+                mutation_record = {
+                    "parent_a": func_a["name"],
+                    "parent_b": func_b["name"],
+                    "operator": operator,
+                    "code": new_code,
+                    "test_result": test_result,
+                    "generated_test": test_spec,
+                    "timestamp": time.time(),
+                    "test_driven": True
+                }
+                results.append(mutation_record)
+                
+                # Track provenance for this mutation
+                if goal_context:
+                    track_provenance(goal_context, mutation_record)
+                
+                # Only accept mutation if it passes the generated test
+                if test_result["passed"]:
+                    func_name = "unknown"
+                    try:
+                        tree = ast.parse(new_code)
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.FunctionDef):
+                                func_name = node.name
+                                break
+                    except:
+                        pass
+                    
+                    save_successful_mutation(func_name, new_code)
+                    record_success(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Created {func_name}, passed generated test")
+                else:
+                    record_failure(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Failed generated test: {test_result.get('reason', 'unknown')}")
+                
+                continue
+            
+            # Original mutation flow (non-test-driven)
             new_code = mutate(func_a, func_b, operator, goal_context=goal_context)
             
             # Optional pre-validation step using simulation
@@ -524,7 +690,7 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
     
     log_mutations(results)
     
-    successes = sum(1 for r in results if r.get("test_result", {}).get("valid") and r.get("test_result", {}).get("score", 0) >= 0.4)
+    successes = sum(1 for r in results if r.get("test_result", {}).get("passed") or (r.get("test_result", {}).get("valid") and r.get("test_result", {}).get("score", 0) >= 0.4))
     return {"mutations": len(results), "successes": successes, "details": results}
 
 

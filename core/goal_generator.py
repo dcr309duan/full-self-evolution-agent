@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', or 'cluster_resolution'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', or 'meta_goal'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -55,6 +55,11 @@ class SimulationMetrics:
 goal_registry: Dict[str, Goal] = {}
 knowledge_base: Dict[str, str] = {}
 
+# Track consecutive successes for meta-goal triggering
+consecutive_successes: int = 0
+success_threshold: int = 10  # Number of consecutive successes before triggering meta-goal
+current_accuracy_threshold: float = 0.8  # Current accuracy threshold, can be lowered
+
 
 def generate_goals(
     metrics_list: List[SimulationMetrics],
@@ -77,6 +82,8 @@ def generate_goals(
     Returns:
         List of generated goals, sorted by priority (highest first).
     """
+    global consecutive_successes, current_accuracy_threshold
+    
     goals: List[Goal] = []
 
     # First, check knowledge base for fitness scores and generate challenge goals
@@ -90,9 +97,55 @@ def generate_goals(
             goal.tags.append("curiosity")
         goals.extend(curiosity_goals)
 
+    # Track consecutive successes and trigger meta-goal if threshold reached
+    all_above_threshold = all(
+        metrics.accuracy >= current_accuracy_threshold for metrics in metrics_list
+    )
+    
+    if all_above_threshold:
+        consecutive_successes += 1
+        logger.debug(
+            "Consecutive successes: %d/%d",
+            consecutive_successes, success_threshold
+        )
+        
+        if consecutive_successes >= success_threshold:
+            # Reset counter and generate meta-goal
+            consecutive_successes = 0
+            
+            # Lower the accuracy threshold to make goals harder
+            current_accuracy_threshold = max(0.5, current_accuracy_threshold - 0.1)
+            logger.info(
+                "Lowered accuracy threshold to %.2f due to 10 consecutive successes",
+                current_accuracy_threshold
+            )
+            
+            # Generate meta-goal: modify the test suite itself
+            meta_goal = Goal(
+                description="Modify the test suite to add more comprehensive tests that push the system beyond current capabilities",
+                priority=GoalPriority.CRITICAL,
+                module="test_suite",
+                goal_type="meta_goal",
+                source="fitness",
+                tags=["meta_goal", "test_suite_modification", "harder_goals"]
+            )
+            goals.append(meta_goal)
+            logger.info(
+                "Generated meta-goal to modify test suite after %d consecutive successes",
+                success_threshold
+            )
+    else:
+        # Reset counter if any module fails
+        if consecutive_successes > 0:
+            logger.debug(
+                "Resetting consecutive successes counter (was %d)",
+                consecutive_successes
+            )
+        consecutive_successes = 0
+
     for metrics in metrics_list:
         # Generate accuracy improvement goals if accuracy is below threshold
-        if metrics.accuracy < accuracy_threshold:
+        if metrics.accuracy < current_accuracy_threshold:
             goal = Goal(
                 description=f"Improve simulation accuracy for {metrics.module}",
                 priority=_calculate_priority(metrics, coverage_weight),
@@ -103,7 +156,7 @@ def generate_goals(
             goals.append(goal)
             logger.debug(
                 "Generated accuracy goal for %s (accuracy=%.2f, threshold=%.2f)",
-                metrics.module, metrics.accuracy, accuracy_threshold
+                metrics.module, metrics.accuracy, current_accuracy_threshold
             )
 
         # Generate dependency tracking goals if unexpected side effects
@@ -523,6 +576,48 @@ def generate_sub_goals(
             fix_goal.dependencies.append(analyze_goal.description)
             verify_goal.dependencies.append(fix_goal.description)
             sub_goals = [analyze_goal, fix_goal, verify_goal]
+    elif parent_goal.goal_type == "meta_goal":
+        # Break meta-goal into smaller steps
+        analyze_goal = Goal(
+            description=f"Analyze current test suite gaps for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="meta_goal",
+            source=parent_goal.source
+        )
+        design_goal = Goal(
+            description=f"Design new test cases to push system beyond current capabilities for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="meta_goal",
+            source=parent_goal.source
+        )
+        implement_goal = Goal(
+            description=f"Implement new test cases in test suite for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="meta_goal",
+            source=parent_goal.source
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: analyze -> design -> implement
+            design_goal.dependencies.append(analyze_goal.description)
+            implement_goal.dependencies.append(design_goal.description)
+            sub_goals = [analyze_goal, design_goal, implement_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [analyze_goal, design_goal, implement_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: analyze is independent, design depends on analyze, implement depends on design
+            design_goal.dependencies.append(analyze_goal.description)
+            implement_goal.dependencies.append(design_goal.description)
+            sub_goals = [analyze_goal, design_goal, implement_goal]
+        else:
+            # Default to sequential for unknown strategies
+            design_goal.dependencies.append(analyze_goal.description)
+            implement_goal.dependencies.append(design_goal.description)
+            sub_goals = [analyze_goal, design_goal, implement_goal]
     else:
         # Generic breakdown for unknown goal types
         research_goal = Goal(
@@ -666,6 +761,11 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
         cluster_key = f"cluster:{goal.module}:{goal.description}"
         knowledge_base[cluster_key] = f"Resolved: {lesson}"
     
+    # If this was a meta-goal, store the test suite modification
+    if "meta_goal" in goal.tags:
+        meta_key = f"meta_goal:{goal.module}:{goal.description}"
+        knowledge_base[meta_key] = f"Test suite modified: {lesson}"
+    
     logger.info(
         "Archived goal '%s' with lesson: %s",
         goal.description, lesson
@@ -791,3 +891,27 @@ if __name__ == "__main__":
         print(f"  Lesson: {generated[0].lesson}")
         print(f"  Registry size: {len(goal_registry)}")
         print(f"  Knowledge base size: {len(knowledge_base)}")
+
+    # Test meta-goal triggering with 10 consecutive successes
+    print("\nTesting meta-goal triggering:")
+    # Reset counter
+    consecutive_successes = 0
+    current_accuracy_threshold = 0.8
+    
+    # Create metrics that all exceed threshold
+    perfect_metrics = [
+        SimulationMetrics(
+            module="module_a",
+            accuracy=0.95,
+            has_unexpected_side_effects=False,
+            coverage=0.9
+        ),
+        SimulationMetrics(
+            module="module_b",
+            accuracy=0.96,
+            has_unexpected_side_effects=False,
+            coverage=0.95
+        )
+    ]
+    
+    # Simulate 10 consecutive successes

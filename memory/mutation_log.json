@@ -1097,5 +1097,49 @@
         "timestamp": 1780649848.7259288
       }
     ]
+  },
+  {
+    "timestamp": 1780651183.7870843,
+    "results": [
+      {
+        "parent_a": "flatten",
+        "parent_b": "prime_fibonacci_check",
+        "operator": "hybrid",
+        "code": "def flatten_prime_fibonacci(lst):\n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    result = []\n    for item in lst:\n        if isinstance(item, list):\n            a, b = 0, 1\n            for _ in range(flatten_prime_fibonacci(item)[0]):\n                a, b = b, a + b\n            result.append((a, is_prime(a))) if isinstance(item, list) and item else result.append(item)\n        else:\n            a, b = 0, 1\n            for _ in range(item):\n                a, b = b, a + b\n            result.append((a, is_prime(a)))\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: flatten_prime_fibonacci\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780651177.653672
+      },
+      {
+        "parent_a": "retry_fibonacci_with_logging",
+        "parent_b": "memoized_retry_fibonacci",
+        "operator": "crossover",
+        "code": "def cached_retry_fibonacci_sequence(start, end, max_attempts=3, delay=0.5, log=False):\n    import time\n    cache = {}\n    \n    def compute_fibonacci(n):\n        if n in cache:\n            return cache[n]\n        if n < 0:\n            raise ValueError(\"n must be non-negative\")\n        if n < 2:\n            cache[n] = n\n            return n\n        a, b = 0, 1\n        for _ in range(2, n + 1):\n            a, b = b, a + b\n        cache[n] = b\n        return b\n    \n    result = []\n    for x in range(start, end + 1):\n        for attempt in range(max_attempts):\n            try:\n                value = compute_fibonacci(x)\n                if log:\n                    print(f\"Fibonacci({x}) = {value} (attempt {attempt+1})\")\n                result.append(value)\n                break\n            except Exception as e:\n                if log:\n                    print(f\"Attempt {attempt+1} for Fibonacci({x}) failed: {e}\")\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay * (attempt + 1))\n                cache.clear()\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.2,
+          "stdout": "FUNCTION: cached_retry_fibonacci_sequence\nSCORE: 1/5\n"
+        },
+        "timestamp": 1780651180.5618808
+      },
+      {
+        "parent_a": "is_fibonacci_prime",
+        "parent_b": "retry_prime_fibonacci",
+        "operator": "crossover",
+        "code": "def find_fibonacci_primes_with_retry(n, max_attempts=3, delay=1):\n    import time\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    if not isinstance(n, int) or n < 1:\n        raise ValueError(\"n must be a positive integer\")\n    \n    for attempt in range(max_attempts):\n        try:\n            a, b = 0, 1\n            result = []\n            while len(result) < n:\n                a, b = b, a + b\n                if is_prime(a):\n                    result.append(a)\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: find_fibonacci_primes_with_retry\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780651183.7633815
+      }
+    ]
   }
 ]

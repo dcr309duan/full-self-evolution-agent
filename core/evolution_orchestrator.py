@@ -4,6 +4,7 @@ Main orchestrator for the self-evolving system. Initializes all subsystems and r
 continuous evolution loop that scores, selects, mutates, tests, and evaluates each subsystem.
 Includes a goal_selection mechanism that maintains a priority queue of evolution goals.
 Integrates reflection parsing to close the feedback loop between mutation outcomes and strategy selection.
+Includes a 'fitness landscape mutation' phase that runs every 3 cycles to generate new tests targeting weak areas.
 """
 
 import time
@@ -31,6 +32,7 @@ EVOLUTION_INTERVAL = 60.0  # Default interval between evolution cycles in second
 STATE_FILE = "orchestrator_state.json"  # File to persist orchestrator state
 LOG_FILE = "evolution_log.json"  # File to log evolution cycles
 REFLECTION_LOG_FILE = "reflection_log.json"  # File to log reflection data
+FITNESS_LANDSCAPE_INTERVAL = 3  # Number of cycles between fitness landscape mutation phases
 
 
 class EvolutionOrchestrator:
@@ -69,6 +71,9 @@ class EvolutionOrchestrator:
 
         # Control flag
         self.running = False
+
+        # Cycle counter for fitness landscape mutation
+        self.cycle_count = 0
 
         # Mapping of subsystem names to their source file paths
         self.subsystem_source_paths: Dict[str, str] = {
@@ -490,6 +495,7 @@ class EvolutionOrchestrator:
             "consecutive_failures": self.consecutive_failures,
             "goal_queue": list(self.goal_queue),
             "evolution_history": self.evolution_history[-100:],  # Keep last 100 entries
+            "cycle_count": self.cycle_count,
             "timestamp": time.time()
         }
         
@@ -530,6 +536,11 @@ class EvolutionOrchestrator:
             if "evolution_history" in state:
                 self.evolution_history = state["evolution_history"]
                 logger.info("Restored %d evolution history entries from saved state", len(self.evolution_history))
+            
+            # Restore cycle count
+            if "cycle_count" in state:
+                self.cycle_count = state["cycle_count"]
+                logger.info("Restored cycle count to %d from saved state", self.cycle_count)
             
             logger.info("Orchestrator state loaded successfully from %s", STATE_FILE)
         except Exception as e:
@@ -682,15 +693,113 @@ class EvolutionOrchestrator:
             logger.exception("Error during sandboxed mutation for subsystem '%s': %s", subsystem_name, e)
             return None, False, None
 
+    def _run_fitness_landscape_mutation(self):
+        """Run the fitness landscape mutation phase to generate new tests targeting weak areas.
+        
+        This method is called every FITNESS_LANDSCAPE_INTERVAL cycles. It analyzes failure patterns
+        and subsystem scores to identify weak areas, then generates 1-3 new tests that target those
+        areas or introduce novel constraints. These tests become part of the permanent test suite.
+        """
+        logger.info("Running fitness landscape mutation phase (cycle %d)", self.cycle_count)
+        
+        try:
+            # Identify weak areas based on failure patterns and low scores
+            weak_areas = []
+            for subsystem_name, score in self.subsystem_scores.items():
+                failures = self.consecutive_failures.get(subsystem_name, 0)
+                if score < 0.5 or failures >= FAILURE_THRESHOLD:
+                    weak_areas.append({
+                        "subsystem": subsystem_name,
+                        "score": score,
+                        "failures": failures,
+                        "failure_pattern": self.failure_analysis.get_failure_pattern(subsystem_name)
+                    })
+            
+            # If no weak areas found, target the lowest scoring subsystem
+            if not weak_areas:
+                lowest_subsystem = min(self.subsystem_scores, key=self.subsystem_scores.get)
+                weak_areas.append({
+                    "subsystem": lowest_subsystem,
+                    "score": self.subsystem_scores[lowest_subsystem],
+                    "failures": self.consecutive_failures.get(lowest_subsystem, 0),
+                    "failure_pattern": self.failure_analysis.get_failure_pattern(lowest_subsystem)
+                })
+            
+            # Generate 1-3 new tests based on weak areas
+            num_tests = min(len(weak_areas), 3)
+            if num_tests < 1:
+                num_tests = 1
+            
+            for i in range(num_tests):
+                weak_area = weak_areas[i % len(weak_areas)]
+                subsystem_name = weak_area["subsystem"]
+                failure_pattern = weak_area.get("failure_pattern", {})
+                
+                # Determine test type based on failure pattern
+                test_type = "standard"
+                if failure_pattern:
+                    # If there are performance failures, create performance limit tests
+                    if "performance" in str(failure_pattern).lower():
+                        test_type = "performance"
+                    # If there are input format failures, create new input format tests
+                    elif "input" in str(failure_pattern).lower() or "format" in str(failure_pattern).lower():
+                        test_type = "input_format"
+                    # If there are adversarial failures, create adversarial tests
+                    elif "adversarial" in str(failure_pattern).lower() or "security" in str(failure_pattern).lower():
+                        test_type = "adversarial"
+                
+                # Generate the test using the testing framework
+                new_test = self.testing_framework.generate_test(
+                    subsystem=subsystem_name,
+                    test_type=test_type,
+                    failure_pattern=failure_pattern
+                )
+                
+                if new_test:
+                    # Add the test to the permanent test suite
+                    self.testing_framework.add_permanent_test(new_test)
+                    logger.info("Added new %s test for subsystem '%s' to permanent test suite", 
+                              test_type, subsystem_name)
+                    
+                    # Log the new test generation
+                    log_entry = {
+                        "timestamp": time.time(),
+                        "phase": "fitness_landscape_mutation",
+                        "subsystem": subsystem_name,
+                        "test_type": test_type,
+                        "test_details": new_test,
+                        "weak_area_info": weak_area
+                    }
+                    
+                    try:
+                        with open("fitness_landscape_log.json", 'a') as f:
+                            f.write(json.dumps(log_entry) + '\n')
+                    except Exception as e:
+                        logger.error("Failed to log fitness landscape mutation: %s", e)
+                else:
+                    logger.warning("Failed to generate new test for subsystem '%s'", subsystem_name)
+            
+            logger.info("Fitness landscape mutation phase completed with %d new tests generated", num_tests)
+            
+        except Exception as e:
+            logger.exception("Error during fitness landscape mutation phase: %s", e)
+
     def evolution_cycle(self):
         """Execute one complete evolution cycle."""
         logger.info("Starting evolution cycle...")
+        
+        # Increment cycle counter
+        self.cycle_count += 1
 
         # Save old scores for logging
         old_scores = self.subsystem_scores.copy()
 
         # 1) Score each subsystem
         self.score_subsystems()
+
+        # Check if it's time for fitness landscape mutation
+        if self.cycle_count % FITNESS_LANDSCAPE_INTERVAL == 0:
+            self._run_fitness_landscape_mutation()
 
         # 2) Identify the subsystem to evolve using goal selection mechanism
         selected = self.select_subsystem_to_evolve()
@@ -753,106 +862,4 @@ class EvolutionOrchestrator:
                 logger.warning("Goal for subsystem '%s' has failed %d times. Attempting retry with different strategy.", 
                              selected, consecutive_failures)
                 
-                # Try different mutation strategies
-                alternative_strategies = ["conservative", "aggressive", "targeted", "random"]
-                retry_success = False
-                
-                for alt_strategy in alternative_strategies:
-                    if alt_strategy == strategy:
-                        continue
-                    
-                    logger.info("Retrying mutation for '%s' with strategy '%s'", selected, alt_strategy)
-                    
-                    # Run sandboxed mutation with alternative strategy
-                    retry_mutated_code, retry_test_passed, retry_failure_path = self._run_sandboxed_mutation(
-                        selected, source_code, alt_strategy
-                    )
-                    
-                    if retry_mutated_code is not None and retry_test_passed:
-                        logger.info("Retry with strategy '%s' succeeded for subsystem '%s'", alt_strategy, selected)
-                        mutated_code = retry_mutated_code
-                        sandbox_test_passed = True
-                        retry_success = True
-                        break
-                    else:
-                        logger.warning("Retry with strategy '%s' failed for subsystem '%s'", alt_strategy, selected)
-                
-                if not retry_success:
-                    logger.error("All retry strategies failed for subsystem '%s'. Triggering strategy switch.", selected)
-                    self.trigger_strategy_switch(selected)
-            
-            self._save_state()
-            return
-
-        # 7) If sandbox tests passed, promote the mutation
-        logger.info("Sandbox tests passed for subsystem '%s'. Promoting mutation.", selected)
-        
-        # Write the mutated code back to disk
-        write_success = self.write_subsystem_source_code(selected, mutated_code)
-        if not write_success:
-            logger.error("Failed to write mutated code for subsystem '%s'. Evolution failed.", selected)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        # Restart the subsystem
-        restart_success = self.restart_subsystem(selected)
-        if not restart_success:
-            logger.warning("Failed to restart subsystem '%s' after mutation. Continuing anyway.", selected)
-
-        # Run full tests to validate the mutation
-        tests_passed = self.run_tests(selected)
-        success = self.evaluate_success(selected, tests_passed)
-
-        # 8) If failed, log failure and increment failure counter for that subsystem
-        if not success:
-            logger.warning("Evolution of subsystem '%s' failed. Incrementing failure counter.", selected)
-            self.update_scores_and_log(selected, False)
-            
-            # 9) If failure counter reaches threshold, integrate with failure analysis module
-            if self.consecutive_failures[selected] >= FAILURE_THRESHOLD:
-                logger.warning("Failure threshold reached for subsystem '%s'. Calling failure analysis module.", selected)
-                try:
-                    # Call the failure analysis module to analyze the subsystem failure
-                    analysis_result = self.failure_analysis.analyze_subsystem_failure(selected)
-                    logger.info("Failure analysis result for '%s': %s", selected, analysis_result)
-                    
-                    # Apply the recommended strategy from failure analysis
-                    if analysis_result and "recommended_strategy" in analysis_result:
-                        recommended_strategy = analysis_result["recommended_strategy"]
-                        logger.info("Applying recommended strategy '%s' for subsystem '%s'", recommended_strategy, selected)
-                        
-                        # Apply the strategy based on the recommendation
-                        if recommended_strategy == "switch_strategy":
-                            self.trigger_strategy_switch(selected)
-                        elif recommended_strategy == "rollback":
-                            # Rollback to previous version if available
-                            logger.info("Rolling back subsystem '%s' to previous version", selected)
-                            # Placeholder for rollback logic
-                        elif recommended_strategy == "adjust_parameters":
-                            # Adjust subsystem parameters
-                            logger.info("Adjusting parameters for subsystem '%s'", selected)
-                            # Placeholder for parameter adjustment
-                        elif recommended_strategy == "reinitialize":
-                            # Reinitialize the subsystem
-                            logger.info("Reinitializing subsystem '%s'", selected)
-                            # Placeholder for reinitialization logic
-                        else:
-                            logger.warning("Unknown recommended strategy '%s' for subsystem '%s'", recommended_strategy, selected)
-                    else:
-                        logger.warning("No recommended strategy provided by failure analysis for subsystem '%s'", selected)
-                        # Fallback to default strategy switch
-                        self.trigger_strategy_switch(selected)
-                except Exception as e:
-                    logger.exception("Error during failure analysis integration for subsystem '%s': %s", selected, e)
-                    # Fallback to default strategy switch
-                    self.trigger_strategy_switch(selected)
-        else:
-            self.update_scores_and_log(selected, True)
-
-        # Log the evolution cycle
-        self._log_evolution_cycle(selected, strategy, success, old_scores, self.subsystem_scores)
-        
-        # NEW: Parse reflection and update mutation strategy based on insights
-        self
+               
