@@ -57,6 +57,7 @@ class ReflectionOutput:
     analysis_history: Dict[FailureCategory, AnalysisRecord] = field(default_factory=dict)
     raw_reflection: Optional[str] = None
     summary: str = ""
+    schema_version: str = "1.0.0"
 
 
 class ReflectionParser:
@@ -90,7 +91,90 @@ class ReflectionParser:
         self._update_analysis_history(categories, hypotheses)
         self._hypothesis_history.extend(hypotheses)
 
+        # Self-validate output against canonical reflection schema
+        self._validate_output(output)
+
         return output
+
+    def _validate_output(self, output: ReflectionOutput) -> None:
+        """Validate the output against the canonical reflection schema.
+
+        Args:
+            output: The ReflectionOutput to validate.
+
+        Raises:
+            ValueError: If validation fails.
+        """
+        # Check required fields
+        if not output.reflection_id:
+            raise ValueError("reflection_id is required")
+        if not output.timestamp:
+            raise ValueError("timestamp is required")
+        if not output.schema_version:
+            raise ValueError("schema_version is required")
+        if output.failure_categories is None:
+            raise ValueError("failure_categories is required")
+        if output.root_cause_hypotheses is None:
+            raise ValueError("root_cause_hypotheses is required")
+        if output.analysis_history is None:
+            raise ValueError("analysis_history is required")
+        if output.summary is None:
+            raise ValueError("summary is required")
+
+        # Validate types
+        if not isinstance(output.reflection_id, str):
+            raise ValueError("reflection_id must be a string")
+        if not isinstance(output.timestamp, datetime):
+            raise ValueError("timestamp must be a datetime")
+        if not isinstance(output.schema_version, str):
+            raise ValueError("schema_version must be a string")
+        if not isinstance(output.failure_categories, list):
+            raise ValueError("failure_categories must be a list")
+        if not isinstance(output.root_cause_hypotheses, list):
+            raise ValueError("root_cause_hypotheses must be a list")
+        if not isinstance(output.analysis_history, dict):
+            raise ValueError("analysis_history must be a dict")
+        if not isinstance(output.summary, str):
+            raise ValueError("summary must be a string")
+
+        # Validate failure categories
+        for category in output.failure_categories:
+            if not isinstance(category, FailureCategory):
+                raise ValueError(f"Invalid failure category: {category}")
+
+        # Validate root cause hypotheses
+        for hypothesis in output.root_cause_hypotheses:
+            if not isinstance(hypothesis, RootCauseHypothesis):
+                raise ValueError(f"Invalid root cause hypothesis: {hypothesis}")
+            if not hypothesis.id:
+                raise ValueError("Each hypothesis must have an id")
+            if not isinstance(hypothesis.category, FailureCategory):
+                raise ValueError(f"Invalid hypothesis category: {hypothesis.category}")
+            if not hypothesis.description:
+                raise ValueError("Each hypothesis must have a description")
+            if not isinstance(hypothesis.confidence, (int, float)):
+                raise ValueError("Hypothesis confidence must be numeric")
+            if not 0.0 <= hypothesis.confidence <= 1.0:
+                raise ValueError("Hypothesis confidence must be between 0.0 and 1.0")
+            if not isinstance(hypothesis.evidence, list):
+                raise ValueError("Hypothesis evidence must be a list")
+            if not isinstance(hypothesis.created_at, datetime):
+                raise ValueError("Hypothesis created_at must be a datetime")
+            if not isinstance(hypothesis.validated, bool):
+                raise ValueError("Hypothesis validated must be a boolean")
+            if not isinstance(hypothesis.resolution_attempted, bool):
+                raise ValueError("Hypothesis resolution_attempted must be a boolean")
+
+        # Validate analysis history
+        for category, record in output.analysis_history.items():
+            if not isinstance(category, FailureCategory):
+                raise ValueError(f"Invalid analysis history key: {category}")
+            if not isinstance(record, AnalysisRecord):
+                raise ValueError(f"Invalid analysis history record for {category}")
+
+        # Validate raw_reflection if present
+        if output.raw_reflection is not None and not isinstance(output.raw_reflection, str):
+            raise ValueError("raw_reflection must be a string or None")
 
     def _extract_failure_categories(self, text: str, context: Optional[Dict[str, Any]] = None) -> List[FailureCategory]:
         """Extract failure categories from reflection text."""

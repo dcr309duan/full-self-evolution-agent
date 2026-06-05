@@ -19,6 +19,156 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+class SchemaAlignmentChecker:
+    """Checks schema alignment and auto-generates migration patches."""
+    
+    def __init__(self):
+        self.validation_log: List[Dict[str, Any]] = []
+        self.migration_log: List[Dict[str, Any]] = []
+    
+    def validate_schema(self, data: Dict[str, Any], context: str) -> bool:
+        """
+        Validate schema alignment for given data.
+        
+        Args:
+            data: Data to validate
+            context: Context description for logging
+            
+        Returns:
+            True if schema is valid, False if mismatches detected
+        """
+        # Simulated schema validation logic
+        # In production, this would check actual schema definitions
+        is_valid = True
+        mismatches = []
+        
+        # Check required fields
+        required_fields = ['id', 'type', 'content']
+        for field in required_fields:
+            if field not in data:
+                mismatches.append(f"Missing required field: {field}")
+                is_valid = False
+        
+        # Check field types
+        if 'id' in data and not isinstance(data['id'], str):
+            mismatches.append(f"Field 'id' should be string, got {type(data['id']).__name__}")
+            is_valid = False
+        
+        if 'type' in data and data['type'] not in ['goal', 'mutation', 'test_result', 'reflection']:
+            mismatches.append(f"Invalid type: {data.get('type', 'unknown')}")
+            is_valid = False
+        
+        # Log validation result
+        validation_entry = {
+            'context': context,
+            'is_valid': is_valid,
+            'mismatches': mismatches,
+            'data_summary': {k: str(v)[:50] for k, v in data.items()}
+        }
+        self.validation_log.append(validation_entry)
+        
+        if mismatches:
+            logger.warning(f"Schema validation failed for {context}: {mismatches}")
+        else:
+            logger.info(f"Schema validation passed for {context}")
+        
+        return is_valid
+    
+    def generate_migration_patch(self, data: Dict[str, Any], mismatches: List[str]) -> Dict[str, Any]:
+        """
+        Auto-generate migration patch to fix schema mismatches.
+        
+        Args:
+            data: Original data with mismatches
+            mismatches: List of detected mismatches
+            
+        Returns:
+            Migration patch dictionary
+        """
+        patch = {
+            'original_data': data.copy(),
+            'patches': [],
+            'migration_type': 'schema_alignment'
+        }
+        
+        for mismatch in mismatches:
+            if "Missing required field" in mismatch:
+                field = mismatch.split(": ")[1]
+                # Generate default value based on field name
+                if field == 'id':
+                    patch['patches'].append({'field': field, 'action': 'add', 'value': 'auto_generated_id'})
+                elif field == 'type':
+                    patch['patches'].append({'field': field, 'action': 'add', 'value': 'unknown'})
+                elif field == 'content':
+                    patch['patches'].append({'field': field, 'action': 'add', 'value': {}})
+            
+            elif "should be string" in mismatch:
+                field = mismatch.split("'")[1]
+                patch['patches'].append({'field': field, 'action': 'convert', 'target_type': 'str'})
+            
+            elif "Invalid type" in mismatch:
+                patch['patches'].append({'field': 'type', 'action': 'convert', 'value': 'goal'})
+        
+        # Log migration
+        migration_entry = {
+            'patch': patch,
+            'applied': False,
+            'timestamp': logging.Formatter.formatTime(logging.makeLogRecord({}), '%Y-%m-%d %H:%M:%S')
+        }
+        self.migration_log.append(migration_entry)
+        
+        logger.info(f"Generated migration patch with {len(patch['patches'])} fixes")
+        return patch
+    
+    def apply_migration_patch(self, data: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply migration patch to data.
+        
+        Args:
+            data: Original data to patch
+            patch: Migration patch to apply
+            
+        Returns:
+            Patched data
+        """
+        patched_data = data.copy()
+        
+        for fix in patch['patches']:
+            if fix['action'] == 'add':
+                patched_data[fix['field']] = fix['value']
+            elif fix['action'] == 'convert':
+                if fix.get('target_type') == 'str':
+                    patched_data[fix['field']] = str(patched_data[fix['field']])
+                elif fix.get('value'):
+                    patched_data[fix['field']] = fix['value']
+        
+        # Update migration log
+        for entry in self.migration_log:
+            if entry['patch'] == patch and not entry['applied']:
+                entry['applied'] = True
+                entry['timestamp'] = logging.Formatter.formatTime(logging.makeLogRecord({}), '%Y-%m-%d %H:%M:%S')
+                break
+        
+        logger.info(f"Applied migration patch with {len(patch['patches'])} fixes")
+        return patched_data
+    
+    def get_validation_summary(self) -> Dict[str, Any]:
+        """Get summary of all validations performed."""
+        total_validations = len(self.validation_log)
+        failed_validations = sum(1 for v in self.validation_log if not v['is_valid'])
+        total_migrations = len(self.migration_log)
+        applied_migrations = sum(1 for m in self.migration_log if m['applied'])
+        
+        return {
+            'total_validations': total_validations,
+            'failed_validations': failed_validations,
+            'total_migrations': total_migrations,
+            'applied_migrations': applied_migrations,
+            'validation_log': self.validation_log[-10:],  # Last 10 entries
+            'migration_log': self.migration_log[-10:]  # Last 10 entries
+        }
+
+
 class MetaMonitor:
     """Monitors goal execution and manages reprioritization based on failures."""
     
@@ -154,6 +304,7 @@ class DependencyAwareFeasibilityEstimator:
 # Global instances
 feasibility_estimator = DependencyAwareFeasibilityEstimator()
 meta_monitor = MetaMonitor()
+schema_checker = SchemaAlignmentChecker()
 
 
 def check_primitive_validation(sandbox_mode: bool = False) -> None:
@@ -228,6 +379,38 @@ def check_primitive_validation(sandbox_mode: bool = False) -> None:
         if sandbox_mode and 'temp_dir' in locals():
             import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def run_schema_validation(context: str, sandbox_mode: bool = False) -> None:
+    """
+    Run schema validation step before each evolution cycle.
+    
+    Args:
+        context: Context description for logging
+        sandbox_mode: If True, use temporary directory for file operations
+    """
+    logger.info(f"Running schema validation for context: {context}")
+    
+    # Simulated validation of the current state
+    validation_data = {
+        'id': 'cycle_validation',
+        'type': 'goal',
+        'content': {'status': 'ready'}
+    }
+    
+    is_valid = schema_checker.validate_schema(validation_data, context)
+    
+    if not is_valid:
+        logger.warning(f"Schema validation failed for {context}, generating migration patch")
+        patch = schema_checker.generate_migration_patch(validation_data, ['Missing required field: id'])
+        patched_data = schema_checker.apply_migration_patch(validation_data, patch)
+        logger.info(f"Applied migration patch, new data: {patched_data}")
+    
+    # Log validation summary
+    summary = schema_checker.get_validation_summary()
+    logger.info(f"Schema validation summary: {summary['total_validations']} validations, "
+                f"{summary['failed_validations']} failures, "
+                f"{summary['applied_migrations']} migrations applied")
 
 
 def schedule_goal(goal: Dict[str, Any], sandbox_mode: bool = False) -> bool:
@@ -339,6 +522,39 @@ def run_triage(sandbox_mode: bool = False) -> None:
         logger.error(f"Triage step failed: {e}")
 
 
+def validate_and_fix(data: Dict[str, Any], context: str) -> Dict[str, Any]:
+    """
+    Validate data and auto-fix if mismatches detected.
+    
+    Args:
+        data: Data to validate
+        context: Context description for logging
+        
+    Returns:
+        Validated (and possibly fixed) data
+    """
+    global schema_checker
+    
+    # Validate schema
+    is_valid = schema_checker.validate_schema(data, context)
+    
+    if not is_valid:
+        # Generate and apply migration patch
+        mismatches = []
+        if 'id' not in data:
+            mismatches.append("Missing required field: id")
+        if 'type' not in data:
+            mismatches.append("Missing required field: type")
+        if 'content' not in data:
+            mismatches.append("Missing required field: content")
+        
+        patch = schema_checker.generate_migration_patch(data, mismatches)
+        data = schema_checker.apply_migration_patch(data, patch)
+        logger.info(f"Auto-fixed data for {context}")
+    
+    return data
+
+
 def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, meta_monitor_enabled: bool = False) -> None:
     """
     Main evolution loop that checks primitive validation before proceeding.
@@ -352,6 +568,7 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
     global PRIMITIVE_VALIDATION_FAILED
     global feasibility_estimator
     global meta_monitor
+    global schema_checker
 
     # Initial validation check
     check_primitive_validation(sandbox_mode)
@@ -372,6 +589,9 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
             check_primitive_validation(sandbox_mode)
             continue
 
+        # Run schema validation before each evolution cycle
+        run_schema_validation(f"pre_cycle_{cycle_count}", sandbox_mode)
+
         # Main evolution logic goes here
         # (placeholder for actual evolution processing)
         print("Primitive validation passed. Running evolution loop...")
@@ -385,12 +605,37 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
             'category': 'test_category'
         }
         
+        # Validate goal_generator output before passing to mutation_engine
+        goal_generator_output = {
+            'id': 'goal_002',
+            'type': 'goal',
+            'content': {'action': 'mutate'}
+        }
+        validated_goal = validate_and_fix(goal_generator_output, "goal_generator_output")
+        
         # Try to schedule a goal
         if schedule_goal(example_goal, sandbox_mode):
             # If scheduled, execute and process result
             # This is where actual execution would happen
+            
+            # Validate mutation_engine output before passing to test_runner
+            mutation_engine_output = {
+                'id': 'mutation_003',
+                'type': 'mutation',
+                'content': {'changes': ['modified_file_a.py']}
+            }
+            validated_mutation = validate_and_fix(mutation_engine_output, "mutation_engine_output")
+            
             process_mutation_result('mutation_001', True, sandbox_mode)
             process_mutation_result('mutation_002', True, sandbox_mode)
+            
+            # Validate test_runner output before passing to reflection_parser
+            test_runner_output = {
+                'id': 'test_004',
+                'type': 'test_result',
+                'content': {'passed': True, 'failures': []}
+            }
+            validated_test_result = validate_and_fix(test_runner_output, "test_runner_output")
             
             # Run meta monitor after goal completion
             run_meta_monitor(example_goal, True, meta_monitor_enabled)

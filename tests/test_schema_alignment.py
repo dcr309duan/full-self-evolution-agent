@@ -955,4 +955,4 @@ class TestSelfRepair:
             repaired_data = self_repair(violated_data)
             
             # Validate after repair
-            is_valid_after, errors_after = validator.validate
+            is_valid_after, errors_after

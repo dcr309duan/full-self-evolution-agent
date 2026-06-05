@@ -77,3 +77,50 @@ class MutationEngine:
         """Placeholder for test result evaluation."""
         # This would parse test output to determine pass/fail
         return False  # Simulate failure for demonstration
+
+    def _validate_against_schema(self, output: Dict[str, Any]) -> bool:
+        """
+        Validate the output against the canonical mutation schema.
+        
+        Args:
+            output: The output dictionary to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        required_fields = ['schema_version', 'mutation_result', 'target_file', 'mutation_params']
+        for field in required_fields:
+            if field not in output:
+                logger.error(f"Output missing required field: {field}")
+                return False
+        
+        if output.get('schema_version') != self.schema_version:
+            logger.error(f"Schema version mismatch: expected {self.schema_version}, got {output.get('schema_version')}")
+            return False
+        
+        return True
+
+    def generate_mutation_output(self, target_file: str, mutation_params: Dict[str, Any], mutation_result: str) -> Optional[Dict[str, Any]]:
+        """
+        Generate and validate mutation output with schema_version field.
+        
+        Args:
+            target_file: Path to the file being mutated
+            mutation_params: Parameters for the mutation operation
+            mutation_result: The result of the mutation
+            
+        Returns:
+            Validated output dictionary if valid, None if validation fails
+        """
+        output = {
+            'schema_version': self.schema_version,
+            'mutation_result': mutation_result,
+            'target_file': target_file,
+            'mutation_params': mutation_params
+        }
+        
+        if self._validate_against_schema(output):
+            return output
+        else:
+            logger.error("Output validation failed against canonical mutation schema")
+            return None

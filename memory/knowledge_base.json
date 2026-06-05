@@ -1,41 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified self_model/builder.py to: Implement the SelfModelBuilder orchestrator that runs the scanner, analyzer, extractor, and discovery modules in sequence, populates the KnowledgeGraph, and serializes it to a JSON file (self_model_graph.json) in the project root.",
-      "timestamp": 1780632212.589699,
-      "cycle": 50
-    },
-    {
-      "content": "Successfully modified self_model/__init__.py to: Add imports and expose the main classes: KnowledgeGraph, ComponentScanner, DependencyAnalyzer, SchemaExtractor, InterfaceDiscovery, SelfModelBuilder.",
-      "timestamp": 1780632216.6117074,
-      "cycle": 50
-    },
-    {
-      "content": "Successfully modified tests/test_self_model.py to: Create test suite that: (1) runs builder on a small test directory, (2) verifies graph contains expected nodes and edges, (3) tests query methods, (4) validates JSON serialization round-trip.",
-      "timestamp": 1780632229.1580622,
-      "cycle": 50
-    },
-    {
-      "content": "Successfully modified scripts/build_self_model.py to: Create a standalone script that imports SelfModelBuilder, runs it on the current codebase, and saves the graph. This can be invoked by the scheduler or orchestrator.",
-      "timestamp": 1780632236.5618865,
-      "cycle": 50
-    },
-    {
-      "content": "Successfully modified main.py to: Add an import and call to SelfModelBuilder at startup (or on a schedule) to keep the self-model up-to-date. Log the number of nodes/edges discovered.",
-      "timestamp": 1780632243.9764972,
-      "cycle": 50
-    },
-    {
-      "content": "Successfully modified goal_decomposition/decomposer.py to: Implement GoalDecomposer class that: (1) accepts abstract goal descriptions, (2) queries the self-model knowledge graph for dependency relationships, (3) uses topological sort to determine ordering, (4) checks module readiness (has tests, has interfaces, etc.), (5) outputs ordered list of sub-goals with dependencies and readiness scores.",
-      "timestamp": 1780632324.06418,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified goal_decomposition/__init__.py to: Create package init that exports GoalDecomposer and related types (SubGoal, DecompositionPlan, GoalPriority).",
-      "timestamp": 1780632327.1393316,
-      "cycle": 51
-    },
-    {
       "content": "Successfully modified goal_decomposition/goal_parser.py to: Implement GoalParser that: (1) parses natural language or structured goal descriptions, (2) extracts key components (target modules, desired outcomes, constraints), (3) normalizes into a standard GoalSpecification format.",
       "timestamp": 1780632352.2251983,
       "cycle": 51
@@ -999,6 +964,41 @@
       "content": "Successfully modified tests/test_core_evolution_loop.py to: Add integration test that: 1) creates 3 consecutive failing goals in 'file_creation' category, 2) verifies meta_monitor detects the pattern, 3) verifies reprioritization blocks file_creation goals, 4) verifies a root cause hypothesis is generated, 5) verifies that after hypothesis generation, a new file_creation goal can be attempted.",
       "timestamp": 1780636427.9979663,
       "cycle": 75
+    },
+    {
+      "content": "Successfully modified evolution_engine/schema_registry.py to: Create a schema registry that defines canonical JSON schemas for all inter-module data contracts: goal_generator output, mutation_engine input/output, test_runner input/output, reflection_parser input/output. Each schema includes field names, types, required/optional status, and version number.",
+      "timestamp": 1780636522.56745,
+      "cycle": 76
+    },
+    {
+      "content": "Successfully modified evolution_engine/schema_alignment_checker.py to: Implement SchemaAlignmentChecker class with: 1) validate_data(module_name, data) - checks data against canonical schema, returns list of mismatches (missing fields, type mismatches, extra fields), 2) generate_migration_patch(module_name, mismatches) - creates a patch that transforms old data format to new format, 3) auto_apply_patch(module_name, data) - applies migration patch to data in-place, 4) register_module(module_name, schema) - adds new module schemas dynamically.",
+      "timestamp": 1780636537.7524924,
+      "cycle": 76
+    },
+    {
+      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate schema alignment checker into the orchestrator: 1) add 'run_schema_validation' step before each evolution cycle, 2) validate goal_generator output before passing to mutation_engine, 3) validate mutation_engine output before passing to test_runner, 4) validate test_runner output before passing to reflection_parser, 5) if mismatches detected, auto-generate and apply migration patches, 6) log all schema validations and migrations.",
+      "timestamp": 1780636578.924211,
+      "cycle": 76
+    },
+    {
+      "content": "Successfully modified tests/test_schema_alignment.py to: Create comprehensive test suite for schema alignment checker: 1) test that valid data passes validation, 2) test that missing fields are detected, 3) test that type mismatches are detected, 4) test that extra fields are detected, 5) test migration patch generation for missing fields, 6) test migration patch application transforms data correctly, 7) test integration with orchestrator validates before evolution cycles.",
+      "timestamp": 1780636624.7644217,
+      "cycle": 76
+    },
+    {
+      "content": "Successfully modified evolution_engine/reflection_parser.py to: Update reflection_parser to include schema_version field in its output, and add a method to self-validate its output against the canonical reflection schema before returning.",
+      "timestamp": 1780636646.9508853,
+      "cycle": 76
+    },
+    {
+      "content": "Successfully modified evolution_engine/goal_generator.py to: Update goal_generator to include schema_version field in its output, and add a method to self-validate its output against the canonical goal schema before returning.",
+      "timestamp": 1780636657.8431551,
+      "cycle": 76
+    },
+    {
+      "content": "Successfully modified evolution_engine/mutation_engine.py to: Update mutation_engine to include schema_version field in its output, and add a method to self-validate its output against the canonical mutation schema before returning.",
+      "timestamp": 1780636666.9035547,
+      "cycle": 76
     }
   ],
   "learned_patterns": [],
@@ -3294,6 +3294,46 @@
       "strategy": "mutation:mutate(retry_memoized_prime_check,prime_fibonacci_check)",
       "outcome": "Created retry_fibonacci_prime_check, score=0.6",
       "timestamp": 1780636433.6361537
+    },
+    {
+      "strategy": "modify evolution_engine/schema_registry.py: Create a schema registry that defines canonical JSON schemas for all inter-module data contracts: goal_generator output, mutation_engine input/output, test_runner input/output, reflection_parser input/output. Each schema includes field names, types, required/optional status, and version number.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636522.5566843
+    },
+    {
+      "strategy": "modify evolution_engine/schema_alignment_checker.py: Implement SchemaAlignmentChecker class with: 1) validate_data(module_name, data) - checks data against canonical schema, returns list of mismatches (missing fields, type mismatches, extra fields), 2) generate_migration_patch(module_name, mismatches) - creates a patch that transforms old data format to new format, 3) auto_apply_patch(module_name, data) - applies migration patch to data in-place, 4) register_module(module_name, schema) - adds new module schemas dynamically.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636537.740082
+    },
+    {
+      "strategy": "modify evolution_engine/orchestrator.py: Integrate schema alignment checker into the orchestrator: 1) add 'run_schema_validation' step before each evolution cycle, 2) validate goal_generator output before passing to mutation_engine, 3) validate mutation_engine output before passing to test_runner, 4) validate test_runner output before passing to reflection_parser, 5) if mismatches detected, auto-generate and apply migration patches, 6) log all schema validations and migrations.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636578.9136097
+    },
+    {
+      "strategy": "modify tests/test_schema_alignment.py: Create comprehensive test suite for schema alignment checker: 1) test that valid data passes validation, 2) test that missing fields are detected, 3) test that type mismatches are detected, 4) test that extra fields are detected, 5) test migration patch generation for missing fields, 6) test migration patch application transforms data correctly, 7) test integration with orchestrator validates before evolution cycles.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636624.7530327
+    },
+    {
+      "strategy": "modify evolution_engine/reflection_parser.py: Update reflection_parser to include schema_version field in its output, and add a method to self-validate its output against the canonical reflection schema before returning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636646.9389725
+    },
+    {
+      "strategy": "modify evolution_engine/goal_generator.py: Update goal_generator to include schema_version field in its output, and add a method to self-validate its output against the canonical goal schema before returning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636657.8272192
+    },
+    {
+      "strategy": "modify evolution_engine/mutation_engine.py: Update mutation_engine to include schema_version field in its output, and add a method to self-validate its output against the canonical mutation schema before returning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636666.8901625
+    },
+    {
+      "strategy": "Implement a schema alignment checker that validates data contracts between all modules (goal generator, mutation engine, test runner, reflection parser) before evolution cycles, and auto-generates migration patches for mismatched fields",
+      "outcome": "7/7 steps succeeded",
+      "timestamp": 1780636666.91605
     }
   ],
   "capabilities_developed": []

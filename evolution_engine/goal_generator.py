@@ -23,6 +23,8 @@ class GoalGenerator:
         self.deprioritized_goal_types: set = set()
         self.goal_candidates: List[Goal] = []
         self.blocked_categories: set = set()
+        # Define the canonical goal schema version
+        self.schema_version = "1.0"
 
     def add_goal_candidates(self, goals: List[Goal]) -> None:
         """Add a list of candidate goals to the generator."""
@@ -37,7 +39,7 @@ class GoalGenerator:
         Generate goals by filtering candidates through feasibility estimation.
         Deprioritizes goal types that are repeatedly blocked.
         Respects blocked categories by generating root_cause_analysis goals instead.
-        Returns a list of feasible goals.
+        Returns a list of feasible goals with schema_version included.
         """
         feasible_goals = []
         for goal in self.goal_candidates:
@@ -62,9 +64,61 @@ class GoalGenerator:
             else:
                 self._handle_blocked_goal(goal)
 
+        # Add schema_version to each feasible goal
+        for goal in feasible_goals:
+            goal.schema_version = self.schema_version
+
+        # Self-validate each goal against the canonical schema
+        validated_goals = []
+        for goal in feasible_goals:
+            if self._validate_goal(goal):
+                validated_goals.append(goal)
+            else:
+                logger.warning(f"Goal {goal.goal_type} failed schema validation and was removed")
+
         # Clear processed candidates
         self.goal_candidates = []
-        return feasible_goals
+        return validated_goals
+
+    def _validate_goal(self, goal: Goal) -> bool:
+        """
+        Validate a goal against the canonical goal schema.
+        Returns True if valid, False otherwise.
+        """
+        # Check required fields
+        if not hasattr(goal, 'goal_type') or goal.goal_type is None:
+            logger.error("Goal missing required field: goal_type")
+            return False
+        
+        if not hasattr(goal, 'description') or not goal.description:
+            logger.error("Goal missing required field: description")
+            return False
+        
+        if not hasattr(goal, 'priority') or not goal.priority:
+            logger.error("Goal missing required field: priority")
+            return False
+        
+        if not hasattr(goal, 'schema_version') or not goal.schema_version:
+            logger.error("Goal missing required field: schema_version")
+            return False
+        
+        # Validate goal_type is a valid GoalType enum
+        if not isinstance(goal.goal_type, GoalType):
+            logger.error(f"Invalid goal_type: {goal.goal_type}")
+            return False
+        
+        # Validate priority is one of the allowed values
+        valid_priorities = ['low', 'medium', 'high', 'critical']
+        if goal.priority not in valid_priorities:
+            logger.error(f"Invalid priority: {goal.priority}")
+            return False
+        
+        # Validate schema_version matches the expected version
+        if goal.schema_version != self.schema_version:
+            logger.error(f"Schema version mismatch: expected {self.schema_version}, got {goal.schema_version}")
+            return False
+        
+        return True
 
     def _handle_blocked_goal(self, goal: Goal) -> None:
         """Log blocked goal and update deprioritization tracking."""
