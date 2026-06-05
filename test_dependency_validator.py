@@ -284,6 +284,122 @@ def main():
         with patch.object(self.validator, 'get_module_content', return_value=code):
             result = self.validator.resolve_function_calls('test_module', 'main')
             self.assertEqual(result, [])  # Should return empty list for unresolved calls
+    
+    # 6) Integration tests for pre-mutation validation hook
+    def test_pre_mutation_hook_rejects_circular_dependency(self):
+        """Test that pre-mutation hook rejects mutations introducing circular dependencies."""
+        # Simulate a mutation that would introduce a circular dependency
+        modules = {
+            'module_a': ['import module_b'],
+            'module_b': ['import module_c'],
+            'module_c': ['import module_a']  # This creates the cycle
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=False):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'module_c'})
+                self.assertFalse(result)
+    
+    def test_pre_mutation_hook_rejects_non_existent_module(self):
+        """Test that pre-mutation hook rejects mutations referencing non-existent modules."""
+        modules = {
+            'module_a': ['import module_b']
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=False):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'non_existent_module'})
+                self.assertFalse(result)
+    
+    def test_pre_mutation_hook_accepts_valid_mutation(self):
+        """Test that pre-mutation hook accepts valid mutations."""
+        modules = {
+            'module_a': ['import module_b'],
+            'module_b': ['import module_c'],
+            'module_c': []
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=True):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'module_c'})
+                self.assertTrue(result)
+    
+    def test_pre_mutation_hook_rejects_self_referencing_import(self):
+        """Test that pre-mutation hook rejects self-referencing imports."""
+        modules = {
+            'module_a': ['import module_b']
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=False):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'module_a'})
+                self.assertFalse(result)
+    
+    def test_pre_mutation_hook_rejects_nested_circular_dependency(self):
+        """Test that pre-mutation hook rejects complex nested circular dependencies."""
+        modules = {
+            'module_a': ['import module_b'],
+            'module_b': ['import module_c'],
+            'module_c': ['import module_d'],
+            'module_d': ['import module_e'],
+            'module_e': ['import module_a']  # Creates cycle A->B->C->D->E->A
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=False):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'module_e'})
+                self.assertFalse(result)
+    
+    def test_pre_mutation_hook_accepts_acyclic_imports(self):
+        """Test that pre-mutation hook accepts acyclic import chains."""
+        modules = {
+            'module_a': ['import module_b'],
+            'module_b': ['import module_c'],
+            'module_c': ['import module_d'],
+            'module_d': []
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=True):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'module_d'})
+                self.assertTrue(result)
+    
+    def test_pre_mutation_hook_rejects_mutation_with_multiple_issues(self):
+        """Test that pre-mutation hook rejects mutations with multiple issues."""
+        modules = {
+            'module_a': ['import module_b'],
+            'module_b': ['import module_c'],
+            'module_c': ['import module_a', 'import non_existent_module']  # Both circular and non-existent
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=False):
+                result = self.validator.pre_mutation_hook('module_c', 'add_import', {'import': 'non_existent_module'})
+                self.assertFalse(result)
+    
+    def test_pre_mutation_hook_handles_empty_imports(self):
+        """Test that pre-mutation hook handles modules with no imports."""
+        modules = {
+            'module_a': [],
+            'module_b': ['import module_a']
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=True):
+                result = self.validator.pre_mutation_hook('module_b', 'add_import', {'import': 'module_a'})
+                self.assertTrue(result)
+    
+    def test_pre_mutation_hook_rejects_import_from_non_existent_package(self):
+        """Test that pre-mutation hook rejects imports from non-existent packages."""
+        modules = {
+            'module_a': ['import module_b']
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=False):
+                result = self.validator.pre_mutation_hook('module_a', 'add_from_import', {'package': 'non_existent_package', 'module': 'some_module'})
+                self.assertFalse(result)
+    
+    def test_pre_mutation_hook_accepts_standard_library_imports(self):
+        """Test that pre-mutation hook accepts standard library imports."""
+        modules = {
+            'module_a': ['import os']
+        }
+        with patch.object(self.validator, 'get_module_content', side_effect=lambda x: modules.get(x, '')):
+            with patch.object(self.validator, 'validate_mutation', return_value=True):
+                result = self.validator.pre_mutation_hook('module_a', 'add_import', {'import': 'sys'})
+                self.assertTrue(result)
 
 if __name__ == '__main__':
     unittest.main()

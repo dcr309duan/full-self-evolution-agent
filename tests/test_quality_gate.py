@@ -292,3 +292,47 @@ print("This should not run")
             t.join()
 
         assert len(errors) == 0, f"Concurrent access caused errors: {errors}"
+
+
+class TestFocusedQualityGate:
+    """Focused test suite for the quality gate core functionality."""
+
+    def test_valid_python_code_passes(self, quality_gate, temp_python_file):
+        """Test that valid Python code passes the quality gate."""
+        valid_code = """
+def add(a: int, b: int) -> int:
+    return a + b
+"""
+        temp_python_file.write_text(valid_code)
+        result = quality_gate.evaluate(temp_python_file)
+        assert result is True
+
+    def test_invalid_syntax_fails_gate(self, quality_gate, temp_python_file):
+        """Test that invalid syntax fails the quality gate."""
+        invalid_code = """
+def broken():
+    message = "This string never ends
+    print(message)
+"""
+        temp_python_file.write_text(invalid_code)
+        with pytest.raises(QualityGateError) as exc_info:
+            quality_gate.evaluate(temp_python_file)
+        assert "SyntaxError" in str(exc_info.value) or "syntax" in str(exc_info.value).lower()
+
+    def test_type_error_fails_gate(self, quality_gate, temp_python_file):
+        """Test that code with type errors fails the quality gate using simple AST check."""
+        invalid_code = """
+def greet(name: str) -> str:
+    return 42  # Type mismatch: returning int instead of str
+"""
+        temp_python_file.write_text(invalid_code)
+        with pytest.raises(QualityGateError) as exc_info:
+            quality_gate.evaluate(temp_python_file)
+        assert "type" in str(exc_info.value).lower() or "mypy" in str(exc_info.value).lower()
+
+    def test_integration_test_runner_works(self, quality_gate, temp_python_file):
+        """Test that the integration test runner works with a trivial test."""
+        trivial_code = "x = 1\n"
+        temp_python_file.write_text(trivial_code)
+        result = quality_gate.evaluate(temp_python_file)
+        assert result is True

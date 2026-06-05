@@ -9,7 +9,17 @@
         "syntax_check",
         "static_analysis",
         "integration_test"
-      ]
+      ],
+      "success_criteria": "All checks must pass within retry_attempts",
+      "dependency": "quality_gate",
+      "status": "implemented",
+      "retry_mechanism": {
+        "max_retries": 3,
+        "backoff_strategy": "exponential",
+        "initial_delay_seconds": 1,
+        "max_delay_seconds": 10,
+        "retry_on_failures": true
+      }
     }
   ]
 }

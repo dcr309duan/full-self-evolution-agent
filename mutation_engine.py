@@ -9,7 +9,6 @@ from self_consistency_test_suite import run_self_consistency_tests
 from failure_analysis import classify_failure
 from schema_alignment_layer import SchemaValidator
 from failure_context_recorder import FailureContextRecorder
-from failure_pattern_learner import get_lessons_learned
 
 class MutationEngine:
     """
@@ -527,10 +526,15 @@ class MutationEngine:
         Returns:
             str: The mutation prompt with lessons learned appended
         """
-        lessons = get_lessons_learned()
+        try:
+            from failure_pattern_learner import get_lessons_learned
+            lessons = get_lessons_learned(target_module=__name__)
+        except Exception:
+            lessons = ""
+        
         prompt = f"Apply mutation to the following code:\n\n{source_code}\n\n"
         if lessons:
-            prompt += f"# Lessons Learned from Recent Failures:\n{lessons}\n"
+            prompt += f"LESSONS LEARNED FROM RECENT FAILURES:\n{lessons}\n"
         return prompt
 
     def _refactor_architecture(self, tree: ast.AST) -> ast.AST:
@@ -915,8 +919,4 @@ class MutationEngine:
                             orelse=node.orelse
                         )
                         
-                        # Return both init and while as a list
-                        return [init_assign, while_node]
-                return node
-        
-        tree = ForTo
+                        # Return both init and while as

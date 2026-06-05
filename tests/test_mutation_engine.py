@@ -156,3 +156,60 @@ def test_mutation_prompt_omits_lessons_learned_when_no_failures(caplog):
             "Expected no 'Lessons Learned' section in mutation prompt when no failures exist"
         assert "lessons" not in prompt.lower(), \
             "Expected no lesson-related content in mutation prompt when no failures exist"
+
+
+def test_lessons_learned_ordered_by_recency_after_consecutive_failures(caplog):
+    """Test that after 5 consecutive mutation failures, the generated prompt contains a 'Lessons Learned' section with at least 5 entries, ordered by recency."""
+    # Arrange: mock failure_pattern_learner to simulate 5 consecutive failures
+    with patch('mutation_engine.FailurePatternLearner') as MockLearner:
+        mock_learner_instance = MockLearner.return_value
+        # Simulate 5 consecutive failures with timestamps for recency ordering
+        mock_learner_instance.get_failures.return_value = [
+            {"module": "module_a", "failure_type": "TypeError", "count": 1, "timestamp": "2023-01-05T10:00:00"},
+            {"module": "module_a", "failure_type": "ValueError", "count": 1, "timestamp": "2023-01-04T10:00:00"},
+            {"module": "module_a", "failure_type": "KeyError", "count": 1, "timestamp": "2023-01-03T10:00:00"},
+            {"module": "module_a", "failure_type": "AttributeError", "count": 1, "timestamp": "2023-01-02T10:00:00"},
+            {"module": "module_a", "failure_type": "IndexError", "count": 1, "timestamp": "2023-01-01T10:00:00"}
+        ]
+        # Return 5 lessons learned, ordered by recency (most recent first)
+        mock_learner_instance.get_lessons_learned.return_value = [
+            "Lesson 5: Avoid TypeError by checking types before operations",
+            "Lesson 4: Validate inputs to prevent ValueError",
+            "Lesson 3: Ensure dictionary keys exist to avoid KeyError",
+            "Lesson 2: Check object attributes before access to prevent AttributeError",
+            "Lesson 1: Validate list indices to avoid IndexError"
+        ]
+
+        engine = MutationEngine(failure_learner=mock_learner_instance)
+
+        # Act: generate mutation prompt
+        prompt = engine.generate_mutation_prompt(module_name="module_a")
+
+        # Assert: prompt contains 'Lessons Learned' section
+        assert "Lessons Learned" in prompt, \
+            "Expected 'Lessons Learned' section in mutation prompt after consecutive failures"
+
+        # Assert: at least 5 entries in the Lessons Learned section
+        # Count the number of lesson entries (lines starting with '-' or numbered)
+        lesson_entries = [line for line in prompt.split('\n') if line.strip().startswith('-') or line.strip()[0].isdigit()]
+        assert len(lesson_entries) >= 5, \
+            f"Expected at least 5 lesson entries, but found {len(lesson_entries)}"
+
+        # Assert: lessons are ordered by recency (most recent first)
+        # The mock returns lessons in recency order, so we check the order in the prompt
+        expected_order = [
+            "Lesson 5: Avoid TypeError by checking types before operations",
+            "Lesson 4: Validate inputs to prevent ValueError",
+            "Lesson 3: Ensure dictionary keys exist to avoid KeyError",
+            "Lesson 2: Check object attributes before access to prevent AttributeError",
+            "Lesson 1: Validate list indices to avoid IndexError"
+        ]
+        # Find the position of each lesson in the prompt
+        positions = []
+        for lesson in expected_order:
+            pos = prompt.find(lesson)
+            assert pos != -1, f"Expected lesson '{lesson}' to be in the prompt"
+            positions.append(pos)
+        # Check that positions are in increasing order (most recent first)
+        assert positions == sorted(positions), \
+            f"Expected lessons ordered by recency (most recent first), but got positions: {positions}"

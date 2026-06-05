@@ -9,6 +9,7 @@ import re
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
 
 # Constants
 ROLLING_WINDOW_SIZE = 50
@@ -17,6 +18,9 @@ MEDIUM_FAILURE_THRESHOLD = 0.4
 HIGH_FAILURE_DISABLE = True
 MEDIUM_FAILURE_REDUCTION = 0.5
 OPERATOR_WEIGHTS_FILE = "operator_weights.json"
+SHORT_TERM_MEMORY_SIZE = 10
+FAILURES_FILE = "failures.json"
+MAX_FAILURES = 20
 
 # Regex patterns for error classification
 ERROR_PATTERNS: Dict[str, re.Pattern] = {
@@ -47,8 +51,13 @@ class FailurePatternLearner:
         )
         # Current operator weights (adjusted)
         self.operator_weights: Dict[str, float] = {}
-        # Load existing weights if available
+        # Short-term memory buffer for recent mutation failures
+        self.short_term_memory: List[Dict[str, str]] = []
+        # Last 20 failures as list of dicts
+        self.failures: List[Dict[str, str]] = []
+        # Load existing data if available
         self._load_weights()
+        self._load_failures()
 
     def _load_weights(self) -> None:
         """Load operator weights from JSON file if exists."""
@@ -62,17 +71,48 @@ class FailurePatternLearner:
                     stats = data.get("stats", {})
                     for op, s in stats.items():
                         self.operator_stats[op] = s
-            except (json.JSONDecodeError, KeyError):
+                    # Restore short-term memory if present
+                    memory = data.get("short_term_memory", [])
+                    self.short_term_memory = memory[-SHORT_TERM_MEMORY_SIZE:]
+            except (json.JSONDecodeError, KeyError, FileNotFoundError):
+                self.operator_weights = {}
+            except Exception:
                 self.operator_weights = {}
 
     def _save_weights(self) -> None:
         """Persist operator weights and stats to JSON file."""
-        data = {
-            "weights": self.operator_weights,
-            "stats": dict(self.operator_stats),
-        }
-        with open(OPERATOR_WEIGHTS_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+        try:
+            data = {
+                "weights": self.operator_weights,
+                "stats": dict(self.operator_stats),
+                "short_term_memory": self.short_term_memory,
+            }
+            with open(OPERATOR_WEIGHTS_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
+
+    def _load_failures(self) -> None:
+        """Load failures from JSON file if exists."""
+        path = Path(FAILURES_FILE)
+        if path.exists():
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        self.failures = data[-MAX_FAILURES:]
+            except (json.JSONDecodeError, FileNotFoundError):
+                self.failures = []
+            except Exception:
+                self.failures = []
+
+    def _save_failures(self) -> None:
+        """Persist failures to JSON file."""
+        try:
+            with open(FAILURES_FILE, "w") as f:
+                json.dump(self.failures, f, indent=2)
+        except Exception:
+            pass
 
     def classify_error(self, error_message: str) -> str:
         """Classify an error message into a category.
@@ -87,6 +127,39 @@ class FailurePatternLearner:
             if pattern.search(error_message):
                 return category
         return "other"
+
+    def update_short_term_memory(self, failure_details: Dict[str, str]) -> None:
+        """Append a new failure to short-term memory and trim to 10 entries.
+
+        Args:
+            failure_details: Dictionary with keys 'timestamp', 'error_type', 'module', 'summary'.
+        """
+        self.short_term_memory.append(failure_details)
+        # Trim to last 10 entries
+        if len(self.short_term_memory) > SHORT_TERM_MEMORY_SIZE:
+            self.short_term_memory = self.short_term_memory[-SHORT_TERM_MEMORY_SIZE:]
+        # Persist updated memory
+        self._save_weights()
+
+    def record_failure(self, module: str, error_type: str, error_msg: str) -> None:
+        """Record a failure with module, error type, error message, and timestamp.
+
+        Args:
+            module: The module where the failure occurred.
+            error_type: The classified error type.
+            error_msg: The error message.
+        """
+        failure = {
+            "module": module,
+            "error_type": error_type,
+            "error_msg": error_msg,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.failures.append(failure)
+        # Keep only last 20 failures
+        if len(self.failures) > MAX_FAILURES:
+            self.failures = self.failures[-MAX_FAILURES:]
+        self._save_failures()
 
     def record_result(
         self, operator: str, success: bool, error_message: Optional[str] = None
@@ -207,21 +280,43 @@ class FailurePatternLearner:
         sorted_errors = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
         return sorted_errors[:top_n]
 
-    def get_lessons_learned(self) -> str:
-        """Get a formatted string of the last 10 mutation failures with error types and affected files.
+    def get_lessons_learned(self, target_module: Optional[str] = None) -> str:
+        """Get a formatted string from the failures list, optionally filtered by module.
+
+        Args:
+            target_module: Optional module name to filter by.
 
         Returns:
-            A formatted string summarizing the last 10 failures for short-term memory.
+            A formatted string summarizing the last failures.
         """
-        if not self.failure_window:
+        if not self.failures:
             return "No failures recorded yet."
 
-        # Get the last 10 failures
-        recent_failures = list(self.failure_window)[-10:]
+        # Filter by module if provided
+        if target_module:
+            filtered_failures = [f for f in self.failures if f.get("module") == target_module]
+        else:
+            filtered_failures = self.failures
 
-        lines = ["Lessons Learned (Last 10 Failures):"]
-        for i, (operator, error_type) in enumerate(recent_failures, 1):
-            lines.append(f"  {i}. Operator: {operator}, Error Type: {error_type}")
+        if not filtered_failures:
+            return f"No failures recorded for module: {target_module}"
+
+        # Sort by recency (most recent first) using timestamp
+        sorted_failures = sorted(
+            filtered_failures,
+            key=lambda x: x.get("timestamp", ""),
+            reverse=True
+        )
+
+        lines = ["Lessons Learned (Last Failures):"]
+        for i, entry in enumerate(sorted_failures, 1):
+            timestamp = entry.get("timestamp", "unknown")
+            error_type = entry.get("error_type", "unknown")
+            module = entry.get("module", "unknown")
+            error_msg = entry.get("error_msg", "no message")
+            lines.append(
+                f"  {i}. [{timestamp}] Module: {module}, Error: {error_type}, Message: {error_msg}"
+            )
 
         return "\n".join(lines)
 
@@ -230,4 +325,7 @@ class FailurePatternLearner:
         self.failure_window.clear()
         self.operator_stats.clear()
         self.operator_weights.clear()
+        self.short_term_memory.clear()
+        self.failures.clear()
         self._save_weights()
+        self._save_failures()
