@@ -1,9 +1,8 @@
 {
-  "cycle_count": 115,
-  "current_generation": 86,
-  "last_evolution_time": 1780645570.271856,
+  "cycle_count": 116,
+  "current_generation": 87,
+  "last_evolution_time": 1780645768.3343368,
   "capabilities": [
-    "Build a minimal end-to-end integration test suite that exercises the full mutation → test → system m",
     "Implement a canonical schema alignment layer that converts all inter-module data (reflection output,",
     "Build a self-consistency test suite that runs after every mutation to verify system integrity: it ch",
     "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a depe",
@@ -52,15 +51,10 @@
     "Implement a sandboxed mutation executor that clones core modules (mutation engine, orchestrator, dep",
     "Build a meta-cognitive evaluator that tracks long-term fitness trends (e.g., success rate on core vs",
     "Implement automated rollback and conflict resolution for overlapping module edits: when two mutation",
-    "Implement atomic file write with rollback in the orchestrator: wrap all module file writes in a try/"
+    "Implement atomic file write with rollback in the orchestrator: wrap all module file writes in a try/",
+    "Create a 'minimal core' end-to-end integration test that runs the full reflection → goal generation "
   ],
   "history": [
-    {
-      "cycle": 7,
-      "goal": "Implement a testing framework to validate self-modifications",
-      "success": false,
-      "timestamp": 1780624047.9345088
-    },
     {
       "cycle": 8,
       "goal": "Implement a testing framework to validate self-modifications",
@@ -654,6 +648,12 @@
       "goal": "Implement atomic file write with rollback in the orchestrator: wrap all module file writes in a try/except block that writes to a temporary file first, then renames; on any exception, restore the original file from a backup snapshot and log the failure as an integration insight.",
       "success": true,
       "timestamp": 1780645732.275263
+    },
+    {
+      "cycle": 116,
+      "goal": "Create a 'minimal core' end-to-end integration test that runs the full reflection → goal generation → mutation → test → promote cycle on a simplified toy module (e.g., a single function that returns a constant), and asserts the cycle completes without any file-system or import errors; add this test to the pre-commit hook.",
+      "success": true,
+      "timestamp": 1780645849.847544
     }
   ],
   "status": "evolving"
