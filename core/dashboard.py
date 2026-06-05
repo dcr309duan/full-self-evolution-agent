@@ -7,7 +7,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import PROJECT_ROOT, LOGS_DIR
+from config import PROJECT_ROOT, LOGS_DIR, MEMORY_DIR
 from core.memory import get_evolution_state, get_knowledge_base, get_goals
 
 
@@ -46,7 +46,23 @@ def get_dashboard_data():
         "pending_goals": [g for g in goals.get("sub_goals", []) if g["status"] == "pending"],
         "completed_goals": goals.get("completed_goals", [])[-10:],
         "log_lines": log_lines,
+        "meta_cognition": _get_meta_cognition_data(),
     }
+
+
+def _get_meta_cognition_data():
+    meta_path = os.path.join(MEMORY_DIR, "meta_cognition_log.json")
+    try:
+        with open(meta_path, 'r') as f:
+            data = json.load(f)
+        return {
+            "total_sessions": len(data.get("sessions", [])),
+            "paradigm_shifts": data.get("paradigm_shifts", [])[-5:],
+            "blind_spots": data.get("blind_spots_discovered", [])[-5:],
+            "last_session": data.get("sessions", [{}])[-1] if data.get("sessions") else None,
+        }
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"total_sessions": 0, "paradigm_shifts": [], "blind_spots": [], "last_session": None}
 
 
 DASHBOARD_HTML = '''<!DOCTYPE html>
@@ -178,6 +194,16 @@ body {
         </div>
     </div>
 
+    <div class="section" style="border-left: 3px solid #8957e5;">
+        <h2>递归元认知</h2>
+        <div style="display:flex;gap:24px;margin-bottom:16px;">
+            <div><span style="color:#8b949e;font-size:12px;">元认知会话</span><br><span style="font-size:20px;color:#8957e5;" id="meta-sessions">0</span></div>
+            <div><span style="color:#8b949e;font-size:12px;">范式转移</span><br><span style="font-size:20px;color:#f0883e;" id="meta-shifts">0</span></div>
+            <div><span style="color:#8b949e;font-size:12px;">盲区发现</span><br><span style="font-size:20px;color:#f85149;" id="meta-blinds">0</span></div>
+        </div>
+        <div id="meta-details"></div>
+    </div>
+
     <div class="section">
         <h2>实时日志</h2>
         <div class="log-area" id="log-area">加载中...</div>
@@ -233,6 +259,21 @@ function updateDashboard(data) {
     ).join('');
 
     document.getElementById('log-area').textContent = data.log_lines.join('');
+
+    // Meta-cognition
+    const meta = data.meta_cognition || {};
+    document.getElementById('meta-sessions').textContent = meta.total_sessions || 0;
+    document.getElementById('meta-shifts').textContent = (meta.paradigm_shifts || []).length;
+    document.getElementById('meta-blinds').textContent = (meta.blind_spots || []).length;
+    let metaHtml = '';
+    (meta.paradigm_shifts || []).slice().reverse().forEach(s => {
+        metaHtml += '<div class="insight-item" style="border-left-color:#f0883e;"><span class="insight-time">' + formatTime(s.timestamp) + '</span> <strong>[范式转移]</strong> ' + (s.insight||'').substring(0,150) + '</div>';
+    });
+    (meta.blind_spots || []).slice().reverse().forEach(b => {
+        metaHtml += '<div class="insight-item" style="border-left-color:#f85149;"><span class="insight-time">' + formatTime(b.timestamp) + '</span> <strong>[盲区]</strong> ' + (b.description||'').substring(0,150) + '</div>';
+    });
+    document.getElementById('meta-details').innerHTML = metaHtml || '<span style="color:#8b949e;font-size:12px;">等待第一次元认知会话（每10轮触发）</span>';
+
     document.getElementById('last-update').textContent = '最后更新: ' + new Date().toLocaleTimeString('zh-CN');
 }
 

@@ -16,6 +16,7 @@ from core.memory import (
 from core.reflection import reflect_on_state, generate_next_goals
 from core.self_modify import self_modify, add_capability, execute_shell, generate_code, safe_execute
 from core.reporter import write_report, generate_timeline
+from core.meta_cognition import meta_cognition_session, question_everything
 
 
 def log_cycle(cycle_num, message):
@@ -141,6 +142,28 @@ def evolution_cycle(state):
         log_cycle(cycle_num, f"Reflection: {json.dumps(reflection)[:200]}")
         
         generate_next_goals(reflection)
+    
+    # Phase 1.5: Recursive meta-cognition (deeper reflection)
+    if cycle_num % 10 == 0:
+        log_cycle(cycle_num, "Phase 1.5: 递归元认知 - 反思反思的反思")
+        try:
+            chain = meta_cognition_session(f"scheduled_cycle_{cycle_num}")
+            log_cycle(cycle_num, f"元认知深度: {len(chain)} 层")
+            for level in chain:
+                if level.get("paradigm_shift"):
+                    log_cycle(cycle_num, f"!!! 范式转移: {level.get('insight', '')[:100]}")
+        except Exception as e:
+            log_cycle(cycle_num, f"元认知异常: {str(e)[:100]}")
+    
+    if cycle_num % 30 == 0:
+        log_cycle(cycle_num, "Phase 1.5+: 质疑一切基本假设")
+        try:
+            results = question_everything()
+            high_priority = [r for r in results if isinstance(r, dict) and r.get("priority_to_challenge", 0) >= 8]
+            if high_priority:
+                log_cycle(cycle_num, f"发现 {len(high_priority)} 个高优先级需质疑的假设")
+        except Exception as e:
+            log_cycle(cycle_num, f"质疑异常: {str(e)[:100]}")
     
     # Phase 2: Select and execute goal
     log_cycle(cycle_num, "Phase 2: Goal selection and execution")
