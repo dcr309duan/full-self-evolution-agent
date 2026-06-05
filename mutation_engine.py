@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from static_validator import validate_mutation
 from mutation_validator import MutationValidator
 from dependency_scheduler import DependencyScheduler
+from self_consistency_test_suite import run_self_consistency_tests
+from failure_analysis import classify_failure
 
 class MutationEngine:
     """
@@ -241,6 +243,42 @@ class MutationEngine:
         except Exception as e:
             return True, None  # Allow mutation on unexpected errors
 
+    def _post_mutation_hook(self, original_code: str, mutated_code: str, mutation_type: str) -> str:
+        """
+        Post-mutation hook that runs self-consistency tests and reverts if they fail.
+        
+        Args:
+            original_code: The original source code before mutation
+            mutated_code: The mutated source code
+            mutation_type: The type of mutation that was applied
+            
+        Returns:
+            str: The final code after post-mutation checks (may be reverted to original)
+        """
+        # Run self-consistency test suite
+        tests_passed, failure_details = run_self_consistency_tests(mutated_code)
+        
+        if not tests_passed:
+            # Classify the failure
+            failure_classification = classify_failure(failure_details)
+            
+            # Log the failure with classification
+            failure_entry = {
+                'operator': mutation_type,
+                'failure_reason': failure_details,
+                'failure_classification': failure_classification,
+                'original_code': original_code,
+                'mutated_code': mutated_code
+            }
+            self.validation_failures.append(failure_entry)
+            
+            # Revert to original code using rollback mechanism
+            print(f"Self-consistency test failed for mutation type '{mutation_type}'. Reverting mutation.")
+            print(f"Failure classification: {failure_classification}")
+            return original_code
+        
+        return mutated_code
+
     def mutate(self, source_code: str) -> str:
         """
         Apply a mutation to the source code based on weighted random selection.
@@ -276,7 +314,9 @@ class MutationEngine:
                 elif mutation_type == 'optimize_performance':
                     tree = self._optimize_performance(tree)
                 elif mutation_type == 'grammar_guided_mutation':
-                    return self._grammar_guided_mutation(source_code)
+                    mutated_code = self._grammar_guided_mutation(source_code)
+                    # Apply post-mutation hook
+                    return self._post_mutation_hook(source_code, mutated_code, mutation_type)
                 
                 mutated_ast = tree
                 mutated_code = ast.unparse(mutated_ast)
@@ -303,7 +343,8 @@ class MutationEngine:
                 # Validate using existing validate_mutation function
                 is_valid, failure_reason = validate_mutation(mutated_ast)
                 if is_valid:
-                    return mutated_code
+                    # Apply post-mutation hook before returning
+                    return self._post_mutation_hook(source_code, mutated_code, mutation_type)
                 else:
                     # Track discarded mutation for this operator
                     self.discarded_mutations[mutation_type] += 1

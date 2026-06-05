@@ -36,7 +36,7 @@ class ModuleStateStore:
             return states.get(module, 'pending')
 
     def set_state(self, module, state):
-        valid_states = {'pending', 'verified_consistent', 'needs_verification', 'mutation_in_progress', 'failed'}
+        valid_states = {'pending', 'verified_consistent', 'needs_verification', 'mutation_in_progress', 'failed', 'consistency_check_failed'}
         if state not in valid_states:
             raise ValueError(f"Invalid state: {state}. Must be one of {valid_states}")
         with self.lock:
@@ -48,6 +48,9 @@ class ModuleStateStore:
         with self.lock:
             states = self._read_states()
             return [module for module, s in states.items() if s == state]
+
+    def get_consistency_failures(self):
+        return self.get_modules_in_state('consistency_check_failed')
 
     def reset_all(self):
         with self.lock:

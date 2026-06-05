@@ -23,6 +23,12 @@
     },
     "dependency_scheduler": {
       "prerequisites": ["module_state_store", "dependency_manifest"]
+    },
+    "failure_analysis_module": {
+      "prerequisites": []
+    },
+    "self_consistency_test_suite": {
+      "prerequisites": ["reflection_parser", "goal_generator", "mutation_engine", "module_state_store", "failure_analysis_module"]
     }
   },
   "bottleneck": "mutation_engine"

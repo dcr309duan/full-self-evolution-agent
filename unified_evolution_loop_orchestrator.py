@@ -9,6 +9,7 @@ Integrates meta_mutation_engine to check for meta-mutations after each evolution
 Integrates rollback_manager to verify and rollback after each mutation application.
 Integrates curiosity_module to inject exploration tasks with configurable probability.
 Integrates DependencyScheduler to manage mutation dependencies and bottleneck resolution.
+Integrates self-consistency test suite to verify module consistency after mutations.
 """
 
 import logging
@@ -25,6 +26,7 @@ from meta_mutation_engine import MetaMutationEngine
 from rollback_manager import RollbackManager
 from curiosity_module import CuriosityModule
 from dependency_scheduler import DependencyScheduler
+from self_consistency_test_suite import SelfConsistencyTestSuite
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ class UnifiedEvolutionLoopOrchestrator:
         rollback_manager: RollbackManager,
         curiosity_module: CuriosityModule,
         dependency_scheduler: DependencyScheduler,
+        self_consistency_test_suite: SelfConsistencyTestSuite,
         max_retries: int = 3,
         curiosity_enabled: bool = True,
         curiosity_probability: float = 0.3,
@@ -58,6 +61,7 @@ class UnifiedEvolutionLoopOrchestrator:
         self.rollback_manager = rollback_manager
         self.curiosity_module = curiosity_module
         self.dependency_scheduler = dependency_scheduler
+        self.self_consistency_test_suite = self_consistency_test_suite
         self.max_retries = max_retries
         self.curiosity_enabled = curiosity_enabled
         self.curiosity_probability = curiosity_probability
@@ -210,7 +214,22 @@ class UnifiedEvolutionLoopOrchestrator:
                         self.goal_manager.mark_goal_completed(goal_id, status="degraded")
                         return
                     
-                    # Step 5: Update state to 'verified_consistent' after integration tests pass
+                    # Step 5: Run self-consistency checks before marking as verified_consistent
+                    self_consistency_success = self._run_self_consistency_checks(goal_id, module_id)
+                    if not self_consistency_success:
+                        logger.warning(f"Self-consistency checks failed for goal {goal_id}")
+                        if module_id:
+                            self.state_store[module_id] = "failed"
+                            logger.info(f"Module {module_id} state updated to 'failed'")
+                        # Trigger rollback
+                        rollback_result = self.rollback_manager.verify_and_rollback()
+                        if rollback_result.get("rollback_performed", False):
+                            logger.warning(f"Rollback performed after self-consistency failure for goal {goal_id}")
+                            self._pause_for_rollback_processing(goal_id, rollback_result)
+                        self.goal_manager.mark_goal_completed(goal_id, status="self_consistency_failed")
+                        return
+                    
+                    # Step 6: Update state to 'verified_consistent' after self-consistency checks pass
                     if module_id:
                         self.state_store[module_id] = "verified_consistent"
                         logger.info(f"Module {module_id} state updated to 'verified_consistent'")
@@ -252,6 +271,28 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _run_self_consistency_checks(self, goal_id: str, module_id: str) -> bool:
+        """Run self-consistency tests on the module and return success status."""
+        try:
+            logger.info(f"Running self-consistency checks for module {module_id} after goal {goal_id}")
+            consistency_results = self.self_consistency_test_suite.run_tests(module_id)
+            
+            if consistency_results.get("success", False):
+                logger.info(f"Self-consistency checks passed for module {module_id}")
+                return True
+            else:
+                failure_details = consistency_results.get("failures", [])
+                for failure in failure_details:
+                    logger.error(f"Self-consistency check failure for module {module_id}: {failure.get('test_name', 'unknown')}")
+                    logger.error(f"Failure trace: {failure.get('traceback', 'No traceback available')}")
+                    self._log_to_reflection_system(goal_id, failure)
+                return False
+                
+        except Exception as e:
+            logger.exception(f"Error running self-consistency checks for module {module_id}: {e}")
+            self._log_to_reflection_system(goal_id, {"error": str(e), "traceback": logging.traceback.format_exc()})
+            return False
 
     def _prioritize_bottleneck_mutations(self, bottleneck: str) -> None:
         """Prioritize mutations that unblock the identified bottleneck."""
