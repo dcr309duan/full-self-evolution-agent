@@ -670,3 +670,93 @@ def analyze_and_force_coordination(
         "results": results,
         "best_mutation": forcer.get_best_coordinated_mutation(),
     }
+
+
+def generate_coordinated_multi_module_mutations(
+    equilibrium_state: Dict[str, Any],
+    detector: Optional[NashEquilibriumDetector] = None
+) -> List[Dict[str, Any]]:
+    """
+    Generates coordinated multi-module mutations based on the equilibrium state.
+    This function is designed to be called from the orchestrator's cycle loop.
+    
+    Args:
+        equilibrium_state: The current equilibrium state from the detector.
+        detector: Optional NashEquilibriumDetector instance.
+        
+    Returns:
+        A list of coordinated mutation plans.
+    """
+    forcer = MultiModuleForcer(detector)
+    return forcer.propose_coordinated_multi_module_mutations(equilibrium_state)
+
+
+def execute_multi_module_mutation_with_rollback(
+    plan: Dict[str, Any],
+    detector: Optional[NashEquilibriumDetector] = None
+) -> Dict[str, Any]:
+    """
+    Executes a multi-module mutation with rollback safety.
+    This function is designed to be called from the orchestrator's cycle loop.
+    
+    Args:
+        plan: The coordinated mutation plan to execute.
+        detector: Optional NashEquilibriumDetector instance.
+        
+    Returns:
+        A result dictionary with execution details and rollback status.
+    """
+    orchestrator = MultiModuleOrchestrator(detector)
+    return orchestrator.execute_with_rollback(plan)
+
+
+def integrate_with_orchestrator_cycle(
+    equilibrium_state: Dict[str, Any],
+    detector: Optional[NashEquilibriumDetector] = None,
+    max_mutations: int = 3
+) -> Dict[str, Any]:
+    """
+    Integrates multi-module forcing into the orchestrator's cycle loop.
+    This function handles the full pipeline: generate plans, execute with rollback,
+    and return results for the cycle loop to process.
+    
+    Args:
+        equilibrium_state: The current equilibrium state from the detector.
+        detector: Optional NashEquilibriumDetector instance.
+        max_mutations: Maximum number of mutations to execute in this cycle.
+        
+    Returns:
+        A result dictionary with all executed mutations and their outcomes.
+    """
+    # Step 1: Generate coordinated mutation plans
+    plans = generate_coordinated_multi_module_mutations(equilibrium_state, detector)
+    
+    if not plans:
+        return {
+            "success": False,
+            "error": "No coordinated mutation plans generated",
+            "mutations_executed": 0,
+            "results": []
+        }
+    
+    # Step 2: Execute up to max_mutations plans with rollback
+    executed_results = []
+    for plan in plans[:max_mutations]:
+        result = execute_multi_module_mutation_with_rollback(plan, detector)
+        executed_results.append(result)
+    
+    # Step 3: Compile results for the cycle loop
+    successful = [r for r in executed_results if r.get("success", False)]
+    
+    return {
+        "success": len(successful) > 0,
+        "plans_generated": len(plans),
+        "mutations_executed": len(executed_results),
+        "successful_mutations": len(successful),
+        "results": executed_results,
+        "cycle_feedback": {
+            "improvement": sum(r.get("improvement", 0.0) for r in successful),
+            "coordinated_advantage": sum(r.get("coordinated_advantage", 0.0) for r in successful),
+            "rolled_back_count": sum(1 for r in executed_results if r.get("rolled_back", False))
+        }
+    }

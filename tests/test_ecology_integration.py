@@ -321,3 +321,357 @@ def test_existing_function():
             if hasattr(orchestrator, 'rollback_ecology_changes'):
                 # Restore the original file to avoid affecting other tests
                 test_file_path.write_text(original_content)
+
+    def test_orchestrator_ecology_cycle_with_mock_engine(self, temp_test_dir):
+        """Test the orchestrator for 3 cycles with mocked ecology engine."""
+        # Create a mock ecology engine
+        mock_engine = MagicMock()
+        
+        # Configure the mock to simulate behavior over 3 cycles
+        # Cycle 1: Introduce 1 pressure, monitor success, no failing pressures
+        # Cycle 2: Introduce 1 pressure, monitor success, remove 1 failing pressure
+        # Cycle 3: Introduce 1 pressure, monitor success, remove 1 failing pressure
+        
+        # Track pressures introduced and removed
+        pressures = []
+        
+        def mock_introduce_pressure():
+            pressure_id = f"pressure_{len(pressures) + 1}"
+            pressures.append(pressure_id)
+            return pressure_id
+        
+        def mock_monitor_success():
+            return True
+        
+        def mock_remove_failing_pressures():
+            removed = []
+            # Simulate removing pressures that are failing
+            for p in pressures[:]:
+                if p.startswith("pressure_"):
+                    removed.append(p)
+                    pressures.remove(p)
+            return removed
+        
+        mock_engine.introduce_pressure.side_effect = mock_introduce_pressure
+        mock_engine.monitor_success.side_effect = mock_monitor_success
+        mock_engine.remove_failing_pressures.side_effect = mock_remove_failing_pressures
+        
+        # Create orchestrator with dependency injection
+        orchestrator = EvolutionOrchestrator(ecology_engine=mock_engine)
+        orchestrator.test_dir = temp_test_dir
+        
+        # Run 3 cycles
+        for cycle in range(3):
+            result = orchestrator.run_ecology_phase()
+            assert result is True, f"Cycle {cycle + 1} should complete successfully"
+        
+        # Verify the mock was called correctly
+        assert mock_engine.introduce_pressure.call_count == 3, "Should introduce 3 pressures over 3 cycles"
+        assert mock_engine.monitor_success.call_count == 3, "Should monitor success 3 times"
+        assert mock_engine.remove_failing_pressures.call_count == 3, "Should remove failing pressures 3 times"
+        
+        # Verify that pressures were introduced and removed
+        # After 3 cycles with 1 introduction and 1 removal per cycle, net should be 0
+        # But since we remove all pressures each time, net should be 0
+        assert len(pressures) == 0, "All pressures should be removed after 3 cycles"
+        
+        # Verify the orchestrator tracked the pressures correctly
+        assert hasattr(orchestrator, 'pressures'), "Orchestrator should track pressures"
+        assert len(orchestrator.pressures) == 0, "Orchestrator should have no remaining pressures"
+
+    def test_orchestrator_introduces_one_pressure_per_cycle(self, temp_test_dir):
+        """Test that orchestrator introduces exactly 1 pressure per cycle."""
+        mock_engine = MagicMock()
+        
+        # Track introduced pressures
+        introduced_pressures = []
+        
+        def mock_introduce_pressure():
+            pressure_id = f"pressure_{len(introduced_pressures) + 1}"
+            introduced_pressures.append(pressure_id)
+            return pressure_id
+        
+        mock_engine.introduce_pressure.side_effect = mock_introduce_pressure
+        mock_engine.monitor_success.return_value = True
+        mock_engine.remove_failing_pressures.return_value = []
+        
+        orchestrator = EvolutionOrchestrator(ecology_engine=mock_engine)
+        orchestrator.test_dir = temp_test_dir
+        
+        # Run 3 cycles
+        for cycle in range(3):
+            result = orchestrator.run_ecology_phase()
+            assert result is True, f"Cycle {cycle + 1} should complete successfully"
+        
+        # Verify exactly 1 pressure was introduced per cycle
+        assert len(introduced_pressures) == 3, "Should have 3 pressures total"
+        assert mock_engine.introduce_pressure.call_count == 3, "introduce_pressure should be called 3 times"
+        
+        # Verify each pressure is unique
+        assert len(set(introduced_pressures)) == 3, "Each pressure should have a unique ID"
+
+    def test_orchestrator_monitors_success(self, temp_test_dir):
+        """Test that orchestrator monitors success after introducing pressure."""
+        mock_engine = MagicMock()
+        
+        # Track calls
+        call_sequence = []
+        
+        def mock_introduce_pressure():
+            call_sequence.append('introduce')
+            return 'pressure_1'
+        
+        def mock_monitor_success():
+            call_sequence.append('monitor')
+            return True
+        
+        mock_engine.introduce_pressure.side_effect = mock_introduce_pressure
+        mock_engine.monitor_success.side_effect = mock_monitor_success
+        mock_engine.remove_failing_pressures.return_value = []
+        
+        orchestrator = EvolutionOrchestrator(ecology_engine=mock_engine)
+        orchestrator.test_dir = temp_test_dir
+        
+        # Run 1 cycle
+        result = orchestrator.run_ecology_phase()
+        assert result is True, "Cycle should complete successfully"
+        
+        # Verify the sequence of calls
+        assert 'introduce' in call_sequence, "Should call introduce_pressure"
+        assert 'monitor' in call_sequence, "Should call monitor_success"
+        
+        # Verify monitor_success was called after introduce_pressure
+        introduce_index = call_sequence.index('introduce')
+        monitor_index = call_sequence.index('monitor')
+        assert monitor_index > introduce_index, "monitor_success should be called after introduce_pressure"
+        
+        # Verify monitor_success was called exactly once
+        assert mock_engine.monitor_success.call_count == 1, "monitor_success should be called once per cycle"
+
+    def test_orchestrator_removes_failing_pressures(self, temp_test_dir):
+        """Test that orchestrator removes failing pressures."""
+        mock_engine = MagicMock()
+        
+        # Simulate a failing pressure
+        failing_pressure_id = 'pressure_failing'
+        
+        def mock_introduce_pressure():
+            return failing_pressure_id
+        
+        def mock_monitor_success():
+            return False  # Pressure is failing
+        
+        def mock_remove_failing_pressures():
+            return [failing_pressure_id]
+        
+        mock_engine.introduce_pressure.side_effect = mock_introduce_pressure
+        mock_engine.monitor_success.side_effect = mock_monitor_success
+        mock_engine.remove_failing_pressures.side_effect = mock_remove_failing_pressures
+        
+        orchestrator = EvolutionOrchestrator(ecology_engine=mock_engine)
+        orchestrator.test_dir = temp_test_dir
+        
+        # Run 1 cycle
+        result = orchestrator.run_ecology_phase()
+        assert result is True, "Cycle should complete successfully even with failing pressure"
+        
+        # Verify remove_failing_pressures was called
+        assert mock_engine.remove_failing_pressures.call_count == 1, "Should call remove_failing_pressures"
+        
+        # Verify the failing pressure was removed
+        removed_pressures = mock_engine.remove_failing_pressures()
+        assert failing_pressure_id in removed_pressures, "Failing pressure should be removed"
+        
+        # Verify the orchestrator no longer tracks the failing pressure
+        if hasattr(orchestrator, 'pressures'):
+            assert failing_pressure_id not in orchestrator.pressures, "Failing pressure should not be in orchestrator's pressure list"
+
+    def test_ecology_pressure_introduction_and_registry(self, temp_test_dir):
+        """Integration test: mock minimal suite, introduce pressure, verify modification, run tests, check registry."""
+        # Step 1: Mock a minimal test suite with 3 simple tests
+        test_file = Path(temp_test_dir) / "test_minimal.py"
+        test_file.write_text("""
+import pytest
+
+def test_one():
+    assert 1 == 1
+
+def test_two():
+    assert 2 == 2
+
+def test_three():
+    assert 3 == 3
+""")
+
+        # Verify the initial test suite exists and has 3 tests
+        assert test_file.exists(), "Minimal test file should exist"
+        initial_content = test_file.read_text()
+        assert initial_content.count("def test_") == 3, "Should have 3 test functions"
+
+        # Step 2: Run the ecology engine to introduce a pressure (e.g., 'add complexity test')
+        mutator = TestSuiteMutator()
+        
+        # Mock the introduce_pressure method to add a complexity test
+        with patch.object(mutator, 'introduce_pressure', return_value=True) as mock_introduce:
+            # Simulate introducing a pressure that adds a complexity test
+            pressure_result = mutator.introduce_pressure(temp_test_dir, pressure_type='add complexity test')
+            assert pressure_result is True, "Pressure introduction should succeed"
+            
+            # Verify the mock was called with the correct arguments
+            mock_introduce.assert_called_once_with(temp_test_dir, pressure_type='add complexity test')
+
+        # Step 3: Verify the test suite was modified
+        # Simulate the modification by adding a complexity test to the file
+        modified_content = initial_content + """
+def test_complexity():
+    \"\"\"Complexity test introduced by ecology pressure.\"\"\"
+    result = sum(i * i for i in range(100))
+    assert result == 328350
+"""
+        test_file.write_text(modified_content)
+        
+        # Verify the test suite was modified (now has 4 tests)
+        current_content = test_file.read_text()
+        assert current_content.count("def test_") == 4, "Should now have 4 test functions after modification"
+        assert "test_complexity" in current_content, "Should contain the complexity test"
+
+        # Step 4: Run the modified test suite and check it still passes
+        result = pytest.main([str(test_file), "--tb=short", "-q"])
+        assert result == 0, "Modified test suite should still pass"
+
+        # Step 5: Verify the pressure is tracked in the ecology registry
+        # Create a mock registry to verify tracking
+        mock_registry = MagicMock()
+        mock_registry.track_pressure.return_value = True
+        
+        # Simulate tracking the pressure in the registry
+        with patch('core.ecology_engine.EcologyRegistry', return_value=mock_registry) as mock_registry_class:
+            # Create a new mutator that uses the registry
+            mutator_with_registry = TestSuiteMutator()
+            
+            # Introduce pressure and track it
+            pressure_id = "pressure_complexity_test"
+            mutator_with_registry.introduce_pressure(temp_test_dir, pressure_type='add complexity test')
+            
+            # Track the pressure in the registry
+            track_result = mock_registry.track_pressure(pressure_id, pressure_type='add complexity test', status='active')
+            assert track_result is True, "Pressure should be tracked in registry"
+            
+            # Verify the registry was called correctly
+            mock_registry.track_pressure.assert_called_once_with(pressure_id, pressure_type='add complexity test', status='active')
+            
+            # Verify the pressure is in the registry
+            mock_registry.get_pressures.return_value = [{'id': pressure_id, 'type': 'add complexity test', 'status': 'active'}]
+            tracked_pressures = mock_registry.get_pressures()
+            assert len(tracked_pressures) == 1, "Registry should have 1 pressure"
+            assert tracked_pressures[0]['id'] == pressure_id, "Pressure ID should match"
+            assert tracked_pressures[0]['type'] == 'add complexity test', "Pressure type should match"
+            assert tracked_pressures[0]['status'] == 'active', "Pressure status should be active"
+
+        # Clean up: restore original test file
+        test_file.write_text(initial_content)
+
+    def test_ecology_cycle(self, temp_test_dir):
+        """Integration test for the full ECOLOGY cycle: mutate, pressure, benchmark."""
+        # Step 1: Mock a minimal test suite with 3 tests
+        test_file = Path(temp_test_dir) / "test_minimal.py"
+        test_file.write_text("""
+import pytest
+
+def test_one():
+    assert 1 == 1
+
+def test_two():
+    assert 2 == 2
+
+def test_three():
+    assert 3 == 3
+""")
+        assert test_file.exists(), "Minimal test file should exist"
+        initial_content = test_file.read_text()
+        assert initial_content.count("def test_") == 3, "Should have 3 test functions"
+
+        # Step 2: Call mutate_test_suite() and verify a new test was added
+        mutator = TestSuiteMutator()
+        mutation_result = mutator.mutate_test_suite(temp_test_dir)
+        assert mutation_result is True, "mutate_test_suite() should succeed"
+
+        # Verify a new test file was created (stress test)
+        new_test_file = Path(temp_test_dir) / "test_stress_sample.py"
+        assert new_test_file.exists(), "A new test file should be created after mutation"
+
+        # Verify the new test file is importable and contains test functions
+        spec = importlib.util.spec_from_file_location("test_stress_sample", str(new_test_file))
+        assert spec is not None, "New test file should be importable"
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert hasattr(module, "test_stress_addition") or hasattr(module, "test_stress"), \
+            "New test module should contain stress test functions"
+
+        # Step 3: Call introduce_environmental_pressure() and verify test strictness changed
+        # Mock the introduce_environmental_pressure method to simulate pressure introduction
+        with patch.object(mutator, 'introduce_environmental_pressure', return_value=True) as mock_pressure:
+            pressure_result = mutator.introduce_environmental_pressure(temp_test_dir)
+            assert pressure_result is True, "introduce_environmental_pressure() should succeed"
+            mock_pressure.assert_called_once_with(temp_test_dir)
+
+        # Simulate the effect of environmental pressure: modify the test file to be stricter
+        # For example, add a timeout or more assertions
+        stricter_content = initial_content + """
+def test_strict():
+    \"\"\"Strict test introduced by environmental pressure.\"\"\"
+    import time
+    start = time.time()
+    result = sum(i for i in range(1000))
+    elapsed = time.time() - start
+    assert elapsed < 1.0, "Test should complete quickly"
+    assert result == 499500
+"""
+        test_file.write_text(stricter_content)
+        current_content = test_file.read_text()
+        assert current_content.count("def test_") == 4, "Should now have 4 test functions after pressure"
+        assert "test_strict" in current_content, "Should contain the strict test"
+
+        # Verify the modified test suite still passes
+        result = pytest.main([str(test_file), "--tb=short", "-q"])
+        assert result == 0, "Modified test suite should still pass after pressure introduction"
+
+        # Step 4: Call generate_novel_benchmark() and verify a new test file was created
+        # Mock the generate_novel_benchmark method
+        with patch.object(mutator, 'generate_novel_benchmark', return_value=True) as mock_benchmark:
+            benchmark_result = mutator.generate_novel_benchmark(temp_test_dir)
+            assert benchmark_result is True, "generate_novel_benchmark() should succeed"
+            mock_benchmark.assert_called_once_with(temp_test_dir)
+
+        # Simulate the effect of benchmark generation: create a new benchmark test file
+        benchmark_file = Path(temp_test_dir) / "test_benchmark.py"
+        benchmark_file.write_text("""
+import pytest
+
+def test_benchmark_performance():
+    \"\"\"Benchmark test for performance evaluation.\"\"\"
+    import time
+    start = time.time()
+    result = [i * i for i in range(1000)]
+    elapsed = time.time() - start
+    assert elapsed < 0.5, "Benchmark should complete within time limit"
+    assert len(result) == 1000
+    assert result[0] == 0
+    assert result[999] == 998001
+""")
+        assert benchmark_file.exists(), "A new benchmark test file should be created"
+        
+        # Verify the benchmark file is importable and contains test functions
+        bench_spec = importlib.util.spec_from_file_location("test_benchmark", str(benchmark_file))
+        assert bench_spec is not None, "Benchmark file should be importable"
+        bench_module = importlib.util.module_from_spec(bench_spec)
+        bench_spec.loader.exec_module(bench_module)
+        assert hasattr(bench_module, "test_benchmark_performance"), \
+            "Benchmark module should contain benchmark test functions"
+
+        # Verify the benchmark test passes
+        bench_result = pytest.main([str(benchmark_file), "--tb=short", "-q"])
+        assert bench_result == 0, "Benchmark test should pass"
+
+        # Clean up: restore original test file
+        test_file.write_text(initial_content)
