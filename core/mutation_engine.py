@@ -589,10 +589,82 @@ def get_mutation_provenance():
     return mutation_provenance
 
 
-if __name__ == "__main__":
-    print("Running mutation cycle...")
-    result = run_mutation_cycle(3)
-    print(f"Mutations: {result['mutations']}, Successes: {result['successes']}")
-    for r in result.get("details", []):
-        if "error" not in r:
-            print(f"  {r.get('test_result', {}).get('reason', '?')} | score={r.get('test_result', {}).get('score', 0)}")
+def generate_mutations(code, context=None):
+    """Generate mutations for the given code.
+    
+    Args:
+        code: The source code to mutate
+        context: Optional context dictionary
+        
+    Returns:
+        list of mutation specifications
+    """
+    pool = get_function_pool()
+    if len(pool) < 2:
+        return []
+    
+    mutations = []
+    operators = ["crossover", "mutate", "hybrid"]
+    
+    for _ in range(3):
+        func_a, func_b = random.sample(pool, 2)
+        operator = random.choice(operators)
+        
+        try:
+            new_code = mutate(func_a, func_b, operator, goal_context=context)
+            mutations.append({
+                "code": new_code,
+                "operator": operator,
+                "parent_a": func_a["name"],
+                "parent_b": func_b["name"]
+            })
+        except Exception:
+            continue
+    
+    return mutations
+
+
+def apply_mutation(code, mutation_spec):
+    """Apply a mutation specification to the given code.
+    
+    Args:
+        code: The source code to apply mutation to
+        mutation_spec: Dictionary with mutation details
+        
+    Returns:
+        The mutated code string
+    """
+    if not mutation_spec or "code" not in mutation_spec:
+        return code
+    
+    return mutation_spec["code"]
+
+
+def validate_mutation(mutation_spec):
+    """Validate a mutation specification.
+    
+    Args:
+        mutation_spec: Dictionary with mutation details
+        
+    Returns:
+        dict with 'valid' bool and 'reason' string
+    """
+    if not mutation_spec or "code" not in mutation_spec:
+        return {"valid": False, "reason": "Invalid mutation specification"}
+    
+    code = mutation_spec["code"]
+    
+    # Check syntax
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        return {"valid": False, "reason": f"Syntax error: {str(e)}"}
+    
+    # Run basic tests
+    test_result = test_mutation(code)
+    
+    return {
+        "valid": test_result["valid"],
+        "reason": test_result.get("reason", "OK"),
+        "score": test_result.get("score", 0)
+    }

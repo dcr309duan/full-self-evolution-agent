@@ -1,9 +1,8 @@
 {
-  "cycle_count": 138,
-  "current_generation": 109,
-  "last_evolution_time": 1780650281.2945287,
+  "cycle_count": 139,
+  "current_generation": 110,
+  "last_evolution_time": 1780650459.3777888,
   "capabilities": [
-    "Build a meta-cognitive monitoring system that detects patterns in failures (e.g., consistent file wr",
     "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., '",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
@@ -52,15 +51,10 @@
     "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automa",
     "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern min",
     "Create a 'dead module detector' that scans all modules for usage count over the last 20 cycles, and ",
-    "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a slidi"
+    "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a slidi",
+    "Extract the mutation engine and test runner into separate sandboxed processes with a stable message-"
   ],
   "history": [
-    {
-      "cycle": 35,
-      "goal": "Create a cross-component integration test suite that runs end-to-end tests for the mutation -> test -> reflection -> strategy update pipeline, and automatically reports any broken links (e.g., mutation engine not returning results, reflection parser not receiving output) as actionable bugs with priority based on pipeline criticality.",
-      "success": true,
-      "timestamp": 1780628713.6972387
-    },
     {
       "cycle": 36,
       "goal": "Develop multi-file code analysis and refactoring capability",
@@ -654,6 +648,12 @@
       "goal": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
       "success": true,
       "timestamp": 1780650422.7672095
+    },
+    {
+      "cycle": 139,
+      "goal": "Extract the mutation engine and test runner into separate sandboxed processes with a stable message-passing API (e.g., using asyncio queues or a simple JSON-RPC over stdin/stdout). The core orchestrator should only route messages, not import or execute mutation/test code directly. This is the minimal first step toward a modular evolution core.",
+      "success": true,
+      "timestamp": 1780650782.2004786
     }
   ],
   "status": "evolving"

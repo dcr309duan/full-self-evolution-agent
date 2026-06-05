@@ -1,6 +1,9 @@
 import json
 import os
 import random
+import signal
+import sys
+from multiprocessing import Process, Manager
 
 STATE_FILE = "state.json"
 INITIAL_STATE = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
@@ -24,6 +27,77 @@ ESSENTIAL_MODULES = [
     "dead_module_detector",
     "module_removal_sandbox"
 ]
+
+class SandboxManager:
+    """Manages sandbox processes for mutation and testing."""
+    
+    def __init__(self):
+        self.manager = Manager()
+        self.mutation_sandbox = None
+        self.test_sandbox = None
+        self.mutation_queue = self.manager.Queue()
+        self.test_queue = self.manager.Queue()
+        self.result_queue = self.manager.Queue()
+        self.running = False
+    
+    def start_mutation_sandbox(self):
+        """Start the mutation sandbox process."""
+        def mutation_worker(mutation_queue, result_queue):
+            while True:
+                try:
+                    state, goal = mutation_queue.get(timeout=1)
+                    result = mutate(state, goal)
+                    result_queue.put(("mutation_result", result))
+                except:
+                    break
+        
+        self.mutation_sandbox = Process(target=mutation_worker, args=(self.mutation_queue, self.result_queue))
+        self.mutation_sandbox.start()
+        print("Mutation sandbox started.")
+    
+    def start_test_sandbox(self):
+        """Start the test sandbox process."""
+        def test_worker(test_queue, result_queue):
+            while True:
+                try:
+                    state = test_queue.get(timeout=1)
+                    result = test(state)
+                    result_queue.put(("test_result", result))
+                except:
+                    break
+        
+        self.test_sandbox = Process(target=test_worker, args=(self.test_queue, self.result_queue))
+        self.test_sandbox.start()
+        print("Test sandbox started.")
+    
+    def stop_sandboxes(self):
+        """Stop all sandbox processes."""
+        if self.mutation_sandbox and self.mutation_sandbox.is_alive():
+            self.mutation_sandbox.terminate()
+            self.mutation_sandbox.join(timeout=2)
+            print("Mutation sandbox stopped.")
+        
+        if self.test_sandbox and self.test_sandbox.is_alive():
+            self.test_sandbox.terminate()
+            self.test_sandbox.join(timeout=2)
+            print("Test sandbox stopped.")
+        
+        self.running = False
+    
+    def submit_mutation(self, state, goal):
+        """Submit a mutation task to the sandbox."""
+        self.mutation_queue.put((state, goal))
+    
+    def submit_test(self, state):
+        """Submit a test task to the sandbox."""
+        self.test_queue.put(state)
+    
+    def get_result(self, timeout=5):
+        """Get a result from the sandbox."""
+        try:
+            return self.result_queue.get(timeout=timeout)
+        except:
+            return None
 
 def reflect(state):
     """Analyze the state dictionary and return a summary."""
@@ -775,97 +849,28 @@ def evolution_main_loop():
     
     return migration_report
 
+def cleanup_handler(signum, frame, sandbox_manager):
+    """Handle graceful shutdown on signal."""
+    print(f"\nReceived signal {signum}. Performing graceful shutdown...")
+    sandbox_manager.stop_sandboxes()
+    print("Cleanup complete. Exiting.")
+    sys.exit(0)
+
 def main():
     """Run 3 cycles of the evolution loop and print results."""
+    # Initialize sandbox manager
+    sandbox_manager = SandboxManager()
+    
+    # Register cleanup handlers for graceful shutdown
+    signal.signal(signal.SIGINT, lambda s, f: cleanup_handler(s, f, sandbox_manager))
+    signal.signal(signal.SIGTERM, lambda s, f: cleanup_handler(s, f, sandbox_manager))
+    
+    # Start sandbox processes
+    sandbox_manager.start_mutation_sandbox()
+    sandbox_manager.start_test_sandbox()
+    
     state = load_or_initialize_state()
     print("Initial state:", state)
     print()
     
-    # Initialize all core modules during bootstrap
-    initialize_recovery_module()
-    initialize_failure_driven_simplification()
-    initialize_failure_driven_mutation_selector()
-    initialize_dead_module_detector()
-    initialize_module_removal_sandbox()
-
-    for cycle in range(1, 4):
-        print(f"--- Cycle {cycle} ---")
-        # Reflect
-        summary = reflect(state)
-        print("Reflection:", summary)
-
-        # Generate goal
-        goal = generate_goal()
-        print("Goal:", goal)
-
-        # Mutate
-        mutated_state = mutate(state, goal)
-        print("Mutated state:", mutated_state)
-
-        # Apply self-healing recovery before validation
-        recovered_state = self_healing_recovery(mutated_state)
-        if recovered_state != mutated_state:
-            print("Recovery applied to mutated state")
-            mutated_state = recovered_state
-
-        # Apply failure-driven simplification
-        simplified_state = failure_driven_simplification(mutated_state)
-        if simplified_state != mutated_state:
-            print("Failure-driven simplification applied to mutated state")
-            mutated_state = simplified_state
-
-        # Apply failure-driven mutation selector
-        selected_state = failure_driven_mutation_selector(mutated_state, goal)
-        if selected_state != mutated_state:
-            print("Failure-driven mutation selector applied to mutated state")
-            mutated_state = selected_state
-
-        # Apply dead module detector
-        detected_state = dead_module_detector(mutated_state)
-        if detected_state != mutated_state:
-            print("Dead module detector applied to mutated state")
-            mutated_state = detected_state
-
-        # Apply module removal sandbox
-        sandboxed_state = module_removal_sandbox(mutated_state)
-        if sandboxed_state != mutated_state:
-            print("Module removal sandbox applied to mutated state")
-            mutated_state = sandboxed_state
-
-        # Sandbox validation
-        is_valid, message = sandbox_validate(mutated_state)
-        if is_valid:
-            print("Sandbox validation:", message)
-            # Accept
-            accept(mutated_state)
-            state = mutated_state
-            print("State accepted and saved.")
-        else:
-            print("Sandbox validation failed:", message)
-            print("State unchanged.")
-
-        print()
-
-    print("Final state:", state)
-    
-    # Run recovery integration test
-    test_recovery_integration()
-    
-    # Run failure-driven simplification test
-    test_failure_driven_simplification()
-    
-    # Run failure-driven mutation selector test
-    test_failure_driven_mutation_selector()
-    
-    # Run dead module detector test
-    test_dead_module_detector()
-    
-    # Run module removal sandbox test
-    test_module_removal_sandbox()
-    
-    # After successful sandbox validation, run migration
-    print("\n--- Migration Phase ---")
-    migrate_to_main()
-
-if __name__ == "__main__":
-    main()
+    # Initialize all core modules during

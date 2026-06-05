@@ -1,46 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/goal_selector.py to: Modify the goal acceptance logic to use system_state.goal_acceptance_threshold: only accept goals whose feasibility score exceeds the threshold. This ensures the scheduler can dynamically tighten or loosen goal acceptance criteria.",
-      "timestamp": 1780643452.2606087,
-      "cycle": 106
-    },
-    {
-      "content": "Successfully modified core/mutation_engine.py to: Modify the mutation application logic to use system_state.mutation_rate: when deciding whether to apply a mutation (e.g., random skip with probability 1-rate), use the current rate from system state. This ensures the scheduler can dynamically control mutation aggressiveness.",
-      "timestamp": 1780643485.5644674,
-      "cycle": 106
-    },
-    {
-      "content": "Successfully modified tests/test_plasticity_stability_scheduler.py to: Create a unit test suite for the scheduler: (1) test that 3 consecutive failures trigger adjustment, (2) test that 3 consecutive successes trigger reverse adjustment, (3) test clamping behavior, (4) test that logging works correctly, (5) test integration with system state.",
-      "timestamp": 1780643501.2467513,
-      "cycle": 106
-    },
-    {
-      "content": "Successfully modified core/evolution_engine.py to: Add a call to the scheduler at the end of each evolution cycle to log the current meta-parameter state even if no adjustment was made, for continuous monitoring.",
-      "timestamp": 1780643511.6375222,
-      "cycle": 106
-    },
-    {
-      "content": "Successfully modified core/evolution_engine.py to: Integrate the ecology engine into the main evolution loop. After each mutation cycle, call ecology_engine.evaluate_fitness_landscape() to assess if the current test suite is becoming too easy. If the agent passes all tests for 3+ consecutive cycles, trigger ecology_engine.introduce_new_pressure() which either creates a new test or mutates an existing one. This prevents the agent from stagnating in a local optimum.",
-      "timestamp": 1780643607.6059682,
-      "cycle": 107
-    },
-    {
-      "content": "Successfully modified tests/test_ecology_engine.py to: Create a test suite for the ecology engine itself. Tests should verify: (1) that new tests are generated with appropriate difficulty, (2) that existing tests can be mutated to be harder, (3) that the engine doesn't create impossible tests, (4) that the engine detects when the agent is overfitting to current tests.",
-      "timestamp": 1780643632.488387,
-      "cycle": 107
-    },
-    {
-      "content": "Successfully modified core/goal_selector.py to: Add a new goal type: 'ECOLOGICAL_PRESSURE' that has high priority. When the ecology engine identifies a need for new environmental pressure, it creates a goal of this type. The goal selector should prioritize these goals to ensure the fitness landscape evolves faster than the agent can adapt.",
-      "timestamp": 1780643656.6263292,
-      "cycle": 107
-    },
-    {
-      "content": "Successfully modified tests/ecological_stress_tests.py to: Create a set of 'stress tests' that simulate environmental pressures: (1) test with randomly corrupted input data, (2) test with simulated disk full conditions, (3) test with network timeouts, (4) test with concurrent mutations, (5) test with missing dependencies. These tests should be dynamically enabled/disabled by the ecology engine based on agent performance.",
-      "timestamp": 1780643676.2418568,
-      "cycle": 107
-    },
-    {
       "content": "Successfully modified core/fitness_landscape_analyzer.py to: Create a module that analyzes the current fitness landscape: (1) tracks which tests the agent passes/fails over time, (2) identifies tests that are always passed (potential for increased difficulty), (3) identifies tests that are never passed (potential for simplification or hints), (4) computes a 'landscape diversity score' measuring how many different types of tests exist, (5) suggests new test types based on gaps in coverage.",
       "timestamp": 1780643749.1875017,
       "cycle": 107
@@ -999,6 +959,46 @@
       "content": "Successfully modified tests/test_meta_parameter_scheduler.py to: Create comprehensive tests: (1) Test that sliding window correctly tracks last 10 outcomes, (2) Test that success rate < 30% triggers reduction in mutation rate and increase in threshold, (3) Test that success rate > 70% triggers increase in mutation rate and decrease in threshold, (4) Test that persistence file is created and contains correct data, (5) Test that history is properly accumulated over multiple cycles, (6) Test edge case: exactly 30% and 70% boundaries",
       "timestamp": 1780650328.419786,
       "cycle": 138
+    },
+    {
+      "content": "Self-reflection: The evolution process has become a treadmill of feature accretion without architectural renewal. The repeated failure to integrate new modules into the core is a symptom of a deeper issue: the agent t",
+      "timestamp": 1780650483.0130765,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified core/message_protocol.py to: Define the JSON-RPC message protocol: Request/Response types, error codes, and serialization format. Include message types: run_mutation, run_test, get_status, shutdown. Each message has id, method, params, and response has id, result, error.",
+      "timestamp": 1780650519.774986,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified core/mutation_sandbox.py to: Create a standalone process that reads JSON-RPC requests from stdin and writes responses to stdout. Implements: (1) run_mutation: receives mutation spec (file, old_code, new_code), applies to a temporary copy of the repo, runs tests, returns pass/fail + diff. (2) run_test: receives test paths, runs pytest on the sandboxed copy, returns results. (3) Uses tempfile for isolation, no filesystem side effects.",
+      "timestamp": 1780650541.1654396,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified core/test_sandbox.py to: Create a standalone process for test execution only. Implements: (1) run_test: receives test file paths, runs them in a subprocess with pytest, captures stdout/stderr/returncode. (2) get_coverage: runs coverage on specified modules. (3) Returns structured JSON with pass/fail counts, error messages, and timing.",
+      "timestamp": 1780650564.3441246,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified core/mutation_engine.py to: Refactor mutation_engine.py to be a library that mutation_sandbox imports, not a module called directly by orchestrator. Remove any direct test runner dependencies. Export a clean API: generate_mutations(code, context), apply_mutation(code, mutation_spec), validate_mutation(mutation_spec).",
+      "timestamp": 1780650652.9334624,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified core/test_runner.py to: Refactor test_runner.py to be a library imported by test_sandbox. Remove any direct orchestrator dependencies. Export: run_tests(test_paths, timeout=30), parse_results(raw_output), get_coverage(modules).",
+      "timestamp": 1780650672.191435,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified tests/test_sandbox_protocol.py to: Create integration tests: (1) Test that mutation_sandbox starts and responds to ping. (2) Test running a trivial mutation (add comment) and verify it returns success. (3) Test running a failing mutation (syntax error) and verify error response. (4) Test test_sandbox runs a known passing test. (5) Test test_sandbox runs a known failing test. (6) Test timeout handling. (7) Test that sandbox processes are properly cleaned up on shutdown.",
+      "timestamp": 1780650692.6453302,
+      "cycle": 139
+    },
+    {
+      "content": "Successfully modified minimal_core_bootstrap.py to: Update bootstrap to: (1) Import and initialize sandbox_manager. (2) Start mutation_sandbox and test_sandbox processes. (3) Pass sandbox references to orchestrator instead of direct module references. (4) Add cleanup handlers for graceful shutdown.",
+      "timestamp": 1780650782.015465,
+      "cycle": 139
     }
   ],
   "learned_patterns": [],
@@ -1557,6 +1557,16 @@
       "approach": "modify evolution_orchestrator.py: Integrate the meta_parameter_scheduler into the evolution cycle: (1) After each mutation cycle, record the outcome (success/failure) in the scheduler, (2) Before starting a new cycle, query the scheduler for current mutation_rate and goal_threshold, (3) Pass these parameters to the mutation engine and goal generator respectively",
       "reason": "Syntax error: expected 'except' or 'finally' block (<unknown>, line 797)",
       "timestamp": 1780650422.7219563
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Refactor the orchestrator to: (1) Launch mutation_sandbox and test_sandbox as subprocesses on startup. (2) Replace all direct imports/calls to mutation engine and test runner with message passing via asyncio queues to the sandbox processes. (3) Implement a message router that maps method names to sandbox processes. (4) Add timeout handling (30s default) and retry logic (3 retries). (5) Remove all direct mutation/test code imports.",
+      "reason": "Syntax error: invalid syntax (<unknown>, line 889)",
+      "timestamp": 1780650613.8069942
+    },
+    {
+      "approach": "modify core/sandbox_manager.py: Create a lifecycle manager for sandbox processes: (1) start_sandbox(type) - launches subprocess with correct entry point. (2) send_message(process_id, message) - writes JSON to stdin, reads JSON from stdout. (3) stop_sandbox(process_id) - sends shutdown message, waits for graceful exit, kills if timeout. (4) health_check() - pings all sandboxes, restarts dead ones. (5) Maintains a registry of active sandbox processes.",
+      "reason": "Safety check failed",
+      "timestamp": 1780650727.380129
     }
   ],
   "successful_strategies": [
@@ -5709,6 +5719,46 @@
       "strategy": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
       "outcome": "2/4 steps succeeded",
       "timestamp": 1780650422.7408667
+    },
+    {
+      "strategy": "modify core/message_protocol.py: Define the JSON-RPC message protocol: Request/Response types, error codes, and serialization format. Include message types: run_mutation, run_test, get_status, shutdown. Each message has id, method, params, and response has id, result, error.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650519.7551131
+    },
+    {
+      "strategy": "modify core/mutation_sandbox.py: Create a standalone process that reads JSON-RPC requests from stdin and writes responses to stdout. Implements: (1) run_mutation: receives mutation spec (file, old_code, new_code), applies to a temporary copy of the repo, runs tests, returns pass/fail + diff. (2) run_test: receives test paths, runs pytest on the sandboxed copy, returns results. (3) Uses tempfile for isolation, no filesystem side effects.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650541.1439714
+    },
+    {
+      "strategy": "modify core/test_sandbox.py: Create a standalone process for test execution only. Implements: (1) run_test: receives test file paths, runs them in a subprocess with pytest, captures stdout/stderr/returncode. (2) get_coverage: runs coverage on specified modules. (3) Returns structured JSON with pass/fail counts, error messages, and timing.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650564.3226435
+    },
+    {
+      "strategy": "modify core/mutation_engine.py: Refactor mutation_engine.py to be a library that mutation_sandbox imports, not a module called directly by orchestrator. Remove any direct test runner dependencies. Export a clean API: generate_mutations(code, context), apply_mutation(code, mutation_spec), validate_mutation(mutation_spec).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650652.9135704
+    },
+    {
+      "strategy": "modify core/test_runner.py: Refactor test_runner.py to be a library imported by test_sandbox. Remove any direct orchestrator dependencies. Export: run_tests(test_paths, timeout=30), parse_results(raw_output), get_coverage(modules).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650672.1671538
+    },
+    {
+      "strategy": "modify tests/test_sandbox_protocol.py: Create integration tests: (1) Test that mutation_sandbox starts and responds to ping. (2) Test running a trivial mutation (add comment) and verify it returns success. (3) Test running a failing mutation (syntax error) and verify error response. (4) Test test_sandbox runs a known passing test. (5) Test test_sandbox runs a known failing test. (6) Test timeout handling. (7) Test that sandbox processes are properly cleaned up on shutdown.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650692.6183424
+    },
+    {
+      "strategy": "modify minimal_core_bootstrap.py: Update bootstrap to: (1) Import and initialize sandbox_manager. (2) Start mutation_sandbox and test_sandbox processes. (3) Pass sandbox references to orchestrator instead of direct module references. (4) Add cleanup handlers for graceful shutdown.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650781.9896007
+    },
+    {
+      "strategy": "Extract the mutation engine and test runner into separate sandboxed processes with a stable message-passing API (e.g., using asyncio queues or a simple JSON-RPC over stdin/stdout). The core orchestrator should only route messages, not import or execute mutation/test code directly. This is the minimal first step toward a modular evolution core.",
+      "outcome": "7/9 steps succeeded",
+      "timestamp": 1780650782.0412831
     }
   ],
   "capabilities_developed": []

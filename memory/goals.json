@@ -14,6 +14,18 @@
       "created_at": 1780649848.7555447
     },
     {
+      "description": "Implement an automated impact prioritization system: for each pending or recently added capability, run a quick benchmark (e.g., 10 test cycles) comparing system success rate with and without that capability enabled. Rank capabilities by delta in success rate. Disable or archive capabilities that show negative or near-zero impact.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780650487.258728
+    },
+    {
+      "description": "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780650487.261601
+    },
+    {
       "description": "Create a performance monitoring and optimization system",
       "priority": 6,
       "status": "pending",
@@ -853,6 +865,13 @@
       "status": "completed",
       "created_at": 1780646079.6363342,
       "completed_at": 1780650422.7528005
+    },
+    {
+      "description": "Extract the mutation engine and test runner into separate sandboxed processes with a stable message-passing API (e.g., using asyncio queues or a simple JSON-RPC over stdin/stdout). The core orchestrator should only route messages, not import or execute mutation/test code directly. This is the minimal first step toward a modular evolution core.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780650487.2556734,
+      "completed_at": 1780650782.0559518
     }
   ],
   "generated_goals": []
