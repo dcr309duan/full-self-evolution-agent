@@ -1,21 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/self_model.py to: Add a 'register_module_interface' method that stores function signatures and docstrings for all public functions in each module, enabling the scanner to access this data without re-parsing",
-      "timestamp": 1780642245.0171137,
-      "cycle": 101
-    },
-    {
-      "content": "Successfully modified tests/test_consolidation_scanner.py to: Create test suite that: (1) Creates synthetic duplicate modules with known overlap, (2) Verifies scanner detects them with >90% accuracy, (3) Tests the merge/delete plan generation, (4) Validates that the plan respects dependency constraints",
-      "timestamp": 1780642328.172854,
-      "cycle": 101
-    },
-    {
-      "content": "Successfully modified core/goal_selector.py to: Add a 'consolidation_priority' parameter that, when consolidation scanner outputs a high-confidence plan, elevates consolidation goals above new capability goals",
-      "timestamp": 1780642343.5831976,
-      "cycle": 101
-    },
-    {
       "content": "Successfully modified core/meta_parameter_evolution.py to: Create the main meta-parameter evolution module with: (1) ParameterTracker class that logs mutation_rate, goal_selection_weights, reflection_depth per generation along with fitness delta, (2) HillClimber class that adjusts one parameter at a time by ±10% and accepts if fitness improves, (3) History buffer storing last 20 generations, (4) trigger() method called every 10 cycles that runs hill-climbing on the most impactful parameter based on correlation analysis",
       "timestamp": 1780642411.2476158,
       "cycle": 102
@@ -999,6 +984,21 @@
       "content": "Successfully modified tests/test_core_mutation_sandbox.py to: Create a test suite that: (1) mocks a dependency graph with varying dependency counts, (2) verifies that mutations with 0-2 dependencies are allowed, (3) verifies that mutations with 3+ dependencies are rejected with a logged suggestion, (4) tests the import parser on sample core files to ensure accurate dependency detection.",
       "timestamp": 1780648765.1453786,
       "cycle": 130
+    },
+    {
+      "content": "Successfully modified capability_consolidation_engine.py to: Create the core consolidation engine that: (1) maintains a registry of all capabilities with usage frequency and failure rate metrics, (2) runs every evolution cycle when capabilities > 20, (3) selects 2 low-impact capabilities based on weighted score (usage_frequency * 0.3 + failure_rate * 0.7), (4) generates a merged abstract capability that combines their core functionality, (5) archives original implementations to a /archive directory, (6) updates the capability registry and dependency graph.",
+      "timestamp": 1780648896.9329565,
+      "cycle": 131
+    },
+    {
+      "content": "Successfully modified tests/test_capability_consolidation.py to: Create test suite that: (1) mocks 25+ capabilities with varying usage/failure metrics, (2) verifies selection picks lowest-scoring capabilities, (3) verifies merged capability description contains keywords from both originals, (4) verifies originals are archived and removed from active list, (5) tests edge case where capabilities <= 20 (no-op).",
+      "timestamp": 1780648962.618363,
+      "cycle": 131
+    },
+    {
+      "content": "Successfully modified capability_registry.json to: Add tracking fields to each capability entry: 'usage_count', 'failure_count', 'last_used_cycle', 'impact_score'. Initialize existing capabilities with default values (usage_count=1, failure_count=0, last_used_cycle=current cycle). This provides the data needed for consolidation decisions.",
+      "timestamp": 1780648973.0206518,
+      "cycle": 131
     }
   ],
   "learned_patterns": [],
@@ -1492,6 +1492,16 @@
       "approach": "modify goal_generator.py: Add a safety check that, when generating goals involving core file mutations, first queries the core_mutation_sandbox for the current dependency count of the target file. If dependencies >= 3, suggest alternative goals that modify non-core files or add new files instead.",
       "reason": "Syntax error: invalid syntax (<unknown>, line 864)",
       "timestamp": 1780648811.856201
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Add integration hook in the evolution cycle to call capability_consolidation_engine.consolidate() after goal completion but before next mutation. Pass current capability list and cycle number. Handle the case where consolidation produces a new goal to implement the merged capability.",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 794)",
+      "timestamp": 1780648941.5754402
+    },
+    {
+      "approach": "modify archive/README.md: Create archive directory structure with README explaining the consolidation protocol, timestamp of each archived capability, and the merged capability that replaced it.",
+      "reason": "Syntax error: leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers (<unknown>, line 25)",
+      "timestamp": 1780648966.8001263
     }
   ],
   "successful_strategies": [
@@ -5444,6 +5454,26 @@
       "strategy": "mutation:crossover(quicksorted_prime_factors,quicksort_factors)",
       "outcome": "Created quicksorted_factor_sort, score=0.4",
       "timestamp": 1780648818.2077878
+    },
+    {
+      "strategy": "modify capability_consolidation_engine.py: Create the core consolidation engine that: (1) maintains a registry of all capabilities with usage frequency and failure rate metrics, (2) runs every evolution cycle when capabilities > 20, (3) selects 2 low-impact capabilities based on weighted score (usage_frequency * 0.3 + failure_rate * 0.7), (4) generates a merged abstract capability that combines their core functionality, (5) archives original implementations to a /archive directory, (6) updates the capability registry and dependency graph.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780648896.9164693
+    },
+    {
+      "strategy": "modify tests/test_capability_consolidation.py: Create test suite that: (1) mocks 25+ capabilities with varying usage/failure metrics, (2) verifies selection picks lowest-scoring capabilities, (3) verifies merged capability description contains keywords from both originals, (4) verifies originals are archived and removed from active list, (5) tests edge case where capabilities <= 20 (no-op).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780648962.6001945
+    },
+    {
+      "strategy": "modify capability_registry.json: Add tracking fields to each capability entry: 'usage_count', 'failure_count', 'last_used_cycle', 'impact_score'. Initialize existing capabilities with default values (usage_count=1, failure_count=0, last_used_cycle=current cycle). This provides the data needed for consolidation decisions.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780648973.003227
+    },
+    {
+      "strategy": "Implement a 'capability consolidation' protocol: for each evolution cycle, if the number of distinct capabilities exceeds 20, randomly select 2 low-impact capabilities (based on their usage frequency and failure rate) and merge them into a single, more abstract capability, archiving the original implementations. This directly reduces complexity bloat and forces creative reuse, targeting the key gap of simplification and the meta-insight of avoiding additive complexity.",
+      "outcome": "3/5 steps succeeded",
+      "timestamp": 1780648973.0387595
     }
   ],
   "capabilities_developed": []

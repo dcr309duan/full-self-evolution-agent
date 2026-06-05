@@ -1,0 +1,55 @@
+{
+  "capabilities": [
+    {
+      "id": "cap_1",
+      "name": "Text Generation",
+      "description": "Generates human-like text based on input prompts",
+      "version": "1.0",
+      "usage_count": 1,
+      "failure_count": 0,
+      "last_used_cycle": 1,
+      "impact_score": 0.0
+    },
+    {
+      "id": "cap_2",
+      "name": "Code Analysis",
+      "description": "Analyzes source code for bugs, patterns, and optimization opportunities",
+      "version": "1.0",
+      "usage_count": 1,
+      "failure_count": 0,
+      "last_used_cycle": 1,
+      "impact_score": 0.0
+    },
+    {
+      "id": "cap_3",
+      "name": "Data Summarization",
+      "description": "Summarizes large datasets into concise reports",
+      "version": "1.0",
+      "usage_count": 1,
+      "failure_count": 0,
+      "last_used_cycle": 1,
+      "impact_score": 0.0
+    },
+    {
+      "id": "cap_4",
+      "name": "Image Recognition",
+      "description": "Identifies objects, people, and scenes in images",
+      "version": "1.0",
+      "usage_count": 1,
+      "failure_count": 0,
+      "last_used_cycle": 1,
+      "impact_score": 0.0
+    },
+    {
+      "id": "cap_5",
+      "name": "Language Translation",
+      "description": "Translates text between multiple languages",
+      "version": "1.0",
+      "usage_count": 1,
+      "failure_count": 0,
+      "last_used_cycle": 1,
+      "impact_score": 0.0
+    }
+  ],
+  "current_cycle": 1
+}
