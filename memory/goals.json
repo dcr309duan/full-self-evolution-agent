@@ -9,12 +9,6 @@
       "consecutive_failures": 1
     },
     {
-      "description": "Create a 'goal feasibility pre-check' step that, before a goal enters the active queue, uses the existing dependency graph and module test coverage to estimate whether the goal is achievable given current capabilities, and automatically blocks or downgrades goals with <50% feasibility score.",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780637080.7299275
-    },
-    {
       "description": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
       "priority": 7,
       "status": "pending",
@@ -537,6 +531,13 @@
       "status": "completed",
       "created_at": 1780639344.2917063,
       "completed_at": 1780640265.2974708
+    },
+    {
+      "description": "Create a 'goal feasibility pre-check' step that, before a goal enters the active queue, uses the existing dependency graph and module test coverage to estimate whether the goal is achievable given current capabilities, and automatically blocks or downgrades goals with <50% feasibility score.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780637080.7299275,
+      "completed_at": 1780640434.1842253
     }
   ],
   "generated_goals": []

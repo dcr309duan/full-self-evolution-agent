@@ -203,6 +203,55 @@ class GoalDependencyGraph:
         """
         return self._coordinated_with.get(name, set()).copy()
 
+    def get_dependency_completeness_score(self, name: str) -> float:
+        """
+        Compute a 'dependency completeness score' for a given goal.
+        Traverses the dependency graph and returns a ratio of how many required
+        dependencies are already satisfied (have working implementations) vs. missing.
+        
+        Args:
+            name: The name of the goal to compute the score for.
+            
+        Returns:
+            A float between 0.0 and 1.0 representing the ratio of satisfied
+            dependencies to total dependencies. Returns 1.0 if the goal has no
+            dependencies or if all dependencies are met.
+            
+        Raises:
+            KeyError: If the goal does not exist in the graph.
+        """
+        if name not in self._prerequisites:
+            raise KeyError(f"Goal '{name}' not found in the graph")
+        
+        # Collect all transitive dependencies (including the goal itself for completeness)
+        all_deps = set()
+        self._collect_transitive_dependencies(name, all_deps)
+        
+        # Remove the goal itself from the set to only count its dependencies
+        all_deps.discard(name)
+        
+        if not all_deps:
+            return 1.0
+        
+        # Count how many of these dependencies are met
+        met_count = sum(1 for dep in all_deps if dep in self._met)
+        
+        return met_count / len(all_deps)
+
+    def _collect_transitive_dependencies(self, name: str, visited: Set[str]) -> None:
+        """
+        Helper method to recursively collect all transitive dependencies of a goal.
+        
+        Args:
+            name: The current node being traversed
+            visited: Set to collect all visited nodes (including the starting node)
+        """
+        if name in visited:
+            return
+        visited.add(name)
+        for dep in self._prerequisites.get(name, set()):
+            self._collect_transitive_dependencies(dep, visited)
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Serialize the graph to a dictionary.

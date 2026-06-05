@@ -5,10 +5,9 @@ from typing import Optional, Dict, List, Any
 import ast
 import importlib.util
 
-from self_model.scanner import Scanner
-from self_model.analyzer import Analyzer
-from self_model.extractor import Extractor
-from self_model.discovery import Discovery
+from self_model.component_scanner import ComponentScanner as Scanner
+from self_model.dependency_analyzer import DependencyAnalyzer as Analyzer
+from self_model.interface_discovery import InterfaceDiscovery as Discovery
 from self_model.knowledge_graph import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,6 @@ class SelfModelBuilder:
         self.project_root = Path(project_root or Path.cwd()).resolve()
         self.scanner = Scanner(self.project_root)
         self.analyzer = Analyzer()
-        self.extractor = Extractor()
         self.discovery = Discovery()
         self.knowledge_graph = KnowledgeGraph()
         self.output_path = self.project_root / "self_model_graph.json"
@@ -43,14 +41,9 @@ class SelfModelBuilder:
         analysis_results = self.analyzer.analyze(scan_results)
         logger.info(f"Analysis completed: {len(analysis_results)} items analyzed.")
 
-        # Step 3: Extract entities and relationships
-        logger.info("Step 3: Extracting entities and relationships...")
-        extraction_results = self.extractor.extract(analysis_results)
-        logger.info(f"Extraction completed: {len(extraction_results)} extractions.")
-
-        # Step 4: Discover implicit patterns
-        logger.info("Step 4: Discovering implicit patterns...")
-        discovery_results = self.discovery.discover(extraction_results)
+        # Step 3: Discover implicit patterns
+        logger.info("Step 3: Discovering implicit patterns...")
+        discovery_results = self.discovery.discover(analysis_results)
         logger.info(f"Discovery completed: {len(discovery_results)} discoveries.")
 
         # Step 5: Populate knowledge graph

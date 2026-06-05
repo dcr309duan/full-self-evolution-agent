@@ -8,6 +8,11 @@ Now includes integration_test_status field to capture pass/fail status and error
 the integration test suite.
 """
 
+
+class ParseError(Exception):
+    """Raised when reflection text cannot be parsed into the expected structure."""
+    pass
+
 import re
 from typing import Dict, List, Optional, Tuple
 
