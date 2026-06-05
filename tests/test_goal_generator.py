@@ -68,6 +68,30 @@ MOCK_KNOWLEDGE_BASE = {
     ]
 }
 
+# Mock data for complete core patterns (no gaps)
+MOCK_COMPLETE_KNOWLEDGE_BASE = {
+    "failure_patterns": [
+        {
+            "pattern": "database_connection_timeout",
+            "frequency": 15,
+            "severity": 0.8,
+            "last_occurrence": "2024-01-15T10:30:00",
+            "affected_services": ["user-service", "order-service"],
+            "root_cause": "connection_pool_exhaustion"
+        }
+    ],
+    "successes": [
+        {
+            "pattern": "successful_connection_pool_management",
+            "frequency": 45,
+            "impact": 0.9,
+            "last_occurrence": "2024-01-15T12:00:00",
+            "services": ["user-service", "order-service"]
+        }
+    ],
+    "gaps": []  # No gaps - all core patterns present
+}
+
 class TestGoalGenerator:
     """Test suite for the GoalGenerator class."""
 
@@ -81,6 +105,15 @@ class TestGoalGenerator:
         return kb
 
     @pytest.fixture
+    def mock_complete_knowledge_base(self):
+        """Create a mock knowledge base with all core patterns present."""
+        kb = Mock(spec=KnowledgeBase)
+        kb.get_failure_patterns.return_value = MOCK_COMPLETE_KNOWLEDGE_BASE["failure_patterns"]
+        kb.get_successes.return_value = MOCK_COMPLETE_KNOWLEDGE_BASE["successes"]
+        kb.get_gaps.return_value = MOCK_COMPLETE_KNOWLEDGE_BASE["gaps"]
+        return kb
+
+    @pytest.fixture
     def mock_orchestrator(self):
         """Create a mock orchestrator."""
         orchestrator = Mock(spec=Orchestrator)
@@ -91,6 +124,11 @@ class TestGoalGenerator:
     def goal_generator(self, mock_knowledge_base):
         """Create a GoalGenerator instance with mock knowledge base."""
         return GoalGenerator(knowledge_base=mock_knowledge_base)
+
+    @pytest.fixture
+    def goal_generator_complete(self, mock_complete_knowledge_base):
+        """Create a GoalGenerator instance with complete knowledge base."""
+        return GoalGenerator(knowledge_base=mock_complete_knowledge_base)
 
     def test_initialization_with_knowledge_base(self, mock_knowledge_base):
         """Test that GoalGenerator initializes correctly with a knowledge base."""
@@ -273,3 +311,175 @@ class TestGoalGenerator:
                                  if p["severity"] >= 0.7]
         
         assert len(goals) == len(high_severity_patterns)
+
+    # New test cases for autonomous goal generation
+
+    def test_gap_analysis_identifies_missing_core_patterns(self, goal_generator):
+        """Test that gap analysis correctly identifies missing core patterns."""
+        # Perform gap analysis
+        gaps = goal_generator.analyze_gaps()
+        
+        # Verify gaps are identified
+        assert len(gaps) > 0
+        assert any("connection_pool_exhaustion" in gap.description for gap in gaps)
+        assert any("cache_eviction" in gap.description for gap in gaps)
+        
+        # Verify gap metadata
+        for gap in gaps:
+            assert hasattr(gap, 'gap_id')
+            assert hasattr(gap, 'description')
+            assert hasattr(gap, 'severity')
+            assert hasattr(gap, 'affected_services')
+            assert gap.severity > 0
+
+    def test_priority_heuristic_assigns_higher_scores_to_core_modifications(self, goal_generator):
+        """Test that priority heuristic assigns higher scores to core modifications."""
+        # Create goals with different modification types
+        core_modification_goal = Goal(
+            description="Fix core database connection pool",
+            affected_services=["user-service", "order-service"],
+            severity=0.9,
+            frequency=20,
+            modification_type="core"
+        )
+        
+        cosmetic_modification_goal = Goal(
+            description="Update API documentation",
+            affected_services=["api-gateway"],
+            severity=0.3,
+            frequency=2,
+            modification_type="cosmetic"
+        )
+        
+        # Calculate priority scores
+        core_score = goal_generator.priority_scorer.calculate(core_modification_goal)
+        cosmetic_score = goal_generator.priority_scorer.calculate(cosmetic_modification_goal)
+        
+        # Core modifications should have higher priority scores
+        assert core_score > cosmetic_score
+        assert core_score >= 0.7  # Core modifications should score high
+        assert cosmetic_score < 0.5  # Cosmetic modifications should score lower
+
+    def test_exactly_three_goals_generated_per_cycle(self, goal_generator):
+        """Test that exactly 3 goals are generated per cycle."""
+        # Generate goals for one cycle
+        goals = goal_generator.generate_goals(max_goals=3)
+        
+        # Verify exactly 3 goals are generated
+        assert len(goals) == 3
+        
+        # Verify goals are distinct
+        goal_ids = [goal.id for goal in goals]
+        assert len(set(goal_ids)) == 3
+        
+        # Verify goals have different descriptions
+        goal_descriptions = [goal.description for goal in goals]
+        assert len(set(goal_descriptions)) == 3
+
+    def test_goals_stored_with_correct_metadata(self, goal_generator):
+        """Test that goals are stored with correct metadata."""
+        goals = goal_generator.generate_goals()
+        
+        for goal in goals:
+            # Check required metadata fields
+            assert hasattr(goal, 'id')
+            assert hasattr(goal, 'description')
+            assert hasattr(goal, 'affected_services')
+            assert hasattr(goal, 'severity')
+            assert hasattr(goal, 'frequency')
+            assert hasattr(goal, 'created_at')
+            assert hasattr(goal, 'priority_score')
+            assert hasattr(goal, 'status')
+            assert hasattr(goal, 'source')
+            
+            # Verify metadata types
+            assert isinstance(goal.id, str)
+            assert isinstance(goal.description, str)
+            assert isinstance(goal.affected_services, list)
+            assert isinstance(goal.severity, float)
+            assert isinstance(goal.frequency, int)
+            assert isinstance(goal.created_at, datetime)
+            assert isinstance(goal.priority_score, float)
+            assert isinstance(goal.status, str)
+            assert isinstance(goal.source, str)
+            
+            # Verify metadata values
+            assert 0 <= goal.severity <= 1.0
+            assert 0 <= goal.priority_score <= 1.0
+            assert goal.status in ["pending", "active", "completed", "failed"]
+            assert goal.source in ["failure_pattern", "gap_analysis", "diversity"]
+
+    def test_edge_case_all_core_patterns_present_generates_diversity_goals(self, goal_generator_complete):
+        """Test edge case when all core patterns are present (should generate diversity goals)."""
+        # Generate goals when all core patterns are present
+        goals = goal_generator_complete.generate_goals()
+        
+        # Should generate diversity goals
+        assert len(goals) > 0
+        
+        # Verify goals are diversity-focused
+        for goal in goals:
+            assert goal.source == "diversity"
+            assert "diversity" in goal.description.lower() or "exploration" in goal.description.lower() or "innovation" in goal.description.lower()
+        
+        # Verify diversity goals have appropriate metadata
+        for goal in goals:
+            assert goal.severity >= 0.3  # Diversity goals should have reasonable priority
+            assert len(goal.affected_services) > 0
+            assert goal.status == "pending"
+
+    def test_goal_generation_cycle_consistency(self, goal_generator):
+        """Test that goal generation cycle produces consistent results."""
+        # Run multiple cycles
+        cycle1_goals = goal_generator.generate_goals(max_goals=3)
+        cycle2_goals = goal_generator.generate_goals(max_goals=3)
+        
+        # Verify both cycles produce 3 goals
+        assert len(cycle1_goals) == 3
+        assert len(cycle2_goals) == 3
+        
+        # Verify goals are unique across cycles
+        cycle1_ids = [goal.id for goal in cycle1_goals]
+        cycle2_ids = [goal.id for goal in cycle2_goals]
+        assert len(set(cycle1_ids + cycle2_ids)) == 6
+
+    def test_goal_priority_score_persistence(self, goal_generator):
+        """Test that priority scores are persisted with goals."""
+        goals = goal_generator.generate_goals()
+        
+        for goal in goals:
+            # Verify priority score is stored
+            assert hasattr(goal, 'priority_score')
+            assert goal.priority_score > 0
+            
+            # Verify priority score is consistent
+            calculated_score = goal_generator.priority_scorer.calculate(goal)
+            assert abs(goal.priority_score - calculated_score) < 0.01
+
+    def test_goal_generation_with_mixed_patterns(self, goal_generator):
+        """Test goal generation with a mix of failure patterns and gaps."""
+        goals = goal_generator.generate_goals()
+        
+        # Verify goals address both failure patterns and gaps
+        failure_patterns = [p["pattern"] for p in MOCK_KNOWLEDGE_BASE["failure_patterns"]]
+        gap_descriptions = [g["description"] for g in MOCK_KNOWLEDGE_BASE["gaps"]]
+        
+        goal_descriptions = [g.description for g in goals]
+        
+        # At least one goal should address a failure pattern
+        assert any(pattern.lower() in desc.lower() for pattern in failure_patterns for desc in goal_descriptions)
+        
+        # At least one goal should address a gap
+        assert any(gap.lower() in desc.lower() for gap in gap_descriptions for desc in goal_descriptions)
+
+    def test_goal_generation_with_no_gaps(self, goal_generator_complete):
+        """Test goal generation when there are no gaps."""
+        goals = goal_generator_complete.generate_goals()
+        
+        # Should still generate goals (diversity goals)
+        assert len(goals) > 0
+        
+        # All goals should be diversity-focused
+        for goal in goals:
+            assert goal.source == "diversity"
+            assert "diversity" in goal.description.lower() or "exploration" in goal.description.lower() or "innovation" in goal.description.lower()

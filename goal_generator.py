@@ -12,6 +12,7 @@ After each reflection cycle, this module:
 8. Generates alternative strategies using different approaches than original failed goals.
 9. Integrates feasibility estimator to check goal viability before generation.
 10. Analyzes accumulated knowledge base to autonomously generate new sub-goals.
+11. Meta-insight analyzer that parses knowledge for key insights and converts to concrete goals.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -20,6 +21,7 @@ from enum import Enum
 import json
 import logging
 from datetime import datetime
+import random
 
 # Assuming ReflectionParser is defined elsewhere; adjust import as needed.
 # For demonstration, we define a minimal ReflectionParser here.
@@ -151,6 +153,285 @@ class KnowledgeBase:
         """Clear all knowledge entries."""
         self.entries.clear()
         self.logger.debug("Knowledge base cleared")
+
+class MetaInsightAnalyzer:
+    """
+    Meta-insight analyzer that:
+    1. Parses accumulated knowledge for key insights about system architecture
+    2. Extracts patterns like 'core modules need sandboxing', 'capabilities need consolidation'
+    3. Converts each insight into a concrete goal with priority heuristic applied
+    4. Merges with gap analysis results to produce final 3 goals
+    """
+    
+    def __init__(self, knowledge_base: KnowledgeBase):
+        self.knowledge_base = knowledge_base
+        self.logger = logging.getLogger(__name__)
+        
+        # Known architectural patterns to detect
+        self.architecture_patterns = {
+            "sandboxing": ["sandbox", "isolation", "containment", "separate", "compartmentalize"],
+            "consolidation": ["consolidate", "merge", "unify", "combine", "centralize"],
+            "modularization": ["modular", "module", "component", "decouple", "loose coupling"],
+            "scalability": ["scale", "scalable", "performance", "throughput", "load"],
+            "security": ["security", "secure", "authentication", "authorization", "encryption"],
+            "testing": ["test", "testing", "validation", "verification", "coverage"],
+            "monitoring": ["monitor", "observability", "logging", "metrics", "alerting"],
+            "documentation": ["document", "documentation", "docs", "readme", "wiki"]
+        }
+        
+        # Priority heuristic weights
+        self.priority_weights = {
+            "frequency": 0.3,
+            "impact": 0.4,
+            "alignment": 0.3
+        }
+    
+    def analyze(self) -> List[Dict[str, Any]]:
+        """
+        Analyze accumulated knowledge and extract key insights.
+        
+        Returns:
+            List of insight dictionaries with keys: insight, pattern, priority_score, goal_description
+        """
+        all_entries = self.knowledge_base.get_all_entries()
+        if not all_entries:
+            self.logger.info("Knowledge base is empty, no insights to analyze")
+            return []
+        
+        insights = []
+        
+        # Analyze failure patterns
+        failure_patterns = self.knowledge_base.get_failure_patterns()
+        for pattern in failure_patterns:
+            detected_patterns = self._detect_architecture_patterns(pattern.description)
+            for arch_pattern in detected_patterns:
+                insight = {
+                    "insight": pattern.description,
+                    "pattern": arch_pattern,
+                    "type": "failure",
+                    "frequency": pattern.frequency,
+                    "impact_score": pattern.impact_score,
+                    "alignment_score": pattern.alignment_score
+                }
+                insights.append(insight)
+        
+        # Analyze successful strategies
+        successful_strategies = self.knowledge_base.get_successful_strategies()
+        for strategy in successful_strategies:
+            detected_patterns = self._detect_architecture_patterns(strategy.description)
+            for arch_pattern in detected_patterns:
+                insight = {
+                    "insight": strategy.description,
+                    "pattern": arch_pattern,
+                    "type": "success",
+                    "frequency": strategy.frequency,
+                    "impact_score": strategy.impact_score,
+                    "alignment_score": strategy.alignment_score
+                }
+                insights.append(insight)
+        
+        # Analyze self-reflections
+        self_reflections = self.knowledge_base.get_self_reflections()
+        for reflection in self_reflections:
+            detected_patterns = self._detect_architecture_patterns(reflection.description)
+            for arch_pattern in detected_patterns:
+                insight = {
+                    "insight": reflection.description,
+                    "pattern": arch_pattern,
+                    "type": "reflection",
+                    "frequency": reflection.frequency,
+                    "impact_score": reflection.impact_score,
+                    "alignment_score": reflection.alignment_score
+                }
+                insights.append(insight)
+        
+        # Deduplicate insights based on similar descriptions
+        unique_insights = self._deduplicate_insights(insights)
+        
+        # Calculate priority scores for each insight
+        for insight in unique_insights:
+            insight["priority_score"] = self._calculate_priority_score(
+                frequency=insight["frequency"],
+                impact=insight["impact_score"],
+                alignment=insight["alignment_score"],
+                is_failure=(insight["type"] == "failure")
+            )
+        
+        # Sort by priority score descending
+        unique_insights.sort(key=lambda x: x["priority_score"], reverse=True)
+        
+        # Generate concrete goal descriptions for each insight
+        for insight in unique_insights:
+            insight["goal_description"] = self._generate_goal_from_insight(insight)
+        
+        return unique_insights
+    
+    def _detect_architecture_patterns(self, text: str) -> List[str]:
+        """
+        Detect architecture patterns in text.
+        
+        Args:
+            text: The text to analyze
+            
+        Returns:
+            List of detected pattern names
+        """
+        detected = []
+        text_lower = text.lower()
+        
+        for pattern_name, keywords in self.architecture_patterns.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    detected.append(pattern_name)
+                    break
+        
+        return detected if detected else ["general"]
+    
+    def _deduplicate_insights(self, insights: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplicate insights based on similar descriptions.
+        
+        Args:
+            insights: List of insight dictionaries
+            
+        Returns:
+            Deduplicated list of insight dictionaries
+        """
+        unique = []
+        seen_descriptions = set()
+        
+        for insight in insights:
+            # Normalize description for comparison
+            normalized = insight["insight"].lower().strip()
+            
+            # Check if similar description already exists
+            is_duplicate = False
+            for seen in seen_descriptions:
+                # Simple similarity check: if one contains the other
+                if normalized in seen or seen in normalized:
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                seen_descriptions.add(normalized)
+                unique.append(insight)
+        
+        return unique
+    
+    def _calculate_priority_score(self, frequency: int, impact: float, alignment: float, is_failure: bool) -> float:
+        """
+        Calculate priority score for an insight.
+        
+        Args:
+            frequency: How often this pattern appears
+            impact: Potential impact score (0.0 to 1.0)
+            alignment: Alignment with self-reflection insights (0.0 to 1.0)
+            is_failure: Whether this is from a failure pattern
+            
+        Returns:
+            Priority score (0.0 to 1.0)
+        """
+        # Normalize frequency (assume max frequency of 10 for normalization)
+        frequency_normalized = min(frequency / 10.0, 1.0)
+        
+        # Adjust weights based on failure status
+        frequency_weight = self.priority_weights["frequency"]
+        impact_weight = self.priority_weights["impact"]
+        alignment_weight = self.priority_weights["alignment"]
+        
+        if is_failure:
+            impact_weight += 0.1
+            frequency_weight += 0.1
+            alignment_weight -= 0.2
+        
+        # Ensure weights sum to 1.0
+        total_weight = frequency_weight + impact_weight + alignment_weight
+        frequency_weight /= total_weight
+        impact_weight /= total_weight
+        alignment_weight /= total_weight
+        
+        score = (frequency_weight * frequency_normalized) + (impact_weight * impact) + (alignment_weight * alignment)
+        return min(max(score, 0.0), 1.0)  # Clamp to [0.0, 1.0]
+    
+    def _generate_goal_from_insight(self, insight: Dict[str, Any]) -> str:
+        """
+        Generate a concrete goal description from an insight.
+        
+        Args:
+            insight: The insight dictionary
+            
+        Returns:
+            Goal description string
+        """
+        pattern = insight["pattern"]
+        insight_text = insight["insight"]
+        
+        # Generate goal based on pattern type
+        if pattern == "sandboxing":
+            return f"Implement sandboxing for {insight_text}"
+        elif pattern == "consolidation":
+            return f"Consolidate {insight_text}"
+        elif pattern == "modularization":
+            return f"Modularize {insight_text}"
+        elif pattern == "scalability":
+            return f"Improve scalability of {insight_text}"
+        elif pattern == "security":
+            return f"Enhance security for {insight_text}"
+        elif pattern == "testing":
+            return f"Add comprehensive tests for {insight_text}"
+        elif pattern == "monitoring":
+            return f"Implement monitoring for {insight_text}"
+        elif pattern == "documentation":
+            return f"Document {insight_text}"
+        else:
+            # Generic goal generation
+            prefixes = ["Address", "Improve", "Optimize", "Refactor", "Enhance"]
+            prefix = random.choice(prefixes)
+            return f"{prefix} {insight_text}"
+    
+    def merge_with_gap_analysis(self, insights: List[Dict[str, Any]], key_gaps: List[str]) -> List[Goal]:
+        """
+        Merge insights with gap analysis results to produce final goals.
+        
+        Args:
+            insights: List of insight dictionaries
+            key_gaps: List of key gaps from reflection parsing
+            
+        Returns:
+            List of Goal objects (top 3)
+        """
+        # Convert insights to goals
+        insight_goals = []
+        for i, insight in enumerate(insights):
+            goal = Goal(
+                description=insight["goal_description"],
+                priority=i + 1,
+                source="meta_insight",
+                last_selected=datetime.now(),
+                rationale=f"Meta-insight from pattern '{insight['pattern']}': {insight['insight']}"
+            )
+            insight_goals.append(goal)
+        
+        # Convert key gaps to goals
+        gap_goals = []
+        for gap in key_gaps:
+            # Check if gap already covered by an insight goal
+            if not any(gap.lower() in g.description.lower() for g in insight_goals):
+                goal = Goal(
+                    description=f"Address gap: {gap}",
+                    priority=len(insight_goals) + len(gap_goals) + 1,
+                    source="gap_analysis",
+                    last_selected=datetime.now(),
+                    rationale=f"Key gap identified: {gap}"
+                )
+                gap_goals.append(goal)
+        
+        # Combine and sort by priority
+        all_goals = insight_goals + gap_goals
+        all_goals.sort(key=lambda g: g.priority)
+        
+        # Return top 3 goals
+        return all_goals[:3]
 
 class AutonomousGoalAnalyzer:
     """
@@ -303,7 +584,6 @@ class AutonomousGoalAnalyzer:
         """Generate a goal description from a failure pattern."""
         # Simple transformation: add "Fix" or "Address" prefix
         prefixes = ["Fix", "Address", "Resolve", "Eliminate", "Prevent"]
-        import random
         prefix = random.choice(prefixes)
         return f"{prefix} {failure_description}"
     
@@ -311,7 +591,6 @@ class AutonomousGoalAnalyzer:
         """Generate a goal description from a successful strategy."""
         # Simple transformation: add "Continue" or "Expand" prefix
         prefixes = ["Continue", "Expand", "Reinforce", "Optimize", "Scale"]
-        import random
         prefix = random.choice(prefixes)
         return f"{prefix} {success_description}"
     
@@ -319,7 +598,6 @@ class AutonomousGoalAnalyzer:
         """Generate a goal description from a self-reflection insight."""
         # Simple transformation: add "Implement" or "Apply" prefix
         prefixes = ["Implement", "Apply", "Integrate", "Adopt", "Practice"]
-        import random
         prefix = random.choice(prefixes)
         return f"{prefix} {reflection_description}"
 
@@ -397,6 +675,7 @@ class GoalGenerator:
     Maintains a feedback loop tracking how parsed reflections influence goal selection.
     Supports retry_generation mode for self-healing loops.
     Includes autonomous goal generation from knowledge base analysis.
+    Includes meta-insight analyzer for extracting architectural insights.
     """
 
     def __init__(self, parser: Optional[ReflectionParser] = None, feasibility_check: bool = True):
@@ -413,7 +692,61 @@ class GoalGenerator:
         self.blocked_goals: List[Dict[str, Any]] = []  # Track blocked goals with reasons
         self.knowledge_base = KnowledgeBase()  # Initialize knowledge base
         self.autonomous_analyzer = AutonomousGoalAnalyzer(self.knowledge_base)  # Initialize analyzer
+        self.meta_insight_analyzer = MetaInsightAnalyzer(self.knowledge_base)  # Initialize meta-insight analyzer
         self.logger = logging.getLogger(__name__)
+        
+        # Core files list for priority scoring
+        self.core_files = [
+            "evolution_orchestrator.py",
+            "goal_generator.py",
+            "mutation_engine.py",
+            "reflection_engine.py"
+        ]
+
+    def calculate_priority_score(self, goal_description: str, target_files: List[str]) -> int:
+        """
+        Calculate priority score for a proposed goal based on target files and description.
+        
+        Args:
+            goal_description: The proposed goal description
+            target_files: List of target files for the goal
+            
+        Returns:
+            Integer priority score (higher = higher priority)
+        """
+        base_priority = 0
+        
+        # Check if any target files are in the core list
+        has_core_file = any(f in self.core_files for f in target_files)
+        has_new_module = any("new" in f.lower() or "module" in f.lower() for f in target_files)
+        has_test_file = any("test" in f.lower() or "tests" in f.lower() for f in target_files)
+        
+        # Assign base priority
+        if has_core_file:
+            base_priority = 10
+        elif has_new_module:
+            base_priority = 3
+        elif has_test_file:
+            base_priority = 1
+        else:
+            base_priority = 3  # Default for other files
+        
+        # Check for recursive self-modification pattern
+        self_modification_keywords = [
+            "self-modify", "self modify", "recursive", "self-improve", 
+            "self improve", "self-evolve", "self evolve", "self-rewrite",
+            "self rewrite", "self-generate", "self generate", "autonomous modification"
+        ]
+        
+        has_self_modification = any(
+            keyword in goal_description.lower() for keyword in self_modification_keywords
+        )
+        
+        # Apply bonus for recursive self-modification
+        if has_self_modification:
+            base_priority += 2
+        
+        return base_priority
 
     def process_reflection(self, reflection_text: str) -> Dict[str, Any]:
         """
@@ -432,9 +765,54 @@ class GoalGenerator:
         # Generate autonomous goals from knowledge base
         self._generate_autonomous_goals()
         
+        # Run meta-insight analysis and merge with gap analysis
+        self._run_meta_insight_analysis(parsed.get("key_gaps", []))
+        
         summary = self._generate_summary(parsed)
         self._record_feedback(parsed, summary)
         return summary
+
+    def _run_meta_insight_analysis(self, key_gaps: List[str]) -> None:
+        """
+        Run meta-insight analysis and merge with gap analysis to produce final goals.
+        
+        Args:
+            key_gaps: List of key gaps from reflection parsing
+        """
+        # Analyze knowledge base for insights
+        insights = self.meta_insight_analyzer.analyze()
+        
+        if not insights and not key_gaps:
+            return
+        
+        # Merge insights with gap analysis to get top 3 goals
+        merged_goals = self.meta_insight_analyzer.merge_with_gap_analysis(insights, key_gaps)
+        
+        # Add merged goals to the goals list, replacing existing meta-insight goals
+        self.goals = [g for g in self.goals if g.source not in ["meta_insight", "gap_analysis"]]
+        
+        for goal in merged_goals:
+            # Perform feasibility check
+            if self.feasibility_check:
+                feasibility_result = self.feasibility_estimator.estimate(goal.description, self.current_assessment)
+                
+                if feasibility_result == FeasibilityResult.BLOCK:
+                    self.logger.info(f"Feasibility check blocked meta-insight goal: '{goal.description}'")
+                    self.blocked_goals.append({
+                        "description": goal.description,
+                        "reason": "Feasibility check blocked meta-insight goal",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    continue
+                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                    goal.description = self._simplify_goal(goal.description)
+                    self.logger.info(f"Feasibility check adjusted meta-insight goal complexity: '{goal.description}'")
+            
+            self.goals.append(goal)
+            self.logger.info(f"Added meta-insight goal: '{goal.description}' (priority: {goal.priority})")
+        
+        # Re-sort goals by priority
+        self.goals.sort(key=lambda g: g.priority)
 
     def _add_reflection_to_knowledge_base(self, reflection_text: str) -> None:
         """Parse reflection text and add relevant entries to knowledge base."""
@@ -499,340 +877,4 @@ class GoalGenerator:
                         continue
                     elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
                         goal.description = self._simplify_goal(goal.description)
-                        self.logger.info(f"Feasibility check adjusted autonomous goal complexity: '{goal.description}'")
-                
-                self.goals.append(goal)
-                self.logger.info(f"Added autonomous goal: '{goal.description}' (priority: {goal.priority})")
-
-    def _update_assessment(self, assessment: Dict[str, Any]) -> None:
-        """Update current_assessment with parsed context."""
-        self.current_assessment.update(assessment)
-        self.logger.debug(f"Updated assessment: {self.current_assessment}")
-
-    def _prioritize_goals(self, key_gaps: List[str]) -> None:
-        """
-        Prioritize existing goals that address key_gaps.
-        Goals matching gaps get higher priority (lower number).
-        """
-        if not key_gaps:
-            return
-
-        for gap in key_gaps:
-            gap_lower = gap.lower()
-            for goal in self.goals:
-                if gap_lower in goal.description.lower():
-                    # Increase priority (lower number) for matching goals
-                    goal.priority = max(1, goal.priority - 1)
-                    self.logger.debug(f"Boosted priority for goal: {goal.description}")
-
-        # Re-sort goals by priority
-        self.goals.sort(key=lambda g: g.priority)
-
-    def _set_primary_goal(self, next_priority: str) -> None:
-        """
-        Set next_priority as the primary goal.
-        If it already exists, move to front; otherwise create new goal.
-        """
-        if not next_priority:
-            return
-
-        # Check if goal already exists
-        existing = [g for g in self.goals if g.description.lower() == next_priority.lower()]
-        if existing:
-            existing[0].priority = 1
-            self.goals.sort(key=lambda g: g.priority)
-            self.logger.debug(f"Set existing goal as primary: {next_priority}")
-        else:
-            # Perform feasibility check before creating new goal
-            if self.feasibility_check:
-                feasibility_result = self.feasibility_estimator.estimate(next_priority, self.current_assessment)
-                
-                if feasibility_result == FeasibilityResult.BLOCK:
-                    self.logger.info(f"Feasibility check blocked goal: '{next_priority}'")
-                    self.blocked_goals.append({
-                        "description": next_priority,
-                        "reason": "Feasibility check blocked due to complexity or resource constraints",
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    return
-                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                    # Reduce goal scope by simplifying the description
-                    simplified_goal = self._simplify_goal(next_priority)
-                    self.logger.info(f"Feasibility check adjusted complexity: '{next_priority}' -> '{simplified_goal}'")
-                    next_priority = simplified_goal
-            
-            new_goal = Goal(
-                description=next_priority,
-                priority=1,
-                source="parsed",
-                last_selected=datetime.now()
-            )
-            self.goals.insert(0, new_goal)
-            self.logger.debug(f"Created new primary goal: {next_priority}")
-
-    def _simplify_goal(self, goal_description: str) -> str:
-        """
-        Simplify a goal description by reducing scope.
-        Removes complexity indicators and vague terms.
-        """
-        # Remove complexity indicators
-        complexity_indicators = [
-            "all ", "everything ", "complete ", "full ", "entire ",
-            "multiple ", "several ", "many ", "various ", "numerous ",
-            "large ", "massive ", "extensive ", "comprehensive ",
-            "complex ", "difficult ", "challenging ", "ambitious "
-        ]
-        
-        simplified = goal_description
-        for indicator in complexity_indicators:
-            simplified = simplified.replace(indicator, "")
-        
-        # Add scope reduction prefix if not already present
-        if not any(prefix in simplified.lower() for prefix in ["simple ", "basic ", "initial ", "first step "]):
-            simplified = f"Simple {simplified}"
-        
-        # Limit to first 50 characters to ensure focus
-        if len(simplified) > 50:
-            simplified = simplified[:50].rsplit(" ", 1)[0]
-        
-        return simplified.strip()
-
-    def _inject_experimental_goals(self, novel_ideas: List[str]) -> None:
-        """
-        Inject novel_ideas as experimental goal variants.
-        These are tracked separately and can be promoted to regular goals.
-        """
-        for idea in novel_ideas:
-            if not any(g.description.lower() == idea.lower() for g in self.experimental_goals):
-                # Perform feasibility check for experimental goals
-                if self.feasibility_check:
-                    feasibility_result = self.feasibility_estimator.estimate(idea, self.current_assessment)
-                    
-                    if feasibility_result == FeasibilityResult.BLOCK:
-                        self.logger.info(f"Feasibility check blocked experimental goal: '{idea}'")
-                        self.blocked_goals.append({
-                            "description": idea,
-                            "reason": "Feasibility check blocked experimental goal",
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        continue
-                    elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                        idea = self._simplify_goal(idea)
-                        self.logger.info(f"Feasibility check adjusted experimental goal complexity: '{idea}'")
-                
-                exp_goal = Goal(
-                    description=idea,
-                    priority=999,  # Low priority initially
-                    source="experimental",
-                    last_selected=datetime.now()
-                )
-                self.experimental_goals.append(exp_goal)
-                self.logger.debug(f"Injected experimental goal: {idea}")
-
-    def promote_experimental_goal(self, description: str) -> bool:
-        """
-        Promote an experimental goal to a regular goal.
-        Returns True if successful.
-        """
-        for exp_goal in self.experimental_goals:
-            if exp_goal.description.lower() == description.lower():
-                # Perform feasibility check before promoting
-                if self.feasibility_check:
-                    feasibility_result = self.feasibility_estimator.estimate(description, self.current_assessment)
-                    
-                    if feasibility_result == FeasibilityResult.BLOCK:
-                        self.logger.info(f"Feasibility check blocked promotion of experimental goal: '{description}'")
-                        self.blocked_goals.append({
-                            "description": description,
-                            "reason": "Feasibility check blocked promotion",
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        return False
-                    elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                        description = self._simplify_goal(description)
-                        self.logger.info(f"Feasibility check adjusted promoted goal complexity: '{description}'")
-                
-                new_goal = Goal(
-                    description=description,
-                    priority=5,  # Moderate priority
-                    source="promoted_experimental",
-                    success_count=exp_goal.success_count,
-                    failure_count=exp_goal.failure_count
-                )
-                self.goals.append(new_goal)
-                self.experimental_goals.remove(exp_goal)
-                self.logger.info(f"Promoted experimental goal: {description}")
-                return True
-        return False
-
-    def select_goal(self) -> Optional[Goal]:
-        """
-        Select the highest priority goal for execution.
-        Updates last_selected timestamp.
-        """
-        if not self.goals:
-            return None
-
-        # Consider experimental goals if they have high success rate
-        best_exp = None
-        for exp in self.experimental_goals:
-            if exp.success_rate() > 0.7 and (best_exp is None or exp.success_rate() > best_exp.success_rate()):
-                best_exp = exp
-
-        # Select from regular goals first
-        if self.goals:
-            selected = self.goals[0]
-            selected.last_selected = datetime.now()
-            return selected
-        elif best_exp:
-            best_exp.last_selected = datetime.now()
-            return best_exp
-        return None
-
-    def record_goal_outcome(self, goal: Goal, success: bool, failure_type: Optional[FailureType] = None) -> None:
-        """
-        Record the outcome of a goal execution for feedback tracking.
-        Optionally specify failure type for retry generation.
-        Also updates knowledge base with outcome.
-        """
-        if success:
-            goal.success_count += 1
-            # Add successful strategy to knowledge base
-            self.knowledge_base.add_successful_strategy(goal.description, impact_score=0.7)
-        else:
-            goal.failure_count += 1
-            if failure_type:
-                goal.failure_type = failure_type
-                self.failed_goals.append(goal)
-                # Add failure pattern to knowledge base
-                self.knowledge_base.add_failure_pattern(goal.description, impact_score=0.6)
-            else:
-                # Add generic failure pattern
-                self.knowledge_base.add_failure_pattern(goal.description, impact_score=0.4)
-
-        # Update feedback history
-        feedback_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "goal_description": goal.description,
-            "goal_source": goal.source,
-            "success": success,
-            "failure_type": failure_type.value if failure_type else None,
-            "current_assessment": self.current_assessment.copy()
-        }
-        self.feedback_history.append(feedback_entry)
-        self.logger.debug(f"Recorded outcome for goal '{goal.description}': {'success' if success else 'failure'}")
-
-    def enable_retry_mode(self, enabled: bool = True) -> None:
-        """Enable or disable retry generation mode."""
-        self.retry_mode = enabled
-        self.logger.info(f"Retry mode {'enabled' if enabled else 'disabled'}")
-
-    def generate_retry_goals(self, failed_goal: Goal) -> List[Goal]:
-        """
-        Generate smaller, more focused sub-goals for retry based on failure type.
-        Returns a list of new retry goals.
-        """
-        if not self.retry_mode:
-            self.logger.warning("Retry mode is not enabled")
-            return []
-
-        retry_goals = []
-        failure_type = failed_goal.failure_type or FailureType.UNKNOWN
-
-        if failure_type == FailureType.IMPLEMENTATION_BUG:
-            # Generate focused sub-goals for implementation bugs
-            sub_goals = [
-                f"Debug and fix {failed_goal.description} - step 1: isolate the bug",
-                f"Debug and fix {failed_goal.description} - step 2: implement fix",
-                f"Debug and fix {failed_goal.description} - step 3: test the fix",
-                f"Review code quality for {failed_goal.description}",
-                f"Add unit tests for {failed_goal.description}"
-            ]
-        elif failure_type == FailureType.DESIGN_LIMITATION:
-            # Generate focused sub-goals for design limitations
-            sub_goals = [
-                f"Redesign approach for {failed_goal.description} - phase 1: requirements analysis",
-                f"Redesign approach for {failed_goal.description} - phase 2: prototype new design",
-                f"Redesign approach for {failed_goal.description} - phase 3: validate with stakeholders",
-                f"Research alternative architectures for {failed_goal.description}",
-                f"Create design document for {failed_goal.description}"
-            ]
-        else:
-            # Generic retry sub-goals for unknown failures
-            sub_goals = [
-                f"Analyze root cause of {failed_goal.description}",
-                f"Create mitigation plan for {failed_goal.description}",
-                f"Implement mitigation for {failed_goal.description}",
-                f"Verify resolution of {failed_goal.description}"
-            ]
-
-        for i, sub_goal_desc in enumerate(sub_goals):
-            # Perform feasibility check for each retry sub-goal
-            if self.feasibility_check:
-                feasibility_result = self.feasibility_estimator.estimate(sub_goal_desc, self.current_assessment)
-                
-                if feasibility_result == FeasibilityResult.BLOCK:
-                    self.logger.info(f"Feasibility check blocked retry goal: '{sub_goal_desc}'")
-                    self.blocked_goals.append({
-                        "description": sub_goal_desc,
-                        "reason": "Feasibility check blocked retry sub-goal",
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    continue
-                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                    sub_goal_desc = self._simplify_goal(sub_goal_desc)
-                    self.logger.info(f"Feasibility check adjusted retry goal complexity: '{sub_goal_desc}'")
-            
-            retry_goal = Goal(
-                description=sub_goal_desc,
-                priority=i + 1,  # Sequential priority
-                source="retry",
-                last_selected=datetime.now(),
-                failure_type=failure_type,
-                original_goal=failed_goal.description
-            )
-            retry_goals.append(retry_goal)
-            self.goals.append(retry_goal)
-            self.logger.debug(f"Generated retry goal: {sub_goal_desc}")
-
-        return retry_goals
-
-    def generate_alternative_strategies(self, failed_goal: Goal, num_alternatives: int = 3) -> List[Goal]:
-        """
-        Generate alternative strategies that use different approaches than the original failed goal.
-        Returns a list of alternative strategy goals.
-        """
-        if not self.retry_mode:
-            self.logger.warning("Retry mode is not enabled for alternative strategies")
-            return []
-
-        alternative_goals = []
-        failure_type = failed_goal.failure_type or FailureType.UNKNOWN
-
-        # Generate alternative approaches based on failure type
-        if failure_type == FailureType.IMPLEMENTATION_BUG:
-            alternatives = [
-                f"Alternative approach: Use library X instead of custom implementation for {failed_goal.description}",
-                f"Alternative approach: Refactor {failed_goal.description} using design pattern Y",
-                f"Alternative approach: Implement {failed_goal.description} with different algorithm",
-                f"Alternative approach: Use third-party service for {failed_goal.description}",
-                f"Alternative approach: Simplify {failed_goal.description} by reducing scope"
-            ]
-        elif failure_type == FailureType.DESIGN_LIMITATION:
-            alternatives = [
-                f"Alternative design: Use microservices architecture for {failed_goal.description}",
-                f"Alternative design: Implement event-driven approach for {failed_goal.description}",
-                f"Alternative design: Use caching layer for {failed_goal.description}",
-                f"Alternative design: Adopt serverless architecture for {failed_goal.description}",
-                f"Alternative design: Use message queue for {failed_goal.description}"
-            ]
-        else:
-            alternatives = [
-                f"Alternative approach: Try different methodology for {failed_goal.description}",
-                f"Alternative approach: Use different tooling for {failed_goal.description}",
-                f"Alternative approach: Collaborate with team on {failed_goal.description}",
-                f"Alternative approach: Break down {failed_goal.description} into smaller tasks",
-                f"Alternative approach: Seek external expertise for {failed_goal.description}"
-            ]
-
-        #
+                        self.logger

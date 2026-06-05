@@ -1,0 +1,13 @@
+{
+  "goals": [],
+  "schema": {
+    "id": "string",
+    "description": "string",
+    "target_files": ["string"],
+    "priority_score": "number",
+    "source": "string",
+    "cycle_number": "number",
+    "status": "string (pending/in_progress/completed/failed)",
+    "created_timestamp": "string (ISO 8601)"
+  }
+}
