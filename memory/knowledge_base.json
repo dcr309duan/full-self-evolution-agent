@@ -1,41 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified goal_decomposition/goal_parser.py to: Implement GoalParser that: (1) parses natural language or structured goal descriptions, (2) extracts key components (target modules, desired outcomes, constraints), (3) normalizes into a standard GoalSpecification format.",
-      "timestamp": 1780632352.2251983,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified goal_decomposition/dependency_resolver.py to: Implement DependencyResolver that: (1) loads the self-model knowledge graph, (2) identifies all components related to the goal, (3) computes dependency chains using Kahn's algorithm, (4) returns a DAG of sub-goals with critical path identification.",
-      "timestamp": 1780632369.9838927,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified goal_decomposition/readiness_checker.py to: Implement ReadinessChecker that: (1) checks each module's test coverage from test suite, (2) verifies interface completeness from schema extractor, (3) checks for existing implementations, (4) assigns readiness score (0.0-1.0) per component.",
-      "timestamp": 1780632382.5459268,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified goal_decomposition/priority_assigner.py to: Implement PriorityAssigner that: (1) uses topological sort for base priority, (2) adjusts for critical path dependencies, (3) considers module readiness (prioritize low-readiness modules for foundational work), (4) outputs ordered list with priority scores.",
-      "timestamp": 1780632399.1140726,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified goal_decomposition/orchestrator.py to: Implement GoalDecompositionOrchestrator that: (1) accepts abstract goal, (2) runs GoalParser, (3) runs DependencyResolver, (4) runs ReadinessChecker, (5) runs PriorityAssigner, (6) produces final DecompositionPlan with ordered sub-goals, estimated effort, and dependency graph visualization data.",
-      "timestamp": 1780632409.7769382,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified main.py to: Integrate GoalDecompositionOrchestrator into the main loop: after self-model update, check for pending abstract goals and decompose them into actionable sub-goals for the scheduler.",
-      "timestamp": 1780632417.5517597,
-      "cycle": 51
-    },
-    {
-      "content": "Successfully modified tests/test_goal_decomposition.py to: Create comprehensive test suite: (1) test parsing of various goal formats, (2) test dependency resolution with mock knowledge graph, (3) test readiness scoring, (4) test full decomposition pipeline with known abstract goals, (5) test edge cases (circular dependencies, missing components).",
-      "timestamp": 1780632441.576875,
-      "cycle": 51
-    },
-    {
       "content": "Successfully modified scripts/decompose_goal.py to: Create standalone script that takes a goal description as argument and outputs the decomposition plan as JSON for external consumption.",
       "timestamp": 1780632452.1363113,
       "cycle": 51
@@ -999,6 +964,41 @@
       "content": "Successfully modified evolution_engine/mutation_engine.py to: Update mutation_engine to include schema_version field in its output, and add a method to self-validate its output against the canonical mutation schema before returning.",
       "timestamp": 1780636666.9035547,
       "cycle": 76
+    },
+    {
+      "content": "Successfully modified evolution_engine/failure_pattern_detector.py to: Create a new FailurePatternDetector class that: (1) maintains a persistent log of failures keyed by (error_type, module_name), (2) tracks cycle timestamps for each failure occurrence, (3) detects when the same (error_type, module_name) pair appears in 3 consecutive cycles, (4) generates a 'debugging' goal with priority HIGH and description referencing the failure pattern, (5) exposes methods: log_failure(error_type, module_name, cycle_number), get_recurring_patterns(), generate_debugging_goal(pattern).",
+      "timestamp": 1780636721.653426,
+      "cycle": 77
+    },
+    {
+      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate FailurePatternDetector into the orchestrator: (1) import and instantiate FailurePatternDetector at module level, (2) after each test run in the evolution loop, call detector.log_failure() for each failed test with extracted error type and module, (3) after logging, call detector.get_recurring_patterns() to check for 3-consecutive-cycle patterns, (4) if patterns found, call detector.generate_debugging_goal() and insert the returned goal into the pending_goals list (before the next goal_generator invocation), (5) log the auto-insertion event.",
+      "timestamp": 1780636760.0462346,
+      "cycle": 77
+    },
+    {
+      "content": "Successfully modified evolution_engine/goal_generator.py to: Update goal_generator to accept and process externally injected goals (like those from failure pattern detector): (1) add a method inject_goal(goal_dict) that appends to a priority queue, (2) modify generate_goals() to first emit any injected goals before generating new ones, (3) ensure injected goals have proper schema_version and are validated by the existing schema alignment checker.",
+      "timestamp": 1780636775.521556,
+      "cycle": 77
+    },
+    {
+      "content": "Successfully modified tests/test_failure_pattern_detector.py to: Create comprehensive test suite for FailurePatternDetector: (1) test that logging failures stores them correctly, (2) test that 2 consecutive same-type failures don't trigger goal generation, (3) test that 3 consecutive same-type failures trigger goal generation, (4) test that non-consecutive failures (e.g., pattern interrupted by other failure) don't trigger, (5) test that generated debugging goal has correct structure (priority=HIGH, description includes error_type and module, action='debugging'), (6) test that multiple simultaneous patterns each generate their own goals, (7) test integration with orchestrator (mock the test runner to produce controlled failure sequences).",
+      "timestamp": 1780636791.3924823,
+      "cycle": 77
+    },
+    {
+      "content": "Successfully modified evolution_engine/failure_log_parser.py to: Create a utility module to parse test runner output and extract structured failure information: (1) parse pytest-style output to extract test name, error type (AssertionError, TypeError, etc.), and module path, (2) normalize module names to consistent format, (3) provide a clean interface for FailurePatternDetector to consume.",
+      "timestamp": 1780636808.0812855,
+      "cycle": 77
+    },
+    {
+      "content": "[研究] Self-healing code generation via causal failure tracing: Self-healing code generation via causal failure tracing is an emerging area combining program repair",
+      "timestamp": 1780636824.7471645,
+      "cycle": 77
+    },
+    {
+      "content": "[研究] Meta-learning for adaptive task decomposition and prioritization: Meta-learning for adaptive task decomposition and prioritization is an emerging area that combines h",
+      "timestamp": 1780636838.9187999,
+      "cycle": 77
     }
   ],
   "learned_patterns": [],
@@ -3334,6 +3334,36 @@
       "strategy": "Implement a schema alignment checker that validates data contracts between all modules (goal generator, mutation engine, test runner, reflection parser) before evolution cycles, and auto-generates migration patches for mismatched fields",
       "outcome": "7/7 steps succeeded",
       "timestamp": 1780636666.91605
+    },
+    {
+      "strategy": "modify evolution_engine/failure_pattern_detector.py: Create a new FailurePatternDetector class that: (1) maintains a persistent log of failures keyed by (error_type, module_name), (2) tracks cycle timestamps for each failure occurrence, (3) detects when the same (error_type, module_name) pair appears in 3 consecutive cycles, (4) generates a 'debugging' goal with priority HIGH and description referencing the failure pattern, (5) exposes methods: log_failure(error_type, module_name, cycle_number), get_recurring_patterns(), generate_debugging_goal(pattern).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636721.6423962
+    },
+    {
+      "strategy": "modify evolution_engine/orchestrator.py: Integrate FailurePatternDetector into the orchestrator: (1) import and instantiate FailurePatternDetector at module level, (2) after each test run in the evolution loop, call detector.log_failure() for each failed test with extracted error type and module, (3) after logging, call detector.get_recurring_patterns() to check for 3-consecutive-cycle patterns, (4) if patterns found, call detector.generate_debugging_goal() and insert the returned goal into the pending_goals list (before the next goal_generator invocation), (5) log the auto-insertion event.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636760.0346541
+    },
+    {
+      "strategy": "modify evolution_engine/goal_generator.py: Update goal_generator to accept and process externally injected goals (like those from failure pattern detector): (1) add a method inject_goal(goal_dict) that appends to a priority queue, (2) modify generate_goals() to first emit any injected goals before generating new ones, (3) ensure injected goals have proper schema_version and are validated by the existing schema alignment checker.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636775.5094967
+    },
+    {
+      "strategy": "modify tests/test_failure_pattern_detector.py: Create comprehensive test suite for FailurePatternDetector: (1) test that logging failures stores them correctly, (2) test that 2 consecutive same-type failures don't trigger goal generation, (3) test that 3 consecutive same-type failures trigger goal generation, (4) test that non-consecutive failures (e.g., pattern interrupted by other failure) don't trigger, (5) test that generated debugging goal has correct structure (priority=HIGH, description includes error_type and module, action='debugging'), (6) test that multiple simultaneous patterns each generate their own goals, (7) test integration with orchestrator (mock the test runner to produce controlled failure sequences).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636791.3815856
+    },
+    {
+      "strategy": "modify evolution_engine/failure_log_parser.py: Create a utility module to parse test runner output and extract structured failure information: (1) parse pytest-style output to extract test name, error type (AssertionError, TypeError, etc.), and module path, (2) normalize module names to consistent format, (3) provide a clean interface for FailurePatternDetector to consume.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636808.0699315
+    },
+    {
+      "strategy": "Build a failure pattern detector that logs recurring test failures by error type and module, and automatically inserts a 'debugging' goal into the pending goals list when the same failure type occurs in 3 consecutive cycles",
+      "outcome": "5/5 steps succeeded",
+      "timestamp": 1780636808.0936048
     }
   ],
   "capabilities_developed": []

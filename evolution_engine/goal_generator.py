@@ -3,6 +3,7 @@ from evolution_engine.feasibility_estimator import FeasibilityEstimator
 from evolution_engine.failure_analysis import FailureAnalyzer
 from evolution_engine.goal_types import GoalType, Goal
 import logging
+from queue import PriorityQueue
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +12,7 @@ class GoalGenerator:
     Generates goals with dependency-aware feasibility estimation.
     Integrates feasibility checks before yielding goals and implements
     a feedback loop to deprioritize blocked goal types.
+    Supports injection of externally generated goals via a priority queue.
     """
 
     def __init__(self, feasibility_estimator: FeasibilityEstimator,
@@ -25,6 +27,44 @@ class GoalGenerator:
         self.blocked_categories: set = set()
         # Define the canonical goal schema version
         self.schema_version = "1.0"
+        # Priority queue for injected goals (lower number = higher priority)
+        self.injected_goals: PriorityQueue = PriorityQueue()
+
+    def inject_goal(self, goal_dict: Dict[str, Any]) -> None:
+        """
+        Inject an externally generated goal into the priority queue.
+        The goal_dict should contain at minimum 'goal_type', 'description', and 'priority'.
+        A default schema_version is added if not present.
+        The goal is validated before being queued.
+        """
+        # Ensure schema_version is present
+        if 'schema_version' not in goal_dict:
+            goal_dict['schema_version'] = self.schema_version
+        
+        # Create a Goal object from the dictionary
+        try:
+            goal = Goal(
+                goal_type=GoalType(goal_dict['goal_type']),
+                description=goal_dict['description'],
+                priority=goal_dict['priority'],
+                schema_version=goal_dict.get('schema_version', self.schema_version)
+            )
+        except (KeyError, ValueError) as e:
+            logger.error(f"Invalid injected goal dict: {e}")
+            return
+        
+        # Validate the goal before queuing
+        if not self._validate_goal(goal):
+            logger.warning(f"Injected goal failed validation and was not queued: {goal}")
+            return
+        
+        # Determine priority for the queue (lower number = higher priority)
+        priority_map = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+        queue_priority = priority_map.get(goal.priority, 4)
+        
+        # Add to priority queue
+        self.injected_goals.put((queue_priority, goal))
+        logger.info(f"Injected goal queued: {goal.goal_type} - {goal.description}")
 
     def add_goal_candidates(self, goals: List[Goal]) -> None:
         """Add a list of candidate goals to the generator."""
@@ -36,12 +76,31 @@ class GoalGenerator:
 
     def generate_goals(self) -> List[Goal]:
         """
-        Generate goals by filtering candidates through feasibility estimation.
+        Generate goals by first emitting any injected goals from the priority queue,
+        then filtering candidates through feasibility estimation.
         Deprioritizes goal types that are repeatedly blocked.
         Respects blocked categories by generating root_cause_analysis goals instead.
         Returns a list of feasible goals with schema_version included.
         """
         feasible_goals = []
+        
+        # First, process all injected goals from the priority queue
+        while not self.injected_goals.empty():
+            _, injected_goal = self.injected_goals.get()
+            # Injected goals bypass feasibility checks but still respect blocked categories
+            if injected_goal.goal_type in self.blocked_categories:
+                # Generate root_cause_analysis goal instead
+                root_cause_goal = Goal(
+                    goal_type=GoalType.ROOT_CAUSE_ANALYSIS,
+                    description=f"Root cause analysis for blocked category: {injected_goal.goal_type}",
+                    priority='critical',
+                    schema_version=self.schema_version
+                )
+                feasible_goals.append(root_cause_goal)
+            else:
+                feasible_goals.append(injected_goal)
+        
+        # Then process regular goal candidates
         for goal in self.goal_candidates:
             # Check if goal's category is blocked
             if goal.goal_type in self.blocked_categories:
@@ -49,7 +108,8 @@ class GoalGenerator:
                 root_cause_goal = Goal(
                     goal_type=GoalType.ROOT_CAUSE_ANALYSIS,
                     description=f"Root cause analysis for blocked category: {goal.goal_type}",
-                    priority='critical'
+                    priority='critical',
+                    schema_version=self.schema_version
                 )
                 feasible_goals.append(root_cause_goal)
                 continue
@@ -64,9 +124,10 @@ class GoalGenerator:
             else:
                 self._handle_blocked_goal(goal)
 
-        # Add schema_version to each feasible goal
+        # Add schema_version to each feasible goal (if not already set)
         for goal in feasible_goals:
-            goal.schema_version = self.schema_version
+            if not hasattr(goal, 'schema_version') or not goal.schema_version:
+                goal.schema_version = self.schema_version
 
         # Self-validate each goal against the canonical schema
         validated_goals = []

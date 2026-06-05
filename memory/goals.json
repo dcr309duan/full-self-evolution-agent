@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a failure pattern detector that logs recurring test failures by error type and module, and automatically inserts a 'debugging' goal into the pending goals list when the same failure type occurs in 3 consecutive cycles",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780636490.61229
-    },
-    {
       "description": "Create a 'capability fitness function' that measures the number of downstream tasks each capability enables and automatically deprecates capabilities with fitness below a configurable threshold (e.g., < 2 downstream uses) after a set number of cycles. Implement a dashboard that displays fitness scores per capability.",
       "priority": 8,
       "status": "pending",
@@ -444,6 +438,13 @@
       "status": "completed",
       "created_at": 1780636490.6103299,
       "completed_at": 1780636666.9240525
+    },
+    {
+      "description": "Build a failure pattern detector that logs recurring test failures by error type and module, and automatically inserts a 'debugging' goal into the pending goals list when the same failure type occurs in 3 consecutive cycles",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780636490.61229,
+      "completed_at": 1780636808.101228
     }
   ],
   "generated_goals": []

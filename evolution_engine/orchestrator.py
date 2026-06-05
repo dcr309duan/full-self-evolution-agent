@@ -301,10 +301,99 @@ class DependencyAwareFeasibilityEstimator:
         return unblocked_goals
 
 
+class FailurePatternDetector:
+    """Detects recurring failure patterns across evolution cycles."""
+    
+    def __init__(self):
+        self.failure_log: List[Dict[str, Any]] = []
+        self.patterns: List[Dict[str, Any]] = []
+        self.cycle_counter: int = 0
+        
+    def log_failure(self, error_type: str, module: str, cycle: int = None) -> None:
+        """
+        Log a failure occurrence.
+        
+        Args:
+            error_type: Type of error encountered
+            module: Module where the error occurred
+            cycle: Cycle number (defaults to internal counter)
+        """
+        if cycle is None:
+            cycle = self.cycle_counter
+        
+        entry = {
+            'cycle': cycle,
+            'error_type': error_type,
+            'module': module,
+            'timestamp': logging.Formatter.formatTime(logging.makeLogRecord({}), '%Y-%m-%d %H:%M:%S')
+        }
+        self.failure_log.append(entry)
+        logger.debug(f"Logged failure: {error_type} in {module} at cycle {cycle}")
+        
+    def get_recurring_patterns(self) -> List[Dict[str, Any]]:
+        """
+        Check for patterns of 3 consecutive cycles with same error type and module.
+        
+        Returns:
+            List of detected patterns
+        """
+        self.patterns = []
+        
+        # Group failures by (error_type, module)
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for entry in self.failure_log:
+            key = (entry['error_type'], entry['module'])
+            grouped[key].append(entry['cycle'])
+        
+        # Check for 3 consecutive cycles
+        for (error_type, module), cycles in grouped.items():
+            cycles = sorted(set(cycles))
+            for i in range(len(cycles) - 2):
+                if cycles[i+1] == cycles[i] + 1 and cycles[i+2] == cycles[i] + 2:
+                    pattern = {
+                        'error_type': error_type,
+                        'module': module,
+                        'start_cycle': cycles[i],
+                        'end_cycle': cycles[i+2],
+                        'consecutive_count': 3
+                    }
+                    self.patterns.append(pattern)
+                    logger.info(f"Detected recurring pattern: {error_type} in {module} from cycle {cycles[i]} to {cycles[i+2]}")
+        
+        return self.patterns
+    
+    def generate_debugging_goal(self, pattern: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate a debugging goal based on a detected pattern.
+        
+        Args:
+            pattern: The detected failure pattern
+            
+        Returns:
+            A goal dictionary for debugging
+        """
+        goal = {
+            'id': f"debug_{pattern['error_type']}_{pattern['module']}_{pattern['start_cycle']}",
+            'type': 'debugging',
+            'priority': 'high',
+            'description': f"Debug recurring failure: {pattern['error_type']} in {pattern['module']}",
+            'error_type': pattern['error_type'],
+            'module': pattern['module'],
+            'start_cycle': pattern['start_cycle'],
+            'end_cycle': pattern['end_cycle'],
+            'dependencies': [],
+            'category': 'debugging'
+        }
+        logger.info(f"Generated debugging goal: {goal['id']}")
+        return goal
+
+
 # Global instances
 feasibility_estimator = DependencyAwareFeasibilityEstimator()
 meta_monitor = MetaMonitor()
 schema_checker = SchemaAlignmentChecker()
+failure_detector = FailurePatternDetector()
 
 
 def check_primitive_validation(sandbox_mode: bool = False) -> None:
@@ -569,11 +658,13 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
     global feasibility_estimator
     global meta_monitor
     global schema_checker
+    global failure_detector
 
     # Initial validation check
     check_primitive_validation(sandbox_mode)
     
     cycle_count = 0
+    pending_goals = []
 
     while True:
         if PRIMITIVE_VALIDATION_FAILED:
@@ -655,6 +746,29 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
                 hypothesis = meta_monitor.generate_root_cause_hypothesis('test_category')
                 logger.info(f"Root cause hypothesis for blocked category: {hypothesis}")
                 meta_monitor.reprioritization_triggered = False
+        
+        # Simulate test run results for failure pattern detection
+        # In real implementation, this would come from actual test execution
+        simulated_failures = [
+            {'error_type': 'AssertionError', 'module': 'test_module_a'},
+            {'error_type': 'TimeoutError', 'module': 'test_module_b'}
+        ]
+        
+        # Log failures to failure detector
+        for failure in simulated_failures:
+            failure_detector.log_failure(
+                error_type=failure['error_type'],
+                module=failure['module'],
+                cycle=cycle_count
+            )
+        
+        # Check for recurring patterns
+        patterns = failure_detector.get_recurring_patterns()
+        if patterns:
+            for pattern in patterns:
+                debugging_goal = failure_detector.generate_debugging_goal(pattern)
+                pending_goals.insert(0, debugging_goal)
+                logger.info(f"Auto-inserted debugging goal: {debugging_goal['id']} into pending_goals")
         
         cycle_count += 1
         

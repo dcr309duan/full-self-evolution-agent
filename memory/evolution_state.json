@@ -1,9 +1,8 @@
 {
-  "cycle_count": 76,
-  "current_generation": 48,
-  "last_evolution_time": 1780636471.864797,
+  "cycle_count": 77,
+  "current_generation": 49,
+  "last_evolution_time": 1780636701.1782498,
   "capabilities": [
-    "Build an API server to expose agent capabilities externally",
     "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the",
     "Integrate the mutation engine with the existing testing framework to create a closed evolutionary lo",
     "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the f",
@@ -52,7 +51,8 @@
     "Build a minimal end-to-end integration test that validates the core evolution loop (reflection → goa",
     "Implement a triage and pruning module that scans all existing code modules, categorizes them as 'fun",
     "Add a meta-level monitor that detects when 3+ consecutive goals fail in the same category (e.g., 'fi",
-    "Implement a schema alignment checker that validates data contracts between all modules (goal generat"
+    "Implement a schema alignment checker that validates data contracts between all modules (goal generat",
+    "Build a failure pattern detector that logs recurring test failures by error type and module, and aut"
   ],
   "history": [
     {
@@ -456,6 +456,12 @@
       "goal": "Implement a schema alignment checker that validates data contracts between all modules (goal generator, mutation engine, test runner, reflection parser) before evolution cycles, and auto-generates migration patches for mismatched fields",
       "success": true,
       "timestamp": 1780636666.9331894
+    },
+    {
+      "cycle": 77,
+      "goal": "Build a failure pattern detector that logs recurring test failures by error type and module, and automatically inserts a 'debugging' goal into the pending goals list when the same failure type occurs in 3 consecutive cycles",
+      "success": true,
+      "timestamp": 1780636838.9386628
     }
   ],
   "status": "evolving"
