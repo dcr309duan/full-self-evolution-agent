@@ -7,6 +7,8 @@ flags stuck-at-extreme parameters, and includes conflict resolution metrics.
 Also includes atomic write failure metrics and auto-generated fix success rate metrics.
 Also tracks sandboxed mutation metrics: number of sandboxed mutations attempted,
 number that passed tests, number that failed tests, number that required rollback.
+Also tracks sleep cycle cleanup impact: number of modules deleted, number of functions consolidated,
+total LOC freed, and timestamp of last sleep cycle.
 """
 
 import time
@@ -28,7 +30,8 @@ class SystemHealthAudit:
     """
     Tracks and reports meta-cognitive health metrics for an evolving system.
     Includes conflict resolution metrics, atomic write failure metrics,
-    auto-generated fix effectiveness metrics, and sandboxed mutation metrics.
+    auto-generated fix effectiveness metrics, sandboxed mutation metrics,
+    and sleep cycle cleanup impact metrics.
     """
 
     def __init__(self, mutation_rate: float = DEFAULT_MUTATION_RATE,
@@ -61,6 +64,14 @@ class SystemHealthAudit:
         self.sandboxed_mutations_passed: int = 0
         self.sandboxed_mutations_failed: int = 0
         self.sandboxed_mutations_rollback: int = 0
+
+        # Sleep cycle cleanup impact tracking
+        self.sleep_cycle_cleanup_impact = {
+            'modules_deleted': 0,
+            'functions_consolidated': 0,
+            'total_loc_freed': 0,
+            'last_sleep_cycle_timestamp': None
+        }
 
     def record_adjustment(self, parameter_name: str, old_value: float, new_value: float) -> None:
         """Record a parameter adjustment with timestamp."""
@@ -177,6 +188,20 @@ class SystemHealthAudit:
             self.sandboxed_mutations_rollback += 1
         else:
             raise ValueError(f"Invalid outcome: {outcome}. Must be 'passed', 'failed', or 'rollback'.")
+
+    def record_sleep_cycle_cleanup(self, modules_deleted: int, functions_consolidated: int, loc_freed: int) -> None:
+        """
+        Record the impact of a sleep cycle cleanup.
+        
+        Args:
+            modules_deleted: Number of modules deleted during cleanup
+            functions_consolidated: Number of functions consolidated during cleanup
+            loc_freed: Total lines of code freed during cleanup
+        """
+        self.sleep_cycle_cleanup_impact['modules_deleted'] += modules_deleted
+        self.sleep_cycle_cleanup_impact['functions_consolidated'] += functions_consolidated
+        self.sleep_cycle_cleanup_impact['total_loc_freed'] += loc_freed
+        self.sleep_cycle_cleanup_impact['last_sleep_cycle_timestamp'] = time.time()
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter."""
@@ -442,11 +467,23 @@ class SystemHealthAudit:
             'sandboxed_mutations_rollback': self.sandboxed_mutations_rollback
         }
 
+    def get_sleep_cycle_cleanup_impact(self) -> Dict:
+        """
+        Return sleep cycle cleanup impact metrics.
+        """
+        return {
+            'modules_deleted': self.sleep_cycle_cleanup_impact['modules_deleted'],
+            'functions_consolidated': self.sleep_cycle_cleanup_impact['functions_consolidated'],
+            'total_loc_freed': self.sleep_cycle_cleanup_impact['total_loc_freed'],
+            'last_sleep_cycle_timestamp': self.sleep_cycle_cleanup_impact['last_sleep_cycle_timestamp']
+        }
+
     def generate_health_report(self) -> Dict:
         """
         Generate a comprehensive health report with all meta-cognitive metrics
         including conflict resolution metrics, atomic write failure metrics,
-        auto-generated fix effectiveness metrics, and sandboxed mutation metrics.
+        auto-generated fix effectiveness metrics, sandboxed mutation metrics,
+        and sleep cycle cleanup impact metrics.
         """
         conflict_count = self.get_conflict_count_last_30()
         resolution_rate = self.get_conflict_resolution_success_rate()
@@ -462,6 +499,7 @@ class SystemHealthAudit:
         modules_with_high_fix_failures = self.get_modules_with_high_fix_failures()
         
         sandboxed_metrics = self.get_sandboxed_mutation_metrics()
+        sleep_cycle_impact = self.get_sleep_cycle_cleanup_impact()
         
         report = {
             'mutation_rate': self.mutation_rate,
@@ -494,7 +532,9 @@ class SystemHealthAudit:
             'sandboxed_mutations_attempted': sandboxed_metrics['sandboxed_mutations_attempted'],
             'sandboxed_mutations_passed': sandboxed_metrics['sandboxed_mutations_passed'],
             'sandboxed_mutations_failed': sandboxed_metrics['sandboxed_mutations_failed'],
-            'sandboxed_mutations_rollback': sandboxed_metrics['sandboxed_mutations_rollback']
+            'sandboxed_mutations_rollback': sandboxed_metrics['sandboxed_mutations_rollback'],
+            # Sleep cycle cleanup impact metrics
+            'sleep_cycle_cleanup_impact': sleep_cycle_impact
         }
         return report
 
@@ -548,6 +588,13 @@ if __name__ == "__main__":
             auditor.record_sandboxed_mutation('passed' if i % 3 != 0 else 'failed')
         if i % 5 == 0:
             auditor.record_sandboxed_mutation('rollback')
+        # Simulate some sleep cycle cleanups
+        if i % 10 == 0:
+            auditor.record_sleep_cycle_cleanup(
+                modules_deleted=i // 10,
+                functions_consolidated=i // 5,
+                loc_freed=i * 10
+            )
     
     # Generate and print report
     report = auditor.generate_health_report()

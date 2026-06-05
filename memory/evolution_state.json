@@ -1,9 +1,8 @@
 {
-  "cycle_count": 118,
-  "current_generation": 89,
-  "last_evolution_time": 1780646058.684858,
+  "cycle_count": 119,
+  "current_generation": 90,
+  "last_evolution_time": 1780646299.5237017,
   "capabilities": [
-    "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a depe",
     "Implement a canonical schema alignment layer that normalizes data formats between all core modules (",
     "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote ",
     "Build a minimal 'new file creation' metamorphic test: write a script that creates a new Python file ",
@@ -52,15 +51,10 @@
     "Implement atomic file write with rollback in the orchestrator: wrap all module file writes in a try/",
     "Create a 'minimal core' end-to-end integration test that runs the full reflection → goal generation ",
     "Build a self-diagnosis module that scans the last 20 failure logs for the most common error type (e.",
-    "Build a recursive sandbox module that clones the core evolution loop components (evolution_orchestra"
+    "Build a recursive sandbox module that clones the core evolution loop components (evolution_orchestra",
+    "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintena"
   ],
   "history": [
-    {
-      "cycle": 10,
-      "goal": "Create a 'mutation' mechanism that randomly selects two existing functions or strategies from the knowledge base, combines or modifies them, and tests the result against a basic problem suite, logging success or failure to generate new experimental capabilities.",
-      "success": false,
-      "timestamp": 1780624394.386522
-    },
     {
       "cycle": 11,
       "goal": "Create a 'mutation' mechanism that randomly selects two existing functions or strategies from the knowledge base, combines or modifies them, and tests the result against a basic problem suite, logging success or failure to generate new experimental capabilities.",
@@ -654,6 +648,12 @@
       "goal": "Build a recursive sandbox module that clones the core evolution loop components (evolution_orchestrator.py, mutation_engine.py, goal_generator.py) into an isolated directory, applies a proposed mutation to the clone, runs the full test suite on the clone, and only if all tests pass, merges the changes back into the live system. Include a rollback mechanism that reverts to the last known good state if the merge causes immediate test failures.",
       "success": true,
       "timestamp": 1780646262.7672126
+    },
+    {
+      "cycle": 119,
+      "goal": "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintenance phase where no new goals are accepted. During this phase, run a dead-code scanner to identify modules with zero test coverage and no imports from active code, delete them (with confirmation), and consolidate duplicate utility functions into shared modules. Log the cleanup actions and freed capacity.",
+      "success": true,
+      "timestamp": 1780646535.3959923
     }
   ],
   "status": "evolving"

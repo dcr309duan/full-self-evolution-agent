@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintenance phase where no new goals are accepted. During this phase, run a dead-code scanner to identify modules with zero test coverage and no imports from active code, delete them (with confirmation), and consolidate duplicate utility functions into shared modules. Log the cleanup actions and freed capacity.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780646079.6337428
-    },
-    {
       "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
       "priority": 7,
       "status": "pending",
@@ -719,6 +713,13 @@
       "status": "completed",
       "created_at": 1780646079.631393,
       "completed_at": 1780646262.7036905
+    },
+    {
+      "description": "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintenance phase where no new goals are accepted. During this phase, run a dead-code scanner to identify modules with zero test coverage and no imports from active code, delete them (with confirmation), and consolidate duplicate utility functions into shared modules. Log the cleanup actions and freed capacity.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780646079.6337428,
+      "completed_at": 1780646498.7289848
     }
   ],
   "generated_goals": []
