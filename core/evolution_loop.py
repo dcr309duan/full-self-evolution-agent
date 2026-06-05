@@ -30,6 +30,25 @@ def log_cycle(cycle_num, message):
         f.write(f"[{timestamp}] Cycle {cycle_num}: {message}\n")
 
 
+def _validate_recent_files(cycle_num):
+    """Check recently modified .py files for import validity."""
+    import subprocess, glob
+    cutoff = time.time() - 120
+    py_files = glob.glob(os.path.join(PROJECT_ROOT, "*.py")) + \
+               glob.glob(os.path.join(PROJECT_ROOT, "core", "*.py"))
+    for fpath in py_files:
+        try:
+            if os.path.getmtime(fpath) > cutoff:
+                result = subprocess.run(
+                    [sys.executable, "-c", f"import ast; ast.parse(open('{fpath}').read())"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if result.returncode != 0:
+                    log_cycle(cycle_num, f"WARN: {os.path.basename(fpath)} has syntax errors")
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
 def select_goal(goals):
     """Select the highest priority pending goal, skipping repeatedly failed ones."""
     pending = [g for g in goals.get("sub_goals", []) if g["status"] == "pending"]
@@ -194,6 +213,8 @@ def evolution_cycle(state):
             state["capabilities"].append(goal["description"][:100])
             if len(state["capabilities"]) > 50:
                 state["capabilities"] = state["capabilities"][-50:]
+            # Validate newly created files are importable
+            _validate_recent_files(cycle_num)
             log_cycle(cycle_num, f"Goal completed: {goal['description']}")
         else:
             goal["consecutive_failures"] = goal.get("consecutive_failures", 0) + 1
@@ -272,9 +293,37 @@ def initialize():
     return state
 
 
+def acquire_lock():
+    """Acquire process lock to prevent duplicate instances."""
+    lock_file = os.path.join(PROJECT_ROOT, ".evolution.lock")
+    if os.path.exists(lock_file):
+        try:
+            with open(lock_file) as f:
+                old_pid = int(f.read().strip())
+            if os.path.exists(f"/proc/{old_pid}"):
+                print(f"[Self-Evolution Agent] Another instance running (PID {old_pid}). Exiting.")
+                sys.exit(1)
+        except (ValueError, OSError):
+            pass
+    with open(lock_file, 'w') as f:
+        f.write(str(os.getpid()))
+    return lock_file
+
+
+def release_lock():
+    """Release process lock."""
+    lock_file = os.path.join(PROJECT_ROOT, ".evolution.lock")
+    try:
+        os.remove(lock_file)
+    except OSError:
+        pass
+
+
 def run_evolution(max_cycles=None):
     """Run the main evolution loop."""
     max_cycles = max_cycles or MAX_EVOLUTION_CYCLES
+    
+    lock_file = acquire_lock()
     
     print(f"[Self-Evolution Agent] Initializing...")
     state = initialize()
@@ -311,6 +360,7 @@ def run_evolution(max_cycles=None):
             add_insight(f"Runtime error in cycle {state['cycle_count']}: {str(e)[:200]}")
             time.sleep(5)
     
+    release_lock()
     print(f"\n[Self-Evolution Agent] Evolution complete. Final state: cycle={state['cycle_count']}, gen={state['current_generation']}")
     return state
 

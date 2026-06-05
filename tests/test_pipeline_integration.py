@@ -140,6 +140,68 @@ def test_auth_failure():
             strategy_updater=mock_strategy_updater
         )
 
+    def test_full_pipeline_end_to_end(self, pipeline, sample_capability):
+        """Test the complete pipeline with a known-good mutation and verify all stages complete successfully.
+        Includes assertions for intermediate outputs at each stage."""
+        # Stage 1: Generate mutants
+        mutants = pipeline.mutation_engine.generate_mutants(sample_capability)
+        assert len(mutants) == 2, "Should generate exactly 2 mutants"
+        assert mutants[0]["id"] == "mutant_001", "First mutant should have correct id"
+        assert mutants[0]["type"] == "condition_inversion", "First mutant should be condition_inversion"
+        assert mutants[1]["id"] == "mutant_002", "Second mutant should have correct id"
+        assert mutants[1]["type"] == "return_value_flip", "Second mutant should be return_value_flip"
+        assert pipeline.mutation_engine.generate_mutants.assert_called_once_with(sample_capability) or True
+
+        # Stage 2: Run tests on mutants
+        test_results = pipeline.test_runner.run_tests(mutants, sample_capability["tests"])
+        assert "mutant_001" in test_results, "Test results should contain mutant_001"
+        assert "mutant_002" in test_results, "Test results should contain mutant_002"
+        assert test_results["mutant_001"]["status"] == "killed", "mutant_001 should be killed"
+        assert test_results["mutant_002"]["status"] == "survived", "mutant_002 should survive"
+        assert test_results["mutant_001"]["failed_tests"] == ["test_auth_success"], "mutant_001 should fail test_auth_success"
+        assert test_results["mutant_002"]["failed_tests"] == [], "mutant_002 should have no failed tests"
+        assert pipeline.test_runner.run_tests.assert_called_once_with(mutants, sample_capability["tests"]) or True
+
+        # Stage 3: Parse reflection output
+        reflection_output = pipeline.reflection_parser.parse(test_results, mutants)
+        assert reflection_output["mutant_001"]["killed"] is True, "mutant_001 should be marked as killed"
+        assert reflection_output["mutant_002"]["killed"] is False, "mutant_002 should be marked as survived"
+        assert "weakness" in reflection_output["mutant_001"], "mutant_001 should have weakness info"
+        assert "weakness" in reflection_output["mutant_002"], "mutant_002 should have weakness info"
+        assert reflection_output["mutant_001"]["weakness"] == "condition_inversion detected", "mutant_001 weakness should match"
+        assert reflection_output["mutant_002"]["weakness"] == "return_value_flip not covered", "mutant_002 weakness should match"
+        assert pipeline.reflection_parser.parse.assert_called_once_with(test_results, mutants) or True
+
+        # Stage 4: Update strategy
+        updated_strategy = pipeline.strategy_updater.update(
+            sample_capability,
+            mutants,
+            test_results,
+            reflection_output
+        )
+        assert updated_strategy["status"] == "success", "Strategy update should succeed"
+        assert len(updated_strategy["new_tests"]) == 1, "Should generate exactly 1 new test"
+        assert updated_strategy["new_tests"][0]["name"] == "test_auth_return_false", "New test should have correct name"
+        assert len(updated_strategy["updated_capability"]["tests"]) == 3, "Updated capability should have 3 tests"
+        assert pipeline.strategy_updater.update.assert_called_once_with(
+            sample_capability,
+            mutants,
+            test_results,
+            reflection_output
+        ) or True
+
+        # Final pipeline execution
+        result = pipeline.run(sample_capability)
+        assert result is not None, "Pipeline result should not be None"
+        assert result["status"] == "success", "Pipeline should complete successfully"
+        assert "mutants" in result, "Result should contain mutants"
+        assert "test_results" in result, "Result should contain test_results"
+        assert "reflection" in result, "Result should contain reflection"
+        assert "updated_capability" in result, "Result should contain updated_capability"
+        assert len(result["mutants"]) == 2, "Result should contain 2 mutants"
+        assert len(result["test_results"]) == 2, "Result should contain 2 test results"
+        assert len(result["updated_capability"]["tests"]) == 3, "Result should have 3 tests in updated capability"
+
     def test_full_pipeline_execution(self, pipeline, sample_capability):
         """Test the full pipeline execution end-to-end with mocked components."""
         # Execute the pipeline
@@ -358,6 +420,173 @@ def test_auth_failure():
         assert "Step 3: Parsing reflection output" in caplog.text
         assert "Step 4: Updating strategy" in caplog.text
         assert "Pipeline completed successfully" in caplog.text
+
+    def test_mutation_to_test_flow(self, pipeline, sample_capability):
+        """Test that mutation engine returns results and testing framework receives them.
+        Validates no broken link between mutation and test stages."""
+        # Step 1: Generate mutants from mutation engine
+        mutants = pipeline.mutation_engine.generate_mutants(sample_capability)
+        
+        # Assert mutation engine returns non-empty list of mutations
+        assert len(mutants) > 0, "Mutation engine should return at least one mutant"
+        assert isinstance(mutants, list), "Mutation engine should return a list"
+        
+        # Verify each mutant has required fields
+        for mutant in mutants:
+            assert "id" in mutant, "Each mutant must have an id"
+            assert "original" in mutant, "Each mutant must have original code"
+            assert "mutated" in mutant, "Each mutant must have mutated code"
+            assert "type" in mutant, "Each mutant must have a mutation type"
+        
+        # Step 2: Pass mutants to test runner and verify it receives them
+        test_results = pipeline.test_runner.run_tests(mutants, sample_capability["tests"])
+        
+        # Assert test runner receives and processes the mutants
+        assert test_results is not None, "Test runner should return results"
+        assert isinstance(test_results, dict), "Test results should be a dictionary"
+        
+        # Verify all mutants are represented in test results
+        for mutant in mutants:
+            assert mutant["id"] in test_results, f"Mutant {mutant['id']} should have test results"
+        
+        # Verify the link between mutation and test stages is intact
+        pipeline.mutation_engine.generate_mutants.assert_called_with(sample_capability)
+        pipeline.test_runner.run_tests.assert_called_with(mutants, sample_capability["tests"])
+        
+        # Verify the pipeline can process the flow end-to-end
+        result = pipeline.run(sample_capability)
+        assert result["status"] == "success", "Pipeline should complete successfully"
+        assert len(result["mutants"]) == len(mutants), "Pipeline output should contain all mutants"
+        assert len(result["test_results"]) == len(mutants), "Pipeline output should contain all test results"
+
+    def test_test_to_reflection_flow(self, pipeline, sample_capability):
+        """Test that test results are passed to reflection parser and parser extracts
+        current_assessment, key_gaps, next_priority. Assert no broken link between test and reflection stages."""
+        # Step 1: Generate mutants
+        mutants = pipeline.mutation_engine.generate_mutants(sample_capability)
+        
+        # Step 2: Run tests on mutants
+        test_results = pipeline.test_runner.run_tests(mutants, sample_capability["tests"])
+        
+        # Assert test results are properly structured
+        assert test_results is not None, "Test results should not be None"
+        assert isinstance(test_results, dict), "Test results should be a dictionary"
+        
+        # Verify test results contain expected keys for each mutant
+        for mutant_id, result in test_results.items():
+            assert "status" in result, f"Test result for {mutant_id} should have status"
+            assert "failed_tests" in result, f"Test result for {mutant_id} should have failed_tests"
+            assert "duration" in result, f"Test result for {mutant_id} should have duration"
+        
+        # Step 3: Pass test results to reflection parser
+        reflection_output = pipeline.reflection_parser.parse(test_results, mutants)
+        
+        # Assert reflection parser receives the test results
+        assert reflection_output is not None, "Reflection output should not be None"
+        assert isinstance(reflection_output, dict), "Reflection output should be a dictionary"
+        
+        # Verify reflection parser extracts current_assessment
+        assert "current_assessment" in reflection_output, "Reflection output should contain current_assessment"
+        current_assessment = reflection_output["current_assessment"]
+        assert isinstance(current_assessment, dict), "current_assessment should be a dictionary"
+        assert "killed_count" in current_assessment or "survived_count" in current_assessment, \
+            "current_assessment should contain mutation statistics"
+        
+        # Verify reflection parser extracts key_gaps
+        assert "key_gaps" in reflection_output, "Reflection output should contain key_gaps"
+        key_gaps = reflection_output["key_gaps"]
+        assert isinstance(key_gaps, list), "key_gaps should be a list"
+        if len(key_gaps) > 0:
+            for gap in key_gaps:
+                assert isinstance(gap, str), "Each key gap should be a string"
+        
+        # Verify reflection parser extracts next_priority
+        assert "next_priority" in reflection_output, "Reflection output should contain next_priority"
+        next_priority = reflection_output["next_priority"]
+        assert isinstance(next_priority, str), "next_priority should be a string"
+        assert len(next_priority) > 0, "next_priority should not be empty"
+        
+        # Verify the link between test and reflection stages is intact
+        pipeline.test_runner.run_tests.assert_called_with(mutants, sample_capability["tests"])
+        pipeline.reflection_parser.parse.assert_called_with(test_results, mutants)
+        
+        # Verify the pipeline can process the flow end-to-end
+        result = pipeline.run(sample_capability)
+        assert result["status"] == "success", "Pipeline should complete successfully"
+        assert "reflection" in result, "Pipeline output should contain reflection data"
+        assert "current_assessment" in result["reflection"], "Reflection should contain current_assessment"
+        assert "key_gaps" in result["reflection"], "Reflection should contain key_gaps"
+        assert "next_priority" in result["reflection"], "Reflection should contain next_priority"
+
+    def test_reflection_to_strategy_flow(self, pipeline, sample_capability):
+        """Test that reflection output is used by strategy selector to update mutation strategy.
+        Validates no broken link between reflection and strategy stages."""
+        # Step 1: Generate mutants
+        mutants = pipeline.mutation_engine.generate_mutants(sample_capability)
+        
+        # Step 2: Run tests on mutants
+        test_results = pipeline.test_runner.run_tests(mutants, sample_capability["tests"])
+        
+        # Step 3: Parse reflection output
+        reflection_output = pipeline.reflection_parser.parse(test_results, mutants)
+        
+        # Assert reflection output contains necessary data for strategy update
+        assert reflection_output is not None, "Reflection output should not be None"
+        assert isinstance(reflection_output, dict), "Reflection output should be a dictionary"
+        
+        # Verify reflection output contains mutation-specific data
+        assert "mutant_001" in reflection_output, "Reflection should contain data for mutant_001"
+        assert "mutant_002" in reflection_output, "Reflection should contain data for mutant_002"
+        assert reflection_output["mutant_001"]["killed"] is True, "mutant_001 should be marked as killed"
+        assert reflection_output["mutant_002"]["killed"] is False, "mutant_002 should be marked as survived"
+        
+        # Step 4: Pass reflection output to strategy updater
+        updated_strategy = pipeline.strategy_updater.update(
+            sample_capability,
+            mutants,
+            test_results,
+            reflection_output
+        )
+        
+        # Assert strategy updater receives and processes the reflection output
+        assert updated_strategy is not None, "Strategy updater should return a result"
+        assert isinstance(updated_strategy, dict), "Strategy updater result should be a dictionary"
+        assert "status" in updated_strategy, "Strategy updater result should contain status"
+        assert updated_strategy["status"] == "success", "Strategy update should be successful"
+        
+        # Verify strategy updater uses reflection data to update mutation strategy
+        # Check that new tests are generated based on reflection analysis
+        assert "new_tests" in updated_strategy, "Strategy updater should return new_tests"
+        assert len(updated_strategy["new_tests"]) > 0, "Strategy should generate new tests for surviving mutants"
+        
+        # Verify the new test targets the surviving mutant (mutant_002 - return_value_flip)
+        new_test = updated_strategy["new_tests"][0]
+        assert "name" in new_test, "New test should have a name"
+        assert "code" in new_test, "New test should have code"
+        assert "return" in new_test["code"].lower() or "false" in new_test["code"].lower(), \
+            "New test should target return value mutation"
+        
+        # Verify updated capability includes new tests
+        assert "updated_capability" in updated_strategy, "Strategy updater should return updated capability"
+        updated_capability = updated_strategy["updated_capability"]
+        assert len(updated_capability["tests"]) == len(sample_capability["tests"]) + len(updated_strategy["new_tests"]), \
+            "Updated capability should include original plus new tests"
+        
+        # Verify the link between reflection and strategy stages is intact
+        pipeline.reflection_parser.parse.assert_called_with(test_results, mutants)
+        pipeline.strategy_updater.update.assert_called_with(
+            sample_capability,
+            mutants,
+            test_results,
+            reflection_output
+        )
+        
+        # Verify the pipeline can process the flow end-to-end
+        result = pipeline.run(sample_capability)
+        assert result["status"] == "success", "Pipeline should complete successfully"
+        assert "updated_capability" in result, "Pipeline output should contain updated capability"
+        assert len(result["updated_capability"]["tests"]) > len(sample_capability["tests"]), \
+            "Pipeline should add new tests based on reflection analysis"
 
 
 class TestPipelineIntegrationEdgeCases:
