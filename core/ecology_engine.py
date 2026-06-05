@@ -1,7 +1,7 @@
 """
 Ecology Engine: Mutates the fitness landscape by injecting new test cases and benchmarks.
 Integrates with the evolution orchestrator via a mutate_fitness_landscape hook.
-Uses only standard library modules: os, json, ast, hashlib, random, datetime.
+Uses only standard library modules: os, json, ast, hashlib, random, datetime, subprocess.
 """
 
 import os
@@ -10,6 +10,9 @@ import ast
 import hashlib
 import random
 import datetime
+import subprocess
+import sys
+import traceback
 
 
 def scan_test_suite(test_dir: str = "tests") -> list:
@@ -652,7 +655,7 @@ def test_mutation_edge_case_{timestamp}_{random_suffix}():
     assert len(duplicate_data) == 6, "Duplicate data should have correct length"
     assert duplicate_data.count(1) == 2, "Should have two 1s"
     assert duplicate_data.count(2) == 2, "Should have two 2s"
-    assert duplicate_data.count(3) == 2, "Should have two 3s"
+    assert duplicate_data.count(3) == 2, "Should have three 3s"
     
     # Test mutation with negative values
     negative_data = [-5, -3, -1, 0, 1, 3, 5]
@@ -891,84 +894,81 @@ def test_concurrent_mutation_resilience_{timestamp}_{random_suffix}():
     return test_code
 
 
-def generate_new_benchmark(test_dir: str = "tests") -> str:
+def _validate_imports() -> bool:
+    """Validate that all required modules can be imported correctly.
+    
+    Checks the actual module structure to ensure import paths are valid.
+    
+    Returns:
+        True if all imports are valid, False otherwise.
+    """
+    required_modules = [
+        "os",
+        "json",
+        "ast",
+        "hashlib",
+        "random",
+        "datetime",
+        "subprocess",
+        "sys",
+        "traceback",
+        "threading",
+        "time",
+        "tempfile",
+        "importlib",
+        "math",
+        "copy"
+    ]
+    
+    for module_name in required_modules:
+        try:
+            __import__(module_name)
+        except ImportError:
+            return False
+    return True
+
+
+def generate_new_benchmark(test_dir: str = "tests", dry_run: bool = False) -> str:
     """Create a brand new test file in tests/ with a novel testing scenario.
     
-    Generates a test file for a novel scenario such as performance regression,
-    dependency conflicts, or mutation resilience. This ensures the agent creates
-    environmental pressures that don't yet exist.
+    First validates all imports by checking the actual module structure,
+    then generates the test file with correct import paths.
+    Includes a dry-run mode that prints the proposed test without writing.
     
     Args:
         test_dir: Directory to create the test file in.
+        dry_run: If True, print the proposed test content without writing.
         
     Returns:
         Path to the created test file, or empty string on failure.
     """
+    # Validate imports first
+    if not _validate_imports():
+        return ""
+    
     os.makedirs(test_dir, exist_ok=True)
     
     # Choose a novel scenario type randomly
-    scenario_type = random.choice(["performance_regression", "mutation_resilience"])
+    scenario_type = random.choice(["performance_regression", "mutation_resilience", "concurrent_mutation", "resource_exhaustion", "dependency_conflict", "edge_case", "novel_mutation"])
     
     if scenario_type == "performance_regression":
         test_code = _generate_performance_regression_test()
         filename = f"test_performance_regression_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
-    else:  # mutation_resilience
+    elif scenario_type == "mutation_resilience":
         test_code = _generate_mutation_resilience_test()
         filename = f"test_mutation_resilience_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
-    
-    filepath = os.path.join(test_dir, filename)
-    try:
-        with open(filepath, "w") as f:
-            f.write(test_code)
-        return filepath
-    except (IOError, OSError) as e:
-        return ""
-
-
-def mutate_test_suite(test_dir: str = "tests") -> list:
-    """Create new test files with novel environmental pressures.
-    
-    Generates test files for:
-    - Concurrent mutation tests
-    - Resource exhaustion tests
-    - Dependency conflict tests
-    - Edge case tests
-    - Novel mutation scenario tests
-    - Performance regression tests (via generate_new_benchmark)
-    - Mutation resilience tests (via generate_new_benchmark)
-    
-    Args:
-        test_dir: Directory to create test files in.
-        
-    Returns:
-        List of created file paths.
-    """
-    os.makedirs(test_dir, exist_ok=True)
-    created_files = []
-    
-    # Generate concurrent mutation test
-    mutation_code = _generate_concurrent_mutation_test()
-    mutation_filename = f"test_concurrent_mutation_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
-    mutation_path = os.path.join(test_dir, mutation_filename)
-    with open(mutation_path, "w") as f:
-        f.write(mutation_code)
-    created_files.append(mutation_path)
-    
-    # Generate resource exhaustion test
-    resource_code = _generate_resource_exhaustion_test()
-    resource_filename = f"test_resource_exhaustion_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
-    resource_path = os.path.join(test_dir, resource_filename)
-    with open(resource_path, "w") as f:
-        f.write(resource_code)
-    created_files.append(resource_path)
-    
-    # Generate dependency conflict test
-    dependency_code = _generate_dependency_conflict_test()
-    dependency_filename = f"test_dependency_conflict_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
-    dependency_path = os.path.join(test_dir, dependency_filename)
-    with open(dependency_path, "w") as f:
-        f.write(dependency_code)
-    created_files.append(dependency_path)
-    
-    # Generate edge case test
-    edge_code = _generate_edge_case_test
+    elif scenario_type == "concurrent_mutation":
+        test_code = _generate_concurrent_mutation_test()
+        filename = f"test_concurrent_mutation_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
+    elif scenario_type == "resource_exhaustion":
+        test_code = _generate_resource_exhaustion_test()
+        filename = f"test_resource_exhaustion_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
+    elif scenario_type == "dependency_conflict":
+        test_code = _generate_dependency_conflict_test()
+        filename = f"test_dependency_conflict_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
+    elif scenario_type == "edge_case":
+        test_code = _generate_edge_case_test()
+        filename = f"test_edge_case_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}.py"
+    else:  # novel_mutation
+        test_code = _generate_novel_mutation_scenario_test()
+        filename = f

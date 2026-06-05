@@ -1,312 +1,376 @@
 import unittest
-import unittest.mock
-from core.ecology_engine import EcologyEngine, Test, DifficultyLevel, OverfittingDetector
+from unittest.mock import patch, mock_open
+from core.ecology_engine import generate_new_benchmark, evolve_test_suite, BenchmarkRegistry
+import ast
+import os
+import json
+import sys
+import tempfile
+import importlib.util
 
 class TestEcologyEngineMinimal(unittest.TestCase):
-    def setUp(self):
-        self.engine = EcologyEngine(seed=42)
-
-    def test_engine_initializes_with_empty_suite(self):
-        """Verify the engine can initialize with an empty test suite."""
-        self.assertIsNotNone(self.engine)
-        self.assertEqual(len(self.engine.tests), 0)
-        self.assertEqual(self.engine.seed, 42)
-
-    def test_engine_can_generate_new_test(self):
-        """Verify it can generate a new test."""
-        test = self.engine.generate_new_test(DifficultyLevel.EASY)
-        self.assertIsNotNone(test)
-        self.assertEqual(test.difficulty, DifficultyLevel.EASY)
-        self.assertGreaterEqual(len(test.test_cases), 1)
-        self.assertIsNotNone(test.code)
-        self.assertGreater(len(test.code), 0)
-
-    def test_engine_can_mutate_test(self):
-        """Verify it can mutate a test to a harder difficulty."""
-        test = Test(
-            code="def add(a, b): return a + b",
-            difficulty=DifficultyLevel.EASY,
-            test_cases=[((1, 2), 3), ((0, 0), 0)]
+    def test_evolve_test_suite_with_mock_generator(self):
+        """Test evolve_test_suite with a mock test generator."""
+        mock_generator_calls = []
+        
+        def mock_generator(difficulty):
+            mock_generator_calls.append(difficulty)
+            return {
+                "code": "def test_add(): assert 1 + 1 == 2",
+                "difficulty": difficulty,
+                "test_cases": [((1, 2), 3)]
+            }
+        
+        result = evolve_test_suite(
+            test_generator=mock_generator,
+            num_tests=3,
+            difficulty="EASY"
         )
-        mutated = self.engine.mutate_test(test, target_difficulty=DifficultyLevel.MEDIUM)
-        self.assertEqual(mutated.difficulty, DifficultyLevel.MEDIUM)
-        self.assertGreaterEqual(len(mutated.test_cases), len(test.test_cases))
-
-    def test_engine_detects_overfitting(self):
-        """Verify overfitting detection works."""
-        overfit_scores = [0.95, 0.95, 0.95, 0.95, 0.95]
-        self.assertTrue(self.engine.detect_overfitting(overfit_scores))
         
-        improving_scores = [0.5, 0.6, 0.7, 0.8, 0.9]
-        self.assertFalse(self.engine.detect_overfitting(improving_scores))
-
-    def test_engine_can_score_diversity(self):
-        """Verify it can score diversity."""
-        test1 = Test(code="def add(a, b): return a + b", difficulty=DifficultyLevel.EASY, test_cases=[((1, 2), 3)])
-        test2 = Test(code="def sub(a, b): return a - b", difficulty=DifficultyLevel.EASY, test_cases=[((5, 3), 2)])
-        test3 = Test(code="def mul(a, b): return a * b", difficulty=DifficultyLevel.EASY, test_cases=[((2, 3), 6)])
+        self.assertEqual(len(mock_generator_calls), 3)
+        for call in mock_generator_calls:
+            self.assertEqual(call, "EASY")
         
-        self.engine.add_test(test1)
-        self.engine.add_test(test2)
-        self.engine.add_test(test3)
+        self.assertEqual(len(result), 3)
+        for test in result:
+            self.assertIn("code", test)
+            self.assertIn("difficulty", test)
+            self.assertIn("test_cases", test)
+
+    def test_evolve_test_suite_rejects_invalid_tests(self):
+        """Verify that invalid tests are rejected."""
+        invalid_tests_generated = []
         
-        diversity_score = self.engine.score_diversity()
-        self.assertIsInstance(diversity_score, float)
-        self.assertGreaterEqual(diversity_score, 0.0)
-        self.assertLessEqual(diversity_score, 1.0)
-
-    @unittest.mock.patch('builtins.open', new_callable=unittest.mock.mock_open)
-    @unittest.mock.patch('os.path.exists', return_value=True)
-    @unittest.mock.patch('os.listdir', return_value=['test_example1.py', 'test_example2.py'])
-    def test_engine_can_scan_test_suite(self, mock_listdir, mock_exists, mock_open):
-        """Verify it can scan a test suite with mocked filesystem."""
-        mock_file = unittest.mock.mock_open(read_data="def test_add(): assert 1 + 1 == 2\n")
-        mock_open.side_effect = [mock_file.return_value, mock_file.return_value]
+        def mock_generator_with_invalid(difficulty):
+            invalid_tests_generated.append(difficulty)
+            if len(invalid_tests_generated) == 1:
+                return None  # Invalid test
+            elif len(invalid_tests_generated) == 2:
+                return {"code": "", "difficulty": difficulty, "test_cases": []}  # Invalid test
+            else:
+                return {
+                    "code": "def test_valid(): assert 1 + 1 == 2",
+                    "difficulty": difficulty,
+                    "test_cases": [((1, 2), 3)]
+                }
         
-        self.engine.scan_test_suite('/fake/dir')
-        self.assertGreater(len(self.engine.tests), 0)
-
-    @unittest.mock.patch('builtins.open', new_callable=unittest.mock.mock_open)
-    @unittest.mock.patch('os.path.exists', return_value=True)
-    @unittest.mock.patch('os.listdir', return_value=['test_example1.py'])
-    def test_engine_can_analyze_test_diversity(self, mock_listdir, mock_exists, mock_open):
-        """Verify it can analyze test diversity with mocked filesystem."""
-        mock_file = unittest.mock.mock_open(read_data="def test_add(): assert 1 + 1 == 2\n")
-        mock_open.return_value = mock_file.return_value
+        result = evolve_test_suite(
+            test_generator=mock_generator_with_invalid,
+            num_tests=5,
+            difficulty="MEDIUM"
+        )
         
-        self.engine.scan_test_suite('/fake/dir')
-        diversity = self.engine.analyze_test_diversity()
+        # Should only contain valid tests
+        for test in result:
+            self.assertIsNotNone(test)
+            self.assertIn("code", test)
+            self.assertGreater(len(test["code"]), 0)
+            self.assertIn("difficulty", test)
+            self.assertIn("test_cases", test)
+
+    def test_evolve_test_suite_with_json_output(self):
+        """Test that evolve_test_suite can produce JSON output."""
+        def mock_generator(difficulty):
+            return {
+                "code": "def test_mul(): assert 2 * 3 == 6",
+                "difficulty": difficulty,
+                "test_cases": [((2, 3), 6)]
+            }
         
-        self.assertIsInstance(diversity, dict)
-        self.assertIn('unit', diversity)
-        self.assertIn('integration', diversity)
-        self.assertIn('stress', diversity)
-        self.assertIn('edge_case', diversity)
-
-    @unittest.mock.patch('builtins.open', new_callable=unittest.mock.mock_open)
-    @unittest.mock.patch('os.path.exists', return_value=True)
-    @unittest.mock.patch('os.listdir', return_value=['test_example1.py'])
-    def test_engine_can_mutate_test_suite(self, mock_listdir, mock_exists, mock_open):
-        """Verify it can mutate a test suite with mocked filesystem."""
-        mock_file = unittest.mock.mock_open(read_data="def test_add(): assert 1 + 1 == 2\n")
-        mock_open.return_value = mock_file.return_value
+        result = evolve_test_suite(
+            test_generator=mock_generator,
+            num_tests=2,
+            difficulty="HARD",
+            output_format="json"
+        )
         
-        self.engine.scan_test_suite('/fake/dir')
-        self.engine.mutate_test_suite('/fake/dir')
+        # Verify result is valid JSON
+        parsed = json.loads(result)
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(len(parsed), 2)
+        for test in parsed:
+            self.assertIn("code", test)
+            self.assertIn("difficulty", test)
+            self.assertIn("test_cases", test)
+
+    def test_evolve_test_suite_handles_empty_generator(self):
+        """Test that evolve_test_suite handles a generator that returns no valid tests."""
+        def empty_generator(difficulty):
+            return None
         
-        # Verify that at least one file was written to
-        self.assertTrue(mock_open.called)
-
-    def test_engine_can_generate_stress_test(self):
-        """Verify it can generate a stress test."""
-        stress_test = self.engine.generate_stress_test(memory_limit_mb=100, timeout_seconds=5)
-        self.assertIsNotNone(stress_test)
-        self.assertEqual(stress_test.memory_limit_mb, 100)
-        self.assertEqual(stress_test.timeout_seconds, 5)
-
-    def test_engine_can_generate_cross_module_test(self):
-        """Verify it can generate a cross-module test."""
-        cross_test = self.engine.generate_cross_module_test(['os', 'sys'])
-        self.assertIsNotNone(cross_test)
-        self.assertIn('os', cross_test.code)
-        self.assertIn('sys', cross_test.code)
-
-    def test_engine_can_generate_novel_domain_test(self):
-        """Verify it can generate a novel domain test."""
-        existing_tests = [
-            Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[]),
-            Test(code="def test_sub(): assert 2-1==1", difficulty=DifficultyLevel.EASY, test_cases=[])
-        ]
-        novel_test = self.engine.generate_novel_domain_test(existing_tests)
-        self.assertIsNotNone(novel_test)
-        self.assertNotEqual(novel_test.code, existing_tests[0].code)
-        self.assertNotEqual(novel_test.code, existing_tests[1].code)
-
-    def test_engine_can_check_novelty(self):
-        """Verify novelty checking works."""
-        existing_tests = [
-            Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
-        ]
-        similar_test = Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
-        novel_test = Test(code="def test_multiply(): assert 2*3==6", difficulty=DifficultyLevel.EASY, test_cases=[])
+        result = evolve_test_suite(
+            test_generator=empty_generator,
+            num_tests=3,
+            difficulty="EASY"
+        )
         
-        self.assertFalse(self.engine.is_novel(similar_test, existing_tests, threshold=0.7))
-        self.assertTrue(self.engine.is_novel(novel_test, existing_tests, threshold=0.7))
+        self.assertEqual(len(result), 0)
 
-    def test_engine_tracks_fitness(self):
-        """Verify fitness tracking works."""
-        test = Test(code="def test_improve(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
-        self.engine.add_test(test)
-        self.engine.update_fitness_tracking(test, 0.5, 0.8)
-        self.assertIn(test, self.engine.improving_tests)
+    def test_evolve_test_suite_with_different_difficulties(self):
+        """Test evolve_test_suite with various difficulty levels."""
+        difficulties = ["EASY", "MEDIUM", "HARD"]
         
-        test2 = Test(code="def test_no_improve(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
-        self.engine.add_test(test2)
-        self.engine.update_fitness_tracking(test2, 0.5, 0.5)
-        self.assertIn(test2, self.engine.non_improving_tests)
-
-    def test_engine_respects_max_tests_per_cycle(self):
-        """Verify the max tests per cycle limit is respected."""
-        self.engine.max_new_tests_per_cycle = 2
-        test1 = Test(code="def test1(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
-        test2 = Test(code="def test2(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
-        test3 = Test(code="def test3(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        def mock_generator(difficulty):
+            return {
+                "code": f"def test_{difficulty.lower()}(): pass",
+                "difficulty": difficulty,
+                "test_cases": [((), None)]
+            }
         
-        self.assertTrue(self.engine.can_add_test(test1))
-        self.engine.add_test(test1)
-        self.assertTrue(self.engine.can_add_test(test2))
-        self.engine.add_test(test2)
-        self.assertFalse(self.engine.can_add_test(test3))
+        for diff in difficulties:
+            result = evolve_test_suite(
+                test_generator=mock_generator,
+                num_tests=1,
+                difficulty=diff
+            )
+            
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["difficulty"], diff)
+
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('os.makedirs')
+    def test_generate_new_benchmark_creates_valid_test_file(self, mock_makedirs, mock_file):
+        """Test that generate_new_benchmark creates a valid Python test file with test_ prefix."""
+        # Call the function
+        result = generate_new_benchmark()
         
-        self.engine.reset_cycle()
-        self.assertTrue(self.engine.can_add_test(test3))
-
-    def test_engine_generate_new_test_with_mocked_dependencies(self):
-        """Test generate_new_test with mocked internal dependencies."""
-        with unittest.mock.patch.object(self.engine, '_generate_test_code', return_value="def test_mocked(): pass") as mock_gen:
-            with unittest.mock.patch.object(self.engine, '_generate_test_cases', return_value=[((1,), 1)]) as mock_cases:
-                test = self.engine.generate_new_test(DifficultyLevel.EASY)
-                mock_gen.assert_called_once_with(DifficultyLevel.EASY)
-                mock_cases.assert_called_once()
-                self.assertEqual(test.code, "def test_mocked(): pass")
-                self.assertEqual(test.test_cases, [((1,), 1)])
-
-    def test_engine_mutate_test_with_mocked_dependencies(self):
-        """Test mutate_test with mocked internal mutation logic."""
-        test = Test(code="def add(a, b): return a + b", difficulty=DifficultyLevel.EASY, test_cases=[((1, 2), 3)])
-        with unittest.mock.patch.object(self.engine, '_mutate_code', return_value="def add(a, b): return a + b + 0") as mock_mutate:
-            with unittest.mock.patch.object(self.engine, '_mutate_test_cases', return_value=[((1, 2), 3), ((0, 0), 0)]) as mock_cases:
-                mutated = self.engine.mutate_test(test, target_difficulty=DifficultyLevel.MEDIUM)
-                mock_mutate.assert_called_once_with(test.code, DifficultyLevel.MEDIUM)
-                mock_cases.assert_called_once_with(test.test_cases, DifficultyLevel.MEDIUM)
-                self.assertEqual(mutated.code, "def add(a, b): return a + b + 0")
-                self.assertEqual(mutated.test_cases, [((1, 2), 3), ((0, 0), 0)])
-
-    def test_engine_detect_overfitting_with_mocked_detector(self):
-        """Test detect_overfitting with mocked OverfittingDetector."""
-        scores = [0.9, 0.91, 0.92, 0.93, 0.94]
-        with unittest.mock.patch.object(OverfittingDetector, 'detect', return_value=True) as mock_detect:
-            result = self.engine.detect_overfitting(scores)
-            mock_detect.assert_called_once_with(scores)
-            self.assertTrue(result)
-
-    def test_engine_score_diversity_with_mocked_tests(self):
-        """Test score_diversity with mocked test suite."""
-        test1 = Test(code="def add(a, b): return a + b", difficulty=DifficultyLevel.EASY, test_cases=[((1, 2), 3)])
-        test2 = Test(code="def sub(a, b): return a - b", difficulty=DifficultyLevel.EASY, test_cases=[((5, 3), 2)])
-        self.engine.add_test(test1)
-        self.engine.add_test(test2)
+        # Verify os.makedirs was called to create tests directory
+        mock_makedirs.assert_called_once_with('tests', exist_ok=True)
         
-        with unittest.mock.patch.object(self.engine, '_calculate_diversity', return_value=0.75) as mock_div:
-            diversity_score = self.engine.score_diversity()
-            mock_div.assert_called_once_with(self.engine.tests)
-            self.assertEqual(diversity_score, 0.75)
-
-    def test_engine_scan_test_suite_with_mocked_filesystem(self):
-        """Test scan_test_suite with fully mocked filesystem."""
-        with unittest.mock.patch('os.path.exists', return_value=True):
-            with unittest.mock.patch('os.listdir', return_value=['test_example1.py']):
-                with unittest.mock.patch('builtins.open', unittest.mock.mock_open(read_data="def test_add(): assert 1 + 1 == 2\n")):
-                    self.engine.scan_test_suite('/fake/dir')
-                    self.assertEqual(len(self.engine.tests), 1)
-
-    def test_engine_analyze_test_diversity_with_mocked_analysis(self):
-        """Test analyze_test_diversity with mocked analysis method."""
-        test = Test(code="def test_add(): assert 1 + 1 == 2", difficulty=DifficultyLevel.EASY, test_cases=[((1, 2), 3)])
-        self.engine.add_test(test)
+        # Verify open was called to write a file
+        mock_file.assert_called_once()
+        call_args = mock_file.call_args
+        self.assertTrue(call_args[0][0].startswith('tests/'))
+        self.assertTrue(call_args[0][0].endswith('.py'))
         
-        expected_diversity = {'unit': 0.8, 'integration': 0.1, 'stress': 0.05, 'edge_case': 0.05}
-        with unittest.mock.patch.object(self.engine, '_analyze_diversity', return_value=expected_diversity) as mock_analyze:
-            diversity = self.engine.analyze_test_diversity()
-            mock_analyze.assert_called_once_with(self.engine.tests)
-            self.assertEqual(diversity, expected_diversity)
-
-    def test_engine_mutate_test_suite_with_mocked_mutation(self):
-        """Test mutate_test_suite with mocked mutation and file operations."""
-        test = Test(code="def test_add(): assert 1 + 1 == 2", difficulty=DifficultyLevel.EASY, test_cases=[((1, 2), 3)])
-        self.engine.add_test(test)
+        # Get the written content
+        written_content = ''.join(call[0] for call in mock_file.write.call_args_list)
         
-        mutated_test = Test(code="def test_add_mutated(): assert 1 + 1 == 3", difficulty=DifficultyLevel.MEDIUM, test_cases=[((1, 2), 3), ((2, 3), 5)])
+        # Verify the content is valid Python syntax
+        try:
+            ast.parse(written_content)
+        except SyntaxError as e:
+            self.fail(f"Generated test file contains invalid Python syntax: {e}")
         
-        with unittest.mock.patch.object(self.engine, 'mutate_test', return_value=mutated_test) as mock_mutate:
-            with unittest.mock.patch('builtins.open', unittest.mock.mock_open()) as mock_file:
-                with unittest.mock.patch('os.path.exists', return_value=True):
-                    with unittest.mock.patch('os.listdir', return_value=['test_example1.py']):
-                        self.engine.mutate_test_suite('/fake/dir')
-                        mock_mutate.assert_called_once_with(test, target_difficulty=unittest.mock.ANY)
-                        mock_file.assert_called()
-
-    def test_engine_generate_stress_test_with_mocked_generator(self):
-        """Test generate_stress_test with mocked internal generator."""
-        expected_test = Test(code="stress test", difficulty=DifficultyLevel.HARD, test_cases=[((100,), 100)])
-        with unittest.mock.patch.object(self.engine, '_create_stress_test', return_value=expected_test) as mock_stress:
-            stress_test = self.engine.generate_stress_test(memory_limit_mb=200, timeout_seconds=10)
-            mock_stress.assert_called_once_with(memory_limit_mb=200, timeout_seconds=10)
-            self.assertEqual(stress_test, expected_test)
-
-    def test_engine_generate_cross_module_test_with_mocked_generator(self):
-        """Test generate_cross_module_test with mocked internal generator."""
-        modules = ['os', 'sys', 'json']
-        expected_test = Test(code="cross module test", difficulty=DifficultyLevel.HARD, test_cases=[((), None)])
-        with unittest.mock.patch.object(self.engine, '_create_cross_module_test', return_value=expected_test) as mock_cross:
-            cross_test = self.engine.generate_cross_module_test(modules)
-            mock_cross.assert_called_once_with(modules)
-            self.assertEqual(cross_test, expected_test)
-
-    def test_engine_generate_novel_domain_test_with_mocked_generator(self):
-        """Test generate_novel_domain_test with mocked internal generator."""
-        existing_tests = [Test(code="test1", difficulty=DifficultyLevel.EASY, test_cases=[])]
-        expected_test = Test(code="novel test", difficulty=DifficultyLevel.HARD, test_cases=[((), None)])
-        with unittest.mock.patch.object(self.engine, '_create_novel_test', return_value=expected_test) as mock_novel:
-            novel_test = self.engine.generate_novel_domain_test(existing_tests)
-            mock_novel.assert_called_once_with(existing_tests)
-            self.assertEqual(novel_test, expected_test)
-
-    def test_engine_is_novel_with_mocked_similarity(self):
-        """Test is_novel with mocked similarity calculation."""
-        existing_tests = [Test(code="test1", difficulty=DifficultyLevel.EASY, test_cases=[])]
-        new_test = Test(code="test2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        # Verify the content contains a function with 'test_' prefix
+        tree = ast.parse(written_content)
+        has_test_function = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name.startswith('test_'):
+                has_test_function = True
+                break
+        self.assertTrue(has_test_function, "Generated test file does not contain a function with 'test_' prefix")
         
-        with unittest.mock.patch.object(self.engine, '_calculate_similarity', return_value=0.5) as mock_sim:
-            result = self.engine.is_novel(new_test, existing_tests, threshold=0.7)
-            mock_sim.assert_called_once_with(new_test, existing_tests[0])
-            self.assertTrue(result)
+        # Verify the function is a valid test function (takes no arguments)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name.startswith('test_'):
+                self.assertEqual(len(node.args.args), 0, f"Test function {node.name} should take no arguments")
         
-        with unittest.mock.patch.object(self.engine, '_calculate_similarity', return_value=0.8) as mock_sim:
-            result = self.engine.is_novel(new_test, existing_tests, threshold=0.7)
-            self.assertFalse(result)
+        # Verify the result is the file path
+        self.assertTrue(isinstance(result, str))
+        self.assertTrue(result.startswith('tests/'))
+        self.assertTrue(result.endswith('.py'))
 
-    def test_engine_update_fitness_tracking_with_mocked_logic(self):
-        """Test update_fitness_tracking with mocked tracking logic."""
-        test = Test(code="def test(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
-        self.engine.add_test(test)
-        
-        with unittest.mock.patch.object(self.engine, '_update_fitness', return_value=True) as mock_update:
-            self.engine.update_fitness_tracking(test, 0.5, 0.8)
-            mock_update.assert_called_once_with(test, 0.5, 0.8)
-            self.assertIn(test, self.engine.improving_tests)
+    def test_generate_new_benchmark_creates_valid_python(self):
+        """Test that generated benchmark is valid Python code."""
+        # Create a temporary directory to avoid polluting the real tests directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                os.makedirs('tests', exist_ok=True)
+                
+                # Generate a benchmark
+                result = generate_new_benchmark()
+                
+                # Read the generated file
+                with open(result, 'r') as f:
+                    content = f.read()
+                
+                # Verify it's valid Python
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    self.fail(f"Generated benchmark has invalid Python syntax: {e}")
+                
+                # Verify it has a test function
+                tree = ast.parse(content)
+                has_test = any(
+                    isinstance(node, ast.FunctionDef) and node.name.startswith('test_')
+                    for node in ast.walk(tree)
+                )
+                self.assertTrue(has_test, "Generated benchmark must contain a test function")
+                
+            finally:
+                os.chdir(original_cwd)
 
-    def test_engine_can_add_test_with_mocked_limit(self):
-        """Test can_add_test with mocked max tests per cycle."""
-        self.engine.max_new_tests_per_cycle = 1
-        test1 = Test(code="def test1(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
-        test2 = Test(code="def test2(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
-        
-        self.assertTrue(self.engine.can_add_test(test1))
-        self.engine.add_test(test1)
-        self.assertFalse(self.engine.can_add_test(test2))
+    def test_generate_new_benchmark_no_import_errors(self):
+        """Test that generated benchmark has no import errors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            original_sys_path = sys.path.copy()
+            try:
+                os.chdir(tmpdir)
+                os.makedirs('tests', exist_ok=True)
+                sys.path.insert(0, tmpdir)
+                
+                # Generate a benchmark
+                result = generate_new_benchmark()
+                
+                # Try to import the generated module
+                module_name = os.path.splitext(os.path.basename(result))[0]
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, result)
+                    if spec is None:
+                        self.fail(f"Could not create spec for {result}")
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                except ImportError as e:
+                    self.fail(f"Generated benchmark has import error: {e}")
+                except Exception as e:
+                    self.fail(f"Generated benchmark raised unexpected error: {e}")
+                
+            finally:
+                sys.path = original_sys_path
+                os.chdir(original_cwd)
 
-    def test_engine_reset_cycle_with_mocked_cleanup(self):
-        """Test reset_cycle with mocked cleanup logic."""
-        test = Test(code="def test(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
-        self.engine.add_test(test)
-        self.engine.max_new_tests_per_cycle = 1
-        self.engine.new_tests_this_cycle = 1
-        
-        with unittest.mock.patch.object(self.engine, '_cleanup_cycle') as mock_cleanup:
-            self.engine.reset_cycle()
-            mock_cleanup.assert_called_once()
-            self.assertEqual(self.engine.new_tests_this_cycle, 0)
+    def test_benchmark_registry_updated(self):
+        """Test that the benchmark registry is properly updated after generation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                os.makedirs('tests', exist_ok=True)
+                
+                # Get initial registry state
+                initial_registry = BenchmarkRegistry.list_benchmarks()
+                initial_count = len(initial_registry)
+                
+                # Generate a new benchmark
+                result = generate_new_benchmark()
+                
+                # Get updated registry state
+                updated_registry = BenchmarkRegistry.list_benchmarks()
+                
+                # Verify registry has been updated
+                self.assertEqual(len(updated_registry), initial_count + 1,
+                                 "Benchmark registry should have one more entry after generation")
+                
+                # Verify the new benchmark is in the registry
+                benchmark_names = [b['name'] for b in updated_registry]
+                generated_name = os.path.splitext(os.path.basename(result))[0]
+                self.assertIn(generated_name, benchmark_names,
+                              f"Generated benchmark '{generated_name}' should be in registry")
+                
+                # Verify the registry entry has required fields
+                for benchmark in updated_registry:
+                    self.assertIn('name', benchmark)
+                    self.assertIn('path', benchmark)
+                    self.assertIn('timestamp', benchmark)
+                    self.assertIn('difficulty', benchmark)
+                    
+            finally:
+                os.chdir(original_cwd)
+
+    def test_benchmark_registry_persists_across_calls(self):
+        """Test that the benchmark registry persists across multiple generate calls."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                os.makedirs('tests', exist_ok=True)
+                
+                # Generate multiple benchmarks
+                num_benchmarks = 3
+                generated_files = []
+                for _ in range(num_benchmarks):
+                    result = generate_new_benchmark()
+                    generated_files.append(result)
+                
+                # Verify registry has all benchmarks
+                registry = BenchmarkRegistry.list_benchmarks()
+                self.assertEqual(len(registry), num_benchmarks,
+                                 f"Registry should contain {num_benchmarks} benchmarks")
+                
+                # Verify each generated file is in the registry
+                for filepath in generated_files:
+                    basename = os.path.splitext(os.path.basename(filepath))[0]
+                    self.assertIn(basename, [b['name'] for b in registry],
+                                  f"Benchmark '{basename}' should be in registry")
+                
+            finally:
+                os.chdir(original_cwd)
+
+    def test_benchmark_registry_metadata(self):
+        """Test that benchmark registry entries contain correct metadata."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                os.makedirs('tests', exist_ok=True)
+                
+                # Generate a benchmark
+                result = generate_new_benchmark()
+                
+                # Get registry entry for the generated benchmark
+                registry = BenchmarkRegistry.list_benchmarks()
+                generated_name = os.path.splitext(os.path.basename(result))[0]
+                
+                # Find the entry
+                entry = None
+                for b in registry:
+                    if b['name'] == generated_name:
+                        entry = b
+                        break
+                
+                self.assertIsNotNone(entry, f"Registry entry for '{generated_name}' not found")
+                
+                # Verify metadata fields
+                self.assertIn('name', entry)
+                self.assertIn('path', entry)
+                self.assertIn('timestamp', entry)
+                self.assertIn('difficulty', entry)
+                self.assertIn('test_count', entry)
+                
+                # Verify types
+                self.assertIsInstance(entry['name'], str)
+                self.assertIsInstance(entry['path'], str)
+                self.assertIsInstance(entry['timestamp'], (int, float))
+                self.assertIsInstance(entry['difficulty'], str)
+                self.assertIsInstance(entry['test_count'], int)
+                
+                # Verify path points to existing file
+                self.assertTrue(os.path.exists(entry['path']),
+                                f"Registry path '{entry['path']}' should exist")
+                
+            finally:
+                os.chdir(original_cwd)
+
+    def test_benchmark_registry_clear(self):
+        """Test that the benchmark registry can be cleared."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                os.makedirs('tests', exist_ok=True)
+                
+                # Generate a benchmark
+                generate_new_benchmark()
+                
+                # Verify registry is not empty
+                registry = BenchmarkRegistry.list_benchmarks()
+                self.assertGreater(len(registry), 0)
+                
+                # Clear the registry
+                BenchmarkRegistry.clear_registry()
+                
+                # Verify registry is empty
+                registry = BenchmarkRegistry.list_benchmarks()
+                self.assertEqual(len(registry), 0,
+                                 "Registry should be empty after clear")
+                
+            finally:
+                os.chdir(original_cwd)
 
 if __name__ == '__main__':
     unittest.main()

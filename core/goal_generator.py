@@ -77,6 +77,58 @@ nash_equilibrium_detected: bool = False  # Whether Nash equilibrium has been det
 nash_equilibrium_modules: List[str] = []  # Modules stuck in Nash equilibrium
 nash_equilibrium_analysis: Dict = {}  # Analysis details of the detected Nash equilibrium
 
+# External goal queue for environmental pressure module
+external_goal_queue: List[Goal] = []  # Queue for goals injected by external modules
+
+
+def add_external_goal(goal: Goal) -> bool:
+    """Add an external goal to the goal queue after validation.
+
+    This method allows the environmental pressure module to inject new goals
+    into the system. It validates the goal format and adds it to the external
+    goal queue, enabling the ecology engine to modify the fitness landscape.
+
+    Args:
+        goal: The Goal object to add. Must have a non-empty description,
+              a valid GoalPriority, a non-empty module, and a valid goal_type.
+
+    Returns:
+        True if the goal was successfully added, False if validation failed.
+    """
+    # Validate goal format
+    if not isinstance(goal, Goal):
+        logger.error("add_external_goal: goal must be a Goal instance, got %s", type(goal).__name__)
+        return False
+
+    if not goal.description or not goal.description.strip():
+        logger.error("add_external_goal: goal description cannot be empty")
+        return False
+
+    if not isinstance(goal.priority, GoalPriority):
+        logger.error("add_external_goal: goal priority must be a GoalPriority enum value")
+        return False
+
+    if not goal.module or not goal.module.strip():
+        logger.error("add_external_goal: goal module cannot be empty")
+        return False
+
+    valid_goal_types = [
+        'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge',
+        'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
+        'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
+        'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure'
+    ]
+    if goal.goal_type not in valid_goal_types:
+        logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
+                     goal.goal_type, valid_goal_types)
+        return False
+
+    # Add the goal to the external queue
+    external_goal_queue.append(goal)
+    logger.info("External goal added to queue: %s (type: %s, priority: %s)",
+                goal.description, goal.goal_type, goal.priority.name)
+    return True
+
 
 def prioritize_pending_goals() -> List[Goal]:
     """Load all pending goals from memory, score them, and return only high-impact ones.
@@ -389,6 +441,7 @@ def generate_goals(
     global consecutive_successes, current_accuracy_threshold, previous_diversity, capability_coverage
     global environmental_pressure_active, environmental_pressure_description
     global nash_equilibrium_detected, nash_equilibrium_modules, nash_equilibrium_analysis
+    global external_goal_queue
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
@@ -711,6 +764,12 @@ def generate_goals(
                 metrics.module, root_cause
             )
 
+    # Add external goals from the queue to the generated goals
+    if external_goal_queue:
+        logger.info("Adding %d external goals from queue to generated goals", len(external_goal_queue))
+        goals.extend(external_goal_queue)
+        external_goal_queue.clear()  # Clear the queue after processing
+
     # Sort goals by priority (CRITICAL first, then HIGH, MEDIUM, LOW)
     # Within same priority, curiosity goals come before routine goals
     goals.sort(key=lambda g: (
@@ -859,73 +918,4 @@ def generate_goals_from_report(
         )
         metrics_list.append(metrics)
 
-    return generate_goals(metrics_list, accuracy_threshold, coverage_weight, curiosity_goals, retry_rate_threshold, permission_failure_threshold, health_dashboard)
-
-
-def prioritize_goals(goals: List[Goal]) -> List[Goal]:
-    """Re-prioritize goals to expand simulation coverage.
-
-    This function sorts goals so that those related to modules with
-    lower coverage come first, within the same priority level.
-    Curiosity-sourced goals are prioritized above routine goals but below critical failures.
-
-    Args:
-        goals: List of goals to prioritize.
-
-    Returns:
-        Re-prioritized list of goals.
-    """
-    # Sort by priority first, then by source (curiosity before routine), then by coverage
-    return sorted(goals, key=lambda g: (
-        g.priority.value,
-        0 if g.source == "curiosity" else 1,
-        g.description
-    ))
-
-
-def generate_sub_goals(
-    parent_goal: Goal,
-    decomposition_strategy: str = "sequential"
-) -> List[Goal]:
-    """Break a complex goal into 2-3 smaller, more achievable sub-goals with explicit dependencies.
-
-    Args:
-        parent_goal: The complex goal to break down.
-        decomposition_strategy: Strategy for generating sub-goals and dependencies.
-            Supported strategies:
-            - 'sequential': Sub-goals are generated in a linear chain where each depends on the previous.
-            - 'parallel': Sub-goals are generated with no dependencies between them.
-            - 'dependency-based': Sub-goals are generated with explicit dependencies based on goal type.
-
-    Returns:
-        List of 2-3 sub-goals derived from the parent goal, with dependency edges set.
-    """
-    sub_goals: List[Goal] = []
-    
-    if parent_goal.goal_type == "accuracy":
-        # Break accuracy improvement into smaller steps
-        analyze_goal = Goal(
-            description=f"Analyze accuracy gaps in {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="accuracy",
-            source=parent_goal.source
-        )
-        implement_goal = Goal(
-            description=f"Implement targeted fixes for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="accuracy",
-            source=parent_goal.source
-        )
-        validate_goal = Goal(
-            description=f"Validate accuracy improvements for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="accuracy",
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: analyze -> implement -> validate
-            implement_
+    return generate_goals
