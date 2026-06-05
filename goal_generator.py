@@ -10,6 +10,7 @@ After each reflection cycle, this module:
 6. Tracks feedback on how parsed reflections influence goal selection success.
 7. Supports retry_generation mode for self-healing loops with focused sub-goals.
 8. Generates alternative strategies using different approaches than original failed goals.
+9. Integrates feasibility estimator to check goal viability before generation.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -40,6 +41,12 @@ class FailureType(Enum):
     DESIGN_LIMITATION = "design_limitation"
     UNKNOWN = "unknown"
 
+class FeasibilityResult(Enum):
+    """Enumeration of feasibility check results."""
+    ALLOW = "allow"
+    BLOCK = "block"
+    ADJUST_COMPLEXITY = "adjust_complexity"
+
 @dataclass
 class Goal:
     """Represents a single goal with metadata."""
@@ -56,6 +63,74 @@ class Goal:
         total = self.success_count + self.failure_count
         return self.success_count / total if total > 0 else 0.0
 
+class FeasibilityEstimator:
+    """
+    Estimates the feasibility of a goal before generation.
+    Returns a FeasibilityResult indicating whether to allow, block, or adjust complexity.
+    """
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    def estimate(self, goal_description: str, context: Dict[str, Any]) -> FeasibilityResult:
+        """
+        Estimate the feasibility of a goal.
+        
+        Args:
+            goal_description: The goal to evaluate
+            context: Current assessment context
+            
+        Returns:
+            FeasibilityResult: ALLOW, BLOCK, or ADJUST_COMPLEXITY
+        """
+        # Simple heuristic-based feasibility estimation
+        # In a real implementation, this would use more sophisticated analysis
+        
+        # Check for overly complex goals (many sub-steps or broad scope)
+        complexity_indicators = [
+            "all", "everything", "complete", "full", "entire",
+            "multiple", "several", "many", "various", "numerous"
+        ]
+        
+        # Check for resource-intensive goals
+        resource_indicators = [
+            "large", "massive", "extensive", "comprehensive",
+            "complex", "difficult", "challenging", "ambitious"
+        ]
+        
+        # Check for vague or poorly defined goals
+        vague_indicators = [
+            "improve", "enhance", "optimize", "streamline",
+            "better", "more", "less", "some", "something"
+        ]
+        
+        goal_lower = goal_description.lower()
+        
+        # Count indicators
+        complexity_count = sum(1 for indicator in complexity_indicators if indicator in goal_lower)
+        resource_count = sum(1 for indicator in resource_indicators if indicator in goal_lower)
+        vague_count = sum(1 for indicator in vague_indicators if indicator in goal_lower)
+        
+        # Check context for feasibility signals
+        mood = context.get("mood", "neutral")
+        progress = context.get("progress", "moderate")
+        
+        # Decision logic
+        if complexity_count >= 3 or resource_count >= 3:
+            self.logger.info(f"Feasibility check BLOCK for '{goal_description}': too complex/resource-intensive")
+            return FeasibilityResult.BLOCK
+        elif complexity_count >= 2 or resource_count >= 2:
+            self.logger.info(f"Feasibility check ADJUST_COMPLEXITY for '{goal_description}': moderately complex")
+            return FeasibilityResult.ADJUST_COMPLEXITY
+        elif vague_count >= 3 and mood in ["negative", "frustrated"]:
+            self.logger.info(f"Feasibility check BLOCK for '{goal_description}': vague goal in negative mood")
+            return FeasibilityResult.BLOCK
+        elif vague_count >= 2 and progress == "low":
+            self.logger.info(f"Feasibility check ADJUST_COMPLEXITY for '{goal_description}': vague goal with low progress")
+            return FeasibilityResult.ADJUST_COMPLEXITY
+        else:
+            return FeasibilityResult.ALLOW
+
 class GoalGenerator:
     """
     Integrates ReflectionParser into goal generation.
@@ -63,8 +138,10 @@ class GoalGenerator:
     Supports retry_generation mode for self-healing loops.
     """
 
-    def __init__(self, parser: Optional[ReflectionParser] = None):
+    def __init__(self, parser: Optional[ReflectionParser] = None, feasibility_check: bool = True):
         self.parser = parser or ReflectionParser()
+        self.feasibility_estimator = FeasibilityEstimator()
+        self.feasibility_check = feasibility_check
         self.current_assessment: Dict[str, Any] = {}
         self.goals: List[Goal] = []
         self.experimental_goals: List[Goal] = []
@@ -72,6 +149,7 @@ class GoalGenerator:
         self.retry_mode: bool = False
         self.failed_goals: List[Goal] = []  # Track failed goals for retry
         self.alternative_strategies: List[Goal] = []  # Track alternative strategies
+        self.blocked_goals: List[Dict[str, Any]] = []  # Track blocked goals with reasons
         self.logger = logging.getLogger(__name__)
 
     def process_reflection(self, reflection_text: str) -> Dict[str, Any]:
@@ -127,6 +205,24 @@ class GoalGenerator:
             self.goals.sort(key=lambda g: g.priority)
             self.logger.debug(f"Set existing goal as primary: {next_priority}")
         else:
+            # Perform feasibility check before creating new goal
+            if self.feasibility_check:
+                feasibility_result = self.feasibility_estimator.estimate(next_priority, self.current_assessment)
+                
+                if feasibility_result == FeasibilityResult.BLOCK:
+                    self.logger.info(f"Feasibility check blocked goal: '{next_priority}'")
+                    self.blocked_goals.append({
+                        "description": next_priority,
+                        "reason": "Feasibility check blocked due to complexity or resource constraints",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    return
+                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                    # Reduce goal scope by simplifying the description
+                    simplified_goal = self._simplify_goal(next_priority)
+                    self.logger.info(f"Feasibility check adjusted complexity: '{next_priority}' -> '{simplified_goal}'")
+                    next_priority = simplified_goal
+            
             new_goal = Goal(
                 description=next_priority,
                 priority=1,
@@ -136,6 +232,33 @@ class GoalGenerator:
             self.goals.insert(0, new_goal)
             self.logger.debug(f"Created new primary goal: {next_priority}")
 
+    def _simplify_goal(self, goal_description: str) -> str:
+        """
+        Simplify a goal description by reducing scope.
+        Removes complexity indicators and vague terms.
+        """
+        # Remove complexity indicators
+        complexity_indicators = [
+            "all ", "everything ", "complete ", "full ", "entire ",
+            "multiple ", "several ", "many ", "various ", "numerous ",
+            "large ", "massive ", "extensive ", "comprehensive ",
+            "complex ", "difficult ", "challenging ", "ambitious "
+        ]
+        
+        simplified = goal_description
+        for indicator in complexity_indicators:
+            simplified = simplified.replace(indicator, "")
+        
+        # Add scope reduction prefix if not already present
+        if not any(prefix in simplified.lower() for prefix in ["simple ", "basic ", "initial ", "first step "]):
+            simplified = f"Simple {simplified}"
+        
+        # Limit to first 50 characters to ensure focus
+        if len(simplified) > 50:
+            simplified = simplified[:50].rsplit(" ", 1)[0]
+        
+        return simplified.strip()
+
     def _inject_experimental_goals(self, novel_ideas: List[str]) -> None:
         """
         Inject novel_ideas as experimental goal variants.
@@ -143,6 +266,22 @@ class GoalGenerator:
         """
         for idea in novel_ideas:
             if not any(g.description.lower() == idea.lower() for g in self.experimental_goals):
+                # Perform feasibility check for experimental goals
+                if self.feasibility_check:
+                    feasibility_result = self.feasibility_estimator.estimate(idea, self.current_assessment)
+                    
+                    if feasibility_result == FeasibilityResult.BLOCK:
+                        self.logger.info(f"Feasibility check blocked experimental goal: '{idea}'")
+                        self.blocked_goals.append({
+                            "description": idea,
+                            "reason": "Feasibility check blocked experimental goal",
+                            "timestamp": datetime.now().isoformat()
+                        })
+                        continue
+                    elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                        idea = self._simplify_goal(idea)
+                        self.logger.info(f"Feasibility check adjusted experimental goal complexity: '{idea}'")
+                
                 exp_goal = Goal(
                     description=idea,
                     priority=999,  # Low priority initially
@@ -159,8 +298,24 @@ class GoalGenerator:
         """
         for exp_goal in self.experimental_goals:
             if exp_goal.description.lower() == description.lower():
+                # Perform feasibility check before promoting
+                if self.feasibility_check:
+                    feasibility_result = self.feasibility_estimator.estimate(description, self.current_assessment)
+                    
+                    if feasibility_result == FeasibilityResult.BLOCK:
+                        self.logger.info(f"Feasibility check blocked promotion of experimental goal: '{description}'")
+                        self.blocked_goals.append({
+                            "description": description,
+                            "reason": "Feasibility check blocked promotion",
+                            "timestamp": datetime.now().isoformat()
+                        })
+                        return False
+                    elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                        description = self._simplify_goal(description)
+                        self.logger.info(f"Feasibility check adjusted promoted goal complexity: '{description}'")
+                
                 new_goal = Goal(
-                    description=exp_goal.description,
+                    description=description,
                     priority=5,  # Moderate priority
                     source="promoted_experimental",
                     success_count=exp_goal.success_count,
@@ -266,6 +421,22 @@ class GoalGenerator:
             ]
 
         for i, sub_goal_desc in enumerate(sub_goals):
+            # Perform feasibility check for each retry sub-goal
+            if self.feasibility_check:
+                feasibility_result = self.feasibility_estimator.estimate(sub_goal_desc, self.current_assessment)
+                
+                if feasibility_result == FeasibilityResult.BLOCK:
+                    self.logger.info(f"Feasibility check blocked retry goal: '{sub_goal_desc}'")
+                    self.blocked_goals.append({
+                        "description": sub_goal_desc,
+                        "reason": "Feasibility check blocked retry sub-goal",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    continue
+                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                    sub_goal_desc = self._simplify_goal(sub_goal_desc)
+                    self.logger.info(f"Feasibility check adjusted retry goal complexity: '{sub_goal_desc}'")
+            
             retry_goal = Goal(
                 description=sub_goal_desc,
                 priority=i + 1,  # Sequential priority
@@ -322,6 +493,22 @@ class GoalGenerator:
         selected_alternatives = alternatives[:min(num_alternatives, len(alternatives))]
 
         for i, alt_desc in enumerate(selected_alternatives):
+            # Perform feasibility check for each alternative strategy
+            if self.feasibility_check:
+                feasibility_result = self.feasibility_estimator.estimate(alt_desc, self.current_assessment)
+                
+                if feasibility_result == FeasibilityResult.BLOCK:
+                    self.logger.info(f"Feasibility check blocked alternative strategy: '{alt_desc}'")
+                    self.blocked_goals.append({
+                        "description": alt_desc,
+                        "reason": "Feasibility check blocked alternative strategy",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    continue
+                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                    alt_desc = self._simplify_goal(alt_desc)
+                    self.logger.info(f"Feasibility check adjusted alternative strategy complexity: '{alt_desc}'")
+            
             alt_goal = Goal(
                 description=alt_desc,
                 priority=10 + i,  # Lower priority than retry goals
@@ -378,7 +565,9 @@ class GoalGenerator:
             "total_experimental": len(self.experimental_goals),
             "retry_mode": self.retry_mode,
             "failed_goals_count": len(self.failed_goals),
-            "alternative_strategies_count": len(self.alternative_strategies)
+            "alternative_strategies_count": len(self.alternative_strategies),
+            "blocked_goals_count": len(self.blocked_goals),
+            "feasibility_check_enabled": self.feasibility_check
         }
 
     def _record_feedback(self, parsed: Dict[str, Any], summary: Dict[str, Any]) -> None:
@@ -415,6 +604,12 @@ class GoalGenerator:
         retry_success_rate = sum(g.success_rate() for g in retry_goals) / len(retry_goals) if retry_goals else 0
         alternative_success_rate = sum(g.success_rate() for g in alternative_goals) / len(alternative_goals) if alternative_goals else 0
 
+        # Analyze blocked goals
+        blocked_by_reason = {}
+        for blocked in self.blocked_goals:
+            reason = blocked.get("reason", "unknown")
+            blocked_by_reason[reason] = blocked_by_reason.get(reason, 0) + 1
+
         return {
             "total_goals": total_goals,
             "successful_goals": successful_goals + successful_exp,
@@ -427,7 +622,10 @@ class GoalGenerator:
             "top_priority_goal": self.goals[0].description if self.goals else None,
             "retry_mode": self.retry_mode,
             "failed_goals_count": len(self.failed_goals),
-            "alternative_strategies_count": len(self.alternative_strategies)
+            "alternative_strategies_count": len(self.alternative_strategies),
+            "blocked_goals_count": len(self.blocked_goals),
+            "blocked_goals_by_reason": blocked_by_reason,
+            "feasibility_check_enabled": self.feasibility_check
         }
 
     def get_goals(self) -> List[Goal]:
@@ -450,10 +648,19 @@ class GoalGenerator:
         """Return list of generated alternative strategies."""
         return self.alternative_strategies
 
+    def get_blocked_goals(self) -> List[Dict[str, Any]]:
+        """Return list of blocked goals with reasons."""
+        return self.blocked_goals
+
+    def set_feasibility_check(self, enabled: bool) -> None:
+        """Enable or disable feasibility checking."""
+        self.feasibility_check = enabled
+        self.logger.info(f"Feasibility check {'enabled' if enabled else 'disabled'}")
+
 # Example usage (commented out):
 # if __name__ == "__main__":
 #     logging.basicConfig(level=logging.INFO)
-#     generator = GoalGenerator()
+#     generator = GoalGenerator(feasibility_check=True)
 #     
 #     # Enable retry mode
 #     generator.enable_retry_mode(True)
@@ -474,3 +681,9 @@ class GoalGenerator:
 #     # Get analysis
 #     analysis = generator.get_feedback_analysis()
 #     print(json.dumps(analysis, indent=2))
+#     
+#     # Check blocked goals
+#     blocked = generator.get_blocked_goals()
+#     print(f"Blocked goals: {len(blocked)}")
+#     for b in blocked:
+#         print(f"  - {b['description']}: {b['reason']}")

@@ -52,6 +52,12 @@ DEFAULT_PATTERNS = {
         r"(?:add|include|integrate|incorporate)\s+(?:check|validation|handling|fallback)",
         r"(?:optimize|improve|enhance|upgrade|migrate)",
     ],
+    "goal_type": [
+        r"(?:goal|objective|target|aim)\s+(?:is|to|of|type|category)\s*[:=]?\s*([\w\s]+)",
+        r"(?:type|category|kind)\s+(?:of\s+)?(?:goal|objective|target)\s*[:=]?\s*([\w\s]+)",
+        r"(?:API\s+server|mutation\s+engine|data\s+pipeline|model\s+training|deployment|testing|optimization)",
+        r"(?:build|create|develop|implement|design)\s+(?:an?\s+)?(?:API\s+server|mutation\s+engine|data\s+pipeline|model|system|application)",
+    ],
 }
 
 
@@ -212,6 +218,58 @@ class ReflectionParser:
         
         return results
 
+    def extract_goal_type_from_reflection(self, reflection_text: str) -> Optional[str]:
+        """
+        Parse the reflection output to identify the goal type (e.g., 'API server', 'mutation engine').
+        This helps automatically categorize goals for the feasibility estimator's database.
+
+        Args:
+            reflection_text: Raw reflection text to analyze.
+
+        Returns:
+            The identified goal type as a string, or None if no goal type could be determined.
+        """
+        if not reflection_text or not isinstance(reflection_text, str):
+            return None
+
+        # Extract goal_type field matches
+        goal_matches = self.extract_field(reflection_text, "goal_type")
+        
+        if not goal_matches:
+            return None
+
+        # Process matches to find the most specific goal type
+        goal_types = []
+        for matched_text, confidence in goal_matches:
+            # Try to extract the actual goal type from capture groups
+            for pattern in self._compiled_patterns["goal_type"]:
+                match = pattern.search(reflection_text)
+                if match:
+                    # Check if there's a capture group (group 1)
+                    if match.lastindex and match.lastindex >= 1:
+                        extracted = match.group(1).strip()
+                        if extracted and len(extracted) > 2:
+                            goal_types.append((extracted, confidence))
+                    else:
+                        # Use the full match if no capture group
+                        full_match = match.group(0).strip()
+                        # Extract the actual goal type from common patterns
+                        for prefix in ["build ", "create ", "develop ", "implement ", "design "]:
+                            if full_match.lower().startswith(prefix):
+                                extracted = full_match[len(prefix):].strip()
+                                if extracted:
+                                    goal_types.append((extracted, confidence))
+                                    break
+                        else:
+                            goal_types.append((full_match, confidence))
+
+        if not goal_types:
+            return None
+
+        # Sort by confidence and return the highest confidence match
+        goal_types.sort(key=lambda x: x[1], reverse=True)
+        return goal_types[0][0]
+
 
 # Example usage (if run as script)
 if __name__ == "__main__":
@@ -246,3 +304,17 @@ if __name__ == "__main__":
         print(f"\n{field}:")
         for text, conf in matches:
             print(f"  - '{text}' (confidence: {conf})")
+
+    # Test extract_goal_type_from_reflection
+    print("\n=== Goal Type Extraction ===")
+    goal_texts = [
+        "The goal is to build an API server for user authentication.",
+        "Our objective is to create a mutation engine for genetic algorithms.",
+        "We need to implement a data pipeline for real-time analytics.",
+        "The target is to design a model training system.",
+        "This is just a general reflection without specific goal.",
+    ]
+    for text in goal_texts:
+        goal_type = parser.extract_goal_type_from_reflection(text)
+        print(f"Text: '{text}'")
+        print(f"  -> Goal type: {goal_type}\n")

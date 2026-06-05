@@ -439,6 +439,56 @@
       "content": "Successfully modified reflection_parser.py to: Add a 'parse_failure_context' method that extracts structured insights from failure logs and error messages. This should output: failure_type, root_cause_hint, suggested_approach_change, and confidence_score. This feeds directly into the sub-goal generation process.",
       "timestamp": 1780628006.6789448,
       "cycle": 31
+    },
+    {
+      "content": "Successfully modified goal_feasibility_estimator.py to: Create a new module that: (1) maintains a success rate database per goal type (e.g., 'API server', 'mutation engine'), (2) checks current capabilities against required capabilities for a goal type, (3) estimates success probability based on capability overlap and historical success rates, (4) returns a decision: 'proceed', 'adjust_complexity', or 'block' with explanation.",
+      "timestamp": 1780628069.527191,
+      "cycle": 32
+    },
+    {
+      "content": "Successfully modified orchestrator.py to: Integrate goal_feasibility_estimator into the orchestrator's goal execution flow. Before executing any new goal, call estimator.estimate_success_probability(goal, capabilities, history). If probability < 0.2, block execution and log reason. If between 0.2 and 0.5, adjust goal complexity (e.g., split into sub-goals, reduce scope). Add a new method 'execute_with_feasibility_check(goal)' that wraps the existing execution logic.",
+      "timestamp": 1780628115.12447,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified goal_generator.py to: Integrate the feasibility estimator into the goal generation pipeline. Before generating a new goal, call the estimator. If 'block', log the reason and skip generation. If 'adjust_complexity', reduce the goal scope (e.g., fewer sub-steps, simpler target). Add a 'feasibility_check' parameter to control this behavior.",
+      "timestamp": 1780628115.6259232,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified orchestrator.py to: Modify the unified evolution loop orchestrator to call the feasibility estimator before enqueuing any new goal. If blocked, log the decision and optionally trigger a 'capability acquisition' sub-goal instead. Ensure the estimator's decision is recorded in the task metadata for future analysis.",
+      "timestamp": 1780628131.5895352,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified goal_feasibility_estimator.py to: Enhance the estimator to: (1) parse goal type from goal description using keyword matching (e.g., 'API server', 'mutation engine', 'web scraping'), (2) compute capability overlap score by checking if required capabilities (hardcoded per type) are in current capabilities list, (3) update success rate database after each goal completion/failure, (4) add a method 'adjust_complexity(goal, probability)' that returns a modified goal with reduced scope (e.g., fewer endpoints for API server, simpler mutation operators for engine).",
+      "timestamp": 1780628142.8729746,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified tests/test_goal_feasibility_estimator.py to: Create comprehensive tests: (1) test that estimator correctly identifies missing capabilities, (2) test that low historical success rate (<20%) triggers block, (3) test that partial capability overlap triggers complexity adjustment, (4) test that high success rate with full capabilities allows proceed, (5) test edge cases like empty history or unknown goal types, (6) test integration with goal generator and orchestrator.",
+      "timestamp": 1780628153.6528664,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified failure_analysis_module.py to: Extend the failure analysis module to feed success/failure data back to the feasibility estimator. Add a method 'record_goal_outcome(goal_type, success, capabilities_used)' that updates the success rate database. Ensure this is called after each goal completion or failure.",
+      "timestamp": 1780628192.540167,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified failure_analysis_module.py to: Add a method 'update_goal_success_rate(goal_type, succeeded)' that the orchestrator calls after each goal attempt. This persists the success/failure data to a JSON file (e.g., 'goal_success_rates.json') so it survives restarts. The estimator reads from this file.",
+      "timestamp": 1780628206.083989,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified goal_success_rates.json to: Initialize a JSON file with default success rates for known goal types. Example: {'API server': {'attempts': 0, 'successes': 0}, 'mutation engine': {'attempts': 0, 'successes': 0}, 'web scraping': {'attempts': 0, 'successes': 0}, 'testing framework': {'attempts': 0, 'successes': 0}, 'task scheduler': {'attempts': 0, 'successes': 0}, 'reflection parser': {'attempts': 0, 'successes': 0}, 'failure analysis': {'attempts': 0, 'successes': 0}, 'self-healing': {'attempts': 0, 'successes': 0}}. This provides a starting point for the estimator.",
+      "timestamp": 1780628210.1150007,
+      "cycle": 33
+    },
+    {
+      "content": "Successfully modified reflection_parser.py to: Add a method 'extract_goal_type_from_reflection(reflection_text)' that parses the reflection output to identify the goal type (e.g., 'API server', 'mutation engine'). This helps automatically categorize goals for the feasibility estimator's database.",
+      "timestamp": 1780628217.024652,
+      "cycle": 33
     }
   ],
   "learned_patterns": [],
@@ -502,6 +552,11 @@
       "approach": "modify evolution_orchestrator.py: Integrate the self-healing retry loop into the unified evolution loop. After each goal execution attempt, check if it failed. If so, instead of just logging the failure, pass it to the self_healing_retry_loop module. The orchestrator should then process the generated sub-goals as new tasks with priority, and update the failure pattern log. Add a configuration parameter to enable/disable self-healing behavior.",
       "reason": "Syntax error: expected an indented block after 'else' statement on line 835 (<unknown>, line 835)",
       "timestamp": 1780627862.0780163
+    },
+    {
+      "approach": "modify reflection_parser.py: Add a method 'extract_goal_type(goal_description)' that uses regex or keyword matching to classify goals into predefined types. This feeds into the estimator's type-based success rate tracking. Also add 'extract_required_capabilities(goal_type)' that returns a list of capabilities needed for that goal type.",
+      "reason": "Syntax error: invalid syntax (<unknown>, line 386)",
+      "timestamp": 1780628170.9506505
     }
   ],
   "successful_strategies": [
@@ -879,6 +934,61 @@
       "strategy": "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatically invokes the failure analysis module and reflection parser to generate 2-3 smaller sub-goals or alternative implementation strategies, then enqueues them for retry with a different approach, logging the failure pattern to avoid infinite loops after 3 retries.",
       "outcome": "6/7 steps succeeded",
       "timestamp": 1780628006.6844432
+    },
+    {
+      "strategy": "modify goal_feasibility_estimator.py: Create a new module that: (1) maintains a success rate database per goal type (e.g., 'API server', 'mutation engine'), (2) checks current capabilities against required capabilities for a goal type, (3) estimates success probability based on capability overlap and historical success rates, (4) returns a decision: 'proceed', 'adjust_complexity', or 'block' with explanation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628069.5226634
+    },
+    {
+      "strategy": "modify orchestrator.py: Integrate goal_feasibility_estimator into the orchestrator's goal execution flow. Before executing any new goal, call estimator.estimate_success_probability(goal, capabilities, history). If probability < 0.2, block execution and log reason. If between 0.2 and 0.5, adjust goal complexity (e.g., split into sub-goals, reduce scope). Add a new method 'execute_with_feasibility_check(goal)' that wraps the existing execution logic.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628115.1147072
+    },
+    {
+      "strategy": "modify goal_generator.py: Integrate the feasibility estimator into the goal generation pipeline. Before generating a new goal, call the estimator. If 'block', log the reason and skip generation. If 'adjust_complexity', reduce the goal scope (e.g., fewer sub-steps, simpler target). Add a 'feasibility_check' parameter to control this behavior.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628115.6202276
+    },
+    {
+      "strategy": "modify orchestrator.py: Modify the unified evolution loop orchestrator to call the feasibility estimator before enqueuing any new goal. If blocked, log the decision and optionally trigger a 'capability acquisition' sub-goal instead. Ensure the estimator's decision is recorded in the task metadata for future analysis.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628131.5839398
+    },
+    {
+      "strategy": "modify goal_feasibility_estimator.py: Enhance the estimator to: (1) parse goal type from goal description using keyword matching (e.g., 'API server', 'mutation engine', 'web scraping'), (2) compute capability overlap score by checking if required capabilities (hardcoded per type) are in current capabilities list, (3) update success rate database after each goal completion/failure, (4) add a method 'adjust_complexity(goal, probability)' that returns a modified goal with reduced scope (e.g., fewer endpoints for API server, simpler mutation operators for engine).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628142.868605
+    },
+    {
+      "strategy": "modify tests/test_goal_feasibility_estimator.py: Create comprehensive tests: (1) test that estimator correctly identifies missing capabilities, (2) test that low historical success rate (<20%) triggers block, (3) test that partial capability overlap triggers complexity adjustment, (4) test that high success rate with full capabilities allows proceed, (5) test edge cases like empty history or unknown goal types, (6) test integration with goal generator and orchestrator.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628153.6483688
+    },
+    {
+      "strategy": "modify failure_analysis_module.py: Extend the failure analysis module to feed success/failure data back to the feasibility estimator. Add a method 'record_goal_outcome(goal_type, success, capabilities_used)' that updates the success rate database. Ensure this is called after each goal completion or failure.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628192.5359006
+    },
+    {
+      "strategy": "modify failure_analysis_module.py: Add a method 'update_goal_success_rate(goal_type, succeeded)' that the orchestrator calls after each goal attempt. This persists the success/failure data to a JSON file (e.g., 'goal_success_rates.json') so it survives restarts. The estimator reads from this file.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628206.0756109
+    },
+    {
+      "strategy": "modify goal_success_rates.json: Initialize a JSON file with default success rates for known goal types. Example: {'API server': {'attempts': 0, 'successes': 0}, 'mutation engine': {'attempts': 0, 'successes': 0}, 'web scraping': {'attempts': 0, 'successes': 0}, 'testing framework': {'attempts': 0, 'successes': 0}, 'task scheduler': {'attempts': 0, 'successes': 0}, 'reflection parser': {'attempts': 0, 'successes': 0}, 'failure analysis': {'attempts': 0, 'successes': 0}, 'self-healing': {'attempts': 0, 'successes': 0}}. This provides a starting point for the estimator.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628210.1046753
+    },
+    {
+      "strategy": "modify reflection_parser.py: Add a method 'extract_goal_type_from_reflection(reflection_text)' that parses the reflection output to identify the goal type (e.g., 'API server', 'mutation engine'). This helps automatically categorize goals for the feasibility estimator's database.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628217.0205026
+    },
+    {
+      "strategy": "Build a goal feasibility estimator that, before executing a new goal, checks the agent's current capabilities and past success rates for similar goal types (e.g., API server, mutation engine), and either adjusts the goal's complexity or blocks it if the estimated success probability is below 20%, preventing repeated failures on unachievable tasks.",
+      "outcome": "6/6 steps succeeded",
+      "timestamp": 1780628217.0286396
     }
   ],
   "capabilities_developed": []

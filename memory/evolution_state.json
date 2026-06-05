@@ -1,7 +1,7 @@
 {
-  "cycle_count": 31,
-  "current_generation": 8,
-  "last_evolution_time": 1780627760.509096,
+  "cycle_count": 32,
+  "current_generation": 9,
+  "last_evolution_time": 1780628040.912062,
   "capabilities": [
     "Develop web scraping capability to gather knowledge from the internet",
     "Create a task scheduler for autonomous background processing",
@@ -20,7 +20,8 @@
     "Implement a unified evolution loop orchestrator that integrates the API server, task scheduler, and ",
     "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to ",
     "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', ",
-    "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatica"
+    "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatica",
+    "Build a goal feasibility estimator that, before executing a new goal, checks the agent's current cap"
   ],
   "history": [
     {
@@ -184,6 +185,12 @@
       "goal": "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatically invokes the failure analysis module and reflection parser to generate 2-3 smaller sub-goals or alternative implementation strategies, then enqueues them for retry with a different approach, logging the failure pattern to avoid infinite loops after 3 retries.",
       "success": true,
       "timestamp": 1780628006.6925879
+    },
+    {
+      "cycle": 32,
+      "goal": "Build a goal feasibility estimator that, before executing a new goal, checks the agent's current capabilities and past success rates for similar goal types (e.g., API server, mutation engine), and either adjusts the goal's complexity or blocks it if the estimated success probability is below 20%, preventing repeated failures on unachievable tasks.",
+      "success": true,
+      "timestamp": 1780628217.0363684
     }
   ],
   "status": "evolving"

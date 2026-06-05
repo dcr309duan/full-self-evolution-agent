@@ -6,7 +6,7 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.evolution_orchestrator import EvolutionOrchestrator
+from core.evolution_loop import run_evolution
 
 
 def main():
@@ -14,8 +14,6 @@ def main():
     parser.add_argument("max_cycles", nargs="?", type=int, default=10, help="Maximum number of evolution cycles")
     parser.add_argument("--api", action="store_true", help="Start the API server instead of the evolution loop")
     args = parser.parse_args()
-
-    orchestrator = EvolutionOrchestrator(max_cycles=args.max_cycles)
 
     if args.api:
         print("""
@@ -28,7 +26,9 @@ def main():
 ║  - External triggers and data retrieval supported       ║
 ╚══════════════════════════════════════════════════════════╝
 """)
-        orchestrator.start_api()
+        from api_server import app
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8081)
     else:
         print("""
 ╔══════════════════════════════════════════════════════════╗
@@ -43,7 +43,7 @@ def main():
 ║  - Git-based version control of evolution                ║
 ╚══════════════════════════════════════════════════════════╝
 """)
-        orchestrator.start()
+        run_evolution(args.max_cycles)
 
 
 if __name__ == "__main__":

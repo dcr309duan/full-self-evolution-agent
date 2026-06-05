@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,73 @@ class FailureAnalyzer:
         self.config = config or {}
         self.failure_history = []
         self.failure_pattern_counts = {}
+        self.goal_success_rates = self._load_goal_success_rates()
+
+    def _load_goal_success_rates(self) -> Dict[str, Dict[str, float]]:
+        """
+        Load goal success rates from JSON file.
+        
+        Returns:
+            Dictionary with goal types as keys and their success/failure counts
+        """
+        file_path = self.config.get('goal_success_file', 'goal_success_rates.json')
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load goal success rates from {file_path}: {e}")
+        return {}
+
+    def _save_goal_success_rates(self) -> None:
+        """
+        Save goal success rates to JSON file.
+        """
+        file_path = self.config.get('goal_success_file', 'goal_success_rates.json')
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(self.goal_success_rates, f, indent=2)
+        except IOError as e:
+            logger.error(f"Failed to save goal success rates to {file_path}: {e}")
+
+    def update_goal_success_rate(self, goal_type: str, succeeded: bool) -> None:
+        """
+        Update the success rate for a specific goal type.
+        
+        Args:
+            goal_type: The type of goal that was attempted
+            succeeded: Whether the goal attempt succeeded or failed
+        """
+        if goal_type not in self.goal_success_rates:
+            self.goal_success_rates[goal_type] = {'successes': 0, 'failures': 0}
+        
+        if succeeded:
+            self.goal_success_rates[goal_type]['successes'] += 1
+        else:
+            self.goal_success_rates[goal_type]['failures'] += 1
+        
+        self._save_goal_success_rates()
+        logger.info(f"Updated goal success rate for '{goal_type}': {self.goal_success_rates[goal_type]}")
+
+    def get_goal_success_rate(self, goal_type: str) -> float:
+        """
+        Get the success rate for a specific goal type.
+        
+        Args:
+            goal_type: The type of goal to query
+        
+        Returns:
+            Success rate as a float between 0.0 and 1.0, or 0.0 if no data
+        """
+        if goal_type not in self.goal_success_rates:
+            return 0.0
+        
+        data = self.goal_success_rates[goal_type]
+        total = data['successes'] + data['failures']
+        if total == 0:
+            return 0.0
+        
+        return data['successes'] / total
 
     def get_failure_pattern_key(self, failure_context: Dict[str, Any]) -> str:
         """

@@ -1,0 +1,10 @@
+{
+  "API server": {"attempts": 0, "successes": 0},
+  "mutation engine": {"attempts": 0, "successes": 0},
+  "web scraping": {"attempts": 0, "successes": 0},
+  "testing framework": {"attempts": 0, "successes": 0},
+  "task scheduler": {"attempts": 0, "successes": 0},
+  "reflection parser": {"attempts": 0, "successes": 0},
+  "failure analysis": {"attempts": 0, "successes": 0},
+  "self-healing": {"attempts": 0, "successes": 0}
+}
