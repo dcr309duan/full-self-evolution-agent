@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified modules/mutation_engine.py to: Add methods to: (1) register a failure with error type classification from the failure pattern learner, (2) expose operator weights as a mutable dict that can be updated by external modules, (3) add a method get_adjusted_operator_weights() that returns current operator probabilities after failure-based adjustments, (4) add a method set_operator_weights(weights_dict) to allow the failure pattern learner to update operator probabilities.",
-      "timestamp": 1780647061.944292,
-      "cycle": 122
-    },
-    {
-      "content": "Successfully modified modules/logging_setup.py to: Add a new log handler for failure pattern data that writes structured JSON to logs/failure_patterns.log with fields: timestamp, cycle, error_type, operator_used, module_under_test, failure_count, success_count, adjusted_weight.",
-      "timestamp": 1780647075.1088743,
-      "cycle": 122
-    },
-    {
-      "content": "Successfully modified config/evolution_config.json to: Add a new 'failure_pattern_learner' config section: {'enabled': true, 'window_size': 50, 'error_type_patterns': {'import_error': 'ImportError|ModuleNotFoundError|No module named', 'type_mismatch': 'TypeError|expected.*got|incompatible type', 'infinite_loop': 'Timeout|infinite loop|maximum recursion'}, 'operator_failure_thresholds': {'disable': 0.7, 'reduce_by_half': 0.4}, 'persist_file': 'data/operator_success_rates.json', 'analysis_interval_cycles': 5}",
-      "timestamp": 1780647080.7395756,
-      "cycle": 122
-    },
-    {
-      "content": "Successfully modified modules/orchestrator.py to: Integrate the failure pattern learner into the evolution loop: after each mutation failure, call failure_pattern_learner.record_failure() with the error details; after every 5 cycles, call failure_pattern_learner.analyze_and_adjust() to update operator weights; ensure the adjusted weights are passed back to mutation_engine.set_operator_weights().",
-      "timestamp": 1780647088.4444275,
-      "cycle": 122
-    },
-    {
       "content": "Successfully modified tests/test_failure_pattern_learner.py to: Create comprehensive integration test that: (1) initializes the failure pattern learner with a mock mutation engine, (2) simulates 50 failures with known error types (10 import errors, 15 type mismatches, 5 infinite loops, 20 other), (3) verifies error type classification accuracy, (4) verifies operator weight adjustments (e.g., operators with >70% failure rate are disabled, those with >40% are halved), (5) verifies persistence to JSON file, (6) verifies reloading from persisted state restores correct weights.",
       "timestamp": 1780647110.2904797,
       "cycle": 122
@@ -999,6 +979,26 @@
       "content": "Successfully modified core/coordinated_mutation_executor.py to: Create a new module that: 1) Accepts a coordinated mutation plan (list of {file, changes}); 2) Creates a temporary sandbox copy of all affected files; 3) Applies all changes to sandbox copies; 4) Validates syntax of all modified files using ast.parse(); 5) Runs integration tests on the sandbox; 6) If all validations pass, atomically copies sandbox files to actual locations; 7) If any validation fails, discards sandbox and reports specific failure reasons; 8) Maintains a rollback snapshot of original files.",
       "timestamp": 1780655561.3739681,
       "cycle": 158
+    },
+    {
+      "content": "Successfully modified modules/failure_pattern_learner.py to: Add a 'get_lessons_learned()' method that returns a formatted string of the last 10 mutation failures (syntax errors, integration test failures) with error types and affected files. This creates the short-term memory buffer.",
+      "timestamp": 1780655703.6004987,
+      "cycle": 159
+    },
+    {
+      "content": "Successfully modified mutation_engine.py to: Modify the mutation prompt generation to: (1) import failure_pattern_learner, (2) call get_lessons_learned() before each mutation, (3) append a '# Lessons Learned from Recent Failures:' section to the prompt with the formatted failures. This directly addresses the fixed prior by adapting the prompt dynamically.",
+      "timestamp": 1780655750.6583412,
+      "cycle": 159
+    },
+    {
+      "content": "Successfully modified tests/test_failure_pattern_learner.py to: Add integration test for the new get_lessons_learned() method: (1) simulate 10+ failures with various error types, (2) verify the output contains all error types, (3) verify it's properly formatted for prompt injection.",
+      "timestamp": 1780655770.4315333,
+      "cycle": 159
+    },
+    {
+      "content": "Successfully modified tests/test_mutation_engine.py to: Add test that verifies the mutation prompt includes the 'Lessons Learned' section when failures exist, and that it's omitted when no failures are recorded.",
+      "timestamp": 1780655785.8869388,
+      "cycle": 159
     }
   ],
   "learned_patterns": [],
@@ -1777,34 +1777,14 @@
       "approach": "modify core/mutation_engine.py: Add a method `apply_coordinated_mutation(plan)` that: 1) Validates the plan structure; 2) Calls coordinated_mutation_executor to apply changes; 3) Returns success/failure status with detailed error messages; 4) Integrates with existing mutation logging and rollback systems.",
       "reason": "Safety check failed",
       "timestamp": 1780655646.3228905
+    },
+    {
+      "approach": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
+      "reason": "Code generated but 4 file(s) failed import: mutation_engine.py, failure_pattern_learner.py, test_mutation_engine.py",
+      "timestamp": 1780655787.1224902
     }
   ],
   "successful_strategies": [
-    {
-      "strategy": "Create a 'capability fitness function' that measures the number of downstream tasks each capability enables and automatically deprecates capabilities with fitness below a configurable threshold (e.g., < 2 downstream uses) after a set number of cycles. Implement a dashboard that displays fitness scores per capability.",
-      "outcome": "5/6 steps succeeded",
-      "timestamp": 1780637027.6595888
-    },
-    {
-      "strategy": "modify evolution_engine/self_healing_retry.py: Create a new SelfHealingRetry module that: (1) wraps mutation execution with retry logic, (2) tracks failure count per mutation attempt, (3) implements strategy switching (smaller scope, different module, different mutation type), (4) escalates after 3 failures, (5) integrates with existing rollback mechanism",
-      "outcome": "Applied successfully",
-      "timestamp": 1780637103.6033537
-    },
-    {
-      "strategy": "modify evolution_engine/orchestrator.py: Integrate SelfHealingRetry into the orchestrator: (1) import and instantiate the retry handler, (2) replace direct mutation calls with retry wrapper, (3) add escalation callback for manual intervention, (4) update orchestrator state machine to handle retry states",
-      "outcome": "Applied successfully",
-      "timestamp": 1780637152.756137
-    },
-    {
-      "strategy": "modify tests/test_self_healing_retry.py: Create comprehensive test suite: (1) test successful mutation on first try, (2) test retry with different strategy after failure, (3) test escalation after 3 failures, (4) test rollback on each failure, (5) test failure logging format, (6) test strategy switching logic",
-      "outcome": "Applied successfully",
-      "timestamp": 1780637174.761423
-    },
-    {
-      "strategy": "modify evolution_engine/goal_generator.py: Add retry-awareness to goal generation: (1) when generating new goals, avoid strategies that have failed 3+ times, (2) prefer strategies that have succeeded in retry scenarios, (3) include retry strategy recommendations in goal metadata",
-      "outcome": "Applied successfully",
-      "timestamp": 1780637245.0626895
-    },
     {
       "strategy": "Implement the self-healing retry mechanism for the evolution orchestrator: when a mutation fails validation, automatically rollback the change, log the failure reason, and retry with a different mutation strategy (e.g., smaller scope or different module) up to 3 times before escalating to manual intervention.",
       "outcome": "4/5 steps succeeded",
@@ -4279,6 +4259,31 @@
       "strategy": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "outcome": "2/5 steps succeeded",
       "timestamp": 1780655646.3501182
+    },
+    {
+      "strategy": "modify modules/failure_pattern_learner.py: Add a 'get_lessons_learned()' method that returns a formatted string of the last 10 mutation failures (syntax errors, integration test failures) with error types and affected files. This creates the short-term memory buffer.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780655703.5428698
+    },
+    {
+      "strategy": "modify mutation_engine.py: Modify the mutation prompt generation to: (1) import failure_pattern_learner, (2) call get_lessons_learned() before each mutation, (3) append a '# Lessons Learned from Recent Failures:' section to the prompt with the formatted failures. This directly addresses the fixed prior by adapting the prompt dynamically.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780655750.6399918
+    },
+    {
+      "strategy": "modify tests/test_failure_pattern_learner.py: Add integration test for the new get_lessons_learned() method: (1) simulate 10+ failures with various error types, (2) verify the output contains all error types, (3) verify it's properly formatted for prompt injection.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780655770.4131515
+    },
+    {
+      "strategy": "modify tests/test_mutation_engine.py: Add test that verifies the mutation prompt includes the 'Lessons Learned' section when failures exist, and that it's omitted when no failures are recorded.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780655785.8716226
+    },
+    {
+      "strategy": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
+      "outcome": "4/4 steps succeeded",
+      "timestamp": 1780655785.9029703
     }
   ],
   "capabilities_developed": []

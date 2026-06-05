@@ -109,3 +109,50 @@ def test_failure_penalty_multiple_modules(caplog):
             assert any(module in record.message and "penalty" in record.message.lower()
                        for record in caplog.records), \
                 f"Expected a log message about {module} penalty"
+
+
+def test_mutation_prompt_includes_lessons_learned_when_failures_exist(caplog):
+    """Test that the mutation prompt includes 'Lessons Learned' section when failures exist."""
+    # Arrange: mock failure_pattern_learner to return failures
+    with patch('mutation_engine.FailurePatternLearner') as MockLearner:
+        mock_learner_instance = MockLearner.return_value
+        mock_learner_instance.get_failures.return_value = [
+            {"module": "module_a", "failure_type": "TypeError", "count": 3}
+        ]
+        mock_learner_instance.get_lessons_learned.return_value = [
+            "Avoid using NoneType in arithmetic operations",
+            "Always validate input types before processing"
+        ]
+
+        engine = MutationEngine(failure_learner=mock_learner_instance)
+
+        # Act: generate mutation prompt
+        prompt = engine.generate_mutation_prompt(module_name="module_a")
+
+        # Assert: prompt contains 'Lessons Learned' section
+        assert "Lessons Learned" in prompt, \
+            "Expected 'Lessons Learned' section in mutation prompt when failures exist"
+        assert "Avoid using NoneType in arithmetic operations" in prompt, \
+            "Expected lesson content in mutation prompt"
+        assert "Always validate input types before processing" in prompt, \
+            "Expected all lessons to be included in mutation prompt"
+
+
+def test_mutation_prompt_omits_lessons_learned_when_no_failures(caplog):
+    """Test that the mutation prompt omits 'Lessons Learned' section when no failures are recorded."""
+    # Arrange: mock failure_pattern_learner to return no failures
+    with patch('mutation_engine.FailurePatternLearner') as MockLearner:
+        mock_learner_instance = MockLearner.return_value
+        mock_learner_instance.get_failures.return_value = []
+        mock_learner_instance.get_lessons_learned.return_value = []
+
+        engine = MutationEngine(failure_learner=mock_learner_instance)
+
+        # Act: generate mutation prompt
+        prompt = engine.generate_mutation_prompt(module_name="module_a")
+
+        # Assert: prompt does not contain 'Lessons Learned' section
+        assert "Lessons Learned" not in prompt, \
+            "Expected no 'Lessons Learned' section in mutation prompt when no failures exist"
+        assert "lessons" not in prompt.lower(), \
+            "Expected no lesson-related content in mutation prompt when no failures exist"

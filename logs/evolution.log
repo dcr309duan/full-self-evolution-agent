@@ -2431,3 +2431,18 @@ SyntaxError: invalid syntax
 [2026-06-05 18:34:06] Cycle 158: Goal completed (verified): [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
 [2026-06-05 18:34:06] Cycle 158: === Cycle Complete ===
 
+[2026-06-05 18:34:43] Cycle 159: === Starting Evolution Cycle ===
+[2026-06-05 18:34:43] Cycle 159: Phase 2: Goal selection and execution
+[2026-06-05 18:34:43] Cycle 159: Selected goal: Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.
+[2026-06-05 18:34:43] Cycle 159: Executing goal: Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.
+[2026-06-05 18:34:49] Cycle 159:   Step: modify -> modules/failure_pattern_learner.py: Add a 'get_lessons_learned()' method that returns a formatted string of the last 10 mutation failures (syntax errors, integration test failures) with error types and affected files. This creates the short-term memory buffer.
+[2026-06-05 18:35:03] Cycle 159:   Step: modify -> mutation_engine.py: Modify the mutation prompt generation to: (1) import failure_pattern_learner, (2) call get_lessons_learned() before each mutation, (3) append a '# Lessons Learned from Recent Failures:' section to the prompt with the formatted failures. This directly addresses the fixed prior by adapting the prompt dynamically.
+[2026-06-05 18:35:50] Cycle 159:   Step: modify -> tests/test_failure_pattern_learner.py: Add integration test for the new get_lessons_learned() method: (1) simulate 10+ failures with various error types, (2) verify the output contains all error types, (3) verify it's properly formatted for prompt injection.
+[2026-06-05 18:36:10] Cycle 159:   Step: modify -> tests/test_mutation_engine.py: Add test that verifies the mutation prompt includes the 'Lessons Learned' section when failures exist, and that it's omitted when no failures are recorded.
+[2026-06-05 18:36:26] Cycle 159: IMPORT FAIL: mutation_engine.py -> ImportError: cannot import name 'MutationEngine' from 'mutation_engine' (consider renaming '/root/full-self-evolution-agent/mutation_engine.py' if it 
+[2026-06-05 18:36:26] Cycle 159: IMPORT FAIL: failure_pattern_learner.py -> ModuleNotFoundError: No module named 'failure_pattern_learner'
+[2026-06-05 18:36:26] Cycle 159: IMPORT FAIL: test_mutation_engine.py -> ModuleNotFoundError: No module named 'test_mutation_engine'
+[2026-06-05 18:36:27] Cycle 159: IMPORT FAIL: test_failure_pattern_learner.py -> ModuleNotFoundError: No module named 'test_failure_pattern_learner'
+[2026-06-05 18:36:27] Cycle 159: Goal REVERTED (import verification failed): Code generated but 4 file(s) failed import: mutation_engine.py, failure_pattern_learner.py, test_mutation_engine.py
+[2026-06-05 18:36:27] Cycle 159: === Cycle Complete ===
+

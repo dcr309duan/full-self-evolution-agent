@@ -207,6 +207,24 @@ class FailurePatternLearner:
         sorted_errors = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
         return sorted_errors[:top_n]
 
+    def get_lessons_learned(self) -> str:
+        """Get a formatted string of the last 10 mutation failures with error types and affected files.
+
+        Returns:
+            A formatted string summarizing the last 10 failures for short-term memory.
+        """
+        if not self.failure_window:
+            return "No failures recorded yet."
+
+        # Get the last 10 failures
+        recent_failures = list(self.failure_window)[-10:]
+
+        lines = ["Lessons Learned (Last 10 Failures):"]
+        for i, (operator, error_type) in enumerate(recent_failures, 1):
+            lines.append(f"  {i}. Operator: {operator}, Error Type: {error_type}")
+
+        return "\n".join(lines)
+
     def reset(self) -> None:
         """Reset all learned data."""
         self.failure_window.clear()

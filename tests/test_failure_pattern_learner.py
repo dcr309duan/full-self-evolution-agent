@@ -216,6 +216,62 @@ class TestFailurePatternLearnerIntegration(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.learner.load_from_file('/nonexistent/path.json')
 
+    def test_get_lessons_learned_integration(self):
+        """Integration test for get_lessons_learned() method.
+        
+        (1) Simulate 10+ failures with various error types,
+        (2) Verify the output contains all error types,
+        (3) Verify it's properly formatted for prompt injection.
+        """
+        # Simulate 12 failures with various error types
+        failure_counts = {
+            ErrorType.IMPORT_ERROR: 3,
+            ErrorType.TYPE_MISMATCH: 4,
+            ErrorType.INFINITE_LOOP: 2,
+            ErrorType.OTHER: 3
+        }
+        self._simulate_failures(self.learner, failure_counts)
+
+        # Call get_lessons_learned()
+        lessons = self.learner.get_lessons_learned()
+
+        # (2) Verify the output contains all error types
+        for error_type in ErrorType:
+            self.assertIn(
+                error_type.name,
+                lessons,
+                f"Lessons learned should contain error type: {error_type.name}"
+            )
+
+        # (3) Verify it's properly formatted for prompt injection
+        # Check that it's a non-empty string
+        self.assertIsInstance(lessons, str)
+        self.assertGreater(len(lessons), 0)
+
+        # Check that it contains key structural elements expected for prompt injection
+        # Should have some kind of summary or list format
+        self.assertTrue(
+            any(marker in lessons for marker in ['-', '*', '1.', 'Summary', 'Lessons']),
+            "Lessons learned should have list or summary formatting"
+        )
+
+        # Check that it doesn't contain raw JSON or code blocks that would break prompt injection
+        self.assertNotIn('```', lessons, "Lessons learned should not contain markdown code fences")
+        self.assertNotIn('{', lessons, "Lessons learned should not contain raw JSON objects")
+
+        # Verify the output includes operator-specific information
+        self.assertIn('operator_a', lessons, "Lessons learned should mention affected operators")
+
+        # Verify the output is concise (suitable for prompt injection)
+        self.assertLess(len(lessons), 2000, "Lessons learned should be concise for prompt injection")
+
+        # Verify the output mentions the total number of failures
+        self.assertIn('12', lessons, "Lessons learned should mention total failure count")
+
+        # Verify the output has a clear structure (e.g., sections or bullet points)
+        lines = lessons.strip().split('\n')
+        self.assertGreater(len(lines), 1, "Lessons learned should have multiple lines for structure")
+
 
 if __name__ == '__main__':
     unittest.main()

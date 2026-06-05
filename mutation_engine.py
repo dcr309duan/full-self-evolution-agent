@@ -9,6 +9,7 @@ from self_consistency_test_suite import run_self_consistency_tests
 from failure_analysis import classify_failure
 from schema_alignment_layer import SchemaValidator
 from failure_context_recorder import FailureContextRecorder
+from failure_pattern_learner import get_lessons_learned
 
 class MutationEngine:
     """
@@ -516,6 +517,22 @@ class MutationEngine:
         weights = [self.objective_weights[t] for t in types]
         return random.choices(types, weights=weights, k=1)[0]
 
+    def _generate_mutation_prompt(self, source_code: str) -> str:
+        """
+        Generate a mutation prompt that includes lessons learned from recent failures.
+        
+        Args:
+            source_code: The source code to be mutated
+            
+        Returns:
+            str: The mutation prompt with lessons learned appended
+        """
+        lessons = get_lessons_learned()
+        prompt = f"Apply mutation to the following code:\n\n{source_code}\n\n"
+        if lessons:
+            prompt += f"# Lessons Learned from Recent Failures:\n{lessons}\n"
+        return prompt
+
     def _refactor_architecture(self, tree: ast.AST) -> ast.AST:
         """
         Refactor architecture: identify classes/functions with high coupling and restructure.
@@ -902,22 +919,4 @@ class MutationEngine:
                         return [init_assign, while_node]
                 return node
         
-        tree = ForToWhileReplacer().visit(tree)
-        return ast.unparse(tree)
-
-    def _template_inline_function(self, source_code: str) -> str:
-        """
-        Template 3: Inline a simple function call.
-        Finds a function that is called exactly once and inlines its body.
-        """
-        tree = ast.parse(source_code)
-        
-        # First pass: collect function definitions and call counts
-        class FunctionCollector(ast.NodeVisitor):
-            def __init__(self):
-                self.functions = {}
-                self.call_counts = {}
-            
-            def visit_FunctionDef(self, node):
-                self.functions[node.name] = node
-                self.gener
+        tree = ForTo

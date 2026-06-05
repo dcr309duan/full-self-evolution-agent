@@ -12,7 +12,8 @@
       "description": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
       "priority": 9,
       "status": "pending",
-      "created_at": 1780655268.6303942
+      "created_at": 1780655268.6303942,
+      "consecutive_failures": 1
     },
     {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
