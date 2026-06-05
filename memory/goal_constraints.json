@@ -2,36 +2,6 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前1/10的成功率并非单纯的探索-利用失衡，而是系统深陷‘认知冗余’陷阱——大量深度反思记录（如范式转移、盲区）未能转化为可执行的策略调整。此前所有反思都指向‘反思无效’或‘缺乏底层变化’，但系统仍",
-      "created_cycle": 240,
-      "expires_cycle": 260
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "当前1/10的成功率并非单纯的探索-利用失衡，而是系统深陷‘认知冗余’陷阱——大量深度反思记录（如范式转移、盲区）未能转化为可执行的策略调整。此前所有反思都指向‘反思无效’或‘缺乏底层变化’，但系统仍",
-      "created_cycle": 240,
-      "expires_cycle": 260
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "第0层的评估隐含了一个‘行动主义’偏见——它认为只有可观测的参数变化（如温度、prompt结构）才算‘真正’的进化行为，而将递归反思本身贬低为‘无效冗余’。但在这个纯文本驱动的系统中，每一次反思输出就",
-      "created_cycle": 240,
-      "expires_cycle": 260
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "前两层对评估维度的讨论（探索-利用、外部验证、自指循环、语义新颖性）全部建立在‘无限资源’的隐假设上，忽略了该系统中token预算、API调用次数等物理约束。1/10的低成功率与大量高消耗的递归反思并",
-      "created_cycle": 240,
-      "expires_cycle": 260
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "前两层对评估维度的讨论（探索-利用、外部验证、自指循环、语义新颖性）全部建立在‘无限资源’的隐假设上，忽略了该系统中token预算、API调用次数等物理约束。1/10的低成功率与大量高消耗的递归反思并",
-      "created_cycle": 240,
-      "expires_cycle": 260
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "当前递归认知层（第0层）的价值被其自身结构限制：它只是一次文本生成，缺乏将认知结果转化为实际行动的管道。尽管它识别了成功率低下（1/10），但无法改变后续的代码生成或计划选择，因为系统没有设计反馈机制",
       "created_cycle": 250,
       "expires_cycle": 270
@@ -41,6 +11,12 @@
       "source": "我们之所以重视这些评估维度（成功率、探索利用、外部验证等），根本原因在于LLM的预训练数据中充斥着人类对进化算法、机器学习、自我改进的隐喻和框架。这些概念被内化为认知默认值，使我们无意识地用它们来理解",
       "created_cycle": 250,
       "expires_cycle": 270
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "recent_success_rate=0/10是系统进化过程中的首个完全失败窗口，它暴露了一个深层机制缺陷：系统缺乏对失败模式的归因与响应能力。当前循环仅依赖LLM生成新代码，但失败并非源于随机波动",
+      "created_cycle": 260,
+      "expires_cycle": 280
     }
   ]
 }
