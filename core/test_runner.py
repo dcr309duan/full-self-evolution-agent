@@ -6,6 +6,9 @@ import re
 from typing import List, Dict, Any, Optional
 import glob
 
+# Global list to hold dynamically registered test file paths
+_dynamic_test_files: List[str] = []
+
 def run_tests(test_paths: List[str], timeout: int = 30) -> Dict[str, Any]:
     """
     Run tests specified by test_paths with a given timeout.
@@ -267,6 +270,46 @@ def discover_test_files(root_dir: str = ".") -> List[str]:
     pattern = os.path.join(root_dir, "**", "*test*.py")
     test_files = glob.glob(pattern, recursive=True)
     return test_files
+
+
+def register_dynamic_test(test_file_path: str) -> None:
+    """
+    Register a test file path dynamically for test discovery without import-time loading.
+    
+    This method allows the environmental pressure module to inject new test files
+    into the test discovery process at runtime, after the module has been imported.
+    The registered paths are stored in a global list and can be retrieved later
+    via get_dynamic_test_files().
+    
+    Args:
+        test_file_path: Path to the test file to register. The path can be absolute
+                       or relative to the current working directory.
+    
+    Raises:
+        ValueError: If the provided path does not exist or is not a file.
+    """
+    if not os.path.exists(test_file_path):
+        raise ValueError(f"Test file path '{test_file_path}' does not exist")
+    if not os.path.isfile(test_file_path):
+        raise ValueError(f"Test file path '{test_file_path}' is not a file")
+    
+    # Normalize the path to an absolute path for consistency
+    abs_path = os.path.abspath(test_file_path)
+    
+    # Avoid duplicate registrations
+    if abs_path not in _dynamic_test_files:
+        _dynamic_test_files.append(abs_path)
+        print(f"Registered dynamic test file: {abs_path}", file=sys.stderr)
+
+
+def get_dynamic_test_files() -> List[str]:
+    """
+    Retrieve the list of dynamically registered test file paths.
+    
+    Returns:
+        List of absolute paths to dynamically registered test files.
+    """
+    return _dynamic_test_files.copy()
 
 
 def inject_test_function(file_path: str, test_function_code: str) -> bool:

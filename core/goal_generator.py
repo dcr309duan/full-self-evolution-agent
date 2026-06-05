@@ -28,7 +28,11 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation', 'adapt_to_pressure', 'nash_equilibrium_meta', or 'coordinated_multi_module_change'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge',
+                    # 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
+                    # 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
+                    # 'adapt_to_pressure', 'nash_equilibrium_meta', 'coordinated_multi_module_change',
+                    # or 'ecological_pressure'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -83,6 +87,14 @@ external_goal_queue: List[Goal] = []  # Queue for goals injected by external mod
 # Coordinated multi-module change tracking
 coordinated_change_candidates: Dict[str, List[str]] = {}  # Maps goal descriptions to lists of module names requiring changes
 
+# Test coverage tracking for ecological pressure goals
+test_coverage_map: Dict[str, List[str]] = {}  # Maps module names to lists of tested areas
+
+# Goal prioritization settings for Nash equilibrium coordination
+nash_coordination_bonus: float = 0.2  # Bonus score for coordinated multi-module goals when Nash equilibrium is detected
+single_module_penalty: float = 0.3  # Penalty applied to single-module goals when Nash equilibrium is active
+nash_coordination_min_modules: int = 2  # Minimum number of modules for a goal to be considered coordinated
+
 
 def add_external_goal(goal: Goal) -> bool:
     """Add an external goal to the goal queue after validation.
@@ -120,7 +132,7 @@ def add_external_goal(goal: Goal) -> bool:
         'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
         'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
         'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure',
-        'coordinated_multi_module_change'
+        'coordinated_multi_module_change', 'ecological_pressure'
     ]
     if goal.goal_type not in valid_goal_types:
         logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
@@ -134,14 +146,64 @@ def add_external_goal(goal: Goal) -> bool:
     return True
 
 
+def _is_coordinated_goal(goal: Goal) -> bool:
+    """Check if a goal involves multiple modules (coordinated multi-module change).
+
+    Args:
+        goal: The goal to check.
+
+    Returns:
+        True if the goal involves multiple modules, False otherwise.
+    """
+    # Check if the module field contains multiple modules (comma-separated)
+    if "," in goal.module:
+        modules = [m.strip() for m in goal.module.split(",") if m.strip()]
+        return len(modules) >= nash_coordination_min_modules
+    
+    # Check tags for coordinated change indicators
+    coordinated_tags = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "multi_module"]
+    for tag in goal.tags:
+        if tag in coordinated_tags:
+            return True
+    
+    # Check goal type for coordinated types
+    coordinated_types = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "nash_equilibrium_meta"]
+    if goal.goal_type in coordinated_types:
+        return True
+    
+    return False
+
+
+def _is_single_module_goal(goal: Goal) -> bool:
+    """Check if a goal targets a single module only.
+
+    Args:
+        goal: The goal to check.
+
+    Returns:
+        True if the goal targets a single module, False otherwise.
+    """
+    # Check if the module field contains a single module
+    if "," in goal.module:
+        return False
+    
+    # Check if the goal type is typically single-module
+    single_module_types = ["accuracy", "dependency_tracking", "infrastructure_hardening", "cluster_resolution"]
+    if goal.goal_type in single_module_types:
+        return True
+    
+    return False
+
+
 def prioritize_pending_goals() -> List[Goal]:
     """Load all pending goals from memory, score them, and return only high-impact ones.
 
     This function:
     (1) Loads all pending goals from the goal_registry.
     (2) Calls goal_impact_prioritizer.score_goal() for each.
-    (3) Returns only goals with score > 0.7 for mutation consideration.
-    (4) Archives goals with score < 0.3.
+    (3) Applies Nash equilibrium coordination bonus/penalty if Nash equilibrium is detected.
+    (4) Returns only goals with score > 0.7 for mutation consideration.
+    (5) Archives goals with score < 0.3.
 
     Returns:
         List of goals with impact score > 0.7.
@@ -158,6 +220,24 @@ def prioritize_pending_goals() -> List[Goal]:
             continue
         try:
             score = score_goal(goal)
+            
+            # Apply Nash equilibrium coordination bonus/penalty
+            if nash_equilibrium_detected:
+                if _is_coordinated_goal(goal):
+                    # Boost coordinated multi-module goals when Nash equilibrium is detected
+                    score += nash_coordination_bonus
+                    logger.debug(
+                        "Applied Nash coordination bonus to goal '%s': score increased to %.2f",
+                        goal.description, score
+                    )
+                elif _is_single_module_goal(goal):
+                    # Penalize single-module goals when Nash equilibrium is detected
+                    score -= single_module_penalty
+                    logger.debug(
+                        "Applied single-module penalty to goal '%s': score decreased to %.2f",
+                        goal.description, score
+                    )
+            
             if score > 0.7:
                 high_impact_goals.append(goal)
                 logger.debug("Goal %s has high impact score: %.2f", goal.description, score)
@@ -181,8 +261,9 @@ def prioritize_and_filter_goals(goals: List[Goal]) -> List[Goal]:
 
     This method runs before mutation selection each cycle. It:
     (1) Calls goal_impact_prioritizer.score_goal() for each goal.
-    (2) Archives goals with score < 0.3.
-    (3) Returns only goals with score > 0.7 for mutation consideration.
+    (2) Applies Nash equilibrium coordination bonus/penalty if Nash equilibrium is detected.
+    (3) Archives goals with score < 0.3.
+    (4) Returns only goals with score > 0.7 for mutation consideration.
 
     Args:
         goals: List of goals to prioritize and filter.
@@ -202,6 +283,24 @@ def prioritize_and_filter_goals(goals: List[Goal]) -> List[Goal]:
             continue
         try:
             score = score_goal(goal)
+            
+            # Apply Nash equilibrium coordination bonus/penalty
+            if nash_equilibrium_detected:
+                if _is_coordinated_goal(goal):
+                    # Boost coordinated multi-module goals when Nash equilibrium is detected
+                    score += nash_coordination_bonus
+                    logger.debug(
+                        "Applied Nash coordination bonus to goal '%s': score increased to %.2f",
+                        goal.description, score
+                    )
+                elif _is_single_module_goal(goal):
+                    # Penalize single-module goals when Nash equilibrium is detected
+                    score -= single_module_penalty
+                    logger.debug(
+                        "Applied single-module penalty to goal '%s': score decreased to %.2f",
+                        goal.description, score
+                    )
+            
             if score > 0.7:
                 filtered_goals.append(goal)
                 logger.debug("Goal %s has high impact score: %.2f", goal.description, score)
@@ -478,6 +577,86 @@ def generate_coordinated_multi_module_change_goal(modules: List[str], descriptio
     return goal
 
 
+def generate_ecological_pressure_goals() -> List[Goal]:
+    """Generate ecological pressure goals by analyzing test coverage gaps.
+
+    This function analyzes the current test coverage map to identify areas
+    with no tests or low coverage, and generates goals to add tests in those
+    areas. It creates new environmental pressures by modifying the test suite
+    to add constraints that don't yet exist.
+
+    Returns:
+        List of Goal objects with type 'ecological_pressure' that specify
+        new test constraints to add.
+    """
+    ecological_pressure_goals = []
+    
+    if not test_coverage_map:
+        logger.info("No test coverage data available, generating generic ecological pressure goal")
+        goal = Goal(
+            description="Create comprehensive test coverage map for all modules to identify untested areas",
+            priority=GoalPriority.HIGH,
+            module="test_suite",
+            goal_type="ecological_pressure",
+            source="fitness",
+            tags=["ecological_pressure", "coverage_analysis", "test_creation"]
+        )
+        ecological_pressure_goals.append(goal)
+        return ecological_pressure_goals
+
+    for module_name, tested_areas in test_coverage_map.items():
+        # Identify areas with no tests
+        untested_areas = []
+        known_areas = ["error_handling", "edge_cases", "performance", "security", "integration", "boundary_conditions"]
+        
+        for area in known_areas:
+            if area not in tested_areas:
+                untested_areas.append(area)
+        
+        if untested_areas:
+            areas_str = ", ".join(untested_areas)
+            description = (
+                f"Add environmental pressure to module '{module_name}': create new tests for "
+                f"untested areas [{areas_str}]. This will introduce new constraints that the "
+                f"system must adapt to, expanding the fitness landscape."
+            )
+            goal = Goal(
+                description=description,
+                priority=GoalPriority.HIGH,
+                module=module_name,
+                goal_type="ecological_pressure",
+                source="fitness",
+                tags=["ecological_pressure", "test_coverage_gap", "new_constraints", f"module:{module_name}"]
+            )
+            ecological_pressure_goals.append(goal)
+            logger.info(
+                "Generated ecological pressure goal for module '%s' with untested areas: %s",
+                module_name, areas_str
+            )
+        else:
+            # If all known areas are tested, generate a goal to find new edge cases
+            description = (
+                f"Add environmental pressure to module '{module_name}': all known areas are tested, "
+                f"so create novel edge cases and stress tests to push the system beyond current "
+                f"capabilities and introduce new constraints."
+            )
+            goal = Goal(
+                description=description,
+                priority=GoalPriority.MEDIUM,
+                module=module_name,
+                goal_type="ecological_pressure",
+                source="fitness",
+                tags=["ecological_pressure", "novel_edge_cases", "stress_testing", f"module:{module_name}"]
+            )
+            ecological_pressure_goals.append(goal)
+            logger.info(
+                "Generated ecological pressure goal for module '%s' to create novel edge cases",
+                module_name
+            )
+
+    return ecological_pressure_goals
+
+
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
@@ -730,187 +909,3 @@ def generate_goals(
                         tags=["ecological_gap", "capability_coverage", "test_creation"]
                     )
                     goals.append(goal)
-                    logger.info(
-                        "Generated ecological gap goal for %s: least-covered capability '%s' (coverage=%.2f, diversity=%.2f, threshold=%.2f)",
-                        metrics.module, least_covered_capability, least_covered_score, current_diversity, diversity_drop_threshold
-                    )
-                else:
-                    # If no capability coverage data, generate a generic ecological gap goal
-                    goal = Goal(
-                        description=f"Assess and expand capability coverage for {metrics.module} to improve test suite diversity",
-                        priority=GoalPriority.HIGH,
-                        module=metrics.module,
-                        goal_type="ecological_gap",
-                        source="fitness",
-                        tags=["ecological_gap", "capability_assessment", "test_creation"]
-                    )
-                    goals.append(goal)
-                    logger.info(
-                        "Generated ecological gap goal for %s (no capability coverage data available, diversity=%.2f, threshold=%.2f)",
-                        metrics.module, current_diversity, diversity_drop_threshold
-                    )
-
-    for metrics in metrics_list:
-        # Generate accuracy improvement goals if accuracy is below threshold
-        if metrics.accuracy < current_accuracy_threshold:
-            goal = Goal(
-                description=f"Improve simulation accuracy for {metrics.module}",
-                priority=_calculate_priority(metrics, coverage_weight),
-                module=metrics.module,
-                goal_type="accuracy",
-                source="fitness"
-            )
-            goals.append(goal)
-            logger.debug(
-                "Generated accuracy goal for %s (accuracy=%.2f, threshold=%.2f)",
-                metrics.module, metrics.accuracy, current_accuracy_threshold
-            )
-
-        # Generate dependency tracking goals if unexpected side effects
-        if metrics.has_unexpected_side_effects:
-            goal = Goal(
-                description=f"Add dependency tracking for {metrics.module}",
-                priority=_calculate_priority(metrics, coverage_weight),
-                module=metrics.module,
-                goal_type="dependency_tracking",
-                source="fitness"
-            )
-            goals.append(goal)
-            logger.debug(
-                "Generated dependency tracking goal for %s (side effects detected)",
-                metrics.module
-            )
-
-        # Generate infrastructure hardening goals for fs_abstraction
-        if metrics.module == "fs_abstraction":
-            if metrics.fs_abstraction_retry_rate > retry_rate_threshold:
-                goal = Goal(
-                    description=f"Improve fs_abstraction resilience: retry rate {metrics.fs_abstraction_retry_rate:.2f} exceeds threshold {retry_rate_threshold}",
-                    priority=GoalPriority.HIGH,
-                    module=metrics.module,
-                    goal_type="infrastructure_hardening",
-                    source="fitness",
-                    tags=["infrastructure_hardening", "retry_rate"]
-                )
-                goals.append(goal)
-                logger.debug(
-                    "Generated infrastructure hardening goal for %s (retry rate=%.2f, threshold=%.2f)",
-                    metrics.module, metrics.fs_abstraction_retry_rate, retry_rate_threshold
-                )
-            
-            if metrics.permission_failure_spike:
-                goal = Goal(
-                    description=f"Improve fs_abstraction permission handling: permission failures spiked",
-                    priority=GoalPriority.HIGH,
-                    module=metrics.module,
-                    goal_type="infrastructure_hardening",
-                    source="fitness",
-                    tags=["infrastructure_hardening", "permission_failure"]
-                )
-                goals.append(goal)
-                logger.debug(
-                    "Generated infrastructure hardening goal for %s (permission failure spike detected)",
-                    metrics.module
-                )
-
-        # Generate cluster resolution goals if a persistent failure cluster is detected
-        if metrics.failure_cluster:
-            # Determine the root cause based on available metrics
-            if metrics.permission_failure_spike:
-                root_cause = "permission handling"
-                fix_description = f"Fix permission handling in {metrics.module}"
-            elif metrics.fs_abstraction_retry_rate > retry_rate_threshold:
-                root_cause = "retry logic"
-                fix_description = f"Add retry logic to {metrics.module}"
-            else:
-                root_cause = "unknown failure pattern"
-                fix_description = f"Investigate and fix persistent failure cluster in {metrics.module}"
-            
-            goal = Goal(
-                description=fix_description,
-                priority=GoalPriority.CRITICAL,
-                module=metrics.module,
-                goal_type="cluster_resolution",
-                source="fitness",
-                tags=["cluster_resolution", "root_cause", root_cause]
-            )
-            goals.append(goal)
-            logger.info(
-                "Generated cluster resolution goal for %s (failure cluster detected, root cause: %s)",
-                metrics.module, root_cause
-            )
-
-    # Add external goals from the queue to the generated goals
-    if external_goal_queue:
-        logger.info("Adding %d external goals from queue to generated goals", len(external_goal_queue))
-        goals.extend(external_goal_queue)
-        external_goal_queue.clear()  # Clear the queue after processing
-
-    # Sort goals by priority (CRITICAL first, then HIGH, MEDIUM, LOW)
-    # Within same priority, curiosity goals come before routine goals
-    goals.sort(key=lambda g: (
-        g.priority.value,
-        0 if g.source == "curiosity" else 1,
-        -_coverage_score(g, metrics_list)
-    ))
-
-    # After generating new goals, apply prioritization and filtering
-    goals = prioritize_and_filter_goals(goals)
-
-    return goals
-
-
-def _generate_challenge_goals_from_knowledge_base() -> List[Goal]:
-    """Generate goals based on fitness scores stored in the knowledge base.
-
-    Reads fitness scores from the knowledge base and generates goals for
-    challenges with low scores (score == 0).
-
-    Returns:
-        List of goals for low-scoring challenges.
-    """
-    challenge_goals = []
-    
-    # Look for fitness score entries in the knowledge base
-    for key, value in knowledge_base.items():
-        if key.startswith("fitness_score:"):
-            # Extract challenge name from key (format: "fitness_score:challenge_name")
-            challenge_name = key.split(":", 1)[1] if ":" in key else key
-            
-            try:
-                score = float(value)
-                if score == 0.0:
-                    # Generate a goal to implement this challenge correctly
-                    goal = Goal(
-                        description=f"Implement {challenge_name} correctly (current score: 0)",
-                        priority=GoalPriority.HIGH,
-                        module=challenge_name,
-                        goal_type="challenge",
-                        source="fitness",
-                        tags=["challenge", "low_score"]
-                    )
-                    challenge_goals.append(goal)
-                    logger.info(
-                        "Generated challenge goal for %s (fitness score: 0)",
-                        challenge_name
-                    )
-            except ValueError:
-                logger.warning(
-                    "Invalid fitness score value for %s: %s",
-                    challenge_name, value
-                )
-    
-    return challenge_goals
-
-
-def _calculate_priority(
-    metrics: SimulationMetrics,
-    coverage_weight: float
-) -> GoalPriority:
-    """Calculate priority based on metrics and coverage weight.
-
-    Lower coverage and lower accuracy increase priority.
-    """
-    # Base priority on accuracy deficit and coverage
-    accuracy_deficit = 1.0 - metrics.accuracy
-    coverage_deficit
