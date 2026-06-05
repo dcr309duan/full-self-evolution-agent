@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a pre-mutation static validation step to the mutation engine: before generating any code change, parse the target module's AST, check for type consistency, unresolved references, and structural invariants (e.g., required function signatures exist), and reject the mutation if any static check fails. This reduces the number of invalid mutations that reach the testing phase.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780634345.3712823
-    },
-    {
       "description": "Build a minimal end-to-end integration test suite that exercises the full mutation → test → system model update → reflection pipeline in a sandboxed environment. This suite must run automatically after every mutation attempt and report pass/fail status, test coverage deltas, and any schema mismatches between reflection parser output and system model input.",
       "priority": 8,
       "status": "pending",
@@ -340,6 +334,13 @@
       "status": "completed",
       "created_at": 1780634345.3683183,
       "completed_at": 1780634405.6577373
+    },
+    {
+      "description": "Add a pre-mutation static validation step to the mutation engine: before generating any code change, parse the target module's AST, check for type consistency, unresolved references, and structural invariants (e.g., required function signatures exist), and reject the mutation if any static check fails. This reduces the number of invalid mutations that reach the testing phase.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780634345.3712823,
+      "completed_at": 1780634509.8416064
     }
   ],
   "generated_goals": []

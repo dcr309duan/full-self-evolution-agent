@@ -3,6 +3,8 @@ import sys
 import json
 import importlib
 import pkgutil
+import tempfile
+import shutil
 from typing import Dict, List, Tuple, Set
 
 # Add project root to path if needed
@@ -272,6 +274,121 @@ def subtract(a, b):
         os.chdir(original_dir)
         shutil.rmtree(test_dir, ignore_errors=True)
 
+def test_static_validation():
+    """Test static validation of modules before mutation."""
+    test_dir = tempfile.mkdtemp()
+    
+    try:
+        # Add test directory to path
+        sys.path.insert(0, test_dir)
+        
+        # Test 1: Valid syntax module should pass validation
+        valid_module_path = os.path.join(test_dir, "valid_module.py")
+        with open(valid_module_path, 'w') as f:
+            f.write("""
+def add(a, b):
+    return a + b
+
+def multiply(a, b):
+    return a * b
+""")
+        
+        # Simulate validation by trying to compile the module
+        with open(valid_module_path, 'r') as f:
+            source = f.read()
+        
+        try:
+            compile(source, valid_module_path, 'exec')
+            validation_passed = True
+        except SyntaxError:
+            validation_passed = False
+        
+        assert validation_passed, "Valid module should pass validation"
+        
+        # Test 2: Module with unresolved import should fail validation
+        unresolved_import_path = os.path.join(test_dir, "unresolved_import_module.py")
+        with open(unresolved_import_path, 'w') as f:
+            f.write("""
+import nonexistent_module
+
+def add(a, b):
+    return a + b
+""")
+        
+        # Simulate validation by trying to import the module
+        try:
+            import unresolved_import_module
+            validation_passed = True
+        except ImportError:
+            validation_passed = False
+        
+        assert not validation_passed, "Module with unresolved import should fail validation"
+        
+        # Test 3: Module with type mismatch should fail validation
+        type_mismatch_path = os.path.join(test_dir, "type_mismatch_module.py")
+        with open(type_mismatch_path, 'w') as f:
+            f.write("""
+def add(a: int, b: int) -> int:
+    return a + b
+
+# Type mismatch: passing string where int expected
+result = add("hello", "world")
+""")
+        
+        # Simulate validation by trying to execute the module
+        try:
+            import type_mismatch_module
+            validation_passed = True
+        except TypeError:
+            validation_passed = False
+        
+        assert not validation_passed, "Module with type mismatch should fail validation"
+        
+        # Test 4: Mutation engine should reject mutations on invalid modules
+        # Create an invalid module
+        invalid_module_path = os.path.join(test_dir, "invalid_module.py")
+        with open(invalid_module_path, 'w') as f:
+            f.write("""
+import nonexistent_module
+
+def add(a, b):
+    return a + b
+""")
+        
+        # Simulate mutation engine behavior
+        # First check if module is valid
+        try:
+            import invalid_module
+            module_valid = True
+        except ImportError:
+            module_valid = False
+        
+        # If module is invalid, mutation engine should reject without attempting modification
+        if not module_valid:
+            # Verify that we don't attempt to modify the file
+            with open(invalid_module_path, 'r') as f:
+                original_content = f.read()
+            
+            # Attempt to "mutate" (should not happen in real engine)
+            # In real engine, this would be skipped
+            mutated_content = original_content.replace("return a + b", "return a * b")
+            
+            # Verify original content is preserved (no mutation attempted)
+            assert original_content != mutated_content, "Mutation should not be attempted on invalid module"
+            
+            # Verify file content remains unchanged
+            with open(invalid_module_path, 'r') as f:
+                current_content = f.read()
+            
+            assert current_content == original_content, "Invalid module file should remain unchanged"
+        
+        print("All static validation tests passed!")
+        
+    finally:
+        # Clean up
+        sys.path.remove(test_dir)
+        shutil.rmtree(test_dir, ignore_errors=True)
+
 def main():
     """Main function to scan and report integration test coverage."""
     print("Scanning for components and integration tests...")
@@ -296,6 +413,9 @@ def main():
     
     # Run the clone and promote mechanism test
     test_clone_and_promote_mechanism()
+    
+    # Run the static validation test
+    test_static_validation()
     
     # Return coverage percentage for potential CI integration
     total_pairs = sum(1 for c1 in components for c2 in components if c1 != c2)

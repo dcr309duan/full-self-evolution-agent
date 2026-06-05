@@ -7,6 +7,7 @@ from agents.feasibility_estimator import FeasibilityEstimator, FeasibilityResult
 from agents.goal_manager import GoalManager
 from agents.execution_logger import ExecutionLogger
 from agents.clone_and_promote import clone_and_promote_integration_test
+from agents.mutation_engine import static_validator
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,13 @@ class Orchestrator:
         self.execution_logger = execution_logger
         self.feasibility_threshold = feasibility_threshold
         self._mutation_operations_halted = False
+        self.static_validation_failures = 0
         
         # Run clone_and_promote integration test during initialization
         self._verify_clone_and_promote()
+        
+        # Run static validator on the mutation engine module itself
+        self._verify_static_validator()
 
     def _verify_clone_and_promote(self) -> None:
         """
@@ -62,6 +67,32 @@ class Orchestrator:
                 "Mutation operations are halted to prevent data corruption."
             )
             self._mutation_operations_halted = True
+
+    def _verify_static_validator(self) -> None:
+        """
+        Run static_validator on the mutation engine module itself to ensure
+        the validator works on real code. Increments static_validation_failures
+        counter if validation fails.
+        """
+        try:
+            from agents import mutation_engine
+            validation_result = static_validator(mutation_engine)
+            if not validation_result:
+                self.static_validation_failures += 1
+                logger.error(
+                    "Static validation of mutation engine module FAILED. "
+                    "Incrementing static_validation_failures counter."
+                )
+            else:
+                logger.info(
+                    "Static validation of mutation engine module PASSED."
+                )
+        except Exception as e:
+            self.static_validation_failures += 1
+            logger.error(
+                f"Static validation of mutation engine module raised an exception: {e}. "
+                "Incrementing static_validation_failures counter."
+            )
 
     def execute_goal(self, goal_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -163,3 +194,12 @@ class Orchestrator:
         # Placeholder for actual execution logic
         logger.info(f"Executing goal {goal.id}")
         return {"executed": True, "goal_id": goal.id}
+
+    def get_monitoring_dashboard(self) -> Dict[str, Any]:
+        """
+        Returns monitoring dashboard data including static_validation_failures counter.
+        """
+        return {
+            "static_validation_failures": self.static_validation_failures,
+            "mutation_operations_halted": self._mutation_operations_halted
+        }
