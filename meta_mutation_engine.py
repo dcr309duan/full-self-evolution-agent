@@ -37,6 +37,7 @@ class MutationStats:
     test_pass_rate: float         # 0.0 to 1.0
     integration_test_status: bool
     reflection_score: float       # 0.0 to 1.0
+    rollback_occurred: bool = False  # Whether a rollback happened in this cycle
     timestamp: float = field(default_factory=time.time)
 
 @dataclass
@@ -50,6 +51,8 @@ class ModulePerformance:
     integration_test_failures: int = 0
     last_mutation_time: float = 0.0
     mutation_count: int = 0
+    rollback_count: int = 0
+    recent_rollbacks: deque[bool] = field(default_factory=lambda: deque(maxlen=10))
 
 # -----------------------------------------------------------------------------
 # AST-based code rewriter (safe mutation)
@@ -140,18 +143,18 @@ class MutationStrategy:
         """Override in subclasses to generate specific mutations."""
         raise NotImplementedError
 
-class ReflectionParserMutation(MutationStrategy):
-    """Mutations for reflection_parser.py."""
+class ConservativeReflectionParserMutation(MutationStrategy):
+    """Conservative mutations for reflection_parser.py with better pre-validation."""
 
     def generate_mutation(self, tree: ast.Module) -> ast.Module:
-        """Add a new field to track reflection depth."""
+        """Add a new field to track reflection depth with pre-validation."""
         # Find the main class and add a new attribute
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 # Add a new field to __init__ if it exists
                 for item in node.body:
                     if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-                        # Add a new assignment for reflection_depth
+                        # Add a new assignment for reflection_depth with validation
                         new_assign = ast.Assign(
                             targets=[ast.Attribute(
                                 value=ast.Name(id='self', ctx=ast.Load()),
@@ -160,27 +163,44 @@ class ReflectionParserMutation(MutationStrategy):
                             )],
                             value=ast.Constant(value=0)
                         )
+                        # Add validation check before assignment
+                        validation_check = ast.If(
+                            test=ast.Compare(
+                                left=ast.Constant(value=0),
+                                ops=[ast.LtE()],
+                                comparators=[ast.Constant(value=100)]
+                            ),
+                            body=[new_assign],
+                            orelse=[ast.Assign(
+                                targets=[ast.Attribute(
+                                    value=ast.Name(id='self', ctx=ast.Load()),
+                                    attr='reflection_depth',
+                                    ctx=ast.Store()
+                                )],
+                                value=ast.Constant(value=0)
+                            )]
+                        )
                         # Insert after the last assignment in __init__
                         for i, stmt in enumerate(item.body):
                             if isinstance(stmt, ast.Assign):
-                                item.body.insert(i+1, new_assign)
+                                item.body.insert(i+1, validation_check)
                                 break
                         break
                 break
         return tree
 
-class MetaEvaluationLoopMutation(MutationStrategy):
-    """Mutations for meta_evaluation_loop.py."""
+class ConservativeMetaEvaluationLoopMutation(MutationStrategy):
+    """Conservative mutations for meta_evaluation_loop.py with better pre-validation."""
 
     def generate_mutation(self, tree: ast.Module) -> ast.Module:
-        """Optimize loop logic by adding early exit conditions."""
+        """Optimize loop logic by adding early exit conditions with validation."""
         # Find the main loop function and add a break condition
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and 'loop' in node.name.lower():
                 # Add an early exit condition based on performance
                 for item in node.body:
                     if isinstance(item, ast.For) or isinstance(item, ast.While):
-                        # Insert a break if performance threshold met
+                        # Insert a break if performance threshold met with validation
                         break_condition = ast.If(
                             test=ast.Compare(
                                 left=ast.Name(id='performance_score', ctx=ast.Load()),
@@ -190,20 +210,30 @@ class MetaEvaluationLoopMutation(MutationStrategy):
                             body=[ast.Break()],
                             orelse=[]
                         )
-                        item.body.insert(0, break_condition)
+                        # Add pre-validation check
+                        pre_validation = ast.If(
+                            test=ast.Compare(
+                                left=ast.Name(id='performance_score', ctx=ast.Load()),
+                                ops=[ast.GtE()],
+                                comparators=[ast.Constant(value=0.0)]
+                            ),
+                            body=[break_condition],
+                            orelse=[ast.Pass()]
+                        )
+                        item.body.insert(0, pre_validation)
                         break
                 break
         return tree
 
-class UnifiedEvolutionOrchestratorMutation(MutationStrategy):
-    """Mutations for unified_evolution_loop_orchestrator.py."""
+class ConservativeUnifiedEvolutionOrchestratorMutation(MutationStrategy):
+    """Conservative mutations for unified_evolution_loop_orchestrator.py with better pre-validation."""
 
     def generate_mutation(self, tree: ast.Module) -> ast.Module:
-        """Add bottleneck detection and optimization."""
+        """Add bottleneck detection and optimization with validation."""
         # Find the main orchestrator class and add a bottleneck detection method
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and 'orchestrator' in node.name.lower():
-                # Add a new method for bottleneck detection
+                # Add a new method for bottleneck detection with validation
                 new_method = ast.FunctionDef(
                     name='detect_bottlenecks',
                     args=ast.arguments(
@@ -214,11 +244,32 @@ class UnifiedEvolutionOrchestratorMutation(MutationStrategy):
                         defaults=[]
                     ),
                     body=[
-                        ast.Assign(
-                            targets=[ast.Name(id='bottlenecks', ctx=ast.Store())],
-                            value=ast.List(elts=[], ctx=ast.Load())
-                        ),
-                        ast.Return(value=ast.Name(id='bottlenecks', ctx=ast.Load()))
+                        # Pre-validation: check if analysis is needed
+                        ast.If(
+                            test=ast.Compare(
+                                left=ast.Call(
+                                    func=ast.Attribute(
+                                        value=ast.Name(id='self', ctx=ast.Load()),
+                                        attr='_should_analyze',
+                                        ctx=ast.Load()
+                                    ),
+                                    args=[],
+                                    keywords=[]
+                                ),
+                                ops=[ast.Is()],
+                                comparators=[ast.Constant(value=True)]
+                            ),
+                            body=[
+                                ast.Assign(
+                                    targets=[ast.Name(id='bottlenecks', ctx=ast.Store())],
+                                    value=ast.List(elts=[], ctx=ast.Load())
+                                ),
+                                ast.Return(value=ast.Name(id='bottlenecks', ctx=ast.Load()))
+                            ],
+                            orelse=[
+                                ast.Return(value=ast.List(elts=[], ctx=ast.Load()))
+                            ]
+                        )
                     ],
                     decorator_list=[]
                 )
@@ -249,9 +300,9 @@ class MetaMutationEngine:
         self.current_cycle = 0
         self.stats_history: List[MutationStats] = []
         self.mutation_strategies: Dict[str, MutationStrategy] = {
-            'reflection_parser': ReflectionParserMutation('reflection_parser'),
-            'meta_evaluation_loop': MetaEvaluationLoopMutation('meta_evaluation_loop'),
-            'unified_evolution_loop_orchestrator': UnifiedEvolutionOrchestratorMutation('unified_evolution_loop_orchestrator')
+            'reflection_parser': ConservativeReflectionParserMutation('reflection_parser'),
+            'meta_evaluation_loop': ConservativeMetaEvaluationLoopMutation('meta_evaluation_loop'),
+            'unified_evolution_loop_orchestrator': ConservativeUnifiedEvolutionOrchestratorMutation('unified_evolution_loop_orchestrator')
         }
         self.module_paths: Dict[str, str] = self._discover_module_paths()
 
@@ -287,6 +338,10 @@ class MetaMutationEngine:
                 perf.avg_test_pass_rate = sum(s.test_pass_rate for s in recent) / len(recent)
                 perf.avg_reflection_score = sum(s.reflection_score for s in recent) / len(recent)
                 perf.integration_test_failures = sum(1 for s in recent if not s.integration_test_status)
+                # Track rollbacks
+                perf.recent_rollbacks.append(stats.rollback_occurred)
+                if stats.rollback_occurred:
+                    perf.rollback_count += 1
 
         logger.debug(f"Recorded stats for cycle {stats.cycle_id}")
 
@@ -299,6 +354,14 @@ class MetaMutationEngine:
         threshold = 0.7  # Performance threshold
 
         for mod_name, perf in self.performance_data.items():
+            # Check rollback rate over last 10 cycles
+            if len(perf.recent_rollbacks) >= 10:
+                rollback_rate = sum(perf.recent_rollbacks) / len(perf.recent_rollbacks)
+                if rollback_rate > 0.3:
+                    logger.info(f"{mod_name} has high rollback rate: {rollback_rate:.2%} (threshold: 30%)")
+                    underperforming.append(mod_name)
+                    continue  # Skip other checks if rollback rate is high
+            
             # Check if module is underperforming
             if perf.avg_mutation_success_rate < threshold:
                 logger.info(f"{mod_name} has low mutation success rate: {perf.avg_mutation_success_rate:.2f}")
@@ -357,7 +420,13 @@ class MetaMutationEngine:
         if module_name not in self.module_paths:
             return False
         module_path = self.module_paths[module_name]
-        return self.rewriter.restore(module_path)
+        success = self.rewriter.restore(module_path)
+        if success:
+            self.performance_data[module_name].rollback_count += 1
+            # Record the rollback in recent stats
+            if self.stats_history:
+                self.stats_history[-1].rollback_occurred = True
+        return success
 
     def run_cycle(self, stats: MutationStats) -> Dict[str, Any]:
         """
@@ -390,12 +459,18 @@ class MetaMutationEngine:
         """Get a summary of performance data for all modules."""
         summary = {}
         for mod_name, perf in self.performance_data.items():
+            rollback_rate = 0.0
+            if len(perf.recent_rollbacks) >= 10:
+                rollback_rate = sum(perf.recent_rollbacks) / len(perf.recent_rollbacks)
+            
             summary[mod_name] = {
                 'avg_mutation_success_rate': perf.avg_mutation_success_rate,
                 'avg_test_pass_rate': perf.avg_test_pass_rate,
                 'avg_reflection_score': perf.avg_reflection_score,
                 'integration_test_failures': perf.integration_test_failures,
                 'mutation_count': perf.mutation_count,
+                'rollback_count': perf.rollback_count,
+                'rollback_rate': rollback_rate,
                 'last_mutation_time': perf.last_mutation_time
             }
         return summary
@@ -427,7 +502,8 @@ if __name__ == '__main__':
             mutation_success_rate=0.6 + (cycle * 0.02) % 0.4,
             test_pass_rate=0.7 + (cycle * 0.01) % 0.3,
             integration_test_status=cycle % 3 != 0,
-            reflection_score=0.5 + (cycle * 0.03) % 0.5
+            reflection_score=0.5 + (cycle * 0.03) % 0.5,
+            rollback_occurred=(cycle % 4 == 0)  # Simulate rollbacks every 4 cycles
         )
         actions = engine.run_cycle(stats)
         if actions['mutations_applied']:

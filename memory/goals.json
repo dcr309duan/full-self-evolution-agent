@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a rollback mechanism for core modules that automatically reverts the last mutation if the integration test suite fails, and logs the failure as a high-priority insight for the goal generator. This adds a safety net to the evolution loop, allowing the agent to recover from unstable changes without manual intervention.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780629627.2822556
-    },
-    {
       "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
       "priority": 7,
       "status": "pending",
@@ -214,6 +208,13 @@
       "status": "completed",
       "created_at": 1780628993.7021782,
       "completed_at": 1780630361.8677437
+    },
+    {
+      "description": "Create a rollback mechanism for core modules that automatically reverts the last mutation if the integration test suite fails, and logs the failure as a high-priority insight for the goal generator. This adds a safety net to the evolution loop, allowing the agent to recover from unstable changes without manual intervention.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780629627.2822556,
+      "completed_at": 1780630548.8396795
     }
   ],
   "generated_goals": []

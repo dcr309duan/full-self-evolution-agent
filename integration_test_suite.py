@@ -32,6 +32,135 @@ class IntegrationTestSuite:
         # Define the controlled test goal
         self.test_goal = "add a docstring to dummy_utility_module.add()"
         
+    def run_full_pipeline_test(self) -> Dict[str, Any]:
+        """
+        Execute the complete mutation->test pipeline and return structured results.
+        This method is designed to be called by the rollback_manager to determine
+        if rollback is needed.
+        
+        Returns:
+            Dict containing structured results with pass/fail status, error details,
+            and test coverage metrics
+        """
+        pipeline_results = {
+            "status": "PASS",
+            "error_details": [],
+            "test_coverage_metrics": {
+                "total_tests": 0,
+                "passed_tests": 0,
+                "failed_tests": 0,
+                "coverage_percentage": 0.0
+            },
+            "pipeline_steps": []
+        }
+        
+        try:
+            # Step 1: Generate goal
+            print("Pipeline Step 1: Generating goal...")
+            goal = self.goal_generator.generate_goal(self.test_goal)
+            pipeline_results["pipeline_steps"].append({
+                "step": "goal_generation",
+                "status": "PASS",
+                "goal": goal
+            })
+            
+            # Step 2: Apply mutation engine
+            print("Pipeline Step 2: Applying mutation engine...")
+            mutation_result = self.mutation_engine.apply_mutation(goal)
+            pipeline_results["pipeline_steps"].append({
+                "step": "mutation_engine",
+                "status": "PASS",
+                "mutation": mutation_result
+            })
+            
+            # Step 3: Rewrite AST
+            print("Pipeline Step 3: Rewriting AST...")
+            ast_result = self.ast_rewriter.rewrite_ast(mutation_result)
+            pipeline_results["pipeline_steps"].append({
+                "step": "ast_rewriter",
+                "status": "PASS",
+                "ast_result": ast_result
+            })
+            
+            # Step 4: Run test suite for dummy module
+            print("Pipeline Step 4: Running test suite...")
+            test_results = self.test_runner.run_tests("dummy_utility_module")
+            
+            # Extract test coverage metrics from test results
+            if isinstance(test_results, dict):
+                total_tests = test_results.get("total_tests", 0)
+                passed_tests = test_results.get("passed_tests", 0)
+                failed_tests = test_results.get("failed_tests", 0)
+                coverage_percentage = test_results.get("coverage_percentage", 0.0)
+            else:
+                total_tests = 0
+                passed_tests = 0
+                failed_tests = 0
+                coverage_percentage = 0.0
+            
+            pipeline_results["test_coverage_metrics"] = {
+                "total_tests": total_tests,
+                "passed_tests": passed_tests,
+                "failed_tests": failed_tests,
+                "coverage_percentage": coverage_percentage
+            }
+            
+            pipeline_results["pipeline_steps"].append({
+                "step": "test_execution",
+                "status": "PASS",
+                "test_results": test_results
+            })
+            
+            # Step 5: Analyze failures
+            print("Pipeline Step 5: Analyzing failures...")
+            failure_analysis = self.failure_analyzer.analyze(test_results)
+            pipeline_results["pipeline_steps"].append({
+                "step": "failure_analysis",
+                "status": "PASS",
+                "analysis": failure_analysis
+            })
+            
+            # Check if there are any failures
+            if failure_analysis.get("has_failures", False):
+                pipeline_results["status"] = "FAIL"
+                error_details = {
+                    "error_type": "TestFailure",
+                    "error_message": "Test failures detected in pipeline",
+                    "traceback": "",
+                    "failure_details": failure_analysis.get("error_traces", [])
+                }
+                pipeline_results["error_details"].append(error_details)
+            
+        except Exception as e:
+            pipeline_results["status"] = "FAIL"
+            error_detail = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "traceback": traceback.format_exc()
+            }
+            pipeline_results["error_details"].append(error_detail)
+            
+            # Add failed step if not already recorded
+            if not pipeline_results["pipeline_steps"] or pipeline_results["pipeline_steps"][-1]["status"] == "PASS":
+                pipeline_results["pipeline_steps"].append({
+                    "step": "unknown",
+                    "status": "FAIL",
+                    "error": error_detail
+                })
+        
+        # Step 6: Send results to reflection system
+        print("Pipeline Step 6: Sending results to reflection system...")
+        try:
+            reflection_result = self.reflection_system.process_results(pipeline_results)
+            pipeline_results["reflection_result"] = reflection_result
+        except Exception as e:
+            pipeline_results["reflection_result"] = {
+                "status": "FAIL",
+                "error": str(e)
+            }
+        
+        return pipeline_results
+    
     def run_integration_test(self) -> Dict[str, Any]:
         """
         Execute the full integration test pipeline.

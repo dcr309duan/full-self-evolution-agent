@@ -6,6 +6,7 @@ suggests a redesign is needed. If so, executes the redesign goal first,
 then retries the original goal with the modified component.
 Also integrates integration_test_suite execution after successful mutations.
 Integrates meta_mutation_engine to check for meta-mutations after each evolution cycle.
+Integrates rollback_manager to verify and rollback after each mutation application.
 """
 
 import logging
@@ -18,6 +19,7 @@ from component_registry import ComponentRegistry
 from execution_engine import ExecutionEngine
 from integration_test_suite import IntegrationTestSuite
 from meta_mutation_engine import MetaMutationEngine
+from rollback_manager import RollbackManager
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ class UnifiedEvolutionLoopOrchestrator:
         redesign_orchestrator: ProactiveRedesignOrchestrator,
         integration_test_suite: IntegrationTestSuite,
         meta_mutation_engine: MetaMutationEngine,
+        rollback_manager: RollbackManager,
         max_retries: int = 3,
     ):
         self.goal_manager = goal_manager
@@ -43,6 +46,7 @@ class UnifiedEvolutionLoopOrchestrator:
         self.redesign_orchestrator = redesign_orchestrator
         self.integration_test_suite = integration_test_suite
         self.meta_mutation_engine = meta_mutation_engine
+        self.rollback_manager = rollback_manager
         self.max_retries = max_retries
         self._loop_active = False
         self.validation_failure_count = 0
@@ -159,6 +163,16 @@ class UnifiedEvolutionLoopOrchestrator:
                         logger.info(f"Degraded cycles count incremented to {self.degraded_cycles}")
                         self.goal_manager.mark_goal_completed(goal_id, status="degraded")
                         return
+                    
+                    # After mutation application and before proceeding to next cycle,
+                    # verify and rollback if needed
+                    rollback_result = self.rollback_manager.verify_and_rollback()
+                    if rollback_result.get("rollback_performed", False):
+                        logger.warning(f"Rollback performed after mutation for goal {goal_id}")
+                        # Pause the loop to allow goal generator to process failure insight
+                        self._pause_for_rollback_processing(goal_id, rollback_result)
+                        self.goal_manager.mark_goal_completed(goal_id, status="rolled_back")
+                        return
                 
                 self.goal_manager.mark_goal_completed(goal_id)
                 return
@@ -187,6 +201,29 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _pause_for_rollback_processing(self, goal_id: str, rollback_result: Dict[str, Any]) -> None:
+        """Pause the evolution loop to allow goal generator to process rollback failure insight."""
+        logger.info(f"Pausing evolution loop for rollback processing of goal {goal_id}")
+        
+        # Log the rollback failure insight for the goal generator
+        failure_insight = {
+            "goal_id": goal_id,
+            "rollback_reason": rollback_result.get("reason", "unknown"),
+            "rollback_details": rollback_result.get("details", {}),
+            "cycle_number": self.cycle_number,
+            "timestamp": logging.time.time() if hasattr(logging.time, 'time') else None
+        }
+        
+        # Notify the goal generator about the failure insight
+        try:
+            self.goal_manager.process_rollback_insight(failure_insight)
+            logger.info(f"Rollback failure insight processed for goal {goal_id}")
+        except Exception as e:
+            logger.error(f"Failed to process rollback insight for goal {goal_id}: {e}")
+        
+        # The loop will naturally continue to the next iteration after this method returns
+        # The goal generator should have processed the insight and adjusted future goals accordingly
 
     def _is_mutation_goal(self, goal: Dict[str, Any]) -> bool:
         """Check if the goal involves a mutation operation."""
