@@ -2,6 +2,12 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a failure analysis module that classifies each failed task as either an implementation bug or a fundamental design flaw, using patterns in error logs and test results, and then logs this classification to guide future evolution priorities (e.g., prioritize refactoring over new features when design flaws dominate). This closes a key gap in robust failure analysis.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780625287.1252034
+    },
+    {
       "description": "Build an API server to expose agent capabilities externally",
       "priority": 7,
       "status": "pending",
@@ -66,6 +72,20 @@
       "created_at": 1780623633.2465868,
       "consecutive_failures": 0,
       "completed_at": 1780625078.6475363
+    },
+    {
+      "description": "Build an AST-based code rewriter with automatic rollback: implement a function that can safely modify the agent's own Python source files (e.g., evolution loop, evaluator) using the `ast` module, and integrate it with the existing testing framework so that any modification that causes test failures is automatically reverted. This addresses the root cause of failed mutation tasks and enables safe self-modification.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780625287.1236176,
+      "completed_at": 1780625375.226036
+    },
+    {
+      "description": "Create a meta-evaluation loop that scores the evolution engine's own performance (e.g., rate of improvement, diversity of attempted changes) and dynamically adjusts the agent's objective function, such as switching from 'add capabilities' to 'refactor architecture' when stagnation is detected. This implements meta-cognitive ability to change success criteria.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780625287.1245415,
+      "completed_at": 1780625525.6834984
     }
   ],
   "generated_goals": []

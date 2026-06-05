@@ -18,6 +18,7 @@ from core.self_modify import self_modify, add_capability, execute_shell, generat
 from core.reporter import write_report, generate_timeline
 from core.meta_cognition import meta_cognition_session, question_everything
 from core.mutation_engine import run_mutation_cycle
+from core.knowledge_acquisition import autonomous_research_cycle
 
 
 def log_cycle(cycle_num, message):
@@ -204,6 +205,18 @@ def evolution_cycle(state):
             log_cycle(cycle_num, f"Mutations: {mut_result['mutations']}, successes: {mut_result['successes']}")
         except Exception as e:
             log_cycle(cycle_num, f"Mutation error: {str(e)[:100]}")
+
+    # Phase 2.7: Autonomous research (every 7 cycles)
+    if cycle_num % 7 == 0:
+        log_cycle(cycle_num, "Phase 2.7: 自主研究 - 探索新知识")
+        try:
+            research_results = autonomous_research_cycle()
+            if isinstance(research_results, list):
+                log_cycle(cycle_num, f"研究完成: {len(research_results)} 个主题")
+            else:
+                log_cycle(cycle_num, f"研究完成: {str(research_results)[:100]}")
+        except Exception as e:
+            log_cycle(cycle_num, f"研究异常: {str(e)[:100]}")
 
     # Phase 3: Update status report every cycle, commit & push every 5
     try:
