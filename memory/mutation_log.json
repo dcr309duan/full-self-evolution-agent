@@ -173,5 +173,49 @@
         "timestamp": 1780626572.0513341
       }
     ]
+  },
+  {
+    "timestamp": 1780627722.683773,
+    "results": [
+      {
+        "parent_a": "retry",
+        "parent_b": "retry_fibonacci",
+        "operator": "hybrid",
+        "code": "def retry_with_fibonacci_backoff(func, max_attempts=3, base_delay=1):\n    import time\n    a, b = 0, 1\n    for attempt in range(max_attempts):\n        try:\n            return func()\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            delay = base_delay * a if a > 0 else base_delay\n            time.sleep(delay)\n            a, b = b, a + b",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_with_fibonacci_backoff\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780627710.4331112
+      },
+      {
+        "parent_a": "retry",
+        "parent_b": "quicksort",
+        "operator": "crossover",
+        "code": "def retry_sort(func, lst, max_attempts=3, delay=1):\n    import time\n    for attempt in range(max_attempts):\n        try:\n            result = func(lst)\n            if len(result) != len(lst):\n                raise ValueError(\"Length mismatch\")\n            if any(result[i] > result[i+1] for i in range(len(result)-1)):\n                raise ValueError(\"Not sorted\")\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1: raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_sort\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780627714.2112405
+      },
+      {
+        "parent_a": "retry_fibonacci",
+        "parent_b": "is_prime",
+        "operator": "mutate",
+        "code": "def retry_is_prime(n, max_attempts=3, delay=1):\n    import time\n    for attempt in range(max_attempts):\n        try:\n            if n < 2:\n                raise ValueError(\"n must be at least 2\")\n            for i in range(2, int(n**0.5) + 1):\n                if n % i == 0:\n                    return False\n            return True\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.2,
+          "stdout": "FUNCTION: retry_is_prime\nSCORE: 1/5\n"
+        },
+        "timestamp": 1780627722.6834223
+      }
+    ]
   }
 ]

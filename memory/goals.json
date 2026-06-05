@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780626959.2867591
-    },
-    {
       "description": "Develop multi-file code analysis and refactoring capability",
       "priority": 7,
       "status": "pending",
@@ -150,6 +144,13 @@
       "status": "completed",
       "created_at": 1780626426.7464669,
       "completed_at": 1780627427.579932
+    },
+    {
+      "description": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780626959.2867591,
+      "completed_at": 1780627699.7159245
     }
   ],
   "generated_goals": []

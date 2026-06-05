@@ -3,6 +3,7 @@
 Main orchestrator for the self-evolving system. Initializes all subsystems and runs a
 continuous evolution loop that scores, selects, mutates, tests, and evaluates each subsystem.
 Includes a goal_selection mechanism that maintains a priority queue of evolution goals.
+Integrates reflection parsing to close the feedback loop between mutation outcomes and strategy selection.
 """
 
 import time
@@ -20,6 +21,7 @@ from mutation_engine import MutationEngine
 from testing_framework import TestingFramework
 from failure_analysis import FailureAnalysis
 from meta_evaluation import MetaEvaluation
+from reflection_parser import ReflectionParser  # New import for reflection parsing
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ FAILURE_THRESHOLD = 3  # Number of consecutive failures before triggering strate
 EVOLUTION_INTERVAL = 60.0  # Default interval between evolution cycles in seconds
 STATE_FILE = "orchestrator_state.json"  # File to persist orchestrator state
 LOG_FILE = "evolution_log.json"  # File to log evolution cycles
+REFLECTION_LOG_FILE = "reflection_log.json"  # File to log reflection data
 
 
 class EvolutionOrchestrator:
@@ -44,6 +47,7 @@ class EvolutionOrchestrator:
         self.testing_framework = TestingFramework(self.config.get("testing_framework", {}))
         self.failure_analysis = FailureAnalysis(self.config.get("failure_analysis", {}))
         self.meta_evaluation = MetaEvaluation(self.config.get("meta_evaluation", {}))
+        self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))  # New subsystem
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -54,6 +58,7 @@ class EvolutionOrchestrator:
             "testing_framework": 1.0,
             "failure_analysis": 1.0,
             "meta_evaluation": 1.0,
+            "reflection_parser": 1.0,  # Added reflection_parser score
         }
 
         # Count consecutive failures per subsystem
@@ -74,6 +79,7 @@ class EvolutionOrchestrator:
             "testing_framework": "testing_framework.py",
             "failure_analysis": "failure_analysis.py",
             "meta_evaluation": "meta_evaluation.py",
+            "reflection_parser": "reflection_parser.py",  # Added reflection_parser path
         }
 
         # Mapping of subsystem names to their instances for restart
@@ -85,6 +91,7 @@ class EvolutionOrchestrator:
             "testing_framework": self.testing_framework,
             "failure_analysis": self.failure_analysis,
             "meta_evaluation": self.meta_evaluation,
+            "reflection_parser": self.reflection_parser,  # Added reflection_parser instance
         }
 
         # Goal selection mechanism: priority queue of evolution goals
@@ -109,6 +116,7 @@ class EvolutionOrchestrator:
             (5, time.time(), "enhance testing framework", "testing_framework"),
             (6, time.time(), "improve failure analysis", "failure_analysis"),
             (7, time.time(), "refine meta evaluation", "meta_evaluation"),
+            (8, time.time(), "improve reflection parsing", "reflection_parser"),  # Added reflection_parser goal
         ]
         
         for goal in default_goals:
@@ -179,6 +187,7 @@ class EvolutionOrchestrator:
         scores["testing_framework"] = self.testing_framework.get_health_score()
         scores["failure_analysis"] = self.failure_analysis.get_health_score()
         scores["meta_evaluation"] = self.meta_evaluation.get_health_score()
+        scores["reflection_parser"] = self.reflection_parser.get_health_score()  # Added reflection_parser score
 
         # Clamp to [0, 1]
         for name in scores:
@@ -338,6 +347,7 @@ class EvolutionOrchestrator:
             "testing_framework": self.testing_framework,
             "failure_analysis": self.failure_analysis,
             "meta_evaluation": self.meta_evaluation,
+            "reflection_parser": self.reflection_parser,  # Added reflection_parser
         }
 
         target = subsystem_map.get(subsystem_name)
@@ -453,6 +463,26 @@ class EvolutionOrchestrator:
         except Exception as e:
             logger.error("Failed to log evolution cycle to %s: %s", LOG_FILE, e)
 
+    def _log_reflection_data(self, subsystem_name: str, reflection_data: Dict[str, Any]):
+        """Log reflection data to the reflection log file.
+
+        Args:
+            subsystem_name: The subsystem that was reflected upon.
+            reflection_data: The parsed reflection data.
+        """
+        log_entry = {
+            "timestamp": time.time(),
+            "subsystem": subsystem_name,
+            "reflection_data": reflection_data
+        }
+        
+        try:
+            with open(REFLECTION_LOG_FILE, 'a') as f:
+                f.write(json.dumps(log_entry) + '\n')
+            logger.debug("Reflection data logged to %s", REFLECTION_LOG_FILE)
+        except Exception as e:
+            logger.error("Failed to log reflection data to %s: %s", REFLECTION_LOG_FILE, e)
+
     def _save_state(self):
         """Save the current orchestrator state to a JSON file for resumption."""
         state = {
@@ -504,6 +534,101 @@ class EvolutionOrchestrator:
             logger.info("Orchestrator state loaded successfully from %s", STATE_FILE)
         except Exception as e:
             logger.error("Failed to load orchestrator state from %s: %s", STATE_FILE, e)
+
+    def _parse_reflection_and_update_strategy(self, subsystem_name: str, mutation_success: bool):
+        """Parse the reflection log and update mutation strategies based on insights.
+
+        This method implements the reflection parsing step in the unified evolution loop.
+        After each mutation cycle, it parses the reflection log, extracts structured insights,
+        and feeds them into the mutation strategy selector.
+
+        Args:
+            subsystem_name: The subsystem that was mutated.
+            mutation_success: Whether the mutation was successful.
+        """
+        logger.info("Parsing reflection data for subsystem '%s' after mutation (success=%s)", 
+                   subsystem_name, mutation_success)
+        
+        try:
+            # Read the reflection log to get recent reflection data
+            reflection_data = None
+            if os.path.exists(REFLECTION_LOG_FILE):
+                with open(REFLECTION_LOG_FILE, 'r') as f:
+                    lines = f.readlines()
+                    if lines:
+                        # Get the last reflection entry for this subsystem
+                        for line in reversed(lines):
+                            try:
+                                entry = json.loads(line.strip())
+                                if entry.get("subsystem") == subsystem_name:
+                                    reflection_data = entry.get("reflection_data")
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+            
+            # If no reflection data exists, create a basic one from the mutation outcome
+            if reflection_data is None:
+                reflection_data = {
+                    "subsystem": subsystem_name,
+                    "mutation_success": mutation_success,
+                    "gaps_identified": [],
+                    "priorities": [],
+                    "insights": []
+                }
+            
+            # Parse the reflection data to extract structured insights
+            parsed_insights = self.reflection_parser.parse_reflection(reflection_data)
+            
+            if parsed_insights:
+                logger.info("Parsed %d insights from reflection data for subsystem '%s'", 
+                          len(parsed_insights), subsystem_name)
+                
+                # Extract gaps and priorities from parsed insights
+                gaps = parsed_insights.get("gaps_identified", [])
+                priorities = parsed_insights.get("priorities", [])
+                
+                # Feed insights into mutation strategy selector
+                if gaps or priorities:
+                    logger.info("Feeding %d gaps and %d priorities into mutation strategy selector for '%s'",
+                              len(gaps), len(priorities), subsystem_name)
+                    
+                    # Update mutation engine strategy based on parsed insights
+                    strategy_update = {
+                        "subsystem": subsystem_name,
+                        "gaps": gaps,
+                        "priorities": priorities,
+                        "insights": parsed_insights.get("insights", [])
+                    }
+                    
+                    # Call mutation engine to update its strategy
+                    self.mutation_engine.update_strategy(strategy_update)
+                    
+                    # Add new goals based on identified gaps and priorities
+                    for gap in gaps:
+                        if isinstance(gap, dict) and "description" in gap and "priority" in gap:
+                            self.add_goal(
+                                priority=gap["priority"],
+                                goal_description=gap["description"],
+                                subsystem=subsystem_name
+                            )
+                    
+                    for priority in priorities:
+                        if isinstance(priority, dict) and "description" in priority and "priority_level" in priority:
+                            self.add_goal(
+                                priority=priority["priority_level"],
+                                goal_description=priority["description"],
+                                subsystem=subsystem_name
+                            )
+                    
+                    logger.info("Mutation strategy updated for subsystem '%s' based on reflection insights", 
+                              subsystem_name)
+                else:
+                    logger.debug("No gaps or priorities found in reflection insights for '%s'", subsystem_name)
+            else:
+                logger.debug("No insights parsed from reflection data for subsystem '%s'", subsystem_name)
+                
+        except Exception as e:
+            logger.exception("Error during reflection parsing for subsystem '%s': %s", subsystem_name, e)
 
     def evolution_cycle(self):
         """Execute one complete evolution cycle."""
@@ -620,6 +745,9 @@ class EvolutionOrchestrator:
 
         # Log the evolution cycle
         self._log_evolution_cycle(selected, strategy, success, old_scores, self.subsystem_scores)
+        
+        # NEW: Parse reflection and update mutation strategy based on insights
+        self._parse_reflection_and_update_strategy(selected, success)
         
         # Save state after each cycle
         self._save_state()
