@@ -1,15 +1,5 @@
 [
   {
-    "name": "memoized_sorted_primes",
-    "code": "def memoized_sorted_primes(limit):\n    cache = {}\n    def is_prime(n):\n        if n < 2:\n            return False\n        if n in cache:\n            return cache[n]\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                cache[n] = False\n                return False\n        cache[n] = True\n        return True\n    primes = [x for x in range(2, limit) if is_prime(x)]\n    if len(primes) <= 1:\n        return primes\n    pivot = primes[len(primes)//2]\n    left = [x for x in primes if x < pivot]\n    mid = [x for x in primes if x == pivot]\n    right = [x for x in primes if x > pivot]\n    return memoized_sorted_primes(len(left)) + mid + memoized_sorted_primes(len(right))",
-    "created": 1780628661.716125
-  },
-  {
-    "name": "memoized_retry_fibonacci",
-    "code": "def memoized_retry_fibonacci(n, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    \n    def compute_fib(k):\n        if k in cache:\n            return cache[k]\n        if k < 0:\n            raise ValueError(\"n must be non-negative\")\n        a, b = 0, 1\n        for _ in range(k):\n            a, b = b, a + b\n        cache[k] = a\n        return a\n    \n    for attempt in range(max_attempts):\n        try:\n            return compute_fib(n)\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
-    "created": 1780628666.006087
-  },
-  {
     "name": "memoized_retry_fibonacci",
     "code": "def memoized_retry_fibonacci(limit, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    def fibonacci(n):\n        if n in cache:\n            return cache[n]\n        if n < 2:\n            cache[n] = n\n            return n\n        a, b = 0, 1\n        for _ in range(2, n + 1):\n            a, b = b, a + b\n        cache[n] = b\n        return b\n    result = []\n    for x in range(limit):\n        for attempt in range(max_attempts):\n            try:\n                result.append(fibonacci(x))\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n                cache.clear()\n    return result",
     "created": 1780630774.0272684
@@ -248,5 +238,15 @@
     "name": "find_fibonacci_primes_with_retry",
     "code": "def find_fibonacci_primes_with_retry(n, max_attempts=3, delay=1):\n    import time\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    if not isinstance(n, int) or n < 1:\n        raise ValueError(\"n must be a positive integer\")\n    \n    for attempt in range(max_attempts):\n        try:\n            a, b = 0, 1\n            result = []\n            while len(result) < n:\n                a, b = b, a + b\n                if is_prime(a):\n                    result.append(a)\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
     "created": 1780651183.7646003
+  },
+  {
+    "name": "memoized_prime_fibonacci_with_retry",
+    "code": "def memoized_prime_fibonacci_with_retry(limit, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def prime_factors(n):\n        factors = []\n        d = 2\n        while d * d <= n:\n            while n % d == 0:\n                factors.append(d)\n                n //= d\n            d += 1\n        if n > 1:\n            factors.append(n)\n        return factors\n    \n    def compute_fib(k):\n        if k in cache:\n            return cache[k]\n        if k < 0:\n            raise ValueError(\"n must be non-negative\")\n        a, b = 0, 1\n        for _ in range(k):\n            a, b = b, a + b\n        cache[k] = a\n        return a\n    \n    result = []\n    n = 0\n    while len(result) < limit:\n        for attempt in range(max_attempts):\n            try:\n                fib_val = compute_fib(n)\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n        if is_prime(fib_val):\n            factors = prime_factors(fib_val)\n            result.append({fib_val: factors})\n        n += 1\n    return result",
+    "created": 1780652573.4190955
+  },
+  {
+    "name": "cached_prime_fibonacci_sequence",
+    "code": "def cached_prime_fibonacci_sequence(n, max_attempts=3, delay=1):\n    import time\n    if not isinstance(n, int) or n < 1:\n        raise ValueError(\"n must be a positive integer\")\n    \n    fib_cache = {0: 0, 1: 1}\n    prime_cache = {}\n    \n    def get_fibonacci(k):\n        if k in fib_cache:\n            return fib_cache[k]\n        a, b = 0, 1\n        for _ in range(2, k + 1):\n            a, b = b, a + b\n        fib_cache[k] = b\n        return b\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        if num in prime_cache:\n            return prime_cache[num]\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                prime_cache[num] = False\n                return False\n        prime_cache[num] = True\n        return True\n    \n    for attempt in range(max_attempts):\n        try:\n            result = []\n            index = 2\n            while len(result) < n:\n                fib_val = get_fibonacci(index)\n                if is_prime(fib_val):\n                    result.append(fib_val)\n                index += 1\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)\n            fib_cache.clear()\n            prime_cache.clear()",
+    "created": 1780652576.1353943
   }
 ]

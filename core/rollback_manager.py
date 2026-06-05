@@ -3,6 +3,7 @@
 Maintains an atomic transaction log for all file writes, implements try/except/finally
 wrappers for mutations, and provides rollback capabilities to restore files to their
 pre-mutation state on failure. Integrates with the failure pattern miner for diagnostics.
+Reports rollback events to health dashboard with cause tracking.
 """
 
 import os
@@ -49,8 +50,10 @@ class RollbackManager:
         self.transaction_log: Dict[str, TransactionEntry] = {}
         self._current_transaction_id: Optional[str] = None
         self._snapshots: List[FileSnapshot] = []
+        self._rollback_frequency: Dict[str, int] = {}  # module -> rollback count
         self._ensure_directories()
         self._load_transaction_log()
+        self._load_rollback_frequency()
 
     def _ensure_directories(self) -> None:
         """Ensure backup and log directories exist."""
@@ -79,6 +82,25 @@ class RollbackManager:
             data.append(entry_dict)
         with open(self.log_file, 'w') as f:
             json.dump(data, f, indent=2)
+
+    def _load_rollback_frequency(self) -> None:
+        """Load rollback frequency data from disk."""
+        freq_file = self.backup_dir / "rollback_frequency.json"
+        if freq_file.exists():
+            try:
+                with open(freq_file, 'r') as f:
+                    self._rollback_frequency = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load rollback frequency: {e}")
+
+    def _save_rollback_frequency(self) -> None:
+        """Persist rollback frequency data to disk."""
+        freq_file = self.backup_dir / "rollback_frequency.json"
+        try:
+            with open(freq_file, 'w') as f:
+                json.dump(self._rollback_frequency, f, indent=2)
+        except IOError as e:
+            logger.error(f"Failed to save rollback frequency: {e}")
 
     def _compute_file_hash(self, file_path: str) -> str:
         """Compute SHA-256 hash of a file."""
@@ -197,7 +219,14 @@ class RollbackManager:
         # Integrate with failure pattern miner
         self._notify_failure_pattern_miner(tid, entry.module_name, reason)
         
+        # Report to health dashboard
+        self._report_to_health_dashboard(tid, entry.module_name, reason, snapshots)
+        
+        # Track rollback frequency per module
+        self._track_rollback_frequency(entry.module_name)
+        
         self._save_transaction_log()
+        self._save_rollback_frequency()
         self._current_transaction_id = None
         self._snapshots = []
         
@@ -246,6 +275,98 @@ class RollbackManager:
             logger.debug("FailurePatternMiner not available, skipping integration")
         except Exception as e:
             logger.warning(f"Failed to notify failure pattern miner: {e}")
+
+    def _report_to_health_dashboard(self, transaction_id: str, module: str, reason: Optional[str], snapshots: List[FileSnapshot]) -> None:
+        """Report rollback event to health dashboard with cause information."""
+        try:
+            from core.health_dashboard import HealthDashboard
+            dashboard = HealthDashboard()
+            
+            # Determine the cause of rollback
+            cause = "unknown"
+            if reason:
+                if "conflict" in reason.lower():
+                    cause = "conflict"
+                elif "partial" in reason.lower() or "incomplete" in reason.lower():
+                    cause = "partial_failure"
+                elif "timeout" in reason.lower():
+                    cause = "timeout"
+                elif "permission" in reason.lower() or "access" in reason.lower():
+                    cause = "permission_error"
+                elif "disk" in reason.lower() or "space" in reason.lower():
+                    cause = "disk_error"
+                elif "corrupt" in reason.lower() or "invalid" in reason.lower():
+                    cause = "corruption"
+                else:
+                    cause = "other_error"
+            
+            dashboard.record_event(
+                event_type="rollback",
+                module=module,
+                transaction_id=transaction_id,
+                cause=cause,
+                reason=reason,
+                affected_files=[s.path for s in snapshots],
+                timestamp=datetime.utcnow().isoformat()
+            )
+        except ImportError:
+            logger.debug("HealthDashboard not available, skipping report")
+        except Exception as e:
+            logger.warning(f"Failed to report to health dashboard: {e}")
+
+    def _track_rollback_frequency(self, module_name: str) -> None:
+        """Track rollback frequency per module."""
+        if module_name in self._rollback_frequency:
+            self._rollback_frequency[module_name] += 1
+        else:
+            self._rollback_frequency[module_name] = 1
+
+    def get_rollback_frequency(self, module_name: Optional[str] = None) -> Dict[str, int]:
+        """Get rollback frequency data, optionally filtered by module."""
+        if module_name:
+            return {module_name: self._rollback_frequency.get(module_name, 0)}
+        return dict(self._rollback_frequency)
+
+    def get_aggregate_rollback_stats(self) -> Dict[str, Any]:
+        """Provide aggregate rollback statistics for dashboard."""
+        total_rollbacks = sum(self._rollback_frequency.values())
+        modules_with_rollbacks = len(self._rollback_frequency)
+        
+        # Get rollback history for additional stats
+        history = self.get_rollback_history()
+        causes = {}
+        for entry in history:
+            cause = "unknown"
+            reason = entry.get("reason", "")
+            if reason:
+                if "conflict" in reason.lower():
+                    cause = "conflict"
+                elif "partial" in reason.lower() or "incomplete" in reason.lower():
+                    cause = "partial_failure"
+                elif "timeout" in reason.lower():
+                    cause = "timeout"
+                elif "permission" in reason.lower() or "access" in reason.lower():
+                    cause = "permission_error"
+                elif "disk" in reason.lower() or "space" in reason.lower():
+                    cause = "disk_error"
+                elif "corrupt" in reason.lower() or "invalid" in reason.lower():
+                    cause = "corruption"
+                else:
+                    cause = "other_error"
+            causes[cause] = causes.get(cause, 0) + 1
+        
+        # Get most affected modules
+        sorted_modules = sorted(self._rollback_frequency.items(), key=lambda x: x[1], reverse=True)
+        top_modules = [{"module": mod, "count": count} for mod, count in sorted_modules[:10]]
+        
+        return {
+            "total_rollbacks": total_rollbacks,
+            "modules_with_rollbacks": modules_with_rollbacks,
+            "rollback_frequency_per_module": dict(self._rollback_frequency),
+            "causes_breakdown": causes,
+            "top_affected_modules": top_modules,
+            "last_updated": datetime.utcnow().isoformat()
+        }
 
     @contextmanager
     def mutation_context(self, module_name: str, operation: str, files: List[str]):

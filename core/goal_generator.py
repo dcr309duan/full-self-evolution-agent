@@ -67,7 +67,8 @@ def generate_goals(
     coverage_weight: float = 0.5,
     curiosity_goals: Optional[List[Goal]] = None,
     retry_rate_threshold: float = 0.3,
-    permission_failure_threshold: int = 5
+    permission_failure_threshold: int = 5,
+    health_dashboard: Optional[Dict] = None
 ) -> List[Goal]:
     """Generate goals based on simulation metrics, knowledge base fitness scores, and curiosity engine input.
 
@@ -78,6 +79,7 @@ def generate_goals(
         curiosity_goals: Optional list of high-priority goals from the curiosity engine.
         retry_rate_threshold: Threshold for fs_abstraction retry rate to trigger infrastructure hardening.
         permission_failure_threshold: Number of permission failures to trigger infrastructure hardening.
+        health_dashboard: Optional dashboard containing system health status, including lockdown state.
 
     Returns:
         List of generated goals, sorted by priority (highest first).
@@ -85,6 +87,57 @@ def generate_goals(
     global consecutive_successes, current_accuracy_threshold
     
     goals: List[Goal] = []
+
+    # Check health_dashboard before generating new goals
+    if health_dashboard:
+        lockdown_active = health_dashboard.get("lockdown_active", False)
+        if lockdown_active:
+            # If lockdown active, generate only 'stabilization' goals
+            logger.info("Goal generator in stabilization mode due to lockdown")
+            for metrics in metrics_list:
+                if metrics.accuracy < current_accuracy_threshold:
+                    goal = Goal(
+                        description=f"Fix failing module {metrics.module}",
+                        priority=GoalPriority.CRITICAL,
+                        module=metrics.module,
+                        goal_type="stabilization",
+                        source="fitness",
+                        tags=["stabilization", "lockdown"]
+                    )
+                    goals.append(goal)
+                    logger.debug(
+                        "Generated stabilization goal for %s (accuracy=%.2f, threshold=%.2f)",
+                        metrics.module, metrics.accuracy, current_accuracy_threshold
+                    )
+                if metrics.fs_abstraction_retry_rate > retry_rate_threshold:
+                    goal = Goal(
+                        description=f"Reduce error rate in {metrics.module}",
+                        priority=GoalPriority.HIGH,
+                        module=metrics.module,
+                        goal_type="stabilization",
+                        source="fitness",
+                        tags=["stabilization", "lockdown", "error_rate"]
+                    )
+                    goals.append(goal)
+                    logger.debug(
+                        "Generated stabilization goal for %s (retry rate=%.2f, threshold=%.2f)",
+                        metrics.module, metrics.fs_abstraction_retry_rate, retry_rate_threshold
+                    )
+                if metrics.failure_cluster:
+                    goal = Goal(
+                        description=f"Fix persistent failure cluster in {metrics.module}",
+                        priority=GoalPriority.CRITICAL,
+                        module=metrics.module,
+                        goal_type="stabilization",
+                        source="fitness",
+                        tags=["stabilization", "lockdown", "failure_cluster"]
+                    )
+                    goals.append(goal)
+                    logger.info(
+                        "Generated stabilization goal for %s (failure cluster detected)",
+                        metrics.module
+                    )
+            return goals
 
     # First, check knowledge base for fitness scores and generate challenge goals
     challenge_goals = _generate_challenge_goals_from_knowledge_base()
@@ -328,7 +381,8 @@ def generate_goals_from_report(
     coverage_weight: float = 0.5,
     curiosity_goals: Optional[List[Goal]] = None,
     retry_rate_threshold: float = 0.3,
-    permission_failure_threshold: int = 5
+    permission_failure_threshold: int = 5,
+    health_dashboard: Optional[Dict] = None
 ) -> List[Goal]:
     """Generate goals from a simulation report dictionary.
 
@@ -355,6 +409,7 @@ def generate_goals_from_report(
         curiosity_goals: Optional list of high-priority goals from the curiosity engine.
         retry_rate_threshold: Threshold for fs_abstraction retry rate.
         permission_failure_threshold: Threshold for permission failures.
+        health_dashboard: Optional dashboard containing system health status.
 
     Returns:
         List of generated goals.
@@ -374,7 +429,7 @@ def generate_goals_from_report(
         )
         metrics_list.append(metrics)
 
-    return generate_goals(metrics_list, accuracy_threshold, coverage_weight, curiosity_goals, retry_rate_threshold, permission_failure_threshold)
+    return generate_goals(metrics_list, accuracy_threshold, coverage_weight, curiosity_goals, retry_rate_threshold, permission_failure_threshold, health_dashboard)
 
 
 def prioritize_goals(goals: List[Goal]) -> List[Goal]:
@@ -863,55 +918,4 @@ if __name__ == "__main__":
 
     print("\nSub-goals for first goal (dependency-based):")
     if generated:
-        sub_goals = generate_sub_goals(generated[0], decomposition_strategy="dependency-based")
-        for sub_goal in sub_goals:
-            deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
-            print(f"  {sub_goal}{deps}")
-
-    # Test blocker resolution goals
-    print("\nTesting blocker resolution goals:")
-    # Add some blocker info to knowledge base
-    knowledge_base["blocker:module_a:critical_dependency"] = "Critical: Module A depends on outdated library X"
-    knowledge_base["blocker:module_c:high_impact"] = "High impact: Module C has circular dependency with Module D"
-    
-    for module in ["module_a", "module_b", "module_c"]:
-        blocker_goals = generate_blocker_resolution_goals(module)
-        if blocker_goals:
-            print(f"  Blocker goals for {module}:")
-            for bg in blocker_goals:
-                print(f"    {bg} (tags: {bg.tags})")
-        else:
-            print(f"  No blocker goals for {module}")
-
-    # Test archiving
-    print("\nArchiving first goal with lesson:")
-    if generated:
-        archive_goal_with_lesson(generated[0], "Found critical accuracy issue in module_a")
-        print(f"  Archived: {generated[0].archived}")
-        print(f"  Lesson: {generated[0].lesson}")
-        print(f"  Registry size: {len(goal_registry)}")
-        print(f"  Knowledge base size: {len(knowledge_base)}")
-
-    # Test meta-goal triggering with 10 consecutive successes
-    print("\nTesting meta-goal triggering:")
-    # Reset counter
-    consecutive_successes = 0
-    current_accuracy_threshold = 0.8
-    
-    # Create metrics that all exceed threshold
-    perfect_metrics = [
-        SimulationMetrics(
-            module="module_a",
-            accuracy=0.95,
-            has_unexpected_side_effects=False,
-            coverage=0.9
-        ),
-        SimulationMetrics(
-            module="module_b",
-            accuracy=0.96,
-            has_unexpected_side_effects=False,
-            coverage=0.95
-        )
-    ]
-    
-    # Simulate 10 consecutive successes
+        sub_goals = generate_sub_go

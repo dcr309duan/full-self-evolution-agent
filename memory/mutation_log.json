@@ -1141,5 +1141,49 @@
         "timestamp": 1780651183.7633815
       }
     ]
+  },
+  {
+    "timestamp": 1780652578.2611158,
+    "results": [
+      {
+        "parent_a": "prime_fibonacci_prime_factors",
+        "parent_b": "memoized_retry_fibonacci",
+        "operator": "mutate",
+        "code": "def memoized_prime_fibonacci_with_retry(limit, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def prime_factors(n):\n        factors = []\n        d = 2\n        while d * d <= n:\n            while n % d == 0:\n                factors.append(d)\n                n //= d\n            d += 1\n        if n > 1:\n            factors.append(n)\n        return factors\n    \n    def compute_fib(k):\n        if k in cache:\n            return cache[k]\n        if k < 0:\n            raise ValueError(\"n must be non-negative\")\n        a, b = 0, 1\n        for _ in range(k):\n            a, b = b, a + b\n        cache[k] = a\n        return a\n    \n    result = []\n    n = 0\n    while len(result) < limit:\n        for attempt in range(max_attempts):\n            try:\n                fib_val = compute_fib(n)\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n        if is_prime(fib_val):\n            factors = prime_factors(fib_val)\n            result.append({fib_val: factors})\n        n += 1\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: memoized_prime_fibonacci_with_retry\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780652573.4175022
+      },
+      {
+        "parent_a": "retry_prime_fibonacci",
+        "parent_b": "optimized_fibonacci_factorizer",
+        "operator": "crossover",
+        "code": "def cached_prime_fibonacci_sequence(n, max_attempts=3, delay=1):\n    import time\n    if not isinstance(n, int) or n < 1:\n        raise ValueError(\"n must be a positive integer\")\n    \n    fib_cache = {0: 0, 1: 1}\n    prime_cache = {}\n    \n    def get_fibonacci(k):\n        if k in fib_cache:\n            return fib_cache[k]\n        a, b = 0, 1\n        for _ in range(2, k + 1):\n            a, b = b, a + b\n        fib_cache[k] = b\n        return b\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        if num in prime_cache:\n            return prime_cache[num]\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                prime_cache[num] = False\n                return False\n        prime_cache[num] = True\n        return True\n    \n    for attempt in range(max_attempts):\n        try:\n            result = []\n            index = 2\n            while len(result) < n:\n                fib_val = get_fibonacci(index)\n                if is_prime(fib_val):\n                    result.append(fib_val)\n                index += 1\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)\n            fib_cache.clear()\n            prime_cache.clear()",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: cached_prime_fibonacci_sequence\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780652576.1340027
+      },
+      {
+        "parent_a": "retry",
+        "parent_b": "memoized_retry_fibonacci",
+        "operator": "hybrid",
+        "code": "def retry_fetch_with_cache(func, args_list, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    results = []\n    for args in args_list:\n        key = str(args)\n        if key in cache:\n            results.append(cache[key])\n            continue\n        for attempt in range(max_attempts):\n            try:\n                value = func(*args)\n                cache[key] = value\n                results.append(value)\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n                cache.clear()\n    return results",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_fetch_with_cache\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780652578.2599797
+      }
+    ]
   }
 ]

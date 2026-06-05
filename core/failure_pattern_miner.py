@@ -3,7 +3,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from collections import defaultdict
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class ConflictType(Enum):
@@ -39,6 +39,7 @@ class FailurePatternMiner:
         self._module_conflicts: Dict[str, Set[str]] = defaultdict(set)
         self._conflict_type_counts: Dict[ConflictType, int] = defaultdict(int)
         self._total_rollbacks: int = 0
+        self._failure_events: List[Dict] = []  # For health dashboard
 
     def record_failure(
         self,
@@ -78,6 +79,48 @@ class FailurePatternMiner:
         self._module_conflicts[module_b].add(module_a)
         self._conflict_type_counts[conflict_type] += 1
         self._total_rollbacks += 1
+
+        # Emit structured failure event to health dashboard
+        failure_event = {
+            "module_a": module_a,
+            "module_b": module_b,
+            "conflict_type": conflict_type.value,
+            "error_type": self._classify_failure(conflict_type),
+            "timestamp": datetime.now().isoformat(),
+            "rollback_count": self._patterns[pattern_key].rollback_count
+        }
+        self._failure_events.append(failure_event)
+
+    def _classify_failure(self, conflict_type: ConflictType) -> str:
+        """Classify failure based on conflict type."""
+        if conflict_type == ConflictType.DEPENDENCY:
+            return "dependency"
+        elif conflict_type == ConflictType.OVERLAP:
+            return "sandbox"
+        elif conflict_type == ConflictType.INTERFACE:
+            return "rollback"
+        else:
+            return "other"
+
+    def get_recent_failures(self, window_size: int = 3600) -> List[Dict]:
+        """
+        Get failures that occurred within the specified time window.
+
+        Args:
+            window_size: Time window in seconds (default 1 hour)
+
+        Returns:
+            List of failure events within the time window
+        """
+        cutoff_time = datetime.now() - timedelta(seconds=window_size)
+        recent_failures = []
+        
+        for event in self._failure_events:
+            event_time = datetime.fromisoformat(event["timestamp"])
+            if event_time >= cutoff_time:
+                recent_failures.append(event)
+        
+        return recent_failures
 
     def get_module_conflict_summary(self, module: str) -> Dict:
         """
@@ -251,3 +294,4 @@ class FailurePatternMiner:
         self._module_conflicts.clear()
         self._conflict_type_counts.clear()
         self._total_rollbacks = 0
+        self._failure_events.clear()

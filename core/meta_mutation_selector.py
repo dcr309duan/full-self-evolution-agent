@@ -9,8 +9,9 @@ from typing import List, Dict, Tuple, Optional
 class MetaMutationSelector:
     """Selects mutation types based on historical performance using a decision forest."""
 
-    def __init__(self, strategies_log: Optional[List[Dict]] = None):
+    def __init__(self, strategies_log: Optional[List[Dict]] = None, health_dashboard: Optional[Dict] = None):
         self.strategies_log = strategies_log or []
+        self.health_dashboard = health_dashboard or {}
         self.mutation_stats = defaultdict(lambda: {"count": 0, "successes": 0, "impact_sum": 0.0})
         self.trees = []
         self._build_forest()
@@ -84,6 +85,13 @@ class MetaMutationSelector:
         if not self.trees:
             self._build_forest()
 
+        # Check health dashboard lockdown status
+        lockdown_active = self.health_dashboard.get("lockdown", False)
+        if lockdown_active:
+            import logging
+            logging.getLogger(__name__).info("Meta-mutation selector paused due to stability lockdown")
+            return "none"  # Suppress all mutation suggestions
+
         # Aggregate votes from all trees
         vote_scores = defaultdict(float)
         for tree in self.trees:
@@ -100,6 +108,13 @@ class MetaMutationSelector:
         """Inject a weighted preference into the mutation engine based on learned biases."""
         if not self.mutation_stats:
             self.analyze_last_50_outcomes()
+
+        # Check health dashboard lockdown status
+        lockdown_active = self.health_dashboard.get("lockdown", False)
+        if lockdown_active:
+            import logging
+            logging.getLogger(__name__).info("Meta-mutation selector paused due to stability lockdown")
+            return {"none": 1.0}  # Suppress all mutation suggestions
 
         # Compute weights proportional to score
         scores = {mtype: data["score"] for mtype, data in self.mutation_stats.items()}

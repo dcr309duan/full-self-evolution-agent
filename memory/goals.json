@@ -14,6 +14,18 @@
       "created_at": 1780651550.8343124
     },
     {
+      "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780652325.9041018
+    },
+    {
+      "description": "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, identifies modules or module pairs that appear in >3 failures, and auto-generates a goal to refactor or simplify those specific integration points.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780652325.9069374
+    },
+    {
       "description": "Create a performance monitoring and optimization system",
       "priority": 6,
       "status": "pending",
@@ -895,6 +907,13 @@
       "status": "completed",
       "created_at": 1780651550.8315756,
       "completed_at": 1780652270.5035152
+    },
+    {
+      "description": "Implement a system-wide integration health dashboard that tracks cross-module dependency failures, sandbox execution errors, and rollback frequencies, and triggers a 'stability lockdown' mode (pausing new mutations) if the rolling 10-cycle failure rate exceeds 20%.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780652325.9006042,
+      "completed_at": 1780652570.373166
     }
   ],
   "generated_goals": []
