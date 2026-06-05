@@ -5,31 +5,36 @@
       "description": "Create a 'mutation' mechanism that randomly selects two existing functions or strategies from the knowledge base, combines or modifies them, and tests the result against a basic problem suite, logging success or failure to generate new experimental capabilities.",
       "priority": 8,
       "status": "pending",
-      "created_at": 1780623633.2465868
+      "created_at": 1780623633.2465868,
+      "consecutive_failures": 0
     },
     {
       "description": "Build an API server to expose agent capabilities externally",
       "priority": 7,
       "status": "pending",
-      "created_at": 1780623346.364249
+      "created_at": 1780623346.364249,
+      "consecutive_failures": 0
     },
     {
       "description": "Develop multi-file code analysis and refactoring capability",
       "priority": 7,
       "status": "pending",
-      "created_at": 1780623346.3650715
+      "created_at": 1780623346.3650715,
+      "consecutive_failures": 0
     },
     {
       "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
       "priority": 7,
       "status": "pending",
-      "created_at": 1780623633.2473752
+      "created_at": 1780623633.2473752,
+      "consecutive_failures": 0
     },
     {
       "description": "Create a performance monitoring and optimization system",
       "priority": 6,
       "status": "pending",
-      "created_at": 1780623346.3657625
+      "created_at": 1780623346.3657625,
+      "consecutive_failures": 0
     }
   ],
   "completed_goals": [

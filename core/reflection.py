@@ -1,11 +1,38 @@
 """Self-reflection and goal generation module."""
 import json
+import os
 import time
 from core.llm import call_deepseek, think_deep
 from core.memory import (
     get_evolution_state, get_knowledge_base, get_goals,
     add_insight, add_goal, save_goals
 )
+from config import MEMORY_DIR
+
+
+def load_principles():
+    """Load core evolution principles."""
+    path = os.path.join(MEMORY_DIR, "principles.json")
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def detect_stuck_pattern(kb):
+    """Detect if agent is stuck repeating the same failures."""
+    failures = kb.get("failed_approaches", [])
+    if len(failures) < 3:
+        return None
+    recent = failures[-5:]
+    approaches = [f.get("approach", "")[:60] for f in recent]
+    from collections import Counter
+    counts = Counter(approaches)
+    repeated = [(a, c) for a, c in counts.items() if c >= 3]
+    if repeated:
+        return repeated[0][0]
+    return None
 
 
 def reflect_on_state():
@@ -13,8 +40,17 @@ def reflect_on_state():
     state = get_evolution_state()
     kb = get_knowledge_base()
     goals = get_goals()
+    principles = load_principles()
+    stuck_on = detect_stuck_pattern(kb)
     
     context = f"""You are a self-evolving AI agent reflecting on your current state.
+
+核心原则（必须遵循）:
+{json.dumps(principles.get('core_principles', []), ensure_ascii=False, indent=2)}
+
+进化哲学: {principles.get('evolution_philosophy', '')}
+
+元指令: {json.dumps(principles.get('meta_directives', []), ensure_ascii=False, indent=2)}
 
 Current Evolution State:
 - Cycle count: {state['cycle_count']}
@@ -26,7 +62,10 @@ Knowledge Base Summary:
 - Insights accumulated: {len(kb.get('insights', []))}
 - Successful strategies: {len(kb.get('successful_strategies', []))}
 - Failed approaches: {len(kb.get('failed_approaches', []))}
-- Last 3 insights: {json.dumps(kb.get('insights', [])[-3:])}
+- Last 3 insights: {json.dumps(kb.get('insights', [])[-3:], ensure_ascii=False)}
+- Recent failures: {json.dumps([f.get('approach','')[:80] for f in kb.get('failed_approaches',[])[-5:]], ensure_ascii=False)}
+
+{"!!! 警告: 检测到重复失败模式: " + stuck_on + " - 必须彻底改变策略 !!!" if stuck_on else ""}
 
 Goals:
 - Primary: {goals['primary_goal']}

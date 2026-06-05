@@ -28,11 +28,20 @@ def log_cycle(cycle_num, message):
 
 
 def select_goal(goals):
-    """Select the highest priority pending goal."""
+    """Select the highest priority pending goal, skipping repeatedly failed ones."""
     pending = [g for g in goals.get("sub_goals", []) if g["status"] == "pending"]
     if not pending:
         return None
-    return pending[0]
+    for g in pending:
+        if g.get("consecutive_failures", 0) >= 3:
+            continue
+        return g
+    # All goals have failed 3+ times - reset the least-failed one and try a different approach
+    if pending:
+        pending.sort(key=lambda x: x.get("consecutive_failures", 0))
+        pending[0]["consecutive_failures"] = 0
+        return pending[0]
+    return None
 
 
 def execute_goal(goal, state):
@@ -151,13 +160,17 @@ def evolution_cycle(state):
         result = execute_goal(goal, state)
         
         if result["success"]:
+            goal["consecutive_failures"] = 0
             complete_goal(goal["description"])
             state["capabilities"].append(goal["description"][:100])
             if len(state["capabilities"]) > 50:
                 state["capabilities"] = state["capabilities"][-50:]
             log_cycle(cycle_num, f"Goal completed: {goal['description']}")
         else:
-            log_cycle(cycle_num, f"Goal failed: {result.get('output', 'unknown')[:200]}")
+            goal["consecutive_failures"] = goal.get("consecutive_failures", 0) + 1
+            from core.memory import save_goals
+            save_goals(goals)
+            log_cycle(cycle_num, f"Goal failed (attempt {goal['consecutive_failures']}): {result.get('output', 'unknown')[:200]}")
     
     # Phase 3: Update status report every cycle, commit & push every 5
     try:

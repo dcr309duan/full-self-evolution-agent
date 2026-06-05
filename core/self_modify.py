@@ -95,10 +95,16 @@ def self_modify(target_file, modification_goal, dry_run=False):
     """
     current_code = read_file(target_file)
     if current_code is None:
-        new_code = generate_code(
-            f"Create new file '{target_file}' that: {modification_goal}",
-            context=""
-        )
+        system_prompt = f"""You are creating a new Python source file named '{target_file}'.
+Output ONLY the file content that should be written to '{target_file}'.
+Do NOT output a script that creates the file. Output the actual content of the target file itself.
+Do NOT wrap in markdown code fences.
+The file should be a proper Python module with imports, functions, and/or classes as needed."""
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Create the file '{target_file}' with this purpose: {modification_goal}"}
+        ]
+        new_code = call_deepseek(messages, temperature=0.4, max_tokens=4096)
     else:
         prompt = f"""Modify the following code to achieve: {modification_goal}
 
@@ -110,7 +116,7 @@ Current code in '{target_file}':
 Output the COMPLETE modified file content. Do not use placeholders."""
         
         messages = [
-            {"role": "system", "content": "You modify Python code to achieve specified goals. Output only the complete file content."},
+            {"role": "system", "content": "You modify Python code to achieve specified goals. Output only the complete file content, no markdown fences."},
             {"role": "user", "content": prompt}
         ]
         new_code = call_deepseek(messages, temperature=0.3, max_tokens=8192)
