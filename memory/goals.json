@@ -8,6 +8,12 @@
       "created_at": 1780623346.3635554
     },
     {
+      "description": "Create a 'mutation' mechanism that randomly selects two existing functions or strategies from the knowledge base, combines or modifies them, and tests the result against a basic problem suite, logging success or failure to generate new experimental capabilities.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780623633.2465868
+    },
+    {
       "description": "Build an API server to expose agent capabilities externally",
       "priority": 7,
       "status": "pending",
@@ -18,6 +24,12 @@
       "priority": 7,
       "status": "pending",
       "created_at": 1780623346.3650715
+    },
+    {
+      "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780623633.2473752
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -40,6 +52,13 @@
       "status": "completed",
       "created_at": 1780623346.3630624,
       "completed_at": 1780623561.6617355
+    },
+    {
+      "description": "Implement a self-evaluation loop that periodically scores progress across current capabilities, identifies the weakest area, and autonomously generates a new evolution task to address that weakness, using a simple scoring function and a priority queue for generated tasks.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780623633.245946,
+      "completed_at": 1780623702.3836913
     }
   ],
   "generated_goals": []

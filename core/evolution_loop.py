@@ -15,6 +15,7 @@ from core.memory import (
 )
 from core.reflection import reflect_on_state, generate_next_goals
 from core.self_modify import self_modify, add_capability, execute_shell, generate_code, safe_execute
+from core.reporter import write_report, generate_timeline
 
 
 def log_cycle(cycle_num, message):
@@ -158,7 +159,13 @@ def evolution_cycle(state):
         else:
             log_cycle(cycle_num, f"Goal failed: {result.get('output', 'unknown')[:200]}")
     
-    # Phase 3: Git commit progress (every 5 cycles)
+    # Phase 3: Update status report every cycle, commit & push every 5
+    try:
+        write_report()
+        generate_timeline()
+    except Exception:
+        pass
+
     if cycle_num % 5 == 0:
         git_commit(f"Evolution cycle {cycle_num}: auto-commit progress")
     
