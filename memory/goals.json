@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a self-contained integration smoke test that runs the full evolution loop (goal selection → mutation → test → reflection) on a trivial capability (e.g., 'increment a counter') and reports pass/fail with detailed step-level logs",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780636490.6140091
-    },
-    {
       "description": "Build a lightweight 'mutation simulation' module that, given a proposed mutation, clones the affected module's dependency subgraph, applies the change to the clone, runs the relevant test suite on the clone, and returns predicted pass/fail and side-effect impact without touching production code.",
       "priority": 8,
       "status": "pending",
@@ -465,6 +459,13 @@
       "status": "completed",
       "created_at": 1780637080.7263644,
       "completed_at": 1780637245.0923033
+    },
+    {
+      "description": "Create a self-contained integration smoke test that runs the full evolution loop (goal selection → mutation → test → reflection) on a trivial capability (e.g., 'increment a counter') and reports pass/fail with detailed step-level logs",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780636490.6140091,
+      "completed_at": 1780637413.56993
     }
   ],
   "generated_goals": []
