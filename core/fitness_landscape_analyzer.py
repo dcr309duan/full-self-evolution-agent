@@ -2,7 +2,9 @@
 
 This module tracks test outcomes over time, identifies patterns in test
 passing/failing, computes diversity metrics, and suggests new test types
-to fill coverage gaps.
+to fill coverage gaps. Also includes Nash equilibrium visualization data
+tracking stagnation periods, coordination potential scores, and coordinated
+mutation targets.
 """
 
 from collections import defaultdict, Counter
@@ -42,6 +44,15 @@ class TestTypeInfo:
     tags: List[str] = field(default_factory=list)
 
 
+@dataclass
+class NashEquilibriumData:
+    """Data related to Nash equilibrium detection and visualization."""
+    stagnation_periods: List[Dict[str, Any]] = field(default_factory=list)
+    coordination_potential: Dict[Tuple[str, str], float] = field(default_factory=dict)
+    recommended_mutation_targets: List[Tuple[str, str]] = field(default_factory=list)
+    equilibrium_detected: bool = False
+
+
 class FitnessLandscapeAnalyzer:
     """Analyzes the fitness landscape of an agent's test performance over time."""
 
@@ -49,6 +60,10 @@ class FitnessLandscapeAnalyzer:
         self.test_history: List[TestRecord] = []
         self.test_types: Dict[str, TestTypeInfo] = {}
         self._current_episode: List[TestRecord] = []
+        # Nash equilibrium tracking
+        self._module_improvement_history: Dict[str, List[bool]] = defaultdict(list)
+        self._stagnation_threshold: int = 5  # episodes without improvement
+        self._nash_data: NashEquilibriumData = NashEquilibriumData()
 
     def register_test_type(self, test_type_info: TestTypeInfo) -> None:
         """Register a new test type for tracking."""
@@ -299,7 +314,8 @@ class FitnessLandscapeAnalyzer:
             'diversity_scores': diversity,
             'always_passed_count': len(self.find_always_passed_tests()),
             'never_passed_count': len(self.find_never_passed_tests()),
-            'suggested_new_types': self.suggest_new_test_types()
+            'suggested_new_types': self.suggest_new_test_types(),
+            'nash_equilibrium_data': self._get_nash_equilibrium_data()
         }
 
     def get_test_type_distribution(self) -> Dict[str, int]:
@@ -324,3 +340,141 @@ class FitnessLandscapeAnalyzer:
             'pass_rate': passes / len(recent),
             'fail_rate': (len(recent) - passes) / len(recent)
         }
+
+    def record_module_improvement(self, module_name: str, improved: bool) -> None:
+        """Record whether a module showed improvement in the current episode.
+
+        Args:
+            module_name: Name of the module (e.g., test type or agent component).
+            improved: Whether the module improved in this episode.
+        """
+        self._module_improvement_history[module_name].append(improved)
+        self._update_nash_equilibrium_data()
+
+    def _update_nash_equilibrium_data(self) -> None:
+        """Update Nash equilibrium tracking data based on module improvement history."""
+        # Reset nash data
+        self._nash_data = NashEquilibriumData()
+
+        # Track stagnation periods for each module
+        for module, improvements in self._module_improvement_history.items():
+            stagnation_start = None
+            for i, improved in enumerate(improvements):
+                if not improved:
+                    if stagnation_start is None:
+                        stagnation_start = i
+                else:
+                    if stagnation_start is not None:
+                        duration = i - stagnation_start
+                        if duration >= self._stagnation_threshold:
+                            self._nash_data.stagnation_periods.append({
+                                'module': module,
+                                'start_episode': stagnation_start,
+                                'end_episode': i - 1,
+                                'duration': duration
+                            })
+                        stagnation_start = None
+            # Check if still in stagnation at end
+            if stagnation_start is not None:
+                duration = len(improvements) - stagnation_start
+                if duration >= self._stagnation_threshold:
+                    self._nash_data.stagnation_periods.append({
+                        'module': module,
+                        'start_episode': stagnation_start,
+                        'end_episode': len(improvements) - 1,
+                        'duration': duration
+                    })
+
+        # Compute coordination potential for each module pair
+        modules = list(self._module_improvement_history.keys())
+        for i in range(len(modules)):
+            for j in range(i + 1, len(modules)):
+                mod_a = modules[i]
+                mod_b = modules[j]
+                improvements_a = self._module_improvement_history[mod_a]
+                improvements_b = self._module_improvement_history[mod_b]
+
+                # Compute coordination potential as correlation of improvement patterns
+                min_len = min(len(improvements_a), len(improvements_b))
+                if min_len > 1:
+                    a_recent = improvements_a[-min_len:]
+                    b_recent = improvements_b[-min_len:]
+                    # Convert to numeric: 1 for improvement, 0 for no improvement
+                    a_numeric = [1 if x else 0 for x in a_recent]
+                    b_numeric = [1 if x else 0 for x in b_recent]
+                    if len(set(a_numeric)) > 1 and len(set(b_numeric)) > 1:
+                        correlation = np.corrcoef(a_numeric, b_numeric)[0, 1]
+                        # Normalize to [0, 1] where 1 means perfect correlation
+                        coordination_potential = (correlation + 1) / 2
+                    else:
+                        coordination_potential = 0.0
+                else:
+                    coordination_potential = 0.0
+
+                self._nash_data.coordination_potential[(mod_a, mod_b)] = coordination_potential
+
+        # Detect equilibrium: all modules stagnant and high coordination potential
+        stagnant_modules = set()
+        for period in self._nash_data.stagnation_periods:
+            if period['duration'] >= self._stagnation_threshold:
+                stagnant_modules.add(period['module'])
+
+        if len(stagnant_modules) >= 2:
+            # Check if all stagnant modules have high coordination potential
+            high_coordination_pairs = 0
+            total_pairs = 0
+            stagnant_list = list(stagnant_modules)
+            for i in range(len(stagnant_list)):
+                for j in range(i + 1, len(stagnant_list)):
+                    pair = (stagnant_list[i], stagnant_list[j])
+                    if pair in self._nash_data.coordination_potential:
+                        total_pairs += 1
+                        if self._nash_data.coordination_potential[pair] > 0.7:
+                            high_coordination_pairs += 1
+
+            if total_pairs > 0 and high_coordination_pairs / total_pairs > 0.5:
+                self._nash_data.equilibrium_detected = True
+
+        # Generate recommended coordinated mutation targets when equilibrium detected
+        if self._nash_data.equilibrium_detected:
+            # Find pairs with highest coordination potential among stagnant modules
+            sorted_pairs = sorted(
+                [(pair, score) for pair, score in self._nash_data.coordination_potential.items()
+                 if pair[0] in stagnant_modules and pair[1] in stagnant_modules],
+                key=lambda x: x[1],
+                reverse=True
+            )
+            # Recommend top 3 pairs for coordinated mutation
+            for pair, score in sorted_pairs[:3]:
+                self._nash_data.recommended_mutation_targets.append(pair)
+
+    def _get_nash_equilibrium_data(self) -> Dict[str, Any]:
+        """Get the current Nash equilibrium tracking data as a dictionary.
+
+        Returns:
+            Dict with keys:
+                - 'stagnation_periods': List of stagnation period dicts
+                - 'coordination_potential': Dict mapping module pair to score
+                - 'recommended_mutation_targets': List of recommended mutation pairs
+                - 'equilibrium_detected': Boolean flag
+        """
+        return {
+            'stagnation_periods': self._nash_data.stagnation_periods,
+            'coordination_potential': {
+                f"{pair[0]}-{pair[1]}": score
+                for pair, score in self._nash_data.coordination_potential.items()
+            },
+            'recommended_mutation_targets': [
+                f"{pair[0]}-{pair[1]}"
+                for pair in self._nash_data.recommended_mutation_targets
+            ],
+            'equilibrium_detected': self._nash_data.equilibrium_detected
+        }
+
+    def get_nash_equilibrium_data(self) -> NashEquilibriumData:
+        """Get the current Nash equilibrium tracking data object.
+
+        Returns:
+            NashEquilibriumData instance with current tracking data.
+        """
+        return self._nash_data

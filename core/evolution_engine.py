@@ -3,11 +3,14 @@
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 import random
+import logging
 from core.system_state import SystemState
 from core.plasticity_stability_scheduler import PlasticityStabilityScheduler
 from core.goal import Goal
 from core.mutation import Mutation
 from core.ecology_engine import EcologyEngine
+from core.nash_detector import NashDetector
+from core.coordinated_mutator import CoordinatedMutator
 
 
 @dataclass
@@ -17,13 +20,18 @@ class EvolutionEngine:
     system_state: SystemState
     scheduler: PlasticityStabilityScheduler
     ecology_engine: EcologyEngine
+    nash_detector: NashDetector
+    coordinated_mutator: CoordinatedMutator
     mutation_outcomes: List[Dict[str, Any]] = field(default_factory=list)
     consecutive_test_passes: int = 0
+    nash_equilibrium_detected: bool = False
+    nash_escape_attempts: int = 0
     
     def __post_init__(self):
         """Initialize mutation outcomes tracking if not already present."""
         if not hasattr(self.system_state, 'mutation_outcomes'):
             self.system_state.mutation_outcomes = []
+        self.logger = logging.getLogger(__name__)
     
     def select_goal(self, goals: List[Goal]) -> Optional[Goal]:
         """Select a goal based on feasibility threshold from system state.
@@ -92,9 +100,7 @@ class EvolutionEngine:
     
     def _log_meta_parameter_state(self) -> None:
         """Log the current meta-parameter state for continuous monitoring."""
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(
+        self.logger.info(
             f"Meta-parameter state - mutation_rate: {self.system_state.mutation_rate:.4f}, "
             f"goal_acceptance_threshold: {self.system_state.goal_acceptance_threshold:.4f}"
         )
@@ -109,9 +115,6 @@ class EvolutionEngine:
             goals: Current list of goals
             ecology_changes_made: Whether ecology engine made changes this cycle
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         # Count tests and passes
         total_tests = len(goals)
         passed_tests = sum(1 for goal in goals if hasattr(goal, 'passed') and goal.passed)
@@ -124,7 +127,7 @@ class EvolutionEngine:
             difficulty_distribution[difficulty] = difficulty_distribution.get(difficulty, 0) + 1
         
         # Log the report
-        logger.info(
+        self.logger.info(
             f"Fitness Landscape Report - "
             f"Total Tests: {total_tests}, "
             f"Pass Rate: {pass_rate:.1f}%, "
@@ -163,6 +166,83 @@ class EvolutionEngine:
         
         return False
     
+    def _detect_and_escape_nash_equilibrium(self, goals: List[Goal]) -> bool:
+        """Detect Nash equilibrium and attempt coordinated escape if detected.
+        
+        Args:
+            goals: Current list of goals
+            
+        Returns:
+            True if coordinated mutation was applied, False otherwise
+        """
+        # Run Nash detection
+        equilibrium_detected = self.nash_detector.detect_equilibrium(goals)
+        
+        if equilibrium_detected:
+            self.nash_equilibrium_detected = True
+            self.nash_escape_attempts += 1
+            
+            self.logger.info(
+                f"Nash equilibrium detected! Attempting coordinated escape "
+                f"(attempt #{self.nash_escape_attempts})"
+            )
+            
+            # Generate coordinated multi-module mutations
+            coordinated_mutations = self.coordinated_mutator.generate_mutations(goals)
+            
+            if not coordinated_mutations:
+                self.logger.warning("No coordinated mutations generated for Nash escape")
+                return False
+            
+            # Test coordinated mutations in sandbox
+            best_mutation = None
+            best_fitness = float('-inf')
+            
+            for mutation in coordinated_mutations:
+                # Apply mutation in sandbox (temporary copy)
+                sandbox_goals = [goal.clone() for goal in goals]
+                mutation.apply(sandbox_goals)
+                
+                # Evaluate fitness in sandbox
+                fitness = self._evaluate_coordinated_fitness(sandbox_goals)
+                
+                if fitness > best_fitness:
+                    best_fitness = fitness
+                    best_mutation = mutation
+            
+            # Apply best-performing coordinated change
+            if best_mutation is not None:
+                best_mutation.apply(goals)
+                self.logger.info(
+                    f"Applied best coordinated mutation with fitness: {best_fitness:.4f}"
+                )
+                return True
+            else:
+                self.logger.warning("No suitable coordinated mutation found for Nash escape")
+                return False
+        
+        self.nash_equilibrium_detected = False
+        return False
+    
+    def _evaluate_coordinated_fitness(self, goals: List[Goal]) -> float:
+        """Evaluate fitness of coordinated mutation in sandbox.
+        
+        Args:
+            goals: Goals after coordinated mutation
+            
+        Returns:
+            Fitness score (higher is better)
+        """
+        # Simple fitness evaluation based on goal feasibility and diversity
+        total_feasibility = sum(goal.feasibility_score for goal in goals)
+        diversity = len(set(goal.id for goal in goals))
+        
+        # Normalize and combine metrics
+        avg_feasibility = total_feasibility / len(goals) if goals else 0
+        diversity_score = diversity / (len(goals) + 1)  # Avoid division by zero
+        
+        return avg_feasibility * 0.7 + diversity_score * 0.3
+    
     def evolve(self, goals: List[Goal]) -> List[Goal]:
         """Execute one evolution cycle.
         
@@ -172,8 +252,9 @@ class EvolutionEngine:
         3. Record outcome
         4. Evaluate and adjust scheduler parameters
         5. Check ecology engine and introduce pressure if needed
-        6. Log current meta-parameter state for continuous monitoring
-        7. Log fitness landscape report
+        6. Run Nash detection and attempt coordinated escape if equilibrium detected
+        7. Log current meta-parameter state for continuous monitoring
+        8. Log fitness landscape report
         
         Args:
             goals: Current list of goals to evolve
@@ -203,11 +284,22 @@ class EvolutionEngine:
         # Check ecology engine and introduce pressure if needed
         ecology_changes_made = self._check_and_apply_ecology_pressure(goals)
         
+        # Run Nash detection and attempt coordinated escape if equilibrium detected
+        nash_escape_applied = self._detect_and_escape_nash_equilibrium(goals)
+        
         # Log meta-parameter state at the end of each evolution cycle
         self._log_meta_parameter_state()
         
         # Log fitness landscape report at the end of each cycle
         self._log_fitness_landscape_report(goals, ecology_changes_made)
+        
+        # Log Nash equilibrium events
+        if self.nash_equilibrium_detected:
+            self.logger.info(
+                f"Nash equilibrium state: detected=True, "
+                f"escape_attempts={self.nash_escape_attempts}, "
+                f"escape_applied={nash_escape_applied}"
+            )
         
         return goals
     
@@ -245,5 +337,7 @@ class EvolutionEngine:
             'current_acceptance_threshold': self.system_state.goal_acceptance_threshold,
             'scheduler_state': self.scheduler.get_state(),
             'consecutive_test_passes': self.consecutive_test_passes,
-            'ecology_engine_state': self.ecology_engine.get_state() if hasattr(self.ecology_engine, 'get_state') else {}
+            'ecology_engine_state': self.ecology_engine.get_state() if hasattr(self.ecology_engine, 'get_state') else {},
+            'nash_equilibrium_detected': self.nash_equilibrium_detected,
+            'nash_escape_attempts': self.nash_escape_attempts
         }
