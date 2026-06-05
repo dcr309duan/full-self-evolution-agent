@@ -1,21 +1,6 @@
 {
   "insights": [
     {
-      "content": "[研究] Adaptive Context-Aware Mutation: Learning from failure patterns to prioritize and refine mutation strategies: Adaptive context-aware mutation is an emerging area in evolutionary computation and software testing",
-      "timestamp": 1780643323.791451,
-      "cycle": 105
-    },
-    {
-      "content": "Self-reflection: The agent's evolution has fallen into a classic local optimum: optimizing for the generation of meta-cognitive tools rather than for the overall fitness of autonomous self-improvement. The real breakt",
-      "timestamp": 1780643385.1695201,
-      "cycle": 106
-    },
-    {
-      "content": "Successfully modified core/plasticity_stability_scheduler.py to: Create a new module that implements a plasticity-stability scheduler. It should: (1) track a sliding window of last 10 mutation outcomes (success/failure), (2) detect 3 consecutive failures → reduce mutation_rate by 20% and raise goal_acceptance_threshold by 10%, (3) detect 3 consecutive successes → reverse adjustments (increase mutation_rate by 20% and lower threshold by 10%), (4) clamp mutation_rate between 0.1 and 0.9, threshold between 0.1 and 0.9, (5) log all adjustments to logs/meta_parameter_history.jsonl with timestamp, cycle, old/new values, and trigger reason.",
-      "timestamp": 1780643404.2137287,
-      "cycle": 106
-    },
-    {
       "content": "Successfully modified core/system_state.py to: Add new fields to the system state: 'mutation_rate' (float, default 0.5), 'goal_acceptance_threshold' (float, default 0.5), 'mutation_outcomes' (list of 'success'/'failure' strings, max length 10), 'meta_parameter_history' (list of adjustment records). Update serialization/deserialization to include these fields.",
       "timestamp": 1780643417.986635,
       "cycle": 106
@@ -999,6 +984,21 @@
       "content": "Successfully modified minimal_core_bootstrap.py to: Add failure_driven_mutation_selector to the list of core modules initialized during bootstrap, ensuring the failure-driven selection mechanism is active from system start.",
       "timestamp": 1780650055.1312222,
       "cycle": 136
+    },
+    {
+      "content": "Successfully modified dead_module_detector.py to: Create a new module that: (1) Maintains a usage counter dictionary (module_name -> list of cycle numbers where it was referenced/used), (2) Provides a method 'record_usage(module_name)' called by the orchestrator each cycle, (3) Provides a method 'get_dead_modules()' that scans the last 20 cycles and returns modules with <2 uses, (4) Provides a method 'flag_for_deprecation(module_name)' that marks a module for removal in the next mutation cycle.",
+      "timestamp": 1780650111.6121807,
+      "cycle": 137
+    },
+    {
+      "content": "Successfully modified tests/test_dead_module_detector.py to: Create comprehensive tests: (1) Test that usage counter increments correctly, (2) Test that modules with 0 uses in 20 cycles are flagged, (3) Test that modules with 1 use are flagged, (4) Test that modules with 2+ uses are not flagged, (5) Test that removal sandbox correctly removes a module and runs tests, (6) Test rollback when removal breaks functionality.",
+      "timestamp": 1780650192.9544787,
+      "cycle": 137
+    },
+    {
+      "content": "Successfully modified minimal_core_bootstrap.py to: Add dead_module_detector and module_removal_sandbox to the list of core modules initialized during bootstrap.",
+      "timestamp": 1780650244.9632418,
+      "cycle": 137
     }
   ],
   "learned_patterns": [],
@@ -1537,6 +1537,16 @@
       "approach": "modify evolution_orchestrator.py: Integrate the failure-driven mutation selector into the mutation selection pipeline: (1) After generating candidate mutations, call the failure-driven mutation selector to filter them, (2) If no mutations remain after filtering, fall back to the original mutation pool with a warning log, (3) Log which mutations were filtered and why for audit trail.",
       "reason": "Syntax error: expected 'except' or 'finally' block (<unknown>, line 802)",
       "timestamp": 1780649976.842208
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Add integration points: (1) Import and initialize DeadModuleDetector, (2) After each cycle's mutations, call detector.record_usage() for each module that was used/executed, (3) In the mutation selection phase, check for flagged modules and create a special 'remove_module' mutation for each, (4) Ensure the removal mutation runs in sandbox with full test suite before being applied.",
+      "reason": "Syntax error: unterminated string literal (detected at line 807) (<unknown>, line 807)",
+      "timestamp": 1780650157.9431362
+    },
+    {
+      "approach": "modify module_removal_sandbox.py: Create a sandbox executor specifically for module removal: (1) Takes a module name to remove, (2) Clones the current codebase state, (3) Removes the module file and all imports, (4) Runs the full test suite, (5) If all tests pass, returns success (allowing the removal to be applied), (6) If tests fail, rolls back and reports the failure.",
+      "reason": "Safety check failed",
+      "timestamp": 1780650178.360383
     }
   ],
   "successful_strategies": [
@@ -5654,6 +5664,26 @@
       "strategy": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
       "outcome": "4/5 steps succeeded",
       "timestamp": 1780650055.1503863
+    },
+    {
+      "strategy": "modify dead_module_detector.py: Create a new module that: (1) Maintains a usage counter dictionary (module_name -> list of cycle numbers where it was referenced/used), (2) Provides a method 'record_usage(module_name)' called by the orchestrator each cycle, (3) Provides a method 'get_dead_modules()' that scans the last 20 cycles and returns modules with <2 uses, (4) Provides a method 'flag_for_deprecation(module_name)' that marks a module for removal in the next mutation cycle.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650111.5941813
+    },
+    {
+      "strategy": "modify tests/test_dead_module_detector.py: Create comprehensive tests: (1) Test that usage counter increments correctly, (2) Test that modules with 0 uses in 20 cycles are flagged, (3) Test that modules with 1 use are flagged, (4) Test that modules with 2+ uses are not flagged, (5) Test that removal sandbox correctly removes a module and runs tests, (6) Test rollback when removal breaks functionality.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650192.9352686
+    },
+    {
+      "strategy": "modify minimal_core_bootstrap.py: Add dead_module_detector and module_removal_sandbox to the list of core modules initialized during bootstrap.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650244.9449165
+    },
+    {
+      "strategy": "Create a 'dead module detector' that scans all modules for usage count over the last 20 cycles, and any module with <2 uses is automatically flagged for deprecation. The system must then attempt to remove the module in the next mutation cycle, running the sandbox tests to verify no functionality is broken by its removal.",
+      "outcome": "3/5 steps succeeded",
+      "timestamp": 1780650244.9846272
     }
   ],
   "capabilities_developed": []

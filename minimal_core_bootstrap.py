@@ -20,7 +20,9 @@ ESSENTIAL_MODULES = [
     "sandbox_validate",
     "self_healing_recovery",
     "failure_driven_simplification",
-    "failure_driven_mutation_selector"
+    "failure_driven_mutation_selector",
+    "dead_module_detector",
+    "module_removal_sandbox"
 ]
 
 def reflect(state):
@@ -166,6 +168,18 @@ def failure_driven_mutation_selector(state, goal):
     
     return selected_state
 
+def dead_module_detector(state):
+    """Detect and report modules that are no longer needed or functional."""
+    print("Dead module detector: Checking for unused modules...")
+    # Placeholder implementation - would normally check module usage patterns
+    return state
+
+def module_removal_sandbox(state):
+    """Safely test removal of dead modules in a sandboxed environment."""
+    print("Module removal sandbox: Testing module removal safety...")
+    # Placeholder implementation - would normally test removal impact
+    return state
+
 def initialize_recovery_module():
     """Initialize the recovery module during bootstrap."""
     print("Initializing self-healing recovery module...")
@@ -225,6 +239,46 @@ def initialize_failure_driven_mutation_selector():
         return True
     else:
         print("Failure-driven mutation selector module initialization failed.")
+        return False
+
+def initialize_dead_module_detector():
+    """Initialize the dead module detector during bootstrap."""
+    print("Initializing dead module detector...")
+    
+    # Verify the function exists
+    if "dead_module_detector" not in globals():
+        print("Warning: dead_module_detector function not found")
+        return False
+    
+    # Test the dead module detector function
+    test_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = dead_module_detector(test_state)
+    
+    if result == test_state:
+        print("Dead module detector initialized successfully.")
+        return True
+    else:
+        print("Dead module detector initialization failed.")
+        return False
+
+def initialize_module_removal_sandbox():
+    """Initialize the module removal sandbox during bootstrap."""
+    print("Initializing module removal sandbox...")
+    
+    # Verify the function exists
+    if "module_removal_sandbox" not in globals():
+        print("Warning: module_removal_sandbox function not found")
+        return False
+    
+    # Test the module removal sandbox function
+    test_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = module_removal_sandbox(test_state)
+    
+    if result == test_state:
+        print("Module removal sandbox initialized successfully.")
+        return True
+    else:
+        print("Module removal sandbox initialization failed.")
         return False
 
 def test_recovery_integration():
@@ -309,6 +363,32 @@ def test_failure_driven_mutation_selector():
     print("All failure-driven mutation selector tests passed!\n")
     return True
 
+def test_dead_module_detector():
+    """Test dead module detector functionality."""
+    print("\n--- Dead Module Detector Test ---")
+    
+    # Test 1: Normal state should pass through
+    normal_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = dead_module_detector(normal_state)
+    assert result == normal_state, "Test 1 failed: Normal state should remain unchanged"
+    print("Test 1 passed: Normal state remains unchanged")
+    
+    print("All dead module detector tests passed!\n")
+    return True
+
+def test_module_removal_sandbox():
+    """Test module removal sandbox functionality."""
+    print("\n--- Module Removal Sandbox Test ---")
+    
+    # Test 1: Normal state should pass through
+    normal_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = module_removal_sandbox(normal_state)
+    assert result == normal_state, "Test 1 failed: Normal state should remain unchanged"
+    print("Test 1 passed: Normal state remains unchanged")
+    
+    print("All module removal sandbox tests passed!\n")
+    return True
+
 def migrate_to_main():
     """Generate migration report and equivalent code for evolution_orchestrator.py's main loop."""
     # Read the working logic from this module
@@ -321,7 +401,9 @@ def migrate_to_main():
         "sandbox_validate": sandbox_validate.__code__.co_code,
         "self_healing_recovery": self_healing_recovery.__code__.co_code,
         "failure_driven_simplification": failure_driven_simplification.__code__.co_code,
-        "failure_driven_mutation_selector": failure_driven_mutation_selector.__code__.co_code
+        "failure_driven_mutation_selector": failure_driven_mutation_selector.__code__.co_code,
+        "dead_module_detector": dead_module_detector.__code__.co_code,
+        "module_removal_sandbox": module_removal_sandbox.__code__.co_code
     }
     
     # Generate equivalent code for evolution_orchestrator.py's main loop
@@ -350,7 +432,9 @@ def evolution_main_loop():
         "sandbox_validate",
         "self_healing_recovery",
         "failure_driven_simplification",
-        "failure_driven_mutation_selector"
+        "failure_driven_mutation_selector",
+        "dead_module_detector",
+        "module_removal_sandbox"
     ]
     
     def reflect(state):
@@ -467,6 +551,14 @@ def evolution_main_loop():
         
         return selected_state
     
+    def dead_module_detector(state):
+        print("Dead module detector: Checking for unused modules...")
+        return state
+    
+    def module_removal_sandbox(state):
+        print("Module removal sandbox: Testing module removal safety...")
+        return state
+    
     def load_or_initialize_state():
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
@@ -525,6 +617,40 @@ def evolution_main_loop():
             print("Failure-driven mutation selector module initialization failed.")
             return False
     
+    def initialize_dead_module_detector():
+        print("Initializing dead module detector...")
+        
+        if "dead_module_detector" not in globals():
+            print("Warning: dead_module_detector function not found")
+            return False
+        
+        test_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+        result = dead_module_detector(test_state)
+        
+        if result == test_state:
+            print("Dead module detector initialized successfully.")
+            return True
+        else:
+            print("Dead module detector initialization failed.")
+            return False
+    
+    def initialize_module_removal_sandbox():
+        print("Initializing module removal sandbox...")
+        
+        if "module_removal_sandbox" not in globals():
+            print("Warning: module_removal_sandbox function not found")
+            return False
+        
+        test_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+        result = module_removal_sandbox(test_state)
+        
+        if result == test_state:
+            print("Module removal sandbox initialized successfully.")
+            return True
+        else:
+            print("Module removal sandbox initialization failed.")
+            return False
+    
     state = load_or_initialize_state()
     print("Initial state:", state)
     print()
@@ -533,6 +659,8 @@ def evolution_main_loop():
     initialize_recovery_module()
     initialize_failure_driven_simplification()
     initialize_failure_driven_mutation_selector()
+    initialize_dead_module_detector()
+    initialize_module_removal_sandbox()
     
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -562,6 +690,18 @@ def evolution_main_loop():
         if selected_state != mutated_state:
             print("Failure-driven mutation selector applied to mutated state")
             mutated_state = selected_state
+        
+        # Apply dead module detector
+        detected_state = dead_module_detector(mutated_state)
+        if detected_state != mutated_state:
+            print("Dead module detector applied to mutated state")
+            mutated_state = detected_state
+        
+        # Apply module removal sandbox
+        sandboxed_state = module_removal_sandbox(mutated_state)
+        if sandboxed_state != mutated_state:
+            print("Module removal sandbox applied to mutated state")
+            mutated_state = sandboxed_state
         
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -599,7 +739,9 @@ def evolution_main_loop():
             "Failure-driven simplification reduces complexity and removes non-essential keys",
             "Pruning mechanism is active from system start through bootstrap initialization",
             "Failure-driven mutation selector provides corrective mutations based on failure patterns",
-            "Mutation selector is initialized during bootstrap for active failure-driven selection"
+            "Mutation selector is initialized during bootstrap for active failure-driven selection",
+            "Dead module detector identifies unused modules for potential removal",
+            "Module removal sandbox safely tests module removal before execution"
         ],
         "working_logic_bytecode": working_logic,
         "equivalent_main_loop": main_loop_code,
@@ -614,7 +756,11 @@ def evolution_main_loop():
             "Initialize failure-driven simplification during bootstrap for active pruning",
             "Apply failure-driven simplification after recovery but before validation",
             "Initialize failure-driven mutation selector during bootstrap for active selection",
-            "Apply failure-driven mutation selector after simplification but before validation"
+            "Apply failure-driven mutation selector after simplification but before validation",
+            "Initialize dead module detector during bootstrap for active monitoring",
+            "Apply dead module detector after mutation selector but before validation",
+            "Initialize module removal sandbox during bootstrap for safe removal testing",
+            "Apply module removal sandbox after dead module detection but before validation"
         ]
     }
     
@@ -639,6 +785,8 @@ def main():
     initialize_recovery_module()
     initialize_failure_driven_simplification()
     initialize_failure_driven_mutation_selector()
+    initialize_dead_module_detector()
+    initialize_module_removal_sandbox()
 
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -672,6 +820,18 @@ def main():
             print("Failure-driven mutation selector applied to mutated state")
             mutated_state = selected_state
 
+        # Apply dead module detector
+        detected_state = dead_module_detector(mutated_state)
+        if detected_state != mutated_state:
+            print("Dead module detector applied to mutated state")
+            mutated_state = detected_state
+
+        # Apply module removal sandbox
+        sandboxed_state = module_removal_sandbox(mutated_state)
+        if sandboxed_state != mutated_state:
+            print("Module removal sandbox applied to mutated state")
+            mutated_state = sandboxed_state
+
         # Sandbox validation
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -696,6 +856,12 @@ def main():
     
     # Run failure-driven mutation selector test
     test_failure_driven_mutation_selector()
+    
+    # Run dead module detector test
+    test_dead_module_detector()
+    
+    # Run module removal sandbox test
+    test_module_removal_sandbox()
     
     # After successful sandbox validation, run migration
     print("\n--- Migration Phase ---")

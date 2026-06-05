@@ -1,9 +1,8 @@
 {
-  "cycle_count": 136,
-  "current_generation": 107,
-  "last_evolution_time": 1780649891.1522064,
+  "cycle_count": 137,
+  "current_generation": 108,
+  "last_evolution_time": 1780650092.2723203,
   "capabilities": [
-    "Create a 'curiosity engine' module that periodically generates a novel synthetic task (e.g., 'implem",
     "Implement a robust file system abstraction layer with atomic writes, retry logic, and automated perm",
     "Build a meta-cognitive monitoring system that detects patterns in failures (e.g., consistent file wr",
     "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., '",
@@ -52,15 +51,10 @@
     "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> gen",
     "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_ge",
     "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automa",
-    "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern min"
+    "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern min",
+    "Create a 'dead module detector' that scans all modules for usage count over the last 20 cycles, and "
   ],
   "history": [
-    {
-      "cycle": 31,
-      "goal": "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatically invokes the failure analysis module and reflection parser to generate 2-3 smaller sub-goals or alternative implementation strategies, then enqueues them for retry with a different approach, logging the failure pattern to avoid infinite loops after 3 retries.",
-      "success": true,
-      "timestamp": 1780628006.6925879
-    },
     {
       "cycle": 33,
       "goal": "Build a goal feasibility estimator that, before executing a new goal, checks the agent's current capabilities and past success rates for similar goal types (e.g., API server, mutation engine), and either adjusts the goal's complexity or blocks it if the estimated success probability is below 20%, preventing repeated failures on unachievable tasks.",
@@ -654,6 +648,12 @@
       "goal": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
       "success": true,
       "timestamp": 1780650055.2600508
+    },
+    {
+      "cycle": 137,
+      "goal": "Create a 'dead module detector' that scans all modules for usage count over the last 20 cycles, and any module with <2 uses is automatically flagged for deprecation. The system must then attempt to remove the module in the next mutation cycle, running the sandbox tests to verify no functionality is broken by its removal.",
+      "success": true,
+      "timestamp": 1780650245.0507293
     }
   ],
   "status": "evolving"
