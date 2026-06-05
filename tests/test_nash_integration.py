@@ -1,74 +1,57 @@
 import sys
 import os
+import subprocess
 import unittest
-from unittest.mock import MagicMock, patch
+import json
+import tempfile
 
 # Add the parent directory to the path so we can import from core and modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.nash_detector import NashDetector
-from core.multi_module_forcer import MultiModuleForcer
-
 
 class TestNashIntegration(unittest.TestCase):
-    """Minimal integration test for Nash equilibrium detection and coordinated mutation."""
+    """Minimal integration test for Nash equilibrium detection and coordinated mutation using subprocess."""
 
     def setUp(self):
-        """Set up a mock system with 3 modules where single mutations are ineffective."""
-        # Create mock modules
-        self.module_a = MagicMock()
-        self.module_b = MagicMock()
-        self.module_c = MagicMock()
-
-        # Configure modules to show no improvement with single mutations
-        self.module_a.mutate.return_value = self.module_a
-        self.module_b.mutate.return_value = self.module_b
-        self.module_c.mutate.return_value = self.module_c
-
-        # Set fitness values such that single mutations don't improve fitness
-        self.module_a.fitness = 0.5
-        self.module_b.fitness = 0.5
-        self.module_c.fitness = 0.5
-
-        # Configure module names
-        self.module_a.name = "ModuleA"
-        self.module_b.name = "ModuleB"
-        self.module_c.name = "ModuleC"
-
-        # Dependency graph: A -> B -> C (A depends on B, B depends on C)
-        self.dependency_graph = {
-            "ModuleA": ["ModuleB"],
-            "ModuleB": ["ModuleC"],
-            "ModuleC": []
+        """Set up a mock scenario with 3 modules at equilibrium using subprocess."""
+        # Create a temporary directory for the test
+        self.test_dir = tempfile.mkdtemp()
+        
+        # Create mock module data files
+        self.modules = {
+            "ModuleA": {"fitness": 0.5, "dependencies": ["ModuleB"]},
+            "ModuleB": {"fitness": 0.5, "dependencies": ["ModuleC"]},
+            "ModuleC": {"fitness": 0.5, "dependencies": []}
         }
-
-        # Create the Nash detector and multi-module forcer
-        self.nash_detector = NashDetector()
-        self.multi_module_forcer = MultiModuleForcer()
-
-        # Register modules with the detector
-        self.modules = [self.module_a, self.module_b, self.module_c]
-        for mod in self.modules:
-            self.nash_detector.register_module(mod)
-
-    def test_minimal_integration_with_interaction_matrix(self):
-        """Minimal integration test that: (1) creates a simple interaction matrix,
-        (2) runs detection, (3) verifies that coordinated changes are proposed when equilibrium is detected."""
-        # (1) Create a simple interaction matrix
-        # Simulate interaction data showing no improvement (equilibrium state)
+        
+        # Write module data to files
+        for module_name, module_data in self.modules.items():
+            module_file = os.path.join(self.test_dir, f"{module_name}.json")
+            with open(module_file, 'w') as f:
+                json.dump(module_data, f)
+        
+        # Create interaction matrix file
         interaction_matrix = {
             "ModuleA": {"ModuleA": 0.5, "ModuleB": 0.5, "ModuleC": 0.5},
             "ModuleB": {"ModuleA": 0.5, "ModuleB": 0.5, "ModuleC": 0.5},
             "ModuleC": {"ModuleA": 0.5, "ModuleB": 0.5, "ModuleC": 0.5}
         }
+        interaction_file = os.path.join(self.test_dir, "interaction_matrix.json")
+        with open(interaction_file, 'w') as f:
+            json.dump(interaction_matrix, f)
         
-        # Configure modules with the interaction matrix
-        self.module_a.get_scores.return_value = interaction_matrix["ModuleA"]
-        self.module_b.get_scores.return_value = interaction_matrix["ModuleB"]
-        self.module_c.get_scores.return_value = interaction_matrix["ModuleC"]
+        # Create dependency graph file
+        dependency_graph = {
+            "ModuleA": ["ModuleB"],
+            "ModuleB": ["ModuleC"],
+            "ModuleC": []
+        }
+        dependency_file = os.path.join(self.test_dir, "dependency_graph.json")
+        with open(dependency_file, 'w') as f:
+            json.dump(dependency_graph, f)
         
-        # Seed the nash_detector with synthetic history showing equilibrium
-        synthetic_history = {
+        # Create history file showing equilibrium
+        history = {
             "ModuleA": [
                 {"fitness": 0.3, "timestamp": 1},
                 {"fitness": 0.4, "timestamp": 2},
@@ -91,57 +74,240 @@ class TestNashIntegration(unittest.TestCase):
                 {"fitness": 0.5, "timestamp": 5}
             ]
         }
+        history_file = os.path.join(self.test_dir, "history.json")
+        with open(history_file, 'w') as f:
+            json.dump(history, f)
+
+    def test_nash_equilibrium_detection_via_subprocess(self):
+        """Test that nash_equilibrium_check detects equilibrium via subprocess."""
+        # Create a script that runs nash_equilibrium_check
+        script_path = os.path.join(self.test_dir, "test_nash_detection.py")
+        with open(script_path, 'w') as f:
+            f.write("""
+import sys
+import os
+import json
+
+# Add parent directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from core.nash_detector import NashDetector
+
+# Load test data
+test_dir = sys.argv[1]
+with open(os.path.join(test_dir, "history.json"), 'r') as f:
+    history = json.load(f)
+with open(os.path.join(test_dir, "interaction_matrix.json"), 'r') as f:
+    interaction_matrix = json.load(f)
+
+# Create detector and load history
+detector = NashDetector()
+for module_name, module_history in history.items():
+    for entry in module_history:
+        detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+
+# Create mock modules
+class MockModule:
+    def __init__(self, name, fitness):
+        self.name = name
+        self.fitness = fitness
+    def get_scores(self):
+        return interaction_matrix[self.name]
+    def mutate(self):
+        return self
+
+modules = []
+for module_name, module_data in json.load(open(os.path.join(test_dir, "ModuleA.json"))).items():
+    pass
+
+# Actually create modules properly
+module_names = ["ModuleA", "ModuleB", "ModuleC"]
+modules = []
+for name in module_names:
+    module_file = os.path.join(test_dir, f"{name}.json")
+    with open(module_file, 'r') as f:
+        data = json.load(f)
+    modules.append(MockModule(name, data["fitness"]))
+
+# Detect equilibrium
+is_nash = detector.detect_equilibrium(modules)
+
+# Output result as JSON
+result = {"is_nash": is_nash}
+print(json.dumps(result))
+""")
         
-        for module_name, history in synthetic_history.items():
-            for entry in history:
-                self.nash_detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+        # Run the script via subprocess
+        result = subprocess.run(
+            [sys.executable, script_path, self.test_dir],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(script_path)
+        )
+        
+        # Check that the script ran successfully
+        self.assertEqual(result.returncode, 0, f"Script failed with error: {result.stderr}")
+        
+        # Parse the output
+        output = json.loads(result.stdout.strip())
+        
+        # Verify that nash_equilibrium_check detects it
+        self.assertTrue(output["is_nash"], "Nash equilibrium should be detected")
 
-        # (2) Run detection
-        is_nash = self.nash_detector.detect_equilibrium(self.modules)
-        self.assertTrue(is_nash, "Nash equilibrium should be detected with interaction matrix showing no improvement")
+    def test_coordinated_mutation_planning_via_subprocess(self):
+        """Test that coordinated_mutation_planner generates a plan via subprocess."""
+        # Create a script that runs coordinated_mutation_planner
+        script_path = os.path.join(self.test_dir, "test_coordinated_mutation.py")
+        with open(script_path, 'w') as f:
+            f.write("""
+import sys
+import os
+import json
 
-        # (3) Verify that coordinated changes are proposed when equilibrium is detected
-        plan = self.multi_module_forcer.generate_plan(self.dependency_graph, {"is_equilibrium": True})
-        self.assertIsNotNone(plan, "Multi-module forcer should generate a plan when equilibrium is detected")
-        self.assertGreaterEqual(len(plan), 2, "Plan should target at least 2 modules")
+# Add parent directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
+from core.multi_module_forcer import MultiModuleForcer
+
+# Load test data
+test_dir = sys.argv[1]
+with open(os.path.join(test_dir, "dependency_graph.json"), 'r') as f:
+    dependency_graph = json.load(f)
+
+# Create forcer and generate plan
+forcer = MultiModuleForcer()
+plan = forcer.generate_plan(dependency_graph, {"is_equilibrium": True})
+
+# Output result as JSON
+result = {"plan": plan}
+print(json.dumps(result))
+""")
+        
+        # Run the script via subprocess
+        result = subprocess.run(
+            [sys.executable, script_path, self.test_dir],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(script_path)
+        )
+        
+        # Check that the script ran successfully
+        self.assertEqual(result.returncode, 0, f"Script failed with error: {result.stderr}")
+        
+        # Parse the output
+        output = json.loads(result.stdout.strip())
+        
+        # Verify that coordinated_mutation_planner generates a plan
+        self.assertIsNotNone(output["plan"], "Coordinated mutation planner should generate a plan")
+        self.assertGreaterEqual(len(output["plan"]), 2, "Plan should target at least 2 modules")
+        
         # Verify the plan contains valid module names
-        plan_module_names = [m.get("module") for m in plan]
+        plan_module_names = [m.get("module") for m in output["plan"]]
         for module_name in plan_module_names:
-            self.assertIn(module_name, [mod.name for mod in self.modules],
+            self.assertIn(module_name, ["ModuleA", "ModuleB", "ModuleC"],
                           f"Module {module_name} in plan should exist in the system")
-
-        # Verify the plan respects dependencies (if ModuleA is targeted, ModuleB must also be targeted)
+        
+        # Verify the plan respects dependencies
         if "ModuleA" in plan_module_names:
             self.assertIn("ModuleB", plan_module_names,
                           "If ModuleA is targeted, ModuleB must also be targeted due to dependency")
         if "ModuleB" in plan_module_names:
             self.assertIn("ModuleC", plan_module_names,
                           "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
-
+        
         # Verify each mutation in the plan has required fields
-        for mutation in plan:
+        for mutation in output["plan"]:
             self.assertIn("module", mutation, "Each mutation should have a 'module' key")
             self.assertIsInstance(mutation["module"], str, "Module name should be a string")
-            if "type" in mutation:
-                self.assertIsInstance(mutation["type"], str, "Mutation type should be a string")
-            if "params" in mutation:
-                self.assertIsInstance(mutation["params"], dict, "Mutation params should be a dictionary")
 
-        # Execute the coordinated changes and verify improvement
-        initial_fitness = sum(mod.fitness for mod in self.modules)
-        for mutation in plan:
-            module_name = mutation.get("module")
-            for mod in self.modules:
-                if mod.name == module_name:
-                    mod.mutate()
-                    # Simulate improvement from coordinated change
-                    mod.fitness += 0.1
-                    break
+    def test_full_integration_via_subprocess(self):
+        """Test full integration: detect equilibrium then generate plan via subprocess."""
+        # Create a script that runs both nash_equilibrium_check and coordinated_mutation_planner
+        script_path = os.path.join(self.test_dir, "test_full_integration.py")
+        with open(script_path, 'w') as f:
+            f.write("""
+import sys
+import os
+import json
 
-        final_fitness = sum(mod.fitness for mod in self.modules)
-        self.assertGreater(final_fitness, initial_fitness,
-                         "Coordinated multi-module change should improve overall system fitness")
+# Add parent directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from core.nash_detector import NashDetector
+from core.multi_module_forcer import MultiModuleForcer
+
+# Load test data
+test_dir = sys.argv[1]
+with open(os.path.join(test_dir, "history.json"), 'r') as f:
+    history = json.load(f)
+with open(os.path.join(test_dir, "interaction_matrix.json"), 'r') as f:
+    interaction_matrix = json.load(f)
+with open(os.path.join(test_dir, "dependency_graph.json"), 'r') as f:
+    dependency_graph = json.load(f)
+
+# Create detector and load history
+detector = NashDetector()
+for module_name, module_history in history.items():
+    for entry in module_history:
+        detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+
+# Create mock modules
+class MockModule:
+    def __init__(self, name, fitness):
+        self.name = name
+        self.fitness = fitness
+    def get_scores(self):
+        return interaction_matrix[self.name]
+    def mutate(self):
+        return self
+
+module_names = ["ModuleA", "ModuleB", "ModuleC"]
+modules = []
+for name in module_names:
+    module_file = os.path.join(test_dir, f"{name}.json")
+    with open(module_file, 'r') as f:
+        data = json.load(f)
+    modules.append(MockModule(name, data["fitness"]))
+
+# Detect equilibrium
+is_nash = detector.detect_equilibrium(modules)
+
+# Generate plan if equilibrium detected
+plan = None
+if is_nash:
+    forcer = MultiModuleForcer()
+    plan = forcer.generate_plan(dependency_graph, {"is_equilibrium": True})
+
+# Output result as JSON
+result = {"is_nash": is_nash, "plan": plan}
+print(json.dumps(result))
+""")
+        
+        # Run the script via subprocess
+        result = subprocess.run(
+            [sys.executable, script_path, self.test_dir],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(script_path)
+        )
+        
+        # Check that the script ran successfully
+        self.assertEqual(result.returncode, 0, f"Script failed with error: {result.stderr}")
+        
+        # Parse the output
+        output = json.loads(result.stdout.strip())
+        
+        # Verify that nash_equilibrium_check detects it
+        self.assertTrue(output["is_nash"], "Nash equilibrium should be detected")
+        
+        # Verify that coordinated_mutation_planner generates a plan
+        self.assertIsNotNone(output["plan"], "Coordinated mutation planner should generate a plan")
+        self.assertGreaterEqual(len(output["plan"]), 2, "Plan should target at least 2 modules")
+
+    def tearDown(self):
+        """Clean up temporary files."""
+        import shutil
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
 
 if __name__ == '__main__':

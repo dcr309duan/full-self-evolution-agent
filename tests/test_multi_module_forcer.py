@@ -44,6 +44,54 @@ class TestMultiModuleForcer(unittest.TestCase):
         with open(module_path, 'r') as f:
             return json.load(f)
 
+    def test_force_coordinated_mutation_returns_plan_when_nash_detected(self):
+        """Test that force_coordinated_mutation() returns a plan when nash is detected."""
+        # Set up modules in Nash equilibrium state
+        self._create_mock_module("module_a", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
+
+        # Reinitialize forcer with updated modules
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+
+        # Force coordinated mutation and get the result
+        result = self.forcer.force_coordinated_mutation()
+
+        # Verify result is not None (a plan was returned)
+        assert result is not None, "force_coordinated_mutation() should return a plan when nash is detected"
+
+    def test_plan_contains_at_least_2_modules(self):
+        """Test that plan contains at least 2 modules."""
+        # Set up modules in Nash equilibrium state
+        self._create_mock_module("module_a", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
+
+        # Reinitialize forcer with updated modules
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+
+        # Force coordinated mutation and get the result
+        result = self.forcer.force_coordinated_mutation()
+
+        # Verify plan contains at least 2 modules
+        assert len(result) >= 2, "Plan should contain at least 2 modules"
+
+    def test_plan_has_coordination_hash(self):
+        """Test that plan has a coordination_hash."""
+        # Set up modules in Nash equilibrium state
+        self._create_mock_module("module_a", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
+
+        # Reinitialize forcer with updated modules
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+
+        # Force coordinated mutation and get the result
+        result = self.forcer.force_coordinated_mutation()
+
+        # Verify plan has a coordination_hash
+        assert "coordination_hash" in result, "Plan should have a coordination_hash"
+
     def test_force_multi_module_change_returns_dict_with_at_least_two_entries_when_nash_detected(self):
         """Test that force_multi_module_change returns a dict with at least 2 module entries when nash is detected."""
         # Set up modules in Nash equilibrium state

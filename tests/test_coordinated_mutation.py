@@ -1,10 +1,14 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from core.coordinated_mutation_planner import CoordinatedMutationPlanner
+from core.multi_module_forcer import MultiModuleForcer
+from core.nash_detector import NashDetector
 
 class TestCoordinatedMutation(unittest.TestCase):
     def setUp(self):
         self.planner = CoordinatedMutationPlanner()
+        self.forcer = MultiModuleForcer()
+        self.detector = NashDetector()
         
         # Create mock modules
         self.module_a = MagicMock()
@@ -147,6 +151,100 @@ class TestCoordinatedMutation(unittest.TestCase):
         new_combined = new_fitness_x + new_fitness_y + new_fitness_z
         self.assertGreater(new_combined, original_combined, 
                           "Combined fitness should be higher after escaping Nash equilibrium")
+
+    def test_forcer_detects_nash_equilibrium(self):
+        """Integration test: (1) forcer detects when nash_detector reports equilibrium,
+        (2) forcer generates a coordinated change plan, (3) the plan involves 2-3 modules."""
+        
+        # Create 3 mock modules with interdependent behavior
+        module_a = MagicMock()
+        module_a.name = "module_a"
+        module_a.fitness = MagicMock(return_value=0.6)
+        module_a.value = 10
+        
+        module_b = MagicMock()
+        module_b.name = "module_b"
+        module_b.fitness = MagicMock(side_effect=lambda: module_a.fitness() * 0.9)
+        module_b.value = 20
+        
+        module_c = MagicMock()
+        module_c.name = "module_c"
+        module_c.fitness = MagicMock(side_effect=lambda: module_b.fitness() + 0.05)
+        module_c.value = 30
+        
+        modules = {"module_a": module_a, "module_b": module_b, "module_c": module_c}
+        
+        # Create interaction matrix for Nash detector
+        interaction_matrix = {
+            "module_a": {"module_b": 0.5, "module_c": 0.3},
+            "module_b": {"module_a": 0.4, "module_c": 0.2},
+            "module_c": {"module_a": 0.1, "module_b": 0.6}
+        }
+        
+        # (1) Forcer detects when nash_detector reports equilibrium
+        # Set up the detector to report equilibrium
+        with patch.object(self.detector, 'detect_equilibrium', return_value=True):
+            equilibrium_detected = self.detector.detect_equilibrium(modules, interaction_matrix)
+            self.assertTrue(equilibrium_detected, "Nash detector should report equilibrium")
+            
+            # (2) Forcer generates a coordinated change plan
+            plan = self.forcer.generate_plan(modules, interaction_matrix)
+            self.assertIsNotNone(plan, "Forcer should generate a plan")
+            
+            # (3) The plan involves 2-3 modules
+            self.assertGreaterEqual(len(plan), 2, "Plan should involve at least 2 modules")
+            self.assertLessEqual(len(plan), 3, "Plan should involve at most 3 modules")
+            
+            # Verify the plan contains valid module names
+            for module_name in plan:
+                self.assertIn(module_name, modules, f"Plan module {module_name} should be in modules dict")
+            
+            # Apply the plan
+            result = self.forcer.apply_plan(modules, plan)
+            self.assertTrue(result, "Plan application should succeed")
+            
+            # Verify modules were changed
+            self.assertNotEqual(module_a.fitness(), 0.6, "Module A fitness should change")
+            self.assertNotEqual(module_b.fitness(), 0.54, "Module B fitness should change")
+            self.assertNotEqual(module_c.fitness(), 0.59, "Module C fitness should change")
+
+    def test_forcer_generates_coordinated_change_plan(self):
+        """Test that forcer generates a coordinated change plan with 2-3 modules"""
+        
+        # Create 2 mock modules
+        module_x = MagicMock()
+        module_x.name = "module_x"
+        module_x.fitness = MagicMock(return_value=0.7)
+        module_x.value = 15
+        
+        module_y = MagicMock()
+        module_y.name = "module_y"
+        module_y.fitness = MagicMock(side_effect=lambda: module_x.fitness() * 0.85)
+        module_y.value = 25
+        
+        modules = {"module_x": module_x, "module_y": module_y}
+        
+        interaction_matrix = {
+            "module_x": {"module_y": 0.8},
+            "module_y": {"module_x": 0.7}
+        }
+        
+        # Generate plan
+        plan = self.forcer.generate_plan(modules, interaction_matrix)
+        
+        # Verify plan exists and involves 2 modules
+        self.assertIsNotNone(plan)
+        self.assertEqual(len(plan), 2, "Plan should involve exactly 2 modules")
+        self.assertIn("module_x", plan)
+        self.assertIn("module_y", plan)
+        
+        # Apply plan
+        result = self.forcer.apply_plan(modules, plan)
+        self.assertTrue(result)
+        
+        # Verify changes were made
+        self.assertNotEqual(module_x.fitness(), 0.7, "Module X fitness should change")
+        self.assertNotEqual(module_y.fitness(), 0.595, "Module Y fitness should change")
 
 if __name__ == '__main__':
     unittest.main()

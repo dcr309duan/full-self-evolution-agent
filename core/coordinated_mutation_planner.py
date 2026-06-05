@@ -1,14 +1,15 @@
+import json
+import os
+import datetime
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
-import copy
-import random
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class Mutation:
     """Represents a single mutation to apply to a module."""
     module_name: str
-    mutation_type: str  # e.g., 'new_function', 'new_call', 'refactor'
+    mutation_type: str
     payload: Dict[str, Any]
     rollback_payload: Dict[str, Any]
 
@@ -19,18 +20,38 @@ class Plan:
     modules_to_change: List[str]
     mutations: List[Mutation]
     expected_fitness_gain: float
-    rollback_plan: List[Callable[[], None]] = field(default_factory=list)
+    rollback_plan: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class CoordinatedMutationPlanner:
     """
     Generates coordinated multi-module mutation plans to break Nash equilibria.
-    Each plan ensures individual mutations are neutral but collectively beneficial.
+    Reads equilibrium state from JSON file and outputs plan as JSON.
     """
 
-    def __init__(self, module_registry: Dict[str, Any], dependency_graph: Dict[str, List[str]]):
-        self.module_registry = module_registry
-        self.dependency_graph = dependency_graph
+    def __init__(self, equilibrium_file: str = "equilibrium_state.json"):
+        self.equilibrium_file = equilibrium_file
+        self.module_registry: Dict[str, Any] = {}
+        self.dependency_graph: Dict[str, List[str]] = {}
+
+    def load_equilibrium_state(self) -> Optional[Dict[str, Any]]:
+        """Read equilibrium state from JSON file."""
+        if not os.path.exists(self.equilibrium_file):
+            return None
+        try:
+            with open(self.equilibrium_file, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return None
+
+    def build_dependency_graph(self, equilibrium_state: Dict[str, Any]) -> None:
+        """Build dependency graph from equilibrium state."""
+        modules = equilibrium_state.get('modules', [])
+        for module in modules:
+            module_name = module.get('name', '')
+            deps = module.get('dependencies', [])
+            self.dependency_graph[module_name] = deps
+            self.module_registry[module_name] = module
 
     def plan_break_equilibrium(
         self,
@@ -44,7 +65,6 @@ class CoordinatedMutationPlanner:
         if len(equilibrium_modules) < 2:
             return None
 
-        # Select 2-3 modules that are interdependent
         target_modules = self._select_target_modules(equilibrium_modules)
         if not target_modules:
             return None
@@ -53,15 +73,12 @@ class CoordinatedMutationPlanner:
         rollback_plan = []
         expected_gain = 0.0
 
-        # Example: Create a new function in module A and a call to it in module B
         if len(target_modules) >= 2:
             donor_module = target_modules[0]
             receiver_module = target_modules[1]
 
-            # Generate a new function name
-            new_func_name = f"_coordinated_{random.randint(1000, 9999)}"
+            new_func_name = f"_coordinated_{datetime.datetime.now().strftime('%H%M%S')}"
 
-            # Mutation for donor: export a new function
             donor_mutation = Mutation(
                 module_name=donor_module,
                 mutation_type='new_function',
@@ -76,18 +93,19 @@ class CoordinatedMutationPlanner:
                 }
             )
             mutations.append(donor_mutation)
-            rollback_plan.append(
-                lambda m=donor_mutation: self._apply_rollback(m)
-            )
+            rollback_plan.append({
+                'module': donor_module,
+                'action': 'remove_function',
+                'function_name': new_func_name
+            })
 
-            # Mutation for receiver: call the new function
             receiver_mutation = Mutation(
                 module_name=receiver_module,
                 mutation_type='new_call',
                 payload={
                     'target_module': donor_module,
                     'function_name': new_func_name,
-                    'call_site': 'init'  # or some strategic location
+                    'call_site': 'init'
                 },
                 rollback_payload={
                     'target_module': donor_module,
@@ -96,11 +114,13 @@ class CoordinatedMutationPlanner:
                 }
             )
             mutations.append(receiver_mutation)
-            rollback_plan.append(
-                lambda m=receiver_mutation: self._apply_rollback(m)
-            )
+            rollback_plan.append({
+                'module': receiver_module,
+                'action': 'remove_call',
+                'target_module': donor_module,
+                'function_name': new_func_name
+            })
 
-            # Estimate fitness gain (simplified heuristic)
             expected_gain = self._estimate_fitness_gain(
                 target_modules, equilibrium_state
             )
@@ -113,20 +133,16 @@ class CoordinatedMutationPlanner:
         )
 
     def _select_target_modules(self, candidates: List[str]) -> List[str]:
-        """
-        Select 2-3 modules from candidates that have dependency relationships.
-        """
+        """Select 2-3 modules from candidates that have dependency relationships."""
         if not candidates:
             return []
 
-        # Prefer modules that depend on each other
         for module in candidates:
             deps = self.dependency_graph.get(module, [])
             for dep in deps:
                 if dep in candidates and dep != module:
                     return [module, dep]
 
-        # Fallback: pick first 2-3
         return candidates[:min(3, len(candidates))]
 
     def _estimate_fitness_gain(
@@ -134,65 +150,51 @@ class CoordinatedMutationPlanner:
         modules: List[str],
         equilibrium_state: Dict[str, Any]
     ) -> float:
-        """
-        Estimate the expected fitness gain from breaking the equilibrium.
-        Uses a simple heuristic based on module centrality and current fitness.
-        """
+        """Estimate the expected fitness gain from breaking the equilibrium."""
         base_fitness = equilibrium_state.get('fitness', 0.0)
-        # Breaking equilibrium typically yields diminishing returns
-        # but can unlock new cooperative behaviors
         return base_fitness * 0.1 + 0.05 * len(modules)
 
-    def _apply_rollback(self, mutation: Mutation) -> None:
-        """
-        Apply the rollback for a given mutation.
-        This is a placeholder; actual implementation depends on module system.
-        """
-        module = self.module_registry.get(mutation.module_name)
-        if module is None:
-            return
+    def generate_plan(self) -> Optional[Dict[str, Any]]:
+        """Main method: load equilibrium state, generate plan, return as dict."""
+        equilibrium_state = self.load_equilibrium_state()
+        if equilibrium_state is None:
+            return None
 
-        action = mutation.rollback_payload.get('action')
-        if action == 'remove':
-            func_name = mutation.rollback_payload.get('function_name')
-            if hasattr(module, func_name):
-                delattr(module, func_name)
-        elif action == 'remove_call':
-            # Placeholder for call removal logic
-            pass
+        self.build_dependency_graph(equilibrium_state)
 
-    def execute_plan(self, plan: Plan) -> bool:
-        """
-        Execute a coordinated mutation plan atomically.
-        Returns True if successful, False if rollback was triggered.
-        """
-        try:
-            for mutation in plan.mutations:
-                self._apply_mutation(mutation)
-            return True
-        except Exception as e:
-            # Rollback all mutations
-            for rollback_fn in plan.rollback_plan:
-                try:
-                    rollback_fn()
-                except Exception:
-                    pass
+        equilibrium_modules = equilibrium_state.get('equilibrium_modules', [])
+        if not equilibrium_modules:
+            equilibrium_modules = list(self.module_registry.keys())
+
+        plan = self.plan_break_equilibrium(equilibrium_modules, equilibrium_state)
+        if plan is None:
+            return None
+
+        return {
+            'timestamp': datetime.datetime.now().isoformat(),
+            'modules_to_change': plan.modules_to_change,
+            'mutations': [
+                {
+                    'module_name': m.module_name,
+                    'mutation_type': m.mutation_type,
+                    'payload': m.payload,
+                    'rollback_payload': m.rollback_payload
+                }
+                for m in plan.mutations
+            ],
+            'expected_fitness_gain': plan.expected_fitness_gain,
+            'rollback_plan': plan.rollback_plan
+        }
+
+    def save_plan(self, plan_dict: Dict[str, Any], output_file: str = "mutation_plan.json") -> None:
+        """Save the plan as a JSON file."""
+        with open(output_file, 'w') as f:
+            json.dump(plan_dict, f, indent=2)
+
+    def run(self, output_file: str = "mutation_plan.json") -> bool:
+        """Execute the full workflow: load, plan, save."""
+        plan_dict = self.generate_plan()
+        if plan_dict is None:
             return False
-
-    def _apply_mutation(self, mutation: Mutation) -> None:
-        """
-        Apply a single mutation to the target module.
-        This is a placeholder; actual implementation depends on module system.
-        """
-        module = self.module_registry.get(mutation.module_name)
-        if module is None:
-            raise ValueError(f"Module {mutation.module_name} not found")
-
-        if mutation.mutation_type == 'new_function':
-            func_name = mutation.payload['function_name']
-            func_body = mutation.payload.get('function_body', 'return None')
-            # Create a new function dynamically
-            exec(f"def {func_name}():\n    {func_body}", module.__dict__)
-        elif mutation.mutation_type == 'new_call':
-            # Placeholder for adding a call to another module's function
-            pass
+        self.save_plan(plan_dict, output_file)
+        return True

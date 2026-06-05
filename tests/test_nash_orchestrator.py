@@ -202,6 +202,46 @@ class TestNashOrchestratorIntegration(unittest.TestCase):
             self.assertIn('reason', change,
                          "Each change should include a reason")
 
+    def test_minimal_integration(self):
+        """Minimal integration test: import, call detect_nash, verify force_coordinated_change."""
+        # Import nash_orchestrator (already imported at top)
+        from core.nash_orchestrator import NashOrchestrator
+
+        # Create a minimal orchestrator instance
+        orch = NashOrchestrator(check_interval=0.1, nash_threshold=0.01)
+
+        # Create a mock equilibrium state (all modules have same metrics)
+        mock_state = {
+            "module_a": {"accuracy": 0.95, "latency": 0.1, "throughput": 100},
+            "module_b": {"accuracy": 0.95, "latency": 0.1, "throughput": 100},
+            "module_c": {"accuracy": 0.95, "latency": 0.1, "throughput": 100}
+        }
+
+        # Register mock modules with the equilibrium state
+        mock_a = MagicMock()
+        mock_a.name = "module_a"
+        mock_a.get_metrics.return_value = mock_state["module_a"]
+        mock_b = MagicMock()
+        mock_b.name = "module_b"
+        mock_b.get_metrics.return_value = mock_state["module_b"]
+        mock_c = MagicMock()
+        mock_c.name = "module_c"
+        mock_c.get_metrics.return_value = mock_state["module_c"]
+
+        orch.register_module(mock_a)
+        orch.register_module(mock_b)
+        orch.register_module(mock_c)
+
+        # Call detect_nash directly (simulating the internal detection)
+        orch.detect_nash()
+
+        # Verify force_coordinated_change is triggered
+        self.assertTrue(orch.force_coordinated_change,
+                       "force_coordinated_change should be True when equilibrium is detected")
+
+        # Clean up
+        orch.stop()
+
 
 if __name__ == '__main__':
     unittest.main()

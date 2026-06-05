@@ -7,37 +7,36 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from core.nash_detector import NashEquilibriumDetector
 
 
-def test_initial_state():
-    """Test that detect_nash() returns False initially"""
+def test_is_at_nash_initial_false():
+    """Test that is_at_nash() returns False initially"""
     detector = NashEquilibriumDetector()
-    assert detector.detect_nash() == False, "Initial state should not be Nash equilibrium"
+    assert detector.is_at_nash() == False, "is_at_nash should return False initially"
 
 
-def test_stable_cycles_trigger_nash():
-    """Test that feeding 3+ stable cycles triggers True"""
+def test_is_at_nash_true_after_3_stable_cycles():
+    """Test that adding 3+ stable cycles triggers True"""
     detector = NashEquilibriumDetector()
-    
-    # Feed 4 stable cycles (more than 3)
-    for _ in range(4):
+    for _ in range(3):
         detector.add_stable_cycle()
-    
-    assert detector.detect_nash() == True, "Should detect Nash after 3+ stable cycles"
+    assert detector.is_at_nash() == True, "is_at_nash should return True after 3 stable cycles"
 
 
-def test_get_stable_modules():
-    """Test that get_stable_modules() returns a list"""
+def test_get_stable_modules_returns_correct_list():
+    """Test that get_stable_modules() returns correct list"""
     detector = NashEquilibriumDetector()
+    # Initially should return empty list
+    assert detector.get_stable_modules() == [], "get_stable_modules should return empty list initially"
     
-    # Add some stable cycles first
-    for _ in range(2):
+    # After adding stable cycles, should return list with module names
+    for _ in range(3):
         detector.add_stable_cycle()
-    
-    result = detector.get_stable_modules()
-    assert isinstance(result, list), "get_stable_modules() should return a list"
+    stable_modules = detector.get_stable_modules()
+    assert isinstance(stable_modules, list), "get_stable_modules should return a list"
+    assert len(stable_modules) > 0, "get_stable_modules should return non-empty list after stable cycles"
 
 
 if __name__ == '__main__':
-    test_initial_state()
-    test_stable_cycles_trigger_nash()
-    test_get_stable_modules()
+    test_is_at_nash_initial_false()
+    test_is_at_nash_true_after_3_stable_cycles()
+    test_get_stable_modules_returns_correct_list()
     print("All tests passed!")
