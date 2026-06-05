@@ -14,12 +14,6 @@
       "created_at": 1780649848.7555447
     },
     {
-      "description": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780646079.6363342
-    },
-    {
       "description": "Create a performance monitoring and optimization system",
       "priority": 6,
       "status": "pending",
@@ -852,6 +846,13 @@
       "status": "completed",
       "created_at": 1780649372.3644664,
       "completed_at": 1780650244.9970913
+    },
+    {
+      "description": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780646079.6363342,
+      "completed_at": 1780650422.7528005
     }
   ],
   "generated_goals": []
