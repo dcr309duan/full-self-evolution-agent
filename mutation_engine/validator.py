@@ -2,7 +2,7 @@
 
 Performs validation of mutations across three phases:
 1. Static AST-level checks (syntax, structure, imports)
-2. Dependency graph analysis (critical interface impact)
+2. Dependency graph analysis (critical interface impact) with side effect simulation
 3. Sandboxed execution with test suite
 
 Returns structured results with pass/fail per phase.
@@ -25,6 +25,12 @@ try:
 except ImportError:
     get_dependency_graph = None
 
+# Side effect simulator integration
+try:
+    from side_effect_simulator import simulate_side_effects
+except ImportError:
+    simulate_side_effects = None
+
 # Phase 3 integration
 try:
     from testing_framework import run_tests
@@ -37,7 +43,7 @@ class ValidationResult:
 
     def __init__(self):
         self.phase1: Dict[str, Any] = {"passed": False, "details": []}
-        self.phase2: Dict[str, Any] = {"passed": False, "details": []}
+        self.phase2: Dict[str, Any] = {"passed": False, "details": [], "side_effects": None}
         self.phase3: Dict[str, Any] = {"passed": False, "details": []}
         self.overall_passed: bool = False
 
@@ -163,7 +169,7 @@ def validate_phase1(source_code: str, original_source: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: Dependency graph analysis
+# Phase 2: Dependency graph analysis with side effect simulation
 # ---------------------------------------------------------------------------
 
 def _get_critical_interfaces(dep_graph: Dict[str, Any]) -> Set[str]:
@@ -215,17 +221,18 @@ def _get_mutated_interfaces(source_code: str, module_name: str) -> Set[str]:
 
 
 def validate_phase2(source_code: str, module_name: str, original_source: str) -> Dict[str, Any]:
-    """Run Phase 2 validation: dependency graph analysis.
+    """Run Phase 2 validation: dependency graph analysis and side effect simulation.
 
-    Checks if the mutation affects any critical interfaces.
+    Checks if the mutation affects any critical interfaces and simulates side effects.
     """
     details = []
     passed = True
+    side_effects = None
 
     if get_dependency_graph is None:
         details.append({"check": "dependency_graph", "passed": False,
                         "message": "self_model.builder.get_dependency_graph not available"})
-        return {"passed": False, "details": details}
+        return {"passed": False, "details": details, "side_effects": None}
 
     try:
         dep_graph = get_dependency_graph()
@@ -252,12 +259,72 @@ def validate_phase2(source_code: str, module_name: str, original_source: str) ->
             details.append({"check": "new_interfaces", "passed": True,
                             "message": f"New interfaces introduced: {new_interfaces}"})
 
+        # Run side effect simulator after critical interface check
+        if simulate_side_effects is not None:
+            try:
+                # Prepare the simulation context
+                simulation_context = {
+                    "source_code": source_code,
+                    "original_source": original_source,
+                    "module_name": module_name,
+                    "dep_graph": dep_graph,
+                    "critical_interfaces": critical_interfaces,
+                    "mutated_interfaces": mutated_interfaces,
+                    "original_interfaces": original_interfaces,
+                    "affected_critical": affected_critical,
+                    "new_interfaces": new_interfaces,
+                }
+                
+                simulation_result = simulate_side_effects(simulation_context)
+                
+                if isinstance(simulation_result, dict):
+                    side_effects = {
+                        "affected_modules": simulation_result.get("affected_modules", []),
+                        "risk_score": simulation_result.get("risk_score", 0),
+                        "recommended_compensations": simulation_result.get("recommended_compensations", [])
+                    }
+                    
+                    # If risk_score > 70, mark Phase 2 as failed with a warning
+                    if side_effects["risk_score"] > 70:
+                        passed = False
+                        details.append({
+                            "check": "side_effect_risk",
+                            "passed": False,
+                            "message": f"Side effect risk score {side_effects['risk_score']} exceeds threshold of 70. "
+                                      f"Affected modules: {side_effects['affected_modules']}. "
+                                      f"Recommended compensations: {side_effects['recommended_compensations']}"
+                        })
+                    else:
+                        details.append({
+                            "check": "side_effect_risk",
+                            "passed": True,
+                            "message": f"Side effect risk score {side_effects['risk_score']} is within acceptable range"
+                        })
+                else:
+                    details.append({
+                        "check": "side_effect_simulation",
+                        "passed": False,
+                        "message": "Side effect simulator returned invalid result format"
+                    })
+            except Exception as e:
+                details.append({
+                    "check": "side_effect_simulation",
+                    "passed": False,
+                    "message": f"Error running side effect simulator: {str(e)}"
+                })
+        else:
+            details.append({
+                "check": "side_effect_simulation",
+                "passed": False,
+                "message": "side_effect_simulator module not available"
+            })
+
     except Exception as e:
         passed = False
         details.append({"check": "dependency_graph", "passed": False,
                         "message": f"Error analyzing dependency graph: {str(e)}"})
 
-    return {"passed": passed, "details": details}
+    return {"passed": passed, "details": details, "side_effects": side_effects}
 
 
 # ---------------------------------------------------------------------------

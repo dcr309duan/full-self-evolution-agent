@@ -2,6 +2,8 @@ from pathlib import Path
 import json
 import logging
 from typing import Optional, Dict, List, Any
+import ast
+import importlib.util
 
 from self_model.scanner import Scanner
 from self_model.analyzer import Analyzer
@@ -24,6 +26,8 @@ class SelfModelBuilder:
         self.discovery = Discovery()
         self.knowledge_graph = KnowledgeGraph()
         self.output_path = self.project_root / "self_model_graph.json"
+        self.interface_usage_path = self.project_root / "interface_usage_map.json"
+        self.interface_usage_map = {}
 
     def run(self) -> Path:
         """Execute the full pipeline and return the path to the serialized graph."""
@@ -55,31 +59,263 @@ class SelfModelBuilder:
         logger.info(f"Knowledge graph populated with {len(self.knowledge_graph.nodes)} nodes "
                      f"and {len(self.knowledge_graph.edges)} edges.")
 
-        # Step 6: Serialize to JSON
-        logger.info(f"Step 6: Serializing knowledge graph to {self.output_path}...")
+        # Step 6: Update interface usage map
+        logger.info("Step 6: Updating interface usage map...")
+        self.update_interface_usage()
+
+        # Step 7: Serialize to JSON
+        logger.info(f"Step 7: Serializing knowledge graph to {self.output_path}...")
         self._serialize()
         logger.info("Self-model building pipeline completed successfully.")
 
         return self.output_path
+
+    def update_interface_usage(self) -> None:
+        """Re-scan all modules and update the interface_usage_map.
+        This should be called after each successful mutation to keep the self-model current."""
+        logger.info("Updating interface usage map...")
+        self.interface_usage_map = self._analyze_interface_usage()
+        self._save_interface_usage_map(self.interface_usage_map)
+        logger.info(f"Interface usage map updated with {len(self.interface_usage_map)} entries.")
+
+    def get_impact_analysis(self, mutation: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a structured impact report for a given mutation.
+        
+        Args:
+            mutation: A dictionary describing the mutation. Expected keys:
+                - "type": str (e.g., "modify", "add", "delete")
+                - "module": str (module path relative to project root)
+                - "interface": str (name of the interface being mutated)
+                - "details": dict (optional, additional mutation details)
+        
+        Returns:
+            A dictionary with the following structure:
+            {
+                "mutation": { ... },  # The original mutation
+                "direct_consumers": [str],  # Modules that directly use the mutated interface
+                "indirect_consumers": [str],  # Modules that indirectly depend on the interface
+                "affected_interfaces": [str],  # Other interfaces that may be affected
+                "risk_level": str,  # "low", "medium", "high"
+                "recommendations": [str]  # Suggested actions
+            }
+        """
+        mutation_type = mutation.get("type", "unknown")
+        module = mutation.get("module", "")
+        interface_name = mutation.get("interface", "")
+        details = mutation.get("details", {})
+        
+        # Build the interface key
+        interface_key = f"{module}:{interface_name}"
+        
+        # Find direct consumers from the interface usage map
+        direct_consumers = self.interface_usage_map.get(interface_key, [])
+        
+        # Find indirect consumers by checking which modules use the direct consumers
+        indirect_consumers = set()
+        for consumer in direct_consumers:
+            # Check if the consumer module has its own interfaces that are used elsewhere
+            for key, users in self.interface_usage_map.items():
+                if key.startswith(f"{consumer}:"):
+                    for user in users:
+                        if user not in direct_consumers and user != module:
+                            indirect_consumers.add(user)
+        
+        # Find affected interfaces (other interfaces in the same module or related modules)
+        affected_interfaces = []
+        for key in self.interface_usage_map:
+            if key.startswith(f"{module}:") and key != interface_key:
+                affected_interfaces.append(key)
+        
+        # Determine risk level based on the number of consumers and mutation type
+        total_consumers = len(direct_consumers) + len(indirect_consumers)
+        if mutation_type == "delete":
+            if total_consumers > 5:
+                risk_level = "high"
+            elif total_consumers > 0:
+                risk_level = "medium"
+            else:
+                risk_level = "low"
+        elif mutation_type == "modify":
+            if total_consumers > 10:
+                risk_level = "high"
+            elif total_consumers > 3:
+                risk_level = "medium"
+            else:
+                risk_level = "low"
+        else:  # add or other types
+            risk_level = "low"
+        
+        # Generate recommendations
+        recommendations = []
+        if risk_level == "high":
+            recommendations.append(f"Consider creating a deprecation plan for {interface_key}")
+            recommendations.append("Notify all dependent module maintainers")
+            recommendations.append("Run comprehensive tests before deploying the mutation")
+        elif risk_level == "medium":
+            recommendations.append(f"Review all {len(direct_consumers)} direct consumers of {interface_key}")
+            recommendations.append("Update documentation for the changed interface")
+        else:
+            recommendations.append("Low impact mutation - standard review process applies")
+        
+        if mutation_type == "delete":
+            recommendations.append(f"Ensure no critical functionality depends on {interface_key}")
+        
+        # Build the impact report
+        impact_report = {
+            "mutation": mutation,
+            "direct_consumers": direct_consumers,
+            "indirect_consumers": list(indirect_consumers),
+            "affected_interfaces": affected_interfaces,
+            "risk_level": risk_level,
+            "recommendations": recommendations
+        }
+        
+        return impact_report
+
+    def _get_public_interfaces(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Extract public functions and classes from all Python files in the project.
+        
+        Returns:
+            A dictionary mapping module paths to lists of public interfaces.
+            Each interface has: name, type (function/class), and line number.
+        """
+        public_interfaces = {}
+        
+        for py_file in self.project_root.rglob("*.py"):
+            if "venv" in str(py_file) or ".env" in str(py_file):
+                continue
+                
+            try:
+                with open(py_file, "r", encoding="utf-8") as f:
+                    tree = ast.parse(f.read(), filename=str(py_file))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+                
+            module_path = str(py_file.relative_to(self.project_root))
+            interfaces = []
+            
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if not node.name.startswith("_"):
+                        interfaces.append({
+                            "name": node.name,
+                            "type": "function",
+                            "line": node.lineno
+                        })
+                elif isinstance(node, ast.ClassDef):
+                    if not node.name.startswith("_"):
+                        methods = []
+                        for item in node.body:
+                            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                if not item.name.startswith("_"):
+                                    methods.append({
+                                        "name": item.name,
+                                        "type": "method",
+                                        "line": item.lineno
+                                    })
+                        interfaces.append({
+                            "name": node.name,
+                            "type": "class",
+                            "line": node.lineno,
+                            "methods": methods
+                        })
+            
+            if interfaces:
+                public_interfaces[module_path] = interfaces
+                
+        return public_interfaces
+
+    def _analyze_interface_usage(self) -> Dict[str, List[str]]:
+        """Analyze all Python files to find which modules call/use public interfaces.
+        
+        Returns:
+            A dictionary mapping each public interface (as 'module:name') to a list
+            of modules that use it.
+        """
+        public_interfaces = self._get_public_interfaces()
+        interface_usage = {}
+        
+        # Build a lookup of interface names to their defining modules
+        interface_to_module = {}
+        for module, interfaces in public_interfaces.items():
+            for interface in interfaces:
+                key = f"{module}:{interface['name']}"
+                interface_to_module[interface['name']] = key
+                if interface['type'] == 'class':
+                    for method in interface.get('methods', []):
+                        method_key = f"{module}:{interface['name']}.{method['name']}"
+                        interface_to_module[f"{interface['name']}.{method['name']}"] = method_key
+        
+        # Scan all Python files for usage
+        for py_file in self.project_root.rglob("*.py"):
+            if "venv" in str(py_file) or ".env" in str(py_file):
+                continue
+                
+            try:
+                with open(py_file, "r", encoding="utf-8") as f:
+                    tree = ast.parse(f.read(), filename=str(py_file))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+                
+            module_path = str(py_file.relative_to(self.project_root))
+            used_interfaces = set()
+            
+            for node in ast.walk(tree):
+                # Function calls
+                if isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name):
+                        func_name = node.func.id
+                        if func_name in interface_to_module:
+                            used_interfaces.add(interface_to_module[func_name])
+                    elif isinstance(node.func, ast.Attribute):
+                        if isinstance(node.func.value, ast.Name):
+                            obj_name = node.func.value.id
+                            attr_name = node.func.attr
+                            # Check for class instantiation or method call
+                            if obj_name in interface_to_module:
+                                used_interfaces.add(interface_to_module[obj_name])
+                            full_name = f"{obj_name}.{attr_name}"
+                            if full_name in interface_to_module:
+                                used_interfaces.add(interface_to_module[full_name])
+                
+                # Class instantiations (handled by Call with Name)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                    class_name = node.func.id
+                    if class_name in interface_to_module:
+                        used_interfaces.add(interface_to_module[class_name])
+                
+                # Attribute accesses
+                if isinstance(node, ast.Attribute):
+                    if isinstance(node.value, ast.Name):
+                        obj_name = node.value.id
+                        attr_name = node.attr
+                        full_name = f"{obj_name}.{attr_name}"
+                        if full_name in interface_to_module:
+                            used_interfaces.add(interface_to_module[full_name])
+            
+            # Record usage for this module
+            for interface_key in used_interfaces:
+                if interface_key not in interface_usage:
+                    interface_usage[interface_key] = []
+                if module_path not in interface_usage[interface_key]:
+                    interface_usage[interface_key].append(module_path)
+        
+        return interface_usage
 
     def get_dependency_graph(self) -> Dict[str, Any]:
         """Return the current dependency graph in a format consumable by DependencyResolver.
         
         Returns:
             A dictionary containing nodes and edges representing the dependency graph,
-            along with a list of critical interfaces that are depended upon by other modules.
+            along with a list of critical interfaces that are depended upon by other modules,
+            and an interface_usage_map showing which modules use each public interface.
             Format: {
                 "nodes": [{"id": str, "type": str, "name": str, ...}],
                 "edges": [{"source": str, "target": str, "type": str, ...}],
-                "critical_interfaces": [
-                    {
-                        "module": str,
-                        "interface_name": str,
-                        "interface_type": str,  # "function", "class", "method", "attribute"
-                        "signature": str,
-                        "depended_by": [str]  # list of module names that depend on this interface
-                    }
-                ]
+                "critical_interfaces": [...],
+                "interface_usage_map": {
+                    "module:interface_name": ["module1", "module2", ...]
+                }
             }
         """
         # Build base graph data
@@ -173,7 +409,25 @@ class SelfModelBuilder:
         # Add critical_interfaces to the graph data
         graph_data["critical_interfaces"] = critical_interfaces
         
+        # Generate and add interface_usage_map
+        logger.info("Analyzing interface usage across the project...")
+        interface_usage_map = self._analyze_interface_usage()
+        graph_data["interface_usage_map"] = interface_usage_map
+        self.interface_usage_map = interface_usage_map
+        
+        # Persist interface_usage_map to JSON file
+        self._save_interface_usage_map(interface_usage_map)
+        
         return graph_data
+
+    def _save_interface_usage_map(self, interface_usage_map: Dict[str, List[str]]) -> None:
+        """Save the interface usage map to a persistent JSON file."""
+        try:
+            with open(self.interface_usage_path, "w", encoding="utf-8") as f:
+                json.dump(interface_usage_map, f, indent=2, ensure_ascii=False)
+            logger.debug(f"Interface usage map saved to {self.interface_usage_path}")
+        except Exception as e:
+            logger.error(f"Failed to save interface usage map: {e}")
 
     def _serialize(self) -> None:
         """Serialize the knowledge graph to a JSON file."""

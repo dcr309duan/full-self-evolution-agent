@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional
 
 from mutation_engine.validator import MutationValidator, ValidationPhase
 from mutation_engine.strategy import MutationStrategy, StrategyManager
+from mutation_engine.compensator import Compensator
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +17,12 @@ class MutationEngine:
         self,
         strategy_manager: StrategyManager,
         validator: MutationValidator,
+        compensator: Compensator,
         max_consecutive_failures: int = 3,
     ):
         self.strategy_manager = strategy_manager
         self.validator = validator
+        self.compensator = compensator
         self.max_consecutive_failures = max_consecutive_failures
         self.consecutive_failures = 0
         self.mutation_count = 0
@@ -80,7 +83,31 @@ class MutationEngine:
             self._handle_validation_failure(target, context)
             return False
 
-        # All phases passed - commit the mutation
+        # Phase 5: Check for side effects
+        side_effects = self.validator.detect_side_effects(mutated_target, context)
+        if side_effects:
+            logger.info("Side effects detected, attempting compensation")
+            try:
+                compensated_target = self.compensator.generate_fixes(mutated_target, side_effects, context)
+                # Apply original mutation plus compensating modifications as atomic commit
+                self._commit_mutation(compensated_target, context)
+                self.consecutive_failures = 0
+                self.success_count += 1
+                self.mutation_count += 1
+                logger.info(
+                    "Mutation with compensation applied successfully | total: %d, success: %d, failures: %d",
+                    self.mutation_count,
+                    self.success_count,
+                    self.failure_count,
+                )
+                return True
+            except Exception as exc:
+                logger.error("Compensation failed: %s. Rolling back mutation.", exc)
+                # Rollback the entire mutation
+                self._handle_validation_failure(target, context)
+                return False
+
+        # No side effects - commit the mutation directly
         self._commit_mutation(mutated_target, context)
         self.consecutive_failures = 0
         self.success_count += 1

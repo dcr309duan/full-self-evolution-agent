@@ -2,8 +2,9 @@
 """
 Standalone script to validate a proposed mutation.
 Runs all three validation phases and outputs a JSON report.
+Also runs side-effect simulation and displays affected modules, risk score, and suggested compensations.
 Usage:
-    python scripts/run_validation_pipeline.py <mutation_file> [--old-code <code>] [--new-code <code>]
+    python scripts/run_validation_pipeline.py <mutation_file> [--old-code <code>] [--new-code <code>] [--auto-compensate]
 """
 
 import argparse
@@ -18,6 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.validation.phase1_syntax import validate_syntax
 from core.validation.phase2_semantics import validate_semantics
 from core.validation.phase3_performance import validate_performance
+from core.side_effects.simulator import simulate_side_effects
+from core.compensation.applier import apply_compensations
 
 
 def parse_mutation_file(filepath: str) -> Dict[str, Any]:
@@ -29,19 +32,21 @@ def parse_mutation_file(filepath: str) -> Dict[str, Any]:
 def run_validation_pipeline(
     mutation: Dict[str, Any],
     old_code: Optional[str] = None,
-    new_code: Optional[str] = None
+    new_code: Optional[str] = None,
+    auto_compensate: bool = False
 ) -> Dict[str, Any]:
     """
-    Run all three validation phases on the given mutation.
+    Run all three validation phases on the given mutation, plus side-effect simulation.
     
     Args:
         mutation: Dictionary containing mutation description (must have 'old_code' and 'new_code' keys,
                   or provide them separately)
         old_code: Original code string (overrides mutation dict)
         new_code: Modified code string (overrides mutation dict)
+        auto_compensate: If True, automatically apply suggested compensations
     
     Returns:
-        Dictionary with validation results for each phase and overall status
+        Dictionary with validation results for each phase, side-effect analysis, and overall status
     """
     # Extract code from mutation or use provided strings
     old = old_code if old_code is not None else mutation.get('old_code', '')
@@ -51,7 +56,8 @@ def run_validation_pipeline(
         return {
             "status": "error",
             "error": "Both old_code and new_code must be provided",
-            "phases": {}
+            "phases": {},
+            "side_effects": {}
         }
     
     results = {}
@@ -126,17 +132,49 @@ def run_validation_pipeline(
             "metrics": {}
         }
     
+    # Side-effect simulation (runs regardless of validation results)
+    side_effects_result = {}
+    try:
+        side_effects = simulate_side_effects(old, new)
+        side_effects_result = {
+            "affected_modules": side_effects.get("affected_modules", []),
+            "risk_score": side_effects.get("risk_score", 0.0),
+            "suggested_compensations": side_effects.get("suggested_compensations", [])
+        }
+    except Exception as e:
+        side_effects_result = {
+            "affected_modules": [],
+            "risk_score": 0.0,
+            "suggested_compensations": [],
+            "error": f"Exception during side-effect simulation: {str(e)}"
+        }
+    
+    # Apply compensations if auto_compensate flag is set
+    if auto_compensate and side_effects_result.get("suggested_compensations"):
+        try:
+            compensation_result = apply_compensations(
+                old, new, side_effects_result["suggested_compensations"]
+            )
+            side_effects_result["compensation_applied"] = True
+            side_effects_result["compensation_details"] = compensation_result
+        except Exception as e:
+            side_effects_result["compensation_applied"] = False
+            side_effects_result["compensation_error"] = str(e)
+    else:
+        side_effects_result["compensation_applied"] = False
+    
     return {
         "status": "valid" if overall_valid else "invalid",
         "overall_valid": overall_valid,
         "phases": results,
+        "side_effects": side_effects_result,
         "mutation": mutation
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate a proposed mutation through all three phases"
+        description="Validate a proposed mutation through all three phases and analyze side effects"
     )
     parser.add_argument(
         "mutation_file",
@@ -156,6 +194,11 @@ def main():
         action="store_true",
         help="Pretty-print the JSON output"
     )
+    parser.add_argument(
+        "--auto-compensate",
+        action="store_true",
+        help="Automatically apply suggested compensations"
+    )
     
     args = parser.parse_args()
     
@@ -172,7 +215,7 @@ def main():
         sys.exit(1)
     
     # Run validation
-    result = run_validation_pipeline(mutation, args.old_code, args.new_code)
+    result = run_validation_pipeline(mutation, args.old_code, args.new_code, args.auto_compensate)
     
     # Output result
     indent = 2 if args.pretty else None

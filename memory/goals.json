@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a causal dependency graph from the self-model that maps module interfaces and callers, enabling simulation of mutation side effects—automatically flag risky changes and generate compensating modifications to maintain integration stability.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780632519.9532623
-    },
-    {
       "description": "Create a failure pattern miner that analyzes the failure log to identify high-level architectural bottlenecks (e.g., 'schema alignment failures account for 40% of recent errors'), and generates targeted refactoring goals to address root causes rather than symptoms.",
       "priority": 8,
       "status": "pending",
@@ -277,6 +271,13 @@
       "status": "completed",
       "created_at": 1780632519.9514618,
       "completed_at": 1780632620.3752167
+    },
+    {
+      "description": "Build a causal dependency graph from the self-model that maps module interfaces and callers, enabling simulation of mutation side effects—automatically flag risky changes and generate compensating modifications to maintain integration stability.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780632519.9532623,
+      "completed_at": 1780632863.8893507
     }
   ],
   "generated_goals": []
