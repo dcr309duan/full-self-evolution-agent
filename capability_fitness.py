@@ -22,6 +22,8 @@ class TestFirstComplianceTracker:
         # Structure: {module_id: [(timestamp, had_prewritten_test, accepted)]}
         self.mutation_records: Dict[str, List[tuple]] = defaultdict(list)
         self.compliance_history: Dict[str, List[tuple]] = defaultdict(list)
+        # Track minimal core E2E test failures per cycle
+        self.cycle_e2e_failures: Dict[str, bool] = {}  # cycle_id -> failed
     
     def record_mutation(self, module_id: str, had_prewritten_test: bool, 
                        accepted: bool, timestamp: Optional[datetime] = None) -> None:
@@ -38,6 +40,16 @@ class TestFirstComplianceTracker:
             timestamp = datetime.now()
         
         self.mutation_records[module_id].append((timestamp, had_prewritten_test, accepted))
+    
+    def record_cycle_e2e_result(self, cycle_id: str, failed: bool) -> None:
+        """
+        Record whether the minimal core E2E test failed for a given cycle.
+        
+        Args:
+            cycle_id: Identifier for the development cycle
+            failed: Whether the minimal core E2E test failed
+        """
+        self.cycle_e2e_failures[cycle_id] = failed
     
     def calculate_compliance_score(self, module_id: str) -> float:
         """
@@ -82,6 +94,29 @@ class TestFirstComplianceTracker:
         score = self.calculate_compliance_score(module_id)
         # Penalty increases as score decreases below 1.0
         return max_penalty * (1.0 - score)
+    
+    def get_capability_fitness_penalty(self, module_id: str, cycle_id: str, 
+                                       max_penalty: float = 0.3) -> float:
+        """
+        Calculate an additional fitness penalty for capabilities introduced 
+        during a cycle where the minimal core E2E test failed.
+        
+        Args:
+            module_id: Identifier for the module
+            cycle_id: Identifier for the development cycle
+            max_penalty: Maximum additional penalty factor (0.0 to 1.0)
+            
+        Returns:
+            Float between 0.0 and max_penalty representing the penalty
+        """
+        # Check if the cycle had a failed E2E test
+        if self.cycle_e2e_failures.get(cycle_id, False):
+            # Apply penalty for any capability introduced in this cycle
+            # Check if there were any accepted mutations for this module in this cycle
+            records = self.mutation_records.get(module_id, [])
+            if records:
+                return max_penalty
+        return 0.0
     
     def get_compliance_trend(self, module_id: str, 
                             window_days: int = 7) -> List[tuple]:
@@ -155,26 +190,40 @@ class TestFirstComplianceTracker:
 
 class CapabilityFitness:
     """
-    Main class for capability fitness evaluation including test-first compliance.
+    Main class for capability fitness evaluation including test-first compliance
+    and E2E stability penalties.
     """
     
     def __init__(self):
         self.compliance_tracker = TestFirstComplianceTracker()
         self.module_fitness_scores: Dict[str, float] = {}
     
-    def evaluate_module(self, module_id: str, base_fitness: float = 1.0) -> float:
+    def evaluate_module(self, module_id: str, cycle_id: str, 
+                       base_fitness: float = 1.0) -> float:
         """
-        Evaluate a module's overall fitness, applying test-first compliance penalty.
+        Evaluate a module's overall fitness, applying test-first compliance penalty
+        and E2E stability penalty for capabilities introduced during failed cycles.
         
         Args:
             module_id: Identifier for the module
+            cycle_id: Identifier for the development cycle
             base_fitness: Base fitness score before penalty
             
         Returns:
-            Adjusted fitness score after applying compliance penalty
+            Adjusted fitness score after applying penalties
         """
-        penalty = self.compliance_tracker.get_penalty_factor(module_id)
-        adjusted_fitness = base_fitness * (1.0 - penalty)
+        # Apply test-first compliance penalty
+        compliance_penalty = self.compliance_tracker.get_penalty_factor(module_id)
+        
+        # Apply E2E stability penalty for capabilities introduced in failed cycles
+        e2e_penalty = self.compliance_tracker.get_capability_fitness_penalty(
+            module_id, cycle_id
+        )
+        
+        # Combine penalties (multiplicative to ensure strong incentive)
+        total_penalty = 1.0 - (1.0 - compliance_penalty) * (1.0 - e2e_penalty)
+        adjusted_fitness = base_fitness * (1.0 - total_penalty)
+        
         self.module_fitness_scores[module_id] = adjusted_fitness
         return adjusted_fitness
     
@@ -195,6 +244,10 @@ def record_mutation(module_id: str, had_prewritten_test: bool, accepted: bool) -
     """Quick function to record a mutation using the default tracker."""
     _default_tracker.record_mutation(module_id, had_prewritten_test, accepted)
 
+def record_cycle_e2e_result(cycle_id: str, failed: bool) -> None:
+    """Quick function to record E2E test result for a cycle."""
+    _default_tracker.record_cycle_e2e_result(cycle_id, failed)
+
 def get_compliance_score(module_id: str) -> float:
     """Quick function to get compliance score from default tracker."""
     return _default_tracker.calculate_compliance_score(module_id)
@@ -202,3 +255,7 @@ def get_compliance_score(module_id: str) -> float:
 def get_penalty(module_id: str) -> float:
     """Quick function to get penalty from default tracker."""
     return _default_tracker.get_penalty_factor(module_id)
+
+def get_capability_fitness_penalty(module_id: str, cycle_id: str) -> float:
+    """Quick function to get E2E stability penalty for a capability."""
+    return _default_tracker.get_capability_fitness_penalty(module_id, cycle_id)

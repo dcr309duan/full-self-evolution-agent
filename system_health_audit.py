@@ -10,6 +10,7 @@ number that passed tests, number that failed tests, number that required rollbac
 Also tracks sleep cycle cleanup impact: number of modules deleted, number of functions consolidated,
 total LOC freed, and timestamp of last sleep cycle.
 Also includes capability audit to flag capabilities accepted without test-first verification.
+Also tracks core stability score based on minimal core E2E test results.
 """
 
 import time
@@ -26,13 +27,16 @@ ADJUSTMENT_WINDOW = 30  # cycles
 CONFLICT_WINDOW = 30  # cycles for conflict tracking
 WRITE_FAILURE_WINDOW = 30  # cycles for write failure tracking
 FIX_EFFECTIVENESS_WINDOW = 30  # cycles for fix effectiveness tracking
+CORE_STABILITY_WINDOW = 10  # cycles for core stability tracking
+CORE_STABILITY_THRESHOLD = 0.9  # threshold for core stability alert
 
 class SystemHealthAudit:
     """
     Tracks and reports meta-cognitive health metrics for an evolving system.
     Includes conflict resolution metrics, atomic write failure metrics,
     auto-generated fix effectiveness metrics, sandboxed mutation metrics,
-    sleep cycle cleanup impact metrics, and capability audit metrics.
+    sleep cycle cleanup impact metrics, capability audit metrics,
+    and core stability metrics.
     """
 
     def __init__(self, mutation_rate: float = DEFAULT_MUTATION_RATE,
@@ -77,6 +81,9 @@ class SystemHealthAudit:
         # Capability audit tracking
         self.capability_log: deque = deque(maxlen=1000)  # Store all capabilities
         self.capabilities_without_tests: Dict[str, Dict] = {}  # Capabilities accepted without test-first verification
+
+        # Core stability tracking
+        self.core_e2e_results: deque = deque(maxlen=CORE_STABILITY_WINDOW)  # Store recent core E2E test results
 
     def record_adjustment(self, parameter_name: str, old_value: float, new_value: float) -> None:
         """Record a parameter adjustment with timestamp."""
@@ -229,6 +236,33 @@ class SystemHealthAudit:
         # Track capabilities accepted without test-first verification
         if accepted and not test_first_verified:
             self.capabilities_without_tests[capability_name] = capability_entry
+
+    def record_core_e2e_result(self, successful: bool) -> None:
+        """
+        Record the result of a minimal core E2E test run.
+        
+        Args:
+            successful: Whether the core E2E test run was successful
+        """
+        self.core_e2e_results.append({
+            'successful': successful,
+            'cycle': self.cycle_count,
+            'timestamp': time.time()
+        })
+
+    def get_core_stability_score(self) -> float:
+        """
+        Calculate the core stability score as the ratio of successful minimal core E2E test runs
+        to total cycles in the last CORE_STABILITY_WINDOW cycles.
+        
+        Returns:
+            Float between 0 and 1 representing the stability score, or 1.0 if no data
+        """
+        if len(self.core_e2e_results) == 0:
+            return 1.0
+        
+        successful = sum(1 for result in self.core_e2e_results if result['successful'])
+        return successful / len(self.core_e2e_results)
 
     def audit_capabilities_without_tests(self) -> List[Dict]:
         """
@@ -520,7 +554,8 @@ class SystemHealthAudit:
         Generate a comprehensive health report with all meta-cognitive metrics
         including conflict resolution metrics, atomic write failure metrics,
         auto-generated fix effectiveness metrics, sandboxed mutation metrics,
-        sleep cycle cleanup impact metrics, and capability audit metrics.
+        sleep cycle cleanup impact metrics, capability audit metrics,
+        and core stability metrics.
         """
         conflict_count = self.get_conflict_count_last_30()
         resolution_rate = self.get_conflict_resolution_success_rate()
@@ -540,6 +575,13 @@ class SystemHealthAudit:
         
         # Capability audit
         capabilities_without_tests = self.audit_capabilities_without_tests()
+        
+        # Core stability
+        core_stability_score = self.get_core_stability_score()
+        core_stability_alert = core_stability_score < CORE_STABILITY_THRESHOLD
+        core_stability_recommendation = None
+        if core_stability_alert:
+            core_stability_recommendation = "CRITICAL: Core stability score below 0.9. Recommend pausing all non-essential mutations."
         
         report = {
             'mutation_rate': self.mutation_rate,
@@ -577,7 +619,11 @@ class SystemHealthAudit:
             'sleep_cycle_cleanup_impact': sleep_cycle_impact,
             # Capability audit metrics
             'capabilities_accepted_without_tests': capabilities_without_tests,
-            'capabilities_without_tests_count': len(capabilities_without_tests)
+            'capabilities_without_tests_count': len(capabilities_without_tests),
+            # Core stability metrics
+            'core_stability_score': core_stability_score,
+            'core_stability_alert': core_stability_alert,
+            'core_stability_recommendation': core_stability_recommendation
         }
         return report
 
@@ -643,6 +689,11 @@ if __name__ == "__main__":
             auditor.record_capability(f'capability_{i}', accepted=True, test_first_verified=(i % 3 == 0))
         if i % 7 == 0:
             auditor.record_capability(f'legacy_capability_{i}', accepted=True, test_first_verified=False)
+        # Simulate core E2E test results
+        if i % 2 == 0:
+            auditor.record_core_e2e_result(successful=(i % 5 != 0))
+        else:
+            auditor.record_core_e2e_result(successful=(i % 3 == 0))
     
     # Generate and print report
     report = auditor.generate_health_report()

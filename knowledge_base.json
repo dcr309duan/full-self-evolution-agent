@@ -1,0 +1,17 @@
+{
+  "capabilities": {
+    "minimal_core_e2e_test": {
+      "description": "The minimal core end-to-end test that validates the basic functionality of the system, serving as a foundational capability.",
+      "status": "created",
+      "creation_date": "2025-04-07",
+      "dependencies": [],
+      "prerequisite_for": ["all_other_capabilities"],
+      "metadata": {
+        "type": "foundational",
+        "priority": 1,
+        "notes": "This capability must be implemented and passing before any other capabilities can be developed."
+      }
+    }
+  },
+  "version": "1.0"
+}

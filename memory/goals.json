@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflection → goal selection → mutation → test → promotion) without manual intervention. This test must run every cycle and block new features if it fails, ensuring foundational stability before adding capabilities.",
-      "priority": 10,
-      "status": "pending",
-      "created_at": 1780647894.4651642
-    },
-    {
       "description": "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabilities for novelty and usage scores; drop the bottom 30% and re-implement only the essential ones with improved design. This directly counters the identified tendency to prioritize quantity over quality.",
       "priority": 9,
       "status": "pending",
@@ -794,6 +788,13 @@
       "status": "completed",
       "created_at": 1780647894.4626188,
       "completed_at": 1780648127.5654154
+    },
+    {
+      "description": "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflection → goal selection → mutation → test → promotion) without manual intervention. This test must run every cycle and block new features if it fails, ensuring foundational stability before adding capabilities.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780647894.4651642,
+      "completed_at": 1780648305.6942804
     }
   ],
   "generated_goals": []

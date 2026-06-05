@@ -1,9 +1,8 @@
 {
-  "cycle_count": 127,
-  "current_generation": 98,
-  "last_evolution_time": 1780647873.3241558,
+  "cycle_count": 128,
+  "current_generation": 99,
+  "last_evolution_time": 1780648163.9068587,
   "capabilities": [
-    "Implement a schema alignment checker that validates data contracts between all modules (goal generat",
     "Build a failure pattern detector that logs recurring test failures by error type and module, and aut",
     "Create a 'capability fitness function' that measures the number of downstream tasks each capability ",
     "Implement the self-healing retry mechanism for the evolution orchestrator: when a mutation fails val",
@@ -52,15 +51,10 @@
     "Implement a git-based workflow for mutation application: each mutation creates a commit, and rollbac",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
     "Create a minimal end-to-end integration test that runs with a trivial mutation (e.g., adding a comme",
-    "Create a 'test-first evolution' workflow: before any mutation can be accepted into the knowledge bas"
+    "Create a 'test-first evolution' workflow: before any mutation can be accepted into the knowledge bas",
+    "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflect"
   ],
   "history": [
-    {
-      "cycle": 22,
-      "goal": "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the specific AST nodes selected, the generated mutation, and the exact error from the AST rewriter or Python parser for each of the 3 consecutive failures. Then, based on the logged patterns, implement a pre-validation guard that checks (1) the mutated code parses into valid Python AST, (2) the AST structure is different from the original, and (3) the mutation does not remove critical structural elements like function definitions or class bodies. If the guard fails, automatically retry with a different random selection up to 5 times before logging a hard failure.",
-      "success": true,
-      "timestamp": 1780626158.323583
-    },
     {
       "cycle": 23,
       "goal": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
@@ -654,6 +648,12 @@
       "goal": "Create a 'test-first evolution' workflow: before any mutation can be accepted into the knowledge base, require a pre-written failing test that proves the new capability would be an improvement. Implement the mutation only to make that test pass. This enforces a strong feedback loop that penalizes instability.",
       "success": true,
       "timestamp": 1780648127.6601446
+    },
+    {
+      "cycle": 128,
+      "goal": "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflection → goal selection → mutation → test → promotion) without manual intervention. This test must run every cycle and block new features if it fails, ensuring foundational stability before adding capabilities.",
+      "success": true,
+      "timestamp": 1780648305.7946587
     }
   ],
   "status": "evolving"
