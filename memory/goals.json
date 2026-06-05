@@ -2,6 +2,18 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a causal dependency graph from the self-model that maps module interfaces and callers, enabling simulation of mutation side effects—automatically flag risky changes and generate compensating modifications to maintain integration stability.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780632519.9532623
+    },
+    {
+      "description": "Create a failure pattern miner that analyzes the failure log to identify high-level architectural bottlenecks (e.g., 'schema alignment failures account for 40% of recent errors'), and generates targeted refactoring goals to address root causes rather than symptoms.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780632519.9546182
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -258,6 +270,13 @@
       "status": "completed",
       "created_at": 1780631585.1432245,
       "completed_at": 1780632460.883309
+    },
+    {
+      "description": "Implement a multi-phase mutation validation pipeline: (1) static AST-level checks for syntax and structural validity, (2) dependency impact analysis using the self-model to detect breaking changes to critical interfaces, (3) sandboxed execution of the proposed change on a module copy with automated tests before committing the mutation.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780632519.9514618,
+      "completed_at": 1780632620.3752167
     }
   ],
   "generated_goals": []
