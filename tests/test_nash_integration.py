@@ -833,11 +833,27 @@ class TestNashIntegration(unittest.TestCase):
             # Initial 5 entries + 3 cycle entries = 8 entries
             self.assertEqual(len(history_data), 8, f"History should have 8 entries for {module_name}")
 
-    def tearDown(self):
-        """Clean up temporary files."""
-        import shutil
-        shutil.rmtree(self.test_dir, ignore_errors=True)
-
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_minimal_integration_with_known_patterns(self):
+        """Minimal integration test: (1) Creates a mock system with 3 modules and known interaction patterns,
+        (2) Verifies Nash detection works correctly, (3) Tests that multi-module forcing generates valid coordinated change sets."""
+        if NashDetectorAndForcer is None or MultiModuleForcer is None:
+            self.skipTest("Required modules could not be imported")
+        
+        # Load test data
+        with open(os.path.join(self.test_dir, "history.json"), 'r') as f:
+            history = json.load(f)
+        with open(os.path.join(self.test_dir, "interaction_matrix.json"), 'r') as f:
+            interaction_matrix = json.load(f)
+        with open(os.path.join(self.test_dir, "dependency_graph.json"), 'r') as f:
+            dependency_graph = json.load(f)
+        
+        # Create detector and load history
+        detector = NashDetectorAndForcer()
+        for module_name, module_history in history.items():
+            for entry in module_history:
+                detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+        
+        # Create mock modules with known interaction patterns
+        class MockModule:
+            def __init__(self, name, fitness):
+                self

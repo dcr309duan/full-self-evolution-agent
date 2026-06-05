@@ -33,7 +33,7 @@ class Goal:
                     # 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
                     # 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
                     # 'adapt_to_pressure', 'nash_equilibrium_meta', 'coordinated_multi_module_change',
-                    # or 'ecological_pressure'
+                    # 'ecological_pressure', or 'multi_module_change'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -133,7 +133,7 @@ def add_external_goal(goal: Goal) -> bool:
         'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
         'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
         'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure',
-        'coordinated_multi_module_change', 'ecological_pressure'
+        'coordinated_multi_module_change', 'ecological_pressure', 'multi_module_change'
     ]
     if goal.goal_type not in valid_goal_types:
         logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
@@ -162,13 +162,13 @@ def _is_coordinated_goal(goal: Goal) -> bool:
         return len(modules) >= nash_coordination_min_modules
     
     # Check tags for coordinated change indicators
-    coordinated_tags = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "multi_module"]
+    coordinated_tags = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "multi_module", "multi_module_change"]
     for tag in goal.tags:
         if tag in coordinated_tags:
             return True
     
     # Check goal type for coordinated types
-    coordinated_types = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "nash_equilibrium_meta"]
+    coordinated_types = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "nash_equilibrium_meta", "multi_module_change"]
     if goal.goal_type in coordinated_types:
         return True
     
@@ -578,6 +578,74 @@ def generate_coordinated_multi_module_change_goal(modules: List[str], descriptio
     return goal
 
 
+def generate_multi_module_change_goal(stuck_modules: List[str], nash_analysis: Dict) -> Goal:
+    """Generate a multi_module_change goal when Nash equilibrium is detected.
+
+    This goal triggers when Nash equilibrium is detected and includes the specific
+    modules and coordinated changes needed to break the equilibrium.
+
+    Args:
+        stuck_modules: List of module names currently stuck in Nash equilibrium.
+        nash_analysis: Dictionary containing Nash equilibrium analysis details,
+            including fitness scores and interaction patterns.
+
+    Returns:
+        A Goal object with type 'multi_module_change' that specifies the modules
+        and coordinated changes needed.
+    """
+    if not stuck_modules:
+        logger.warning("generate_multi_module_change_goal called with empty stuck_modules list")
+        return None
+
+    modules_str = ", ".join(stuck_modules)
+    
+    # Extract coordinated changes from nash_analysis if available
+    coordinated_changes = nash_analysis.get('coordinated_changes', [])
+    if coordinated_changes:
+        changes_str = "; ".join(coordinated_changes)
+        description = (
+            f"Multi-module change required to escape Nash equilibrium: "
+            f"modules [{modules_str}] are stuck. "
+            f"Coordinated changes needed: {changes_str}. "
+            f"All modules must be modified simultaneously to break the local optimum."
+        )
+    else:
+        description = (
+            f"Multi-module change required to escape Nash equilibrium: "
+            f"modules [{modules_str}] are stuck in a local optimum. "
+            f"Coordinated changes needed across all modules to break the equilibrium "
+            f"and explore new fitness landscapes."
+        )
+
+    goal = Goal(
+        description=description,
+        priority=GoalPriority.CRITICAL,
+        module=",".join(stuck_modules),
+        goal_type="multi_module_change",
+        source="fitness",
+        tags=["multi_module_change", "nash_equilibrium", "coordinated_change", "equilibrium_break"]
+    )
+
+    # Add nash analysis details as tags for reference
+    if nash_analysis:
+        for key, value in nash_analysis.items():
+            if isinstance(value, str):
+                goal.tags.append(f"nash_{key}:{value}")
+            elif isinstance(value, (int, float)):
+                goal.tags.append(f"nash_{key}:{value:.2f}")
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str):
+                        goal.tags.append(f"nash_{key}:{item}")
+
+    logger.info(
+        "Generated multi_module_change goal for modules %s with coordinated changes",
+        stuck_modules
+    )
+
+    return goal
+
+
 def generate_ecological_pressure_goals() -> List[Goal]:
     """Generate ecological pressure goals by analyzing test coverage gaps.
 
@@ -656,6 +724,47 @@ def generate_ecological_pressure_goals() -> List[Goal]:
             )
 
     return ecological_pressure_goals
+
+
+def _generate_challenge_goals_from_knowledge_base() -> List[Goal]:
+    """Generate challenge goals based on knowledge base entries.
+
+    This internal function queries the knowledge base for fitness scores and
+    generates challenge goals for modules with low fitness scores.
+
+    Returns:
+        List of Goal objects with type 'challenge' for low-fitness modules.
+    """
+    challenge_goals = []
+    for module, fitness_str in knowledge_base.items():
+        try:
+            fitness = float(fitness_str)
+            if fitness < 0.5:  # Low fitness threshold
+                goal = Goal(
+                    description=f"Improve fitness of module {module} from {fitness:.2f} to above 0.5",
+                    priority=GoalPriority.HIGH,
+                    module=module,
+                    goal_type="challenge",
+                    source="fitness",
+                    tags=["challenge", "fitness_improvement", f"module:{module}"]
+                )
+                challenge_goals.append(goal)
+                logger.debug("Generated challenge goal for module %s (fitness=%.2f)", module, fitness)
+        except (ValueError, TypeError):
+            logger.warning("Invalid fitness value for module %s: %s", module, fitness_str)
+    return challenge_goals
+
+
+def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
+    """Archive a goal with a lesson learned.
+
+    Args:
+        goal: The goal to archive.
+        lesson: The lesson to associate with the archived goal.
+    """
+    goal.archived = True
+    goal.lesson = lesson
+    logger.info("Archived goal '%s' with lesson: %s", goal.description, lesson)
 
 
 def generate_goals(
@@ -806,107 +915,4 @@ def generate_goals(
         
         # Generate coordinated multi-module change goal if there are 3+ modules
         if len(nash_equilibrium_modules) >= 3:
-            coordinated_multi_module_goal = generate_coordinated_multi_module_change_goal(
-                nash_equilibrium_modules,
-                f"Break Nash equilibrium across {len(nash_equilibrium_modules)} modules"
-            )
-            if coordinated_multi_module_goal:
-                goals.append(coordinated_multi_module_goal)
-                logger.info(
-                    "Generated coordinated multi-module change goal for %d modules",
-                    len(nash_equilibrium_modules)
-                )
-        
-        # Reset the flag after generating the goals to avoid duplicate generation
-        nash_equilibrium_detected = False
-
-    # Track consecutive successes and trigger meta-goal if threshold reached
-    all_above_threshold = all(
-        metrics.accuracy >= current_accuracy_threshold for metrics in metrics_list
-    )
-    
-    if all_above_threshold:
-        consecutive_successes += 1
-        logger.debug(
-            "Consecutive successes: %d/%d",
-            consecutive_successes, success_threshold
-        )
-        
-        if consecutive_successes >= success_threshold:
-            # Reset counter and generate meta-goal
-            consecutive_successes = 0
-            
-            # Lower the accuracy threshold to make goals harder
-            current_accuracy_threshold = max(0.5, current_accuracy_threshold - 0.1)
-            logger.info(
-                "Lowered accuracy threshold to %.2f due to 10 consecutive successes",
-                current_accuracy_threshold
-            )
-            
-            # Generate meta-goal: modify the test suite itself
-            meta_goal = Goal(
-                description="Modify the test suite to add more comprehensive tests that push the system beyond current capabilities",
-                priority=GoalPriority.CRITICAL,
-                module="test_suite",
-                goal_type="meta_goal",
-                source="fitness",
-                tags=["meta_goal", "test_suite_modification", "harder_goals"]
-            )
-            goals.append(meta_goal)
-            logger.info(
-                "Generated meta-goal to modify test suite after %d consecutive successes",
-                success_threshold
-            )
-    else:
-        # Reset counter if any module fails
-        if consecutive_successes > 0:
-            logger.debug(
-                "Resetting consecutive successes counter (was %d)",
-                consecutive_successes
-            )
-        consecutive_successes = 0
-
-    # Check for ecological evolution triggers based on test suite diversity
-    for metrics in metrics_list:
-        if hasattr(metrics, 'test_suite_diversity'):
-            current_diversity = metrics.test_suite_diversity
-            # Detect drop in diversity
-            if current_diversity < diversity_drop_threshold:
-                # Generate ecological evolution goal to expand test ecosystem
-                goal = Goal(
-                    description=f"Expand test ecosystem for {metrics.module}: diversity dropped to {current_diversity:.2f}",
-                    priority=GoalPriority.HIGH,
-                    module=metrics.module,
-                    goal_type="ecological_evolution",
-                    source="fitness",
-                    tags=["ecological_evolution", "diversity_drop", "test_ecosystem"]
-                )
-                goals.append(goal)
-                logger.info(
-                    "Generated ecological evolution goal for %s (diversity=%.2f, threshold=%.2f)",
-                    metrics.module, current_diversity, diversity_drop_threshold
-                )
-            # Update previous diversity for next cycle
-            previous_diversity = current_diversity
-
-    # Check for ecological gap triggers after ecology engine evaluation
-    for metrics in metrics_list:
-        if hasattr(metrics, 'test_suite_diversity'):
-            current_diversity = metrics.test_suite_diversity
-            # If diversity drops below threshold, find the least-covered capability
-            if current_diversity < diversity_drop_threshold:
-                # Determine the least-covered capability from capability_coverage
-                if capability_coverage:
-                    least_covered_capability = min(capability_coverage, key=capability_coverage.get)
-                    least_covered_score = capability_coverage[least_covered_capability]
-                    
-                    # Generate ecological gap goal to create tests for the least-covered capability
-                    goal = Goal(
-                        description=f"Create tests for least-covered capability '{least_covered_capability}' in {metrics.module} (coverage: {least_covered_score:.2f})",
-                        priority=GoalPriority.HIGH,
-                        module=metrics.module,
-                        goal_type="ecological_gap",
-                        source="fitness",
-                        tags=["ecological_gap", "capability_coverage", "test_creation"]
-                    )
-                    goals.append
+            coordinated_multi_module_goal = generate_coordinated_multi_module

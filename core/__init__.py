@@ -54,6 +54,7 @@ from .ecology_engine import EcologyEngine
 from . import nash_detector
 from . import multi_module_forcer
 from . import nash_integration
+from . import nash_detector_and_forcer
 
 __all__ = [
     'audit_and_prune',
@@ -85,4 +86,5 @@ __all__ = [
     'NashIntegrationConfig',
     'IntegrationResult',
     'nash_integration',
+    'nash_detector_and_forcer',
 ]

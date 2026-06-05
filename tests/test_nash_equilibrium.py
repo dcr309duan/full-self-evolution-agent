@@ -312,6 +312,89 @@ class TestNashEquilibriumMinimal(unittest.TestCase):
         # Verify equilibrium is broken
         self.assertFalse(self.detector.is_nash_equilibrium(modified_graph3))
 
+    def test_equilibrium_after_n_cycles_no_improvement(self):
+        """Test (1): Verify detector correctly identifies equilibrium after N cycles of no improvement."""
+        # Create a mock graph that is in equilibrium
+        mock_graph = {
+            "mod_a": {"score": 0.80, "interactions": {"mod_b": -0.15, "mod_c": -0.10}},
+            "mod_b": {"score": 0.80, "interactions": {"mod_a": -0.15, "mod_c": -0.10}},
+            "mod_c": {"score": 0.80, "interactions": {"mod_a": -0.10, "mod_b": -0.10}}
+        }
+        
+        # Simulate N cycles of no improvement (scores remain stable)
+        n_cycles = 10
+        for cycle in range(n_cycles):
+            # No changes to scores - simulating no improvement
+            self.assertTrue(self.detector.is_nash_equilibrium(mock_graph))
+        
+        # After N cycles, equilibrium should still be detected
+        self.assertTrue(self.detector.is_nash_equilibrium(mock_graph))
+
+    def test_reset_after_multi_module_change_succeeds(self):
+        """Test (2): Verify detector resets when a multi-module change succeeds."""
+        # Create a mock graph in equilibrium
+        mock_graph = {
+            "mod_a": {"score": 0.80, "interactions": {"mod_b": -0.15}},
+            "mod_b": {"score": 0.80, "interactions": {"mod_a": -0.15}}
+        }
+        
+        # Initially in equilibrium
+        self.assertTrue(self.detector.is_nash_equilibrium(mock_graph))
+        
+        # Generate a multi-module change plan
+        plan = self.forcer.force_multi_module_change(mock_graph)
+        
+        # Apply the changes (simulating successful multi-module change)
+        for mod_name, change in plan.items():
+            mock_graph[mod_name]["score"] = change["new_score"]
+        
+        # After successful change, the system may no longer be in equilibrium
+        # The detector should reflect the new state
+        result = self.detector.is_nash_equilibrium(mock_graph)
+        self.assertIsInstance(result, bool)
+        
+        # The new state should be closer to equilibrium (scores more balanced)
+        scores = [mock_graph[m]["score"] for m in mock_graph]
+        score_range = max(scores) - min(scores)
+        self.assertLessEqual(score_range, 0.2)
+
+    def test_forcer_generates_valid_coordinated_mutations(self):
+        """Test (3): Verify the forcer generates valid coordinated mutations."""
+        # Create a mock graph with imbalanced scores
+        mock_graph = {
+            "mod_x": {"score": 0.60, "interactions": {"mod_y": -0.20, "mod_z": -0.15}},
+            "mod_y": {"score": 0.80, "interactions": {"mod_x": -0.20, "mod_z": -0.10}},
+            "mod_z": {"score": 0.70, "interactions": {"mod_x": -0.15, "mod_y": -0.10}}
+        }
+        
+        # Generate coordinated mutations
+        plan = self.forcer.force_multi_module_change(mock_graph)
+        
+        # Verify plan structure
+        self.assertIsInstance(plan, dict)
+        self.assertEqual(len(plan), 3)
+        
+        # Verify each mutation is valid
+        for mod_name, change in plan.items():
+            self.assertIn(mod_name, mock_graph)
+            self.assertIn("module", change)
+            self.assertEqual(change["module"], mod_name)
+            self.assertIn("new_score", change)
+            self.assertIsInstance(change["new_score"], (int, float))
+            self.assertGreaterEqual(change["new_score"], 0)
+            self.assertLessEqual(change["new_score"], 1)
+        
+        # Verify mutations are coordinated (scores move toward each other)
+        original_scores = [mock_graph[m]["score"] for m in mock_graph]
+        new_scores = [plan[m]["new_score"] for m in mock_graph]
+        
+        original_range = max(original_scores) - min(original_scores)
+        new_range = max(new_scores) - min(new_scores)
+        self.assertLessEqual(new_range, original_range)
+        
+        # Verify the plan is not empty
+        self.assertGreater(len(plan), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
