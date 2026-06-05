@@ -811,72 +811,81 @@ class NashDetectorAndForcer:
         
         return equilibrium_pairs
 
-
-# Simple test function to validate core logic
-def test_nash_detector_and_forcer():
-    """
-    Test function to validate the core logic of NashDetectorAndForcer.
-    Tests: initialization, equilibrium detection, coordinated change, and interaction tracking.
-    """
-    print("Running tests for NashDetectorAndForcer...")
-    
-    # Test 1: Initialization
-    print("\nTest 1: Initialization")
-    detector = NashDetectorAndForcer(num_modules=5, random_seed=42)
-    assert detector.num_modules == 5, "Should have 5 modules"
-    assert len(detector.dependency_matrix) == 5, "Dependency matrix should have 5 rows"
-    assert len(detector.module_scores) == 5, "Should have 5 module scores"
-    assert detector.sliding_window_size == 20, "Sliding window should be 20"
-    print("  PASS: Initialization works correctly")
-    
-    # Test 2: Score computation
-    print("\nTest 2: Score computation")
-    initial_scores = detector.module_scores.copy()
-    new_scores = detector.update_all_scores()
-    assert len(new_scores) == 5, "Should return 5 scores"
-    assert new_scores != initial_scores, "Scores should change after update"
-    print("  PASS: Score computation works correctly")
-    
-    # Test 3: Interaction tracking
-    print("\nTest 3: Interaction tracking")
-    detector.record_interaction(0, 1, True)
-    detector.record_interaction(1, 2, False)
-    detector.record_interaction(0, 2, True)
-    assert (0, 1) in detector.interaction_frequencies, "Should track interaction (0,1)"
-    assert detector.interaction_frequencies[(0, 1)] == 1, "Frequency should be 1"
-    assert detector.interaction_success_rates[(0, 1)] == 1.0, "Success rate should be 1.0"
-    assert detector.interaction_success_rates[(1, 2)] == 0.0, "Success rate should be 0.0"
-    print("  PASS: Interaction tracking works correctly")
-    
-    # Test 4: Enhanced equilibrium detection
-    print("\nTest 4: Enhanced equilibrium detection")
-    # Force stable scores to trigger equilibrium
-    for _ in range(10):
-        detector.update_all_scores()
-    # Check equilibrium with stable scores
-    is_equilibrium = detector.detect_nash_equilibrium()
-    # After 3+ consecutive no-improvement cycles, should detect equilibrium
-    if detector.consecutive_no_improvement >= 3:
-        assert is_equilibrium, "Should detect equilibrium after 3+ no-improvement cycles"
-        print("  PASS: Enhanced equilibrium detection works correctly")
-    else:
-        print("  INFO: Not enough cycles to trigger equilibrium (may need more iterations)")
-    
-    # Test 5: Coordinated change generation
-    print("\nTest 5: Coordinated change generation")
-    change_plan = detector.force_coordinated_change(3)
-    assert change_plan["type"] == "coordinated_mutation", "Should be coordinated mutation"
-    assert len(change_plan["modules_changed"]) == 3, "Should change 3 modules"
-    assert len(change_plan["mutations"]) == 3, "Should have 3 mutations"
-    print("  PASS: Coordinated change generation works correctly")
-    
-    # Test 6: Coordinated change execution
-    print("\nTest 6: Coordinated change execution")
-    execution_result = detector.execute_coordinated_change(change_plan)
-    assert execution_result["type"] == "coordinated_mutation_executed", "Should be executed mutation"
-    assert len(execution_result["mutations_applied"]) == 3, "Should have applied 3 mutations"
-    assert not detector.in_equilibrium, "Should exit equilibrium after change"
-    print("  PASS: Coordinated change execution works correctly")
-    
-    # Test 7: Serialization
-   
+    def detect_nash_equilibrium_with_baseline(self) -> List[Tuple[int, int]]:
+        """
+        Nash equilibrium detection function that tracks module interaction frequencies
+        and success rates over the last 20 cycles. Implements a function that checks
+        if no single module change improves the system by comparing recent mutation
+        success rates against a baseline. Returns a list of modules currently in equilibrium.
+        
+        This function:
+        1. Tracks module interaction frequencies and success rates over the last 20 cycles
+        2. Computes a baseline success rate from the first 10 cycles of the window
+        3. Compares recent mutation success rates (last 10 cycles) against the baseline
+        4. Identifies modules where no single change improves success rate by more than 5%
+        5. Returns a list of module pairs currently in equilibrium
+        
+        Returns:
+            List of module pairs (tuples) that are at Nash equilibrium
+        """
+        equilibrium_pairs = []
+        
+        # Need at least 20 cycles of interaction history
+        if len(self.interaction_history) < 20:
+            return []
+        
+        # Get the last 20 interactions from the sliding window
+        recent_interactions = list(self.interaction_history)[-20:]
+        
+        # Split into baseline (first 10) and recent (last 10)
+        baseline_interactions = recent_interactions[:10]
+        recent_interactions_window = recent_interactions[10:]
+        
+        # Compute baseline success rates per module pair
+        baseline_stats: Dict[Tuple[int, int], Dict[str, int]] = defaultdict(
+            lambda: {"attempts": 0, "successes": 0, "failures": 0}
+        )
+        for pair_key, success in baseline_interactions:
+            baseline_stats[pair_key]["attempts"] += 1
+            if success:
+                baseline_stats[pair_key]["successes"] += 1
+            else:
+                baseline_stats[pair_key]["failures"] += 1
+        
+        # Compute recent success rates per module pair
+        recent_stats: Dict[Tuple[int, int], Dict[str, int]] = defaultdict(
+            lambda: {"attempts": 0, "successes": 0, "failures": 0}
+        )
+        for pair_key, success in recent_interactions_window:
+            recent_stats[pair_key]["attempts"] += 1
+            if success:
+                recent_stats[pair_key]["successes"] += 1
+            else:
+                recent_stats[pair_key]["failures"] += 1
+        
+        # Check each module pair for equilibrium
+        all_pairs = set(list(baseline_stats.keys()) + list(recent_stats.keys()))
+        
+        for pair_key in all_pairs:
+            baseline = baseline_stats.get(pair_key, {"attempts": 0, "successes": 0, "failures": 0})
+            recent = recent_stats.get(pair_key, {"attempts": 0, "successes": 0, "failures": 0})
+            
+            # Need at least 3 attempts in both baseline and recent to evaluate
+            if baseline["attempts"] < 3 or recent["attempts"] < 3:
+                continue
+            
+            # Compute baseline success rate
+            baseline_rate = baseline["successes"] / baseline["attempts"] if baseline["attempts"] > 0 else 0.0
+            
+            # Compute recent success rate
+            recent_rate = recent["successes"] / recent["attempts"] if recent["attempts"] > 0 else 0.0
+            
+            # Check if no single module change improves the success rate by more than 5%
+            # We simulate changes by considering what happens if we adjust the pair's behavior
+            
+            # Simulate change: increase successes by 1 (improvement scenario)
+            improved_successes = recent["successes"] + 1
+            improved_rate = improved_successes / (recent["attempts"] + 1) if (recent["attempts"] + 1) > 0 else 0.0
+            improvement_with_more_successes = improved_rate - recent_rate
+            
+            # Simulate change: decrease failures

@@ -45,10 +45,35 @@ class CoordinatedMutationEngine:
         self.sandbox_enabled = sandbox_enabled
         self._plans: Dict[str, MutationPlan] = {}
         self._mutation_generators: Dict[str, Callable] = {}
+        self._dependency_graph: Dict[str, List[str]] = {}
 
     def register_mutation_generator(self, module_pattern: str, generator: Callable) -> None:
         """Register a generator function for a module pattern."""
         self._mutation_generators[module_pattern] = generator
+
+    def build_dependency_graph(self, modules: List[str]) -> Dict[str, List[str]]:
+        """Build a simple dependency graph from module imports."""
+        graph: Dict[str, List[str]] = {}
+        for module_path in modules:
+            full_path = self.workspace_root / module_path
+            if full_path.exists():
+                try:
+                    with open(full_path, "r") as f:
+                        content = f.read()
+                    tree = ast.parse(content)
+                    imports = []
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.Import):
+                            for alias in node.names:
+                                imports.append(alias.name)
+                        elif isinstance(node, ast.ImportFrom):
+                            if node.module:
+                                imports.append(node.module)
+                    graph[module_path] = imports
+                except Exception:
+                    graph[module_path] = []
+        self._dependency_graph = graph
+        return graph
 
     def create_plan(self, modules: List[str], interaction_description: str) -> MutationPlan:
         """Create a mutation plan for coordinated changes across modules."""
@@ -61,6 +86,9 @@ class CoordinatedMutationEngine:
             interaction_description=interaction_description,
             rollback_point_id=plan_id,
         )
+
+        # Build dependency graph
+        self.build_dependency_graph(modules)
 
         # Generate mutations for each module
         for module_path in modules:
@@ -169,6 +197,30 @@ class CoordinatedMutationEngine:
                 if conflicts:
                     logger.warning(f"Name conflicts detected in {module_name}: {conflicts}")
                 all_names.update(names)
+
+            # Check dependency compatibility
+            if self._dependency_graph:
+                for module_path, deps in self._dependency_graph.items():
+                    for dep in deps:
+                        dep_module = dep.replace(".", "/") + ".py"
+                        if dep_module in plan.modules:
+                            dep_mutation = next((m for m in plan.mutations if m.module_path == dep_module), None)
+                            if dep_mutation and dep_mutation.success:
+                                # Check if the dependent module uses any changed names
+                                try:
+                                    dep_tree = ast.parse(dep_mutation.mutated_content)
+                                    dep_names = set()
+                                    for node in ast.walk(dep_tree):
+                                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                                            dep_names.add(node.name)
+                                    # Verify the dependent module still has expected interfaces
+                                    if module_path in definitions:
+                                        expected_names = definitions[module_path]
+                                        missing = expected_names - dep_names
+                                        if missing:
+                                            logger.warning(f"Dependency {dep_module} missing expected names: {missing}")
+                                except SyntaxError:
+                                    continue
 
             return True
 

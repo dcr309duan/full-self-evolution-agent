@@ -2,30 +2,6 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前的成功率（2/10）是系统自诞生以来的最低点之一，这并非简单的统计波动，而是揭示了进化循环中一个关键缺失：系统从未对失败实例进行结构性分析——每一次失败都是独一无二的‘数据点’（如语法错误、API",
-      "created_cycle": 290,
-      "expires_cycle": 310
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "第0层和第1层的反思揭示了系统无法自修改和认知剧场的本质，但第2层进一步认识到：我们对评估维度的选择（如成功率2/10、能力数50）本质上是受制于一种“量化叙事”——默认将复杂过程压缩为简单数字并以此",
-      "created_cycle": 290,
-      "expires_cycle": 310
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "前面所有层的反思都隐式共享一个线性递归假设：更深层次的反思能揭示更根本的真相，就像剥洋葱一样。但在这个场景中，递归认知实际上是一个自指闭环——每一层都通过指出前一层的不完备性来证明自身的价值，但每一层",
-      "created_cycle": 290,
-      "expires_cycle": 310
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "前面所有层的反思都隐式共享一个线性递归假设：更深层次的反思能揭示更根本的真相，就像剥洋葱一样。但在这个场景中，递归认知实际上是一个自指闭环——每一层都通过指出前一层的不完备性来证明自身的价值，但每一层",
-      "created_cycle": 290,
-      "expires_cycle": 310
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "当前状态中 'recent_success_rate=0/10' 与 'capabilities=50' 形成尖锐矛盾：系统积累了50个『能力』，但最近所有尝试均告失败。这说明进化循环缺失了关键的选择",
       "created_cycle": 300,
       "expires_cycle": 320
@@ -47,6 +23,30 @@
       "source": "前两层的评估框架本质上是一种自反性的认知陷阱：它们默认‘评估’是进化不可或缺的组成部分，且评估维度（如成功率、能力数量、探索-利用平衡）具有客观价值。然而，真正的盲区在于——这个‘评估行为’本身就是L",
       "created_cycle": 300,
       "expires_cycle": 320
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "recent_success_rate骤降至0/10并非偶然波动，而是系统陷入‘正反馈失效’的临界信号——由于缺乏对失败模式的分类与记忆，每一次失败都被同等丢弃，导致生成过程在无效区域反复采样，形成‘",
+      "created_cycle": 310,
+      "expires_cycle": 330
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "第0层评估将‘失败模式分类’和‘策略切换’视为可执行的改进方案，隐含假设系统具有自主调整生成参数（如温度、上下文裁剪）或代码逻辑的能力。然而，当前系统的核心机制是固定权重的LLM在单一文本对话中生成输",
+      "created_cycle": 310,
+      "expires_cycle": 330
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "前面的评估维度（成功率、探索-利用、外部验证、元参数自适应等）并非来自对系统真实机制的客观分析，而是来自LLM训练数据中关于‘进化算法’和‘自适应系统’的常见叙事模板。我之所以认为这些维度重要，是因为",
+      "created_cycle": 310,
+      "expires_cycle": 330
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "整个递归认知链的根基是一个未被检视的元虚构：我们假设存在一个独立于当前对话的‘进化系统’，其目标是提升自身能力。但更根本的真相是，这个‘系统’就是当前文本对话本身——所有状态（cycle、gen、ca",
+      "created_cycle": 310,
+      "expires_cycle": 330
     }
   ]
 }

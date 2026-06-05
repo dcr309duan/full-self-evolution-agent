@@ -3,12 +3,13 @@ import os
 import unittest
 import json
 import tempfile
+from unittest.mock import patch, MagicMock
 
 # Add the parent directory to the path so we can import from core and modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from nash_detector_and_forcer import NashDetectorAndForcer
-from multi_module_forcer import MultiModuleForcer
+from core.nash_detector_and_forcer import NashDetectorAndForcer
+from core.multi_module_forcer import MultiModuleForcer
 
 
 class TestNashIntegration(unittest.TestCase):
@@ -80,7 +81,7 @@ class TestNashIntegration(unittest.TestCase):
             json.dump(history, f)
 
     def test_equilibrium_detection(self):
-        """Test that equilibrium detection works with mock data."""
+        """Test that detection works with mock module data."""
         # Load test data
         with open(os.path.join(self.test_dir, "history.json"), 'r') as f:
             history = json.load(f)
@@ -118,7 +119,7 @@ class TestNashIntegration(unittest.TestCase):
         self.assertTrue(is_nash, "Nash equilibrium should be detected")
 
     def test_multi_module_forcing_generates_proposal(self):
-        """Test that multi-module forcing generates at least one coordinated change proposal."""
+        """Test that multi-module forcing produces at least one coordinated change."""
         # Load test data
         with open(os.path.join(self.test_dir, "dependency_graph.json"), 'r') as f:
             dependency_graph = json.load(f)
@@ -264,6 +265,74 @@ class TestNashIntegration(unittest.TestCase):
         
         # Step 3: Verify system moved to new state (no longer at equilibrium)
         self.assertFalse(new_is_nash, "System should no longer be at equilibrium after mutation")
+
+    def test_minimal_integration_with_mocked_orchestrator(self):
+        """Minimal integration test with mocked evolution orchestrator."""
+        # Load test data
+        with open(os.path.join(self.test_dir, "history.json"), 'r') as f:
+            history = json.load(f)
+        with open(os.path.join(self.test_dir, "interaction_matrix.json"), 'r') as f:
+            interaction_matrix = json.load(f)
+        with open(os.path.join(self.test_dir, "dependency_graph.json"), 'r') as f:
+            dependency_graph = json.load(f)
+        
+        # Create detector and load history
+        detector = NashDetectorAndForcer()
+        for module_name, module_history in history.items():
+            for entry in module_history:
+                detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+        
+        # Create mock modules
+        class MockModule:
+            def __init__(self, name, fitness):
+                self.name = name
+                self.fitness = fitness
+            def get_scores(self):
+                return interaction_matrix[self.name]
+            def mutate(self):
+                return self
+        
+        module_names = ["ModuleA", "ModuleB", "ModuleC"]
+        modules = []
+        for name in module_names:
+            module_file = os.path.join(self.test_dir, f"{name}.json")
+            with open(module_file, 'r') as f:
+                data = json.load(f)
+            modules.append(MockModule(name, data["fitness"]))
+        
+        # Mock the evolution orchestrator
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.get_modules.return_value = modules
+        mock_orchestrator.get_dependency_graph.return_value = dependency_graph
+        mock_orchestrator.get_interaction_matrix.return_value = interaction_matrix
+        
+        # Step 1: Detect equilibrium using mocked orchestrator
+        is_nash = detector.detect_equilibrium(mock_orchestrator.get_modules())
+        
+        # Step 2: Generate plan using mocked orchestrator
+        plan = None
+        if is_nash:
+            forcer = MultiModuleForcer()
+            plan = forcer.generate_plan(
+                mock_orchestrator.get_dependency_graph(),
+                {"is_equilibrium": True}
+            )
+        
+        # Step 3: Verify detection works
+        self.assertTrue(is_nash, "Nash equilibrium should be detected")
+        
+        # Step 4: Verify coordinated change is generated
+        self.assertIsNotNone(plan, "Coordinated change plan should be generated")
+        self.assertGreaterEqual(len(plan), 2, "Plan should target at least 2 modules")
+        
+        # Verify plan respects dependencies
+        plan_module_names = [m.get("module") for m in plan]
+        if "ModuleA" in plan_module_names:
+            self.assertIn("ModuleB", plan_module_names,
+                          "If ModuleA is targeted, ModuleB must also be targeted due to dependency")
+        if "ModuleB" in plan_module_names:
+            self.assertIn("ModuleC", plan_module_names,
+                          "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
 
     def tearDown(self):
         """Clean up temporary files."""
