@@ -242,3 +242,27 @@
 [2026-06-05 10:18:37] Cycle 20: Goal failed (attempt 2): All steps failed
 [2026-06-05 10:18:37] Cycle 20: Phase 2.5: Mutation cycle
 [2026-06-05 10:18:51] Cycle 20: Mutations: 3, successes: 2
+[2026-06-05 10:18:55] Cycle 20: === Cycle Complete ===
+
+[2026-06-05 10:19:25] Cycle 21: === Starting Evolution Cycle ===
+[2026-06-05 10:19:25] Cycle 21: Phase 2: Goal selection and execution
+[2026-06-05 10:19:25] Cycle 21: Selected goal: Build an API server to expose agent capabilities externally
+[2026-06-05 10:19:25] Cycle 21: Executing goal: Build an API server to expose agent capabilities externally
+[2026-06-05 10:19:33] Cycle 21:   Step: create_file -> api_server.py: Create a FastAPI-based API server with endpoints to: GET /capabilities (list current capabilities), POST /evolve (trigger one evolution cycle), GET /knowledge (retrieve accumulated knowledge), GET /status (system health and cycle count). Include CORS middleware for external access.
+[2026-06-05 10:19:47] Cycle 21:   Step: modify_file -> main.py: Add an optional --api flag to start the API server instead of the standard evolution loop. When API mode is active, expose the existing evolution engine as a callable service, allowing external triggers and data retrieval.
+[2026-06-05 10:19:53] Cycle 21:   Step: create_file -> api_client_example.py: Create a reference client script demonstrating how to interact with the API: query capabilities, trigger evolution, retrieve knowledge. This serves as both documentation and a test harness.
+[2026-06-05 10:20:04] Cycle 21:   Step: modify_file -> requirements.txt: Add 'fastapi', 'uvicorn', and 'pydantic' to dependencies to ensure the API server can be installed and run.
+[2026-06-05 10:20:07] Cycle 21:   Step: create_file -> tests/test_api.py: Create integration tests for the API server using pytest and httpx, testing each endpoint with expected responses and error handling.
+[2026-06-05 10:20:17] Cycle 21: Goal completed: Build an API server to expose agent capabilities externally
+[2026-06-05 10:20:17] Cycle 21: Phase 2.7: 自主研究 - 探索新知识
+[2026-06-05 10:20:52] Cycle 21: 研究完成: 2 个主题
+[2026-06-05 10:20:52] Cycle 21: === Cycle Complete ===
+
+[2026-06-05 10:21:22] Cycle 22: === Starting Evolution Cycle ===
+[2026-06-05 10:21:22] Cycle 22: Phase 1: Self-reflection
+[2026-06-05 10:21:39] Cycle 22: Reflection: {"current_assessment": "I have built a substantial infrastructure for self-evolution: web scraping, task scheduling, self-evaluation, testing, AST rewriting, meta-evaluation, failure analysis, and an 
+[2026-06-05 10:21:45] Cycle 22: Phase 2: Goal selection and execution
+[2026-06-05 10:21:45] Cycle 22: Selected goal: Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the specific AST nodes selected, the generated mutation, and the exact error from the AST rewriter or Python parser for each of the 3 consecutive failures. Then, based on the logged patterns, implement a pre-validation guard that checks (1) the mutated code parses into valid Python AST, (2) the AST structure is different from the original, and (3) the mutation does not remove critical structural elements like function definitions or class bodies. If the guard fails, automatically retry with a different random selection up to 5 times before logging a hard failure.
+[2026-06-05 10:21:45] Cycle 22: Executing goal: Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the specific AST nodes selected, the generated mutation, and the exact error from the AST rewriter or Python parser for each of the 3 consecutive failures. Then, based on the logged patterns, implement a pre-validation guard that checks (1) the mutated code parses into valid Python AST, (2) the AST structure is different from the original, and (3) the mutation does not remove critical structural elements like function definitions or class bodies. If the guard fails, automatically retry with a different random selection up to 5 times before logging a hard failure.
+[2026-06-05 10:21:54] Cycle 22:   Step: modify -> mutation_engine.py: Add detailed logging instrumentation: log the specific AST nodes selected for mutation, the generated mutation code, and capture the exact error from ast.parse() or the AST rewriter when a mutation fails. Store these logs in a structured format (e.g., list of dicts) for pattern analysis.
+[2026-06-05 10:22:06] Cycle 22:   Step: modify -> mutation_engine.py: Implement the pre-validation guard function `validate_mutation(original_code, mutated_code)` that checks: (1) mutated_code parses to valid Python AST via ast.parse(), (2) the AST structure is different from original (compare AST node types and structure, not just string equality), and (3) critical structural elements are preserved (count function definitions, class bodies, and ensure they are not reduced). Return True/False with specific failure reason.

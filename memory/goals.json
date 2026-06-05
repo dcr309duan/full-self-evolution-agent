@@ -2,11 +2,22 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build an API server to expose agent capabilities externally",
-      "priority": 7,
+      "description": "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the specific AST nodes selected, the generated mutation, and the exact error from the AST rewriter or Python parser for each of the 3 consecutive failures. Then, based on the logged patterns, implement a pre-validation guard that checks (1) the mutated code parses into valid Python AST, (2) the AST structure is different from the original, and (3) the mutation does not remove critical structural elements like function definitions or class bodies. If the guard fails, automatically retry with a different random selection up to 5 times before logging a hard failure.",
+      "priority": 10,
       "status": "pending",
-      "created_at": 1780623346.364249,
-      "consecutive_failures": 2
+      "created_at": 1780626105.4495976
+    },
+    {
+      "description": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780626105.451548
+    },
+    {
+      "description": "Implement a 'strategy switch' mechanism in the mutation engine: when the engine logs its 4th consecutive failure (including the 3 existing ones), it automatically shifts from random crossover mutation to a grammar-guided mutation approach. Specifically, define 3 template-based mutation patterns (e.g., 'wrap function body in try-except', 'add logging call at function entry', 'replace constant with parameter') sourced from the 34 successful strategies in the knowledge base. Apply these templates instead of random AST splicing. If this also fails, the engine should log a detailed report and pause mutation activity until the failure analysis module produces a new recommended strategy.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780626105.4531872
     },
     {
       "description": "Develop multi-file code analysis and refactoring capability",
@@ -87,6 +98,14 @@
       "status": "completed",
       "created_at": 1780625287.1252034,
       "completed_at": 1780625734.7317593
+    },
+    {
+      "description": "Build an API server to expose agent capabilities externally",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780623346.364249,
+      "consecutive_failures": 2,
+      "completed_at": 1780626017.3934417
     }
   ],
   "generated_goals": []
