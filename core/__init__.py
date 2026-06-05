@@ -17,6 +17,18 @@ def __getattr__(name):
         import importlib
         mod = importlib.import_module('.multi_module_forcer', __package__)
         return getattr(mod, name)
+    if name in ('equilibrium_detector',):
+        import importlib
+        mod = importlib.import_module('.equilibrium_detector', __package__)
+        return getattr(mod, name)
+    if name in ('multi_module_forcer',):
+        import importlib
+        mod = importlib.import_module('.multi_module_forcer', __package__)
+        return getattr(mod, name)
+    if name in ('orchestrator_hook',):
+        import importlib
+        mod = importlib.import_module('.orchestrator_hook', __package__)
+        return getattr(mod, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from .coordinated_mutation_engine import CoordinatedMutationEngine, MutationConfig, MutationResult
@@ -43,4 +55,6 @@ __all__ = [
     'ChangeResult',
     'nash_detector',
     'multi_module_forcer',
+    'equilibrium_detector',
+    'orchestrator_hook',
 ]

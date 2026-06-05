@@ -459,6 +459,76 @@ class TestNashIntegration(unittest.TestCase):
         self.assertTrue(change_plan_generated,
                        "multi_module_forcer should produce a non-empty change plan when equilibrium is reached")
 
+    def test_minimal_integration_with_synthetic_history(self):
+        """Minimal integration test that: (a) seeds the nash_detector with synthetic module history,
+        (b) verifies detection of equilibrium state, (c) tests that multi_module_forcer produces a valid plan,
+        (d) uses only standard library mocks."""
+        # (a) Seed the nash_detector with synthetic module history
+        # Create synthetic history data for each module
+        synthetic_history = {
+            "ModuleA": [
+                {"fitness": 0.3, "timestamp": 1},
+                {"fitness": 0.4, "timestamp": 2},
+                {"fitness": 0.5, "timestamp": 3},
+                {"fitness": 0.5, "timestamp": 4},
+                {"fitness": 0.5, "timestamp": 5}
+            ],
+            "ModuleB": [
+                {"fitness": 0.3, "timestamp": 1},
+                {"fitness": 0.4, "timestamp": 2},
+                {"fitness": 0.5, "timestamp": 3},
+                {"fitness": 0.5, "timestamp": 4},
+                {"fitness": 0.5, "timestamp": 5}
+            ],
+            "ModuleC": [
+                {"fitness": 0.3, "timestamp": 1},
+                {"fitness": 0.4, "timestamp": 2},
+                {"fitness": 0.5, "timestamp": 3},
+                {"fitness": 0.5, "timestamp": 4},
+                {"fitness": 0.5, "timestamp": 5}
+            ]
+        }
+        
+        # Seed the nash_detector with synthetic history
+        for module_name, history in synthetic_history.items():
+            for entry in history:
+                self.nash_detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+        
+        # (b) Verify detection of equilibrium state
+        is_nash = self.nash_detector.detect_equilibrium(self.modules)
+        self.assertTrue(is_nash, "Nash equilibrium should be detected with synthetic history showing plateau")
+        
+        # (c) Test that multi_module_forcer produces a valid plan
+        plan = self.planner.generate_plan(self.dependency_graph, {"is_equilibrium": True})
+        self.assertIsNotNone(plan, "multi_module_forcer should produce a plan when equilibrium is detected")
+        self.assertGreaterEqual(len(plan), 2, "Plan should target at least 2 modules")
+        
+        # Verify the plan contains valid module names
+        plan_module_names = [m.get("module") for m in plan]
+        for module_name in plan_module_names:
+            self.assertIn(module_name, [mod.name for mod in self.modules],
+                          f"Module {module_name} in plan should exist in the system")
+        
+        # Verify the plan respects dependencies
+        if "ModuleA" in plan_module_names:
+            self.assertIn("ModuleB", plan_module_names,
+                          "If ModuleA is targeted, ModuleB must also be targeted due to dependency")
+        if "ModuleB" in plan_module_names:
+            self.assertIn("ModuleC", plan_module_names,
+                          "If ModuleB is targeted, ModuleC must also be targeted due to dependency")
+        
+        # Verify each mutation in the plan has required fields
+        for mutation in plan:
+            self.assertIn("module", mutation, "Each mutation should have a 'module' key")
+            self.assertIsInstance(mutation["module"], str, "Module name should be a string")
+            if "type" in mutation:
+                self.assertIsInstance(mutation["type"], str, "Mutation type should be a string")
+            if "params" in mutation:
+                self.assertIsInstance(mutation["params"], dict, "Mutation params should be a dictionary")
+        
+        # (d) Verify that only standard library mocks are used (no external test framework imports)
+        # This is implicitly verified by the imports at the top of the file
+
 
 if __name__ == '__main__':
     unittest.main()

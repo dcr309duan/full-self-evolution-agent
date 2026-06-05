@@ -470,8 +470,21 @@ def generate_goals(
                 environmental_pressure_description
             )
 
-    # Check if Nash equilibrium is detected and generate meta-goal
+    # Check if Nash equilibrium is detected and generate appropriate goals
     if nash_equilibrium_detected and nash_equilibrium_modules:
+        # Generate Nash escape goal to actively seek to break out of local optima
+        nash_escape_goal = generate_nash_escape_goal(
+            nash_equilibrium_modules,
+            nash_equilibrium_analysis
+        )
+        if nash_escape_goal:
+            goals.append(nash_escape_goal)
+            logger.info(
+                "Generated Nash escape goal for modules %s to break equilibrium",
+                nash_equilibrium_modules
+            )
+        
+        # Also generate the meta-goal for higher-level strategy
         nash_meta_goal = generate_nash_equilibrium_meta_goal(
             nash_equilibrium_modules,
             nash_equilibrium_analysis
@@ -482,7 +495,20 @@ def generate_goals(
                 "Generated Nash equilibrium meta-goal for modules %s",
                 nash_equilibrium_modules
             )
-        # Reset the flag after generating the goal to avoid duplicate generation
+        
+        # Generate coordinated mutation goal as well
+        coordinated_mutation_goal = generate_coordinated_mutation_goal(
+            nash_equilibrium_modules,
+            nash_equilibrium_analysis
+        )
+        if coordinated_mutation_goal:
+            goals.append(coordinated_mutation_goal)
+            logger.info(
+                "Generated coordinated mutation goal for modules %s",
+                nash_equilibrium_modules
+            )
+        
+        # Reset the flag after generating the goals to avoid duplicate generation
         nash_equilibrium_detected = False
 
     # Track consecutive successes and trigger meta-goal if threshold reached
@@ -902,19 +928,4 @@ def generate_sub_goals(
         
         if decomposition_strategy == "sequential":
             # Linear chain: analyze -> implement -> validate
-            implement_goal.dependencies.append(analyze_goal.description)
-            validate_goal.dependencies.append(implement_goal.description)
-            sub_goals = [analyze_goal, implement_goal, validate_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [analyze_goal, implement_goal, validate_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: analyze is independent, implement depends on analyze, validate depends on implement
-            implement_goal.dependencies.append(analyze_goal.description)
-            validate_goal.dependencies.append(implement_goal.description)
-            sub_goals = [analyze_goal, implement_goal, validate_goal]
-        else:
-            # Default to sequential for unknown strategies
-            implement_goal.dependencies.append(analyze_goal.description)
-            validate_goal.dependencies.append(implement_goal.description)
-            sub_go
+            implement_
