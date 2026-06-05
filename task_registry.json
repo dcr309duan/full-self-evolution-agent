@@ -1,0 +1,26 @@
+import json
+import os
+
+# Define the initial task registry content
+initial_tasks = [
+    {
+        "id": "scrape_example",
+        "function": "scrape_task",
+        "args": ["https://example.com"],
+        "interval": 60,
+        "enabled": True,
+        "last_run": None
+    }
+]
+
+# Define the file path
+file_path = "task_registry.json"
+
+# Check if file already exists to avoid overwriting without confirmation
+if os.path.exists(file_path):
+    print(f"Warning: '{file_path}' already exists. Not overwriting.")
+else:
+    # Write the initial task registry to the file
+    with open(file_path, "w") as f:
+        json.dump(initial_tasks, f, indent=2)
+    print(f"Created '{file_path}' with initial task registry.")

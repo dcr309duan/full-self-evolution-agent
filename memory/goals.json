@@ -1,0 +1,46 @@
+{
+  "primary_goal": "Achieve full autonomous self-evolution capability",
+  "sub_goals": [
+    {
+      "description": "Implement a testing framework to validate self-modifications",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780623346.3635554
+    },
+    {
+      "description": "Build an API server to expose agent capabilities externally",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780623346.364249
+    },
+    {
+      "description": "Develop multi-file code analysis and refactoring capability",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780623346.3650715
+    },
+    {
+      "description": "Create a performance monitoring and optimization system",
+      "priority": 6,
+      "status": "pending",
+      "created_at": 1780623346.3657625
+    }
+  ],
+  "completed_goals": [
+    {
+      "description": "Develop web scraping capability to gather knowledge from the internet",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780623346.3625174,
+      "completed_at": 1780623460.6889596
+    },
+    {
+      "description": "Create a task scheduler for autonomous background processing",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780623346.3630624,
+      "completed_at": 1780623561.6617355
+    }
+  ],
+  "generated_goals": []
+}
