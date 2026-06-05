@@ -7,13 +7,13 @@
       "prerequisites": ["schema_definitions"]
     },
     "reflection_parser": {
-      "prerequisites": ["base_parsers", "schema_definitions"]
+      "prerequisites": ["base_parsers", "schema_definitions", "schema_alignment_layer"]
     },
     "goal_generator": {
-      "prerequisites": ["reflection_parser", "schema_definitions"]
+      "prerequisites": ["reflection_parser", "schema_definitions", "schema_alignment_layer"]
     },
     "mutation_engine": {
-      "prerequisites": ["goal_generator", "testing_framework"]
+      "prerequisites": ["goal_generator", "testing_framework", "schema_alignment_layer"]
     },
     "testing_framework": {
       "prerequisites": ["schema_definitions"]
@@ -27,8 +27,11 @@
     "failure_analysis_module": {
       "prerequisites": []
     },
+    "schema_alignment_layer": {
+      "prerequisites": ["module_state_store", "failure_analysis_module"]
+    },
     "self_consistency_test_suite": {
-      "prerequisites": ["reflection_parser", "goal_generator", "mutation_engine", "module_state_store", "failure_analysis_module"]
+      "prerequisites": ["reflection_parser", "goal_generator", "mutation_engine", "module_state_store", "failure_analysis_module", "schema_alignment_layer"]
     }
   },
   "bottleneck": "mutation_engine"

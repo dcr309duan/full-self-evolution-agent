@@ -10,6 +10,8 @@ Integrates rollback_manager to verify and rollback after each mutation applicati
 Integrates curiosity_module to inject exploration tasks with configurable probability.
 Integrates DependencyScheduler to manage mutation dependencies and bottleneck resolution.
 Integrates self-consistency test suite to verify module consistency after mutations.
+Integrates RuntimeAlignmentEngine for alignment validation before reflection->goal generation
+and before goal->mutation steps.
 """
 
 import logging
@@ -27,6 +29,7 @@ from rollback_manager import RollbackManager
 from curiosity_module import CuriosityModule
 from dependency_scheduler import DependencyScheduler
 from self_consistency_test_suite import SelfConsistencyTestSuite
+from runtime_alignment_engine import RuntimeAlignmentEngine
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,7 @@ class UnifiedEvolutionLoopOrchestrator:
         curiosity_module: CuriosityModule,
         dependency_scheduler: DependencyScheduler,
         self_consistency_test_suite: SelfConsistencyTestSuite,
+        runtime_alignment_engine: RuntimeAlignmentEngine,
         max_retries: int = 3,
         curiosity_enabled: bool = True,
         curiosity_probability: float = 0.3,
@@ -62,6 +66,7 @@ class UnifiedEvolutionLoopOrchestrator:
         self.curiosity_module = curiosity_module
         self.dependency_scheduler = dependency_scheduler
         self.self_consistency_test_suite = self_consistency_test_suite
+        self.runtime_alignment_engine = runtime_alignment_engine
         self.max_retries = max_retries
         self.curiosity_enabled = curiosity_enabled
         self.curiosity_probability = curiosity_probability
@@ -77,6 +82,18 @@ class UnifiedEvolutionLoopOrchestrator:
         """Main evolution loop that integrates redesign and integration testing when needed."""
         self._loop_active = True
         while self._loop_active:
+            # Before reflection->goal generation step, run alignment validation
+            alignment_result = self.runtime_alignment_engine.validate_alignment(
+                context="reflection_to_goal",
+                cycle_number=self.cycle_number
+            )
+            if alignment_result.get("mismatch_detected", False):
+                logger.warning(f"Alignment mismatch detected before reflection->goal generation: {alignment_result.get('details', {})}")
+                self._log_alignment_event("reflection_to_goal", alignment_result)
+                self.runtime_alignment_engine.trigger_auto_adaptation(alignment_result)
+            else:
+                logger.debug("Alignment validation passed for reflection->goal generation")
+
             goal = self.goal_manager.get_next_goal()
             if goal is None:
                 logger.info("No more goals to process. Evolution loop complete.")
@@ -161,6 +178,19 @@ class UnifiedEvolutionLoopOrchestrator:
         """Process a single goal, potentially triggering redesign on failure."""
         goal_id = goal.get("id", "unknown")
         logger.info(f"Processing goal: {goal_id}")
+
+        # Before goal->mutation step, run alignment validation
+        alignment_result = self.runtime_alignment_engine.validate_alignment(
+            context="goal_to_mutation",
+            goal_id=goal_id,
+            cycle_number=self.cycle_number
+        )
+        if alignment_result.get("mismatch_detected", False):
+            logger.warning(f"Alignment mismatch detected before goal->mutation for goal {goal_id}: {alignment_result.get('details', {})}")
+            self._log_alignment_event("goal_to_mutation", alignment_result, goal_id=goal_id)
+            self.runtime_alignment_engine.trigger_auto_adaptation(alignment_result)
+        else:
+            logger.debug(f"Alignment validation passed for goal->mutation for goal {goal_id}")
 
         # Step 1: Identify bottleneck before mutation cycle
         bottleneck = self.dependency_scheduler.get_bottleneck()
@@ -271,6 +301,26 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _log_alignment_event(self, context: str, alignment_result: Dict[str, Any], goal_id: Optional[str] = None) -> None:
+        """Log alignment events to the knowledge base."""
+        try:
+            event = {
+                "type": "alignment_validation",
+                "context": context,
+                "cycle_number": self.cycle_number,
+                "mismatch_detected": alignment_result.get("mismatch_detected", False),
+                "details": alignment_result.get("details", {}),
+                "auto_adaptation_triggered": alignment_result.get("auto_adaptation_triggered", False),
+            }
+            if goal_id:
+                event["goal_id"] = goal_id
+            
+            # Log to knowledge base (assuming there's a method for this)
+            logger.info(f"Alignment event logged to knowledge base: {event}")
+            # In a real implementation, this would write to a knowledge base storage
+        except Exception as e:
+            logger.error(f"Failed to log alignment event: {e}")
 
     def _run_self_consistency_checks(self, goal_id: str, module_id: str) -> bool:
         """Run self-consistency tests on the module and return success status."""

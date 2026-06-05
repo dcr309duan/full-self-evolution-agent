@@ -7,6 +7,7 @@ from mutation_validator import MutationValidator
 from dependency_scheduler import DependencyScheduler
 from self_consistency_test_suite import run_self_consistency_tests
 from failure_analysis import classify_failure
+from schema_alignment_layer import SchemaValidator
 
 class MutationEngine:
     """
@@ -81,10 +82,12 @@ class MutationEngine:
             'switch_to_single_gene_mutation': self.switch_to_single_gene_mutation
         }
 
-        # Initialize MutationValidator and DependencyScheduler
+        # Initialize MutationValidator, DependencyScheduler, and SchemaValidator
         self.validator = MutationValidator()
         self.dependency_scheduler = DependencyScheduler()
         self.enable_validation = enable_validation
+        self.schema_validator = SchemaValidator()
+        self.normalized_goal = None
 
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
@@ -97,6 +100,23 @@ class MutationEngine:
         """Update objective weights from meta-evaluation loop."""
         self.objective_weights = weights
         self._normalize_weights()
+
+    def set_normalized_goal(self, goal: Dict[str, Any]) -> bool:
+        """
+        Set the normalized goal after validating it against the canonical schema.
+        
+        Args:
+            goal: The goal dictionary to validate and set
+            
+        Returns:
+            bool: True if the goal was valid and set, False otherwise
+        """
+        if self.schema_validator.validate(goal):
+            self.normalized_goal = goal
+            return True
+        else:
+            print(f"Invalid goal format: {goal}")
+            return False
 
     def redesign_strategy(self, strategy_name: str, new_params: Optional[Dict[str, Any]] = None, replacement_strategy: Optional[str] = None) -> bool:
         """

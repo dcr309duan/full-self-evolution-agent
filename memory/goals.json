@@ -2,6 +2,18 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780631585.1413064
+    },
+    {
+      "description": "Design and integrate a hierarchical goal decomposition system that automatically breaks abstract evolution goals into concrete, ordered sub-goals based on current dependency graph and module readiness.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780631585.1432245
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -237,6 +249,13 @@
       "status": "completed",
       "created_at": 1780630847.0881603,
       "completed_at": 1780631530.0446713
+    },
+    {
+      "description": "Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs into a normalized format consumable by goal_generator and mutation_engine, including runtime validation and automated adaptation on mismatch detection.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780631585.1396446,
+      "completed_at": 1780631934.560224
     }
   ],
   "generated_goals": []
