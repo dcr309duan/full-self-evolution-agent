@@ -1,0 +1,46 @@
+[
+  {
+    "timestamp": 1780625069.6355572,
+    "results": [
+      {
+        "parent_a": "fibonacci",
+        "parent_b": "retry",
+        "operator": "mutate",
+        "code": "def retry_fibonacci(n, max_attempts=3, delay=1):\n    import time\n    for attempt in range(max_attempts):\n        try:\n            if n < 0:\n                raise ValueError(\"n must be non-negative\")\n            a, b = 0, 1\n            for _ in range(n):\n                a, b = b, a + b\n            return a\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: retry_fibonacci\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780625056.833339
+      },
+      {
+        "parent_a": "flatten",
+        "parent_b": "quicksort",
+        "operator": "mutate",
+        "code": "def flatten_sort_unique(lst):\n    def flatten(lst):\n        result = []\n        for item in lst:\n            if isinstance(item, list):\n                result.extend(flatten(item))\n            else:\n                result.append(item)\n        return result\n    flat = flatten(lst)\n    if len(flat) <= 1:\n        return flat\n    pivot = flat[len(flat)//2]\n    left = [x for x in flat if x < pivot]\n    mid = [x for x in flat if x == pivot]\n    right = [x for x in flat if x > pivot]\n    return flatten_sort_unique(left) + mid + flatten_sort_unique(right)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.2,
+          "stdout": "FUNCTION: flatten_sort_unique\nSCORE: 1/5\n"
+        },
+        "timestamp": 1780625058.7561138
+      },
+      {
+        "parent_a": "is_prime",
+        "parent_b": "retry",
+        "operator": "mutate",
+        "code": "def prime_retry(func, max_attempts=3, delay=1, divisor_check=False):\n    import time\n    for attempt in range(max_attempts):\n        try:\n            result = func()\n            if divisor_check and result is not None:\n                n = result\n                if n >= 2:\n                    for i in range(2, int(n**0.5)+1):\n                        if n % i == 0:\n                            raise ValueError(f\"{n} is not prime\")\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: prime_retry\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780625069.635353
+      }
+    ]
+  }
+]

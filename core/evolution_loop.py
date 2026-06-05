@@ -17,6 +17,7 @@ from core.reflection import reflect_on_state, generate_next_goals
 from core.self_modify import self_modify, add_capability, execute_shell, generate_code, safe_execute
 from core.reporter import write_report, generate_timeline
 from core.meta_cognition import meta_cognition_session, question_everything
+from core.mutation_engine import run_mutation_cycle
 
 
 def log_cycle(cycle_num, message):
@@ -195,6 +196,15 @@ def evolution_cycle(state):
             save_goals(goals)
             log_cycle(cycle_num, f"Goal failed (attempt {goal['consecutive_failures']}): {result.get('output', 'unknown')[:200]}")
     
+    # Phase 2.5: Mutation cycle (every 5 cycles)
+    if cycle_num % 5 == 0:
+        log_cycle(cycle_num, "Phase 2.5: Mutation cycle")
+        try:
+            mut_result = run_mutation_cycle(3)
+            log_cycle(cycle_num, f"Mutations: {mut_result['mutations']}, successes: {mut_result['successes']}")
+        except Exception as e:
+            log_cycle(cycle_num, f"Mutation error: {str(e)[:100]}")
+
     # Phase 3: Update status report every cycle, commit & push every 5
     try:
         write_report()

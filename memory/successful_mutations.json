@@ -1,0 +1,7 @@
+[
+  {
+    "name": "retry_fibonacci",
+    "code": "def retry_fibonacci(n, max_attempts=3, delay=1):\n    import time\n    for attempt in range(max_attempts):\n        try:\n            if n < 0:\n                raise ValueError(\"n must be non-negative\")\n            a, b = 0, 1\n            for _ in range(n):\n                a, b = b, a + b\n            return a\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+    "created": 1780625056.8349652
+  }
+]

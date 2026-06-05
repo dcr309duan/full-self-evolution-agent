@@ -199,6 +199,11 @@
       "strategy": "modify test_verify.py: A module that provides a function fibonacci(n) which returns the nth fibonacci number, and a function is_prime(n) that checks if n is prime",
       "outcome": "Applied successfully",
       "timestamp": 1780624751.4699109
+    },
+    {
+      "strategy": "mutation:mutate(fibonacci,retry)",
+      "outcome": "Created retry_fibonacci, score=0.6",
+      "timestamp": 1780625056.8368466
     }
   ],
   "capabilities_developed": []
