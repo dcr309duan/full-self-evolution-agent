@@ -1,9 +1,8 @@
 {
-  "cycle_count": 145,
-  "current_generation": 116,
-  "last_evolution_time": 1780652307.505978,
+  "cycle_count": 146,
+  "current_generation": 117,
+  "last_evolution_time": 1780652622.615866,
   "capabilities": [
-    "Create an end-to-end integration test that validates the full evolution loop (mutation → test → prom",
     "Create a 'system health audit' module that scores each existing capability on novelty (age since las",
     "Implement a 'meta-mutation' selector that, after each 5 evolution cycles, analyzes the last 50 mutat",
     "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (",
@@ -52,15 +51,10 @@
     "Implement a meta-goal generator that, after every 10 evolution cycles, analyzes the distribution of ",
     "Implement an automated impact prioritization system: for each pending or recently added capability, ",
     "Build an atomic multi-module mutation orchestrator that, given a goal requiring changes to 3+ module",
-    "Implement a system-wide integration health dashboard that tracks cross-module dependency failures, s"
+    "Implement a system-wide integration health dashboard that tracks cross-module dependency failures, s",
+    "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end"
   ],
   "history": [
-    {
-      "cycle": 44,
-      "goal": "Create a rollback mechanism for core modules that automatically reverts the last mutation if the integration test suite fails, and logs the failure as a high-priority insight for the goal generator. This adds a safety net to the evolution loop, allowing the agent to recover from unstable changes without manual intervention.",
-      "success": true,
-      "timestamp": 1780630548.969628
-    },
     {
       "cycle": 45,
       "goal": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
@@ -654,6 +648,12 @@
       "goal": "Implement a system-wide integration health dashboard that tracks cross-module dependency failures, sandbox execution errors, and rollback frequencies, and triggers a 'stability lockdown' mode (pausing new mutations) if the rolling 10-cycle failure rate exceeds 20%.",
       "success": true,
       "timestamp": 1780652586.2149456
+    },
+    {
+      "cycle": 146,
+      "goal": "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.",
+      "success": true,
+      "timestamp": 1780652767.215302
     }
   ],
   "status": "evolving"

@@ -2240,3 +2240,15 @@ SyntaxError: invalid syntax
 [2026-06-05 17:42:58] Cycle 145: Mutations: 3, successes: 2
 [2026-06-05 17:43:06] Cycle 145: === Cycle Complete ===
 
+[2026-06-05 17:43:42] Cycle 146: === Starting Evolution Cycle ===
+[2026-06-05 17:43:42] Cycle 146: Phase 2: Goal selection and execution
+[2026-06-05 17:43:42] Cycle 146: Selected goal: Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.
+[2026-06-05 17:43:42] Cycle 146: Executing goal: Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.
+[2026-06-05 17:43:50] Cycle 146:   Step: create -> core/pre_mutation_test_hook.py: Create a new module that: 1) Intercepts mutation requests before application, 2) Runs the full end-to-end integration test suite (tests/test_integration.py or similar), 3) If tests pass, allows mutation to proceed, 4) If tests fail, triggers rollback via rollback_manager, logs the failure pattern (error type, module, timestamp) to a failure_patterns log, and blocks the mutation.
+[2026-06-05 17:44:00] Cycle 146:   Step: modify -> core/evolution_orchestrator.py: Modify the orchestrator to call pre_mutation_test_hook before applying any mutation. If the hook returns a failure, skip the mutation and log the event. Integrate with the existing rollback_manager for state restoration.
+[2026-06-05 17:44:46] Cycle 146:   Step: modify -> core/rollback_manager.py: Extend rollback_manager to support a 'pre-mutation test failure' rollback type, storing the failure pattern and test output for later analysis.
+[2026-06-05 17:45:19] Cycle 146:   Step: create -> tests/test_pre_mutation_hook.py: Create a test that: 1) Simulates a mutation that would break the integration test, 2) Verifies the hook blocks it and triggers rollback, 3) Verifies failure pattern is logged, 4) Tests the happy path where tests pass and mutation proceeds.
+[2026-06-05 17:45:36] Cycle 146:   Step: modify -> core/failure_pattern_learner.py: Update the failure pattern learner to consume logs from the pre-mutation test hook, integrating these patterns into its analysis for smarter mutation selection.
+[2026-06-05 17:46:07] Cycle 146: Goal completed: Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.
+[2026-06-05 17:46:07] Cycle 146: === Cycle Complete ===
+

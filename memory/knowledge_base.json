@@ -1,21 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified failure_context_recorder.py to: Extend the existing failure context recorder to accept and store the additional context from sandbox failures: test output, diff, and sandbox path. Add a method to query recent sandbox failures.",
-      "timestamp": 1780644985.3742878,
-      "cycle": 112
-    },
-    {
-      "content": "[研究] Self-Healing Code Repair via Meta-Learning from Failure Patterns: The field of self-healing code repair via meta-learning leverages few-shot learning and transformer-",
-      "timestamp": 1780645001.3930445,
-      "cycle": 112
-    },
-    {
-      "content": "[研究] Dynamic Capability Synthesis through Cross-Module Dependency Graph Analysis: Dynamic Capability Synthesis (DCS) through Cross-Module Dependency Graph Analysis (CDGA) is an emerg",
-      "timestamp": 1780645012.9424784,
-      "cycle": 112
-    },
-    {
       "content": "Successfully modified meta_cognitive_evaluator.py to: Create new module that tracks long-term fitness trends: (1) records every mutation outcome with timestamp, category (core vs peripheral), success/failure, and current parameters; (2) maintains a rolling window of last 30 cycles; (3) computes success rate for core changes vs peripheral changes; (4) detects brittleness when core success rate drops below 60% or when core changes fail 3+ times consecutively; (5) exposes methods to query current trend state and recommended parameter adjustments.",
       "timestamp": 1780645080.7781758,
       "cycle": 113
@@ -999,6 +984,21 @@
       "content": "Successfully modified core/health_dashboard_integration_test.py to: Create end-to-end integration test that: 1) Simulates 15 cycles with controlled failure injection, 2) Verifies dashboard correctly tracks rolling failure rate, 3) Confirms lockdown activates at cycle 10 with 3 failures in 10 (30% > 20%), 4) Verifies mutations pause during lockdown, 5) Verifies recovery after 5 cycles with no failures.",
       "timestamp": 1780652570.314253,
       "cycle": 145
+    },
+    {
+      "content": "Successfully modified core/pre_mutation_test_hook.py to: Create a new module that: 1) Intercepts mutation requests before application, 2) Runs the full end-to-end integration test suite (tests/test_integration.py or similar), 3) If tests pass, allows mutation to proceed, 4) If tests fail, triggers rollback via rollback_manager, logs the failure pattern (error type, module, timestamp) to a failure_patterns log, and blocks the mutation.",
+      "timestamp": 1780652640.8806632,
+      "cycle": 146
+    },
+    {
+      "content": "Successfully modified core/rollback_manager.py to: Extend rollback_manager to support a 'pre-mutation test failure' rollback type, storing the failure pattern and test output for later analysis.",
+      "timestamp": 1780652719.1009002,
+      "cycle": 146
+    },
+    {
+      "content": "Successfully modified tests/test_pre_mutation_hook.py to: Create a test that: 1) Simulates a mutation that would break the integration test, 2) Verifies the hook blocks it and triggers rollback, 3) Verifies failure pattern is logged, 4) Tests the happy path where tests pass and mutation proceeds.",
+      "timestamp": 1780652736.4916039,
+      "cycle": 146
     }
   ],
   "learned_patterns": [],
@@ -1642,6 +1642,16 @@
       "approach": "modify core/evolution_orchestrator.py: Modify orchestrator to: 1) Initialize health_dashboard on startup, 2) After each cycle, call dashboard.update() to recalculate rolling failure rate, 3) Check lockdown status before applying new mutations, 4) If lockdown active, skip mutation generation and log 'Stability lockdown active - pausing mutations', 5) After LOCKDOWN_DURATION_CYCLES, re-evaluate and lift lockdown if rate < threshold.",
       "reason": "Syntax error: unterminated string literal (detected at line 856) (<unknown>, line 856)",
       "timestamp": 1780652469.415499
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Modify the orchestrator to call pre_mutation_test_hook before applying any mutation. If the hook returns a failure, skip the mutation and log the event. Integrate with the existing rollback_manager for state restoration.",
+      "reason": "Syntax error: unterminated string literal (detected at line 856) (<unknown>, line 856)",
+      "timestamp": 1780652686.822287
+    },
+    {
+      "approach": "modify core/failure_pattern_learner.py: Update the failure pattern learner to consume logs from the pre-mutation test hook, integrating these patterns into its analysis for smarter mutation selection.",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 426)",
+      "timestamp": 1780652767.1252851
     }
   ],
   "successful_strategies": [
@@ -6024,6 +6034,26 @@
       "strategy": "mutation:crossover(retry_prime_fibonacci,optimized_fibonacci_factorizer)",
       "outcome": "Created cached_prime_fibonacci_sequence, score=0.6",
       "timestamp": 1780652576.1456623
+    },
+    {
+      "strategy": "modify core/pre_mutation_test_hook.py: Create a new module that: 1) Intercepts mutation requests before application, 2) Runs the full end-to-end integration test suite (tests/test_integration.py or similar), 3) If tests pass, allows mutation to proceed, 4) If tests fail, triggers rollback via rollback_manager, logs the failure pattern (error type, module, timestamp) to a failure_patterns log, and blocks the mutation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780652640.8580296
+    },
+    {
+      "strategy": "modify core/rollback_manager.py: Extend rollback_manager to support a 'pre-mutation test failure' rollback type, storing the failure pattern and test output for later analysis.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780652719.081782
+    },
+    {
+      "strategy": "modify tests/test_pre_mutation_hook.py: Create a test that: 1) Simulates a mutation that would break the integration test, 2) Verifies the hook blocks it and triggers rollback, 3) Verifies failure pattern is logged, 4) Tests the happy path where tests pass and mutation proceeds.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780652736.4716377
+    },
+    {
+      "strategy": "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.",
+      "outcome": "3/5 steps succeeded",
+      "timestamp": 1780652767.1437466
     }
   ],
   "capabilities_developed": []

@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780650487.261601
-    },
-    {
       "description": "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub repositories related to 'self-evolving systems' or 'meta-learning' (using a pre-approved list), extracts one novel design pattern per repo via a simple keyword and structure analysis, and generates a goal to integrate that pattern into the system (e.g., 'Add a reward-shaping module based on pattern X'). This introduces external insights to break out of self-referential optimization loops.",
       "priority": 8,
       "status": "pending",
@@ -914,6 +908,13 @@
       "status": "completed",
       "created_at": 1780652325.9006042,
       "completed_at": 1780652570.373166
+    },
+    {
+      "description": "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780650487.261601,
+      "completed_at": 1780652767.1563735
     }
   ],
   "generated_goals": []

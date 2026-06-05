@@ -4,6 +4,7 @@ Maintains an atomic transaction log for all file writes, implements try/except/f
 wrappers for mutations, and provides rollback capabilities to restore files to their
 pre-mutation state on failure. Integrates with the failure pattern miner for diagnostics.
 Reports rollback events to health dashboard with cause tracking.
+Supports 'pre-mutation test failure' rollback type, storing failure pattern and test output.
 """
 
 import os
@@ -39,6 +40,9 @@ class TransactionEntry:
     status: str = "pending"  # pending, committed, rolled_back
     reason: Optional[str] = None
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    rollback_type: Optional[str] = None  # e.g., "pre_mutation_test_failure"
+    failure_pattern: Optional[str] = None  # Pattern that caused the failure
+    test_output: Optional[str] = None  # Output from the failing test
 
 
 class RollbackManager:
@@ -193,8 +197,14 @@ class RollbackManager:
         logger.info(f"Transaction {tid} committed successfully")
         return True
 
-    def rollback_transaction(self, transaction_id: Optional[str] = None, reason: Optional[str] = None) -> bool:
-        """Rollback a transaction, restoring all files to pre-mutation state."""
+    def rollback_transaction(self, transaction_id: Optional[str] = None, reason: Optional[str] = None,
+                             rollback_type: Optional[str] = None, failure_pattern: Optional[str] = None,
+                             test_output: Optional[str] = None) -> bool:
+        """Rollback a transaction, restoring all files to pre-mutation state.
+        
+        Supports extended rollback types like 'pre_mutation_test_failure' which stores
+        the failure pattern and test output for later analysis.
+        """
         tid = transaction_id or self._current_transaction_id
         if not tid or tid not in self.transaction_log:
             logger.error(f"No transaction to rollback: {tid}")
@@ -203,6 +213,9 @@ class RollbackManager:
         entry = self.transaction_log[tid]
         entry.reason = reason
         entry.status = "rolled_back"
+        entry.rollback_type = rollback_type
+        entry.failure_pattern = failure_pattern
+        entry.test_output = test_output
         
         # Use the snapshots from the entry or current session
         snapshots = entry.snapshots if entry.snapshots else self._snapshots
@@ -214,13 +227,13 @@ class RollbackManager:
                 logger.error(f"Failed to restore {snapshot.path}")
         
         # Log rollback details
-        self._log_rollback(tid, reason, snapshots)
+        self._log_rollback(tid, reason, snapshots, rollback_type, failure_pattern, test_output)
         
         # Integrate with failure pattern miner
-        self._notify_failure_pattern_miner(tid, entry.module_name, reason)
+        self._notify_failure_pattern_miner(tid, entry.module_name, reason, failure_pattern, test_output)
         
         # Report to health dashboard
-        self._report_to_health_dashboard(tid, entry.module_name, reason, snapshots)
+        self._report_to_health_dashboard(tid, entry.module_name, reason, snapshots, rollback_type)
         
         # Track rollback frequency per module
         self._track_rollback_frequency(entry.module_name)
@@ -237,14 +250,19 @@ class RollbackManager:
         
         return success
 
-    def _log_rollback(self, transaction_id: str, reason: Optional[str], snapshots: List[FileSnapshot]) -> None:
+    def _log_rollback(self, transaction_id: str, reason: Optional[str], snapshots: List[FileSnapshot],
+                      rollback_type: Optional[str] = None, failure_pattern: Optional[str] = None,
+                      test_output: Optional[str] = None) -> None:
         """Log rollback reason and affected modules."""
         rollback_log = {
             "timestamp": datetime.utcnow().isoformat(),
             "transaction_id": transaction_id,
             "reason": reason or "No reason provided",
             "affected_files": [s.path for s in snapshots],
-            "module": self.transaction_log.get(transaction_id, TransactionEntry("", "", "")).module_name
+            "module": self.transaction_log.get(transaction_id, TransactionEntry("", "", "")).module_name,
+            "rollback_type": rollback_type,
+            "failure_pattern": failure_pattern,
+            "test_output": test_output
         }
         
         log_path = self.backup_dir / "rollback_log.json"
@@ -259,7 +277,9 @@ class RollbackManager:
         except (IOError, json.JSONDecodeError) as e:
             logger.error(f"Failed to write rollback log: {e}")
 
-    def _notify_failure_pattern_miner(self, transaction_id: str, module: str, reason: Optional[str]) -> None:
+    def _notify_failure_pattern_miner(self, transaction_id: str, module: str, reason: Optional[str],
+                                       failure_pattern: Optional[str] = None,
+                                       test_output: Optional[str] = None) -> None:
         """Notify the failure pattern miner about a rollback."""
         try:
             from core.failure_pattern_miner import FailurePatternMiner
@@ -269,14 +289,18 @@ class RollbackManager:
                 module=module,
                 error_type="rollback",
                 error_message=reason or "Unknown rollback reason",
-                timestamp=datetime.utcnow().isoformat()
+                timestamp=datetime.utcnow().isoformat(),
+                failure_pattern=failure_pattern,
+                test_output=test_output
             )
         except ImportError:
             logger.debug("FailurePatternMiner not available, skipping integration")
         except Exception as e:
             logger.warning(f"Failed to notify failure pattern miner: {e}")
 
-    def _report_to_health_dashboard(self, transaction_id: str, module: str, reason: Optional[str], snapshots: List[FileSnapshot]) -> None:
+    def _report_to_health_dashboard(self, transaction_id: str, module: str, reason: Optional[str],
+                                     snapshots: List[FileSnapshot],
+                                     rollback_type: Optional[str] = None) -> None:
         """Report rollback event to health dashboard with cause information."""
         try:
             from core.health_dashboard import HealthDashboard
@@ -284,7 +308,9 @@ class RollbackManager:
             
             # Determine the cause of rollback
             cause = "unknown"
-            if reason:
+            if rollback_type == "pre_mutation_test_failure":
+                cause = "pre_mutation_test_failure"
+            elif reason:
                 if "conflict" in reason.lower():
                     cause = "conflict"
                 elif "partial" in reason.lower() or "incomplete" in reason.lower():
@@ -307,7 +333,8 @@ class RollbackManager:
                 cause=cause,
                 reason=reason,
                 affected_files=[s.path for s in snapshots],
-                timestamp=datetime.utcnow().isoformat()
+                timestamp=datetime.utcnow().isoformat(),
+                rollback_type=rollback_type
             )
         except ImportError:
             logger.debug("HealthDashboard not available, skipping report")
@@ -335,10 +362,15 @@ class RollbackManager:
         # Get rollback history for additional stats
         history = self.get_rollback_history()
         causes = {}
+        pre_mutation_test_failures = 0
         for entry in history:
             cause = "unknown"
+            rollback_type = entry.get("rollback_type")
             reason = entry.get("reason", "")
-            if reason:
+            if rollback_type == "pre_mutation_test_failure":
+                cause = "pre_mutation_test_failure"
+                pre_mutation_test_failures += 1
+            elif reason:
                 if "conflict" in reason.lower():
                     cause = "conflict"
                 elif "partial" in reason.lower() or "incomplete" in reason.lower():
@@ -365,12 +397,20 @@ class RollbackManager:
             "rollback_frequency_per_module": dict(self._rollback_frequency),
             "causes_breakdown": causes,
             "top_affected_modules": top_modules,
+            "pre_mutation_test_failures": pre_mutation_test_failures,
             "last_updated": datetime.utcnow().isoformat()
         }
 
     @contextmanager
-    def mutation_context(self, module_name: str, operation: str, files: List[str]):
-        """Context manager for safe file mutations with automatic rollback on failure."""
+    def mutation_context(self, module_name: str, operation: str, files: List[str],
+                         rollback_type: Optional[str] = None,
+                         failure_pattern: Optional[str] = None,
+                         test_output: Optional[str] = None):
+        """Context manager for safe file mutations with automatic rollback on failure.
+        
+        Supports extended rollback types like 'pre_mutation_test_failure' which stores
+        the failure pattern and test output for later analysis.
+        """
         tid = self.begin_transaction(module_name, operation)
         try:
             # Take snapshots of all files that will be mutated
@@ -386,7 +426,9 @@ class RollbackManager:
             # On any exception, rollback all changes
             reason = f"{type(e).__name__}: {str(e)}"
             logger.error(f"Mutation failed, initiating rollback: {reason}")
-            self.rollback_transaction(tid, reason)
+            self.rollback_transaction(tid, reason, rollback_type=rollback_type,
+                                      failure_pattern=failure_pattern,
+                                      test_output=test_output)
             raise
 
     def get_transaction_status(self, transaction_id: str) -> Optional[str]:
@@ -394,8 +436,9 @@ class RollbackManager:
         entry = self.transaction_log.get(transaction_id)
         return entry.status if entry else None
 
-    def get_rollback_history(self, module_name: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get rollback history, optionally filtered by module."""
+    def get_rollback_history(self, module_name: Optional[str] = None,
+                              rollback_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get rollback history, optionally filtered by module or rollback type."""
         log_path = self.backup_dir / "rollback_log.json"
         if not log_path.exists():
             return []
@@ -405,10 +448,16 @@ class RollbackManager:
                 history = json.load(f)
             if module_name:
                 history = [h for h in history if h.get('module') == module_name]
+            if rollback_type:
+                history = [h for h in history if h.get('rollback_type') == rollback_type]
             return history
         except (IOError, json.JSONDecodeError) as e:
             logger.error(f"Failed to read rollback history: {e}")
             return []
+
+    def get_pre_mutation_test_failures(self, module_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all pre-mutation test failure rollbacks, optionally filtered by module."""
+        return self.get_rollback_history(module_name=module_name, rollback_type="pre_mutation_test_failure")
 
     def cleanup_old_backups(self, max_age_days: int = 7) -> int:
         """Clean up backup files older than specified days."""
@@ -438,6 +487,16 @@ def get_rollback_manager() -> RollbackManager:
     return _global_rollback_manager
 
 
-def safe_mutation(module_name: str, operation: str, files: List[str]):
-    """Decorator/context manager for safe file mutations."""
-    return get_rollback_manager().mutation_context(module_name, operation, files)
+def safe_mutation(module_name: str, operation: str, files: List[str],
+                   rollback_type: Optional[str] = None,
+                   failure_pattern: Optional[str] = None,
+                   test_output: Optional[str] = None):
+    """Decorator/context manager for safe file mutations.
+    
+    Supports extended rollback types like 'pre_mutation_test_failure' which stores
+    the failure pattern and test output for later analysis.
+    """
+    return get_rollback_manager().mutation_context(module_name, operation, files,
+                                                    rollback_type=rollback_type,
+                                                    failure_pattern=failure_pattern,
+                                                    test_output=test_output)
