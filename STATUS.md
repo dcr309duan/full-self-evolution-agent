@@ -1,6 +1,6 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-05 11:05:09
+> Generated: 2026-06-05 11:08:48
 
 ## Overview
 
@@ -8,17 +8,17 @@
 |--------|-------|
 | Status | **evolving** |
 | Current Cycle | 36 |
-| Generation | 9 |
-| Last Activity | 2026-06-05 11:03:31 |
-| Speed | ~20.8 cycles/hour |
+| Generation | 10 |
+| Last Activity | 2026-06-05 11:05:47 |
+| Speed | ~19.6 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 64.3% (18/28) |
-| Recent Success Rate (last 20) | 70.0% (14/20) |
-| Capabilities Developed | 19 |
+| Total Success Rate | 65.5% (19/29) |
+| Recent Success Rate (last 20) | 75.0% (15/20) |
+| Capabilities Developed | 20 |
 | Goals Completed | 20 |
 | Goals Pending | 4 |
 
@@ -43,6 +43,7 @@
 17. Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', 
 18. Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatica
 19. Build a goal feasibility estimator that, before executing a new goal, checks the agent's current cap
+20. Create a cross-component integration test suite that runs end-to-end tests for the mutation -> test 
 
 ## Current Goals (Pending)
 
@@ -68,23 +69,22 @@
 
 | Category | Count |
 |----------|-------|
-| Insights | 118 |
-| Successful Strategies | 107 |
-| Failed Approaches | 16 |
+| Insights | 131 |
+| Successful Strategies | 121 |
+| Failed Approaches | 17 |
 
 ### Recent Insights
 
-- [06-05 11:04] Successfully modified tests/test_full_pipeline_integration.py to: Create a comprehensive integration test suite that: (1
-- [06-05 11:04] Successfully modified tests/test_broken_link_detector.py to: Expand existing tests to: (1) Add test for reflection parse
-- [06-05 11:04] Successfully modified tests/test_full_pipeline_integration.py to: Add test method 'test_mutation_to_test_link' that spec
-- [06-05 11:04] [研究] Self-Healing Code Integration: Automated Retry and Recovery Mechanisms for Failed Modifications: The field of self-
-- [06-05 11:05] [研究] Goal-Oriented Reflection Parsing: Dynamic Extraction and Classification of Task Objectives from Natural Language: C
+- [06-05 11:07] Successfully modified capabilities/code_smell_detector.py to: Create a code smell detector that analyzes the entire code
+- [06-05 11:08] Successfully modified tests/test_pipeline_auto_heal.py to: Add test method 'test_escalation_after_3_failures' that: (1) 
+- [06-05 11:08] Successfully modified pipeline_orchestrator.py to: Create a pipeline orchestrator module that: (1) Coordinates the full 
+- [06-05 11:08] Successfully modified tests/test_multi_file_refactoring.py to: Create a comprehensive test suite for multi-file analysis
+- [06-05 11:08] Successfully modified pipeline_orchestrator.py to: Add method 'run_with_auto_heal()' that: (1) Runs the pipeline. (2) If
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 23 | Integrate the mutation engine with the existing testing fram | FAILED |
 | 24 | Integrate the mutation engine with the existing testing fram | SUCCESS |
 | 25 | Implement a 'failure-driven mutation strategy selector' that | SUCCESS |
 | 26 | Create a 'successful mutation pattern extractor' that, whene | SUCCESS |
@@ -94,6 +94,7 @@
 | 30 | Add a structured reflection parser that extracts 'current_as | SUCCESS |
 | 31 | Implement a self-healing retry loop for failed goals: when a | SUCCESS |
 | 33 | Build a goal feasibility estimator that, before executing a  | SUCCESS |
+| 35 | Create a cross-component integration test suite that runs en | SUCCESS |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

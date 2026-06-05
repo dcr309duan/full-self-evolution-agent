@@ -50,7 +50,15 @@ COMPONENT_SPECIFIC_FIXES = {
     },
 }
 
-def generate_bug_report(component_name, failure_type, timestamp=None, suggested_fix=None):
+# Component versions mapping
+COMPONENT_VERSIONS = {
+    "mutation_engine": "2.1.0",
+    "test_framework": "1.8.3",
+    "reflection_parser": "3.0.1",
+    "strategy_selector": "1.2.0",
+}
+
+def generate_bug_report(component_name, failure_type, timestamp=None, suggested_fix=None, pipeline_run_id=None):
     """
     Generate a bug report dictionary for a given component failure.
     
@@ -59,9 +67,10 @@ def generate_bug_report(component_name, failure_type, timestamp=None, suggested_
         failure_type (str): Type of failure (e.g., 'timeout', 'parse_error').
         timestamp (str, optional): ISO format timestamp. Defaults to current time.
         suggested_fix (str, optional): Custom fix suggestion. Defaults to mapped fix.
+        pipeline_run_id (str, optional): Identifier for the pipeline run.
     
     Returns:
-        dict: Bug report with component, failure, timestamp, fix, and priority.
+        dict: Bug report with component, failure, timestamp, fix, priority, and run ID.
     """
     if timestamp is None:
         timestamp = datetime.utcnow().isoformat()
@@ -76,13 +85,19 @@ def generate_bug_report(component_name, failure_type, timestamp=None, suggested_
             # Fall back to general failure fix map
             suggested_fix = FAILURE_FIX_MAP.get(failure_type, "Investigate and resolve manually.")
     
-    return {
+    report = {
         "component": component_name,
         "failure_type": failure_type,
         "timestamp": timestamp,
         "suggested_fix": suggested_fix,
         "priority": priority,
+        "component_version": COMPONENT_VERSIONS.get(component_name, "unknown"),
     }
+    
+    if pipeline_run_id is not None:
+        report["pipeline_run_id"] = pipeline_run_id
+    
+    return report
 
 def write_bug_report(report, filename="pipeline_bug_reports.json"):
     """
@@ -127,10 +142,12 @@ def write_markdown_report(report, filename="pipeline_bug_reports.md"):
 ## Bug Report - {report['component']}
 
 - **Component:** {report['component']}
+- **Component Version:** {report.get('component_version', 'unknown')}
 - **Failure Type:** {report['failure_type']}
 - **Timestamp:** {report['timestamp']}
 - **Priority:** {report['priority']}
 - **Suggested Fix:** {report['suggested_fix']}
+- **Pipeline Run ID:** {report.get('pipeline_run_id', 'N/A')}
 
 ---
 """
@@ -139,7 +156,7 @@ def write_markdown_report(report, filename="pipeline_bug_reports.md"):
     with open(filename, "w") as f:
         f.write(markdown_entry + existing_content)
 
-def report_failure(component_name, failure_type, timestamp=None, suggested_fix=None):
+def report_failure(component_name, failure_type, timestamp=None, suggested_fix=None, pipeline_run_id=None):
     """
     Convenience function to generate and persist a bug report in both JSON and markdown formats.
     
@@ -148,11 +165,12 @@ def report_failure(component_name, failure_type, timestamp=None, suggested_fix=N
         failure_type (str): Type of failure.
         timestamp (str, optional): ISO format timestamp.
         suggested_fix (str, optional): Custom fix suggestion.
+        pipeline_run_id (str, optional): Identifier for the pipeline run.
     
     Returns:
         dict: The generated bug report.
     """
-    report = generate_bug_report(component_name, failure_type, timestamp, suggested_fix)
+    report = generate_bug_report(component_name, failure_type, timestamp, suggested_fix, pipeline_run_id)
     write_bug_report(report)
     write_markdown_report(report)
     return report
@@ -190,3 +208,67 @@ def clear_reports(filename="pipeline_bug_reports.json"):
     if os.path.exists(markdown_filename):
         with open(markdown_filename, "w") as f:
             f.write("")
+
+def generate_pipeline_report(pipeline_run_id, filename="pipeline_bug_reports.json"):
+    """
+    Generate a summary of all broken links found in a single pipeline run.
+    
+    Args:
+        pipeline_run_id (str): The pipeline run ID to filter reports.
+        filename (str): Path to the JSON file containing reports.
+    
+    Returns:
+        dict: Summary report with total failures, component breakdown, and details.
+    """
+    all_reports = get_all_reports(filename)
+    run_reports = [r for r in all_reports if r.get("pipeline_run_id") == pipeline_run_id]
+    
+    if not run_reports:
+        return {
+            "pipeline_run_id": pipeline_run_id,
+            "total_failures": 0,
+            "components": {},
+            "details": [],
+            "generated_at": datetime.utcnow().isoformat()
+        }
+    
+    component_breakdown = {}
+    for report in run_reports:
+        component = report["component"]
+        if component not in component_breakdown:
+            component_breakdown[component] = {"total": 0, "failures": []}
+        component_breakdown[component]["total"] += 1
+        component_breakdown[component]["failures"].append({
+            "failure_type": report["failure_type"],
+            "timestamp": report["timestamp"],
+            "priority": report["priority"]
+        })
+    
+    return {
+        "pipeline_run_id": pipeline_run_id,
+        "total_failures": len(run_reports),
+        "components": component_breakdown,
+        "details": run_reports,
+        "generated_at": datetime.utcnow().isoformat()
+    }
+
+def get_critical_path_failures(pipeline_run_id=None, filename="pipeline_bug_reports.json"):
+    """
+    Return only P0 (CRITICAL priority) failures that are blocking the pipeline.
+    
+    Args:
+        pipeline_run_id (str, optional): If provided, filter by pipeline run ID.
+        filename (str): Path to the JSON file containing reports.
+    
+    Returns:
+        list: List of CRITICAL priority bug reports.
+    """
+    all_reports = get_all_reports(filename)
+    
+    if pipeline_run_id:
+        filtered_reports = [r for r in all_reports if r.get("pipeline_run_id") == pipeline_run_id]
+    else:
+        filtered_reports = all_reports
+    
+    critical_failures = [r for r in filtered_reports if r.get("priority") == CRITICAL]
+    return critical_failures
