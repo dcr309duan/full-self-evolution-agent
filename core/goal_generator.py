@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -908,4 +909,4 @@ def generate_goals(
                         source="fitness",
                         tags=["ecological_gap", "capability_coverage", "test_creation"]
                     )
-                    goals.append(goal)
+                    goals.append

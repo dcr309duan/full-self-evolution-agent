@@ -6,6 +6,7 @@ from core.evolution_orchestrator import EvolutionOrchestrator
 from core.capability_factory import CapabilityFactory
 from core.goal_generator import GoalGenerator
 from core.test_runner import TestRunner
+from core.ecology_pressure_engine import EcologyPressureEngine
 
 
 @pytest.fixture
@@ -109,3 +110,50 @@ def test_pressure_generation_and_feedback():
             result = mock_cycle(pressure)
             assert result["status"] == "completed", f"Cycle for {pressure['name']} should complete"
             assert result["goals_generated"] > 0, f"Cycle for {pressure['name']} should generate goals"
+
+
+def test_ecology_pressure_engine_full_loop():
+    """
+    Test the full loop using ecology_pressure_engine:
+    1. GoalGenerator produces ECOLOGICAL_PRESSURE goal
+    2. Pressure engine evaluates the goal
+    3. Generates new test templates
+    4. Validates templates are syntactically valid Python
+    """
+    # Step 1: GoalGenerator produces ECOLOGICAL_PRESSURE goal
+    goal_generator = GoalGenerator()
+    ecological_goal = goal_generator.generate_goal("ECOLOGICAL_PRESSURE", intensity=0.6)
+    assert ecological_goal is not None, "GoalGenerator should produce ECOLOGICAL_PRESSURE goal"
+    assert ecological_goal["type"] == "ECOLOGICAL_PRESSURE", "Goal type should be ECOLOGICAL_PRESSURE"
+    assert "intensity" in ecological_goal, "Goal should contain intensity"
+    assert ecological_goal["intensity"] == 0.6, "Goal intensity should match input"
+
+    # Step 2: Pressure engine evaluates the goal
+    pressure_engine = EcologyPressureEngine()
+    evaluation_result = pressure_engine.evaluate_pressure(ecological_goal)
+    assert evaluation_result is not None, "Pressure engine should evaluate the goal"
+    assert "status" in evaluation_result, "Evaluation result should have status"
+    assert evaluation_result["status"] in ["accepted", "rejected", "pending"], \
+        "Status should be one of accepted, rejected, or pending"
+
+    # Step 3: Generate new test templates from the evaluation
+    test_templates = pressure_engine.generate_test_templates(evaluation_result)
+    assert test_templates is not None, "Should generate test templates"
+    assert isinstance(test_templates, list), "Test templates should be a list"
+    assert len(test_templates) > 0, "Should generate at least one test template"
+
+    # Step 4: Validate templates are syntactically valid Python
+    for template in test_templates:
+        assert "code" in template, "Each template should have a 'code' field"
+        assert "description" in template, "Each template should have a 'description' field"
+        
+        # Attempt to compile the template code to check syntax
+        try:
+            compile(template["code"], "<test_template>", "exec")
+        except SyntaxError as e:
+            pytest.fail(f"Template code is not syntactically valid Python: {e}")
+        
+        # Verify template contains test-related structure
+        assert "def test_" in template["code"] or "class Test" in template["code"], \
+            "Template should contain test function or class definition"
+        assert "assert" in template["code"], "Template should contain at least one assert statement"

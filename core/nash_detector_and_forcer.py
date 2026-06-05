@@ -40,6 +40,9 @@ class ModuleInteractionTracker:
         self.total_multi_module_perturbations_attempted: int = 0
         self.successful_multi_module_perturbations: int = 0
         
+        # Dependency graph for equilibrium detection
+        self.dependency_graph: Dict[int, Set[int]] = defaultdict(set)
+        
     def record_interaction(self, module_i: int, module_j: int, success: bool) -> None:
         """Record an interaction between two modules."""
         interaction_key = (min(module_i, module_j), max(module_i, module_j))
@@ -67,6 +70,10 @@ class ModuleInteractionTracker:
             pair_data["success_count"] += 1
         pair_data["success_rate"] = pair_data["success_count"] / pair_data["total_count"] if pair_data["total_count"] > 0 else 0.0
         pair_data["last_cycles"].append(success)
+        
+        # Update dependency graph
+        self.dependency_graph[module_i].add(module_j)
+        self.dependency_graph[module_j].add(module_i)
     
     def update_module_improvement(self, module_idx: int, improved: bool) -> None:
         """Update the improvement history for a specific module."""
@@ -168,6 +175,110 @@ class ModuleInteractionTracker:
         self.consecutive_no_improvement = 0
         return False, []
     
+    def detect_nash_equilibrium_with_dependency_graph(self, module_scores: List[float], dependency_matrix: List[List[float]]) -> Tuple[bool, List[Tuple[int, int]], Dict[str, Any]]:
+        """
+        Detect Nash equilibrium by analyzing the dependency graph for modules where
+        all single-module mutations have failed to improve the system in the last 5 attempts.
+        
+        Tracks which modules are in equilibrium and which combinations of coordinated changes
+        could break out.
+        
+        Args:
+            module_scores: Current scores for each module
+            dependency_matrix: Current dependency matrix
+            
+        Returns:
+            Tuple of (is_in_equilibrium, list_of_equilibrium_pairs, breakout_opportunities)
+        """
+        if len(module_scores) < self.equilibrium_window:
+            return False, [], {}
+        
+        # Track modules where all single-module mutations failed in last 5 attempts
+        modules_in_equilibrium = []
+        breakout_opportunities = {}
+        
+        for module_idx in range(self.num_modules):
+            # Check improvement history for last 5 attempts
+            improvement_history = list(self.module_improvement_history[module_idx])
+            if len(improvement_history) >= 5:
+                # Check if all last 5 attempts failed to improve
+                if not any(improvement_history[-5:]):
+                    modules_in_equilibrium.append(module_idx)
+                    
+                    # Find neighbors in dependency graph that could help break out
+                    neighbors = self.dependency_graph.get(module_idx, set())
+                    if neighbors:
+                        # Check which neighbors are also in equilibrium
+                        neighbor_equilibrium = []
+                        for neighbor in neighbors:
+                            neighbor_history = list(self.module_improvement_history[neighbor])
+                            if len(neighbor_history) >= 5 and not any(neighbor_history[-5:]):
+                                neighbor_equilibrium.append(neighbor)
+                        
+                        # Identify coordinated change combinations
+                        if neighbor_equilibrium:
+                            # 2-module combinations
+                            for neighbor in neighbor_equilibrium:
+                                combo_key = tuple(sorted([module_idx, neighbor]))
+                                if combo_key not in breakout_opportunities:
+                                    breakout_opportunities[combo_key] = {
+                                        "type": "pair",
+                                        "modules": [module_idx, neighbor],
+                                        "interaction_frequency": self.interaction_frequencies.get(
+                                            (min(module_idx, neighbor), max(module_idx, neighbor)), 0
+                                        ),
+                                        "success_rate": self.interaction_success_rates.get(
+                                            (min(module_idx, neighbor), max(module_idx, neighbor)), 0.0
+                                        )
+                                    }
+                            
+                            # 3-module combinations (if enough neighbors)
+                            if len(neighbor_equilibrium) >= 2:
+                                for i in range(len(neighbor_equilibrium)):
+                                    for j in range(i + 1, len(neighbor_equilibrium)):
+                                        combo_key = tuple(sorted([module_idx, neighbor_equilibrium[i], neighbor_equilibrium[j]]))
+                                        if combo_key not in breakout_opportunities:
+                                            breakout_opportunities[combo_key] = {
+                                                "type": "triple",
+                                                "modules": [module_idx, neighbor_equilibrium[i], neighbor_equilibrium[j]],
+                                                "interaction_frequency": sum(
+                                                    self.interaction_frequencies.get(
+                                                        (min(a, b), max(a, b)), 0
+                                                    ) for a, b in [
+                                                        (module_idx, neighbor_equilibrium[i]),
+                                                        (module_idx, neighbor_equilibrium[j]),
+                                                        (neighbor_equilibrium[i], neighbor_equilibrium[j])
+                                                    ]
+                                                ),
+                                                "success_rate": sum(
+                                                    self.interaction_success_rates.get(
+                                                        (min(a, b), max(a, b)), 0.0
+                                                    ) for a, b in [
+                                                        (module_idx, neighbor_equilibrium[i]),
+                                                        (module_idx, neighbor_equilibrium[j]),
+                                                        (neighbor_equilibrium[i], neighbor_equilibrium[j])
+                                                    ]
+                                                ) / 3.0 if 3 > 0 else 0.0
+                                            }
+        
+        # Determine if system is in equilibrium
+        is_equilibrium = len(modules_in_equilibrium) >= 2
+        
+        if is_equilibrium:
+            self.consecutive_no_improvement += 1
+            if self.consecutive_no_improvement >= 3:
+                self.in_equilibrium = True
+                # Convert breakout opportunities to equilibrium pairs for compatibility
+                equilibrium_pairs = []
+                for combo_key, combo_data in breakout_opportunities.items():
+                    if combo_data["type"] == "pair":
+                        equilibrium_pairs.append(tuple(combo_data["modules"]))
+                self.equilibrium_pairs = equilibrium_pairs
+                return True, equilibrium_pairs, breakout_opportunities
+        
+        self.consecutive_no_improvement = 0
+        return False, [], breakout_opportunities
+    
     def _compute_module_score(self, module_idx: int, module_scores: List[float], dependency_matrix: List[List[float]]) -> float:
         """Compute score for a single module based on dependencies."""
         score = 0.0
@@ -183,7 +294,8 @@ class ModuleInteractionTracker:
             "interaction_success_rates": dict(self.interaction_success_rates),
             "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
             "equilibrium_pairs": self.equilibrium_pairs,
-            "in_equilibrium": self.in_equilibrium
+            "in_equilibrium": self.in_equilibrium,
+            "dependency_graph": {str(k): list(v) for k, v in self.dependency_graph.items()}
         }
     
     def get_logging_metrics(self) -> Dict[str, Any]:
@@ -211,7 +323,8 @@ class CoordinatedMutationPlanner:
         
     def plan_mutations(self, equilibrium_pairs: List[Tuple[int, int]], 
                       interaction_frequencies: Dict[Tuple[int, int], int],
-                      dependency_matrix: List[List[float]]) -> Dict[str, Any]:
+                      dependency_matrix: List[List[float]],
+                      breakout_opportunities: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Plan coordinated mutations for 2-3 modules based on equilibrium pairs.
         
@@ -219,11 +332,81 @@ class CoordinatedMutationPlanner:
             equilibrium_pairs: List of module pairs in equilibrium
             interaction_frequencies: Frequency of interactions between modules
             dependency_matrix: Current dependency matrix
+            breakout_opportunities: Optional dictionary of breakout opportunities from dependency graph analysis
             
         Returns:
             Dictionary with mutation plan
         """
-        # Select modules to mutate based on equilibrium pairs
+        # Use breakout opportunities if available
+        if breakout_opportunities and len(breakout_opportunities) > 0:
+            # Sort breakout opportunities by interaction frequency (highest first)
+            sorted_opportunities = sorted(
+                breakout_opportunities.items(),
+                key=lambda x: x[1]["interaction_frequency"],
+                reverse=True
+            )
+            
+            # Select the best breakout opportunity
+            best_opportunity = sorted_opportunities[0][1]
+            modules_to_mutate = best_opportunity["modules"]
+            
+            # Build mutation plan based on breakout opportunity
+            mutation_plan = {
+                "type": "coordinated_mutation",
+                "modules_changed": modules_to_mutate,
+                "mutations": [],
+                "rationale": f"Breakout from equilibrium using {best_opportunity['type']} combination"
+            }
+            
+            for module_idx in modules_to_mutate:
+                mutation_type = random.choice(["dependency_shift", "dependency_swap", "dependency_reset"])
+                
+                if mutation_type == "dependency_shift":
+                    shift_amount = random.uniform(-0.2, 0.2)
+                    original = dependency_matrix[module_idx].copy()
+                    new_deps = []
+                    for j in range(self.num_modules):
+                        new_val = max(0.0, min(1.0, dependency_matrix[module_idx][j] + shift_amount))
+                        new_deps.append(new_val)
+                    mutation_plan["mutations"].append({
+                        "module": module_idx,
+                        "type": "shift",
+                        "amount": shift_amount,
+                        "original": original,
+                        "new": new_deps
+                    })
+                    
+                elif mutation_type == "dependency_swap":
+                    j1, j2 = random.sample(range(self.num_modules), 2)
+                    original = dependency_matrix[module_idx].copy()
+                    new_deps = original.copy()
+                    new_deps[j1], new_deps[j2] = new_deps[j2], new_deps[j1]
+                    mutation_plan["mutations"].append({
+                        "module": module_idx,
+                        "type": "swap",
+                        "indices": (j1, j2),
+                        "original": original,
+                        "new": new_deps
+                    })
+                    
+                else:  # dependency_reset
+                    num_to_reset = random.randint(1, max(1, self.num_modules // 2))
+                    indices_to_reset = random.sample(range(self.num_modules), num_to_reset)
+                    original = dependency_matrix[module_idx].copy()
+                    new_deps = original.copy()
+                    for j in indices_to_reset:
+                        new_deps[j] = random.random()
+                    mutation_plan["mutations"].append({
+                        "module": module_idx,
+                        "type": "reset",
+                        "indices_reset": indices_to_reset,
+                        "original": original,
+                        "new": new_deps
+                    })
+            
+            return mutation_plan
+        
+        # Fall back to original logic if no breakout opportunities
         modules_to_mutate = self._select_modules_for_mutation(equilibrium_pairs, interaction_frequencies)
         
         if len(modules_to_mutate) < 2:
@@ -379,6 +562,9 @@ class NashDetectorAndForcer:
         
         # List of module pairs in equilibrium
         self.equilibrium_pairs: List[Tuple[int, int]] = []
+        
+        # Breakout opportunities from dependency graph analysis
+        self.breakout_opportunities: Dict[str, Any] = {}
 
     def set_dependency_matrix(self, matrix: List[List[float]]) -> None:
         """
@@ -490,8 +676,8 @@ class NashDetectorAndForcer:
                 self.consecutive_no_improvement = 0
                 return False
         
-        # Use interaction tracker for equilibrium detection
-        is_equilibrium, equilibrium_pairs = self.interaction_tracker.detect_nash_equilibrium(
+        # Use interaction tracker for equilibrium detection with dependency graph
+        is_equilibrium, equilibrium_pairs, breakout_opportunities = self.interaction_tracker.detect_nash_equilibrium_with_dependency_graph(
             self.module_scores, self.dependency_matrix
         )
         
@@ -500,6 +686,7 @@ class NashDetectorAndForcer:
             self.equilibrium_iterations += 1
             self.equilibrium_detected = True
             self.equilibrium_pairs = equilibrium_pairs
+            self.breakout_opportunities = breakout_opportunities
             return True
         
         return False
@@ -568,11 +755,12 @@ class NashDetectorAndForcer:
         # Always use 3 modules as per requirement
         num_modules_to_change = 3
         
-        # Use mutation planner to generate coordinated mutations
+        # Use mutation planner to generate coordinated mutations with breakout opportunities
         mutation_plan = self.mutation_planner.plan_mutations(
             self.equilibrium_pairs,
             self.interaction_tracker.interaction_frequencies,
-            self.dependency_matrix
+            self.dependency_matrix,
+            self.breakout_opportunities
         )
         
         # Track that a multi-module perturbation was attempted
@@ -653,6 +841,7 @@ class NashDetectorAndForcer:
         self.in_equilibrium = False
         self.equilibrium_detected = False
         self.consecutive_no_improvement = 0
+        self.breakout_opportunities = {}
         
         # Track successful multi-module perturbation
         self.interaction_tracker.successful_multi_module_perturbations += 1
@@ -704,186 +893,4 @@ class NashDetectorAndForcer:
                 change_plan = self.force_coordinated_change(num_to_change)
                 
                 # Execute the plan
-                execution = self.execute_coordinated_change(change_plan)
-                results["coordinated_changes_forced"] += 1
-                results["history"].append({
-                    "iteration": iteration,
-                    "type": "coordinated_change",
-                    "plan": change_plan,
-                    "execution": execution
-                })
-            
-            results["iterations"] = iteration + 1
-        
-        results["final_scores"] = self.module_scores.copy()
-        results["logging_metrics"] = self.interaction_tracker.get_logging_metrics()
-        return results
-
-    def get_orchestrator_api(self) -> Dict[str, Any]:
-        """
-        Simple API for integration with the evolution orchestrator.
-        
-        Returns a dictionary with methods that the orchestrator can call:
-        - 'detect_equilibrium': Check if system is in Nash equilibrium
-        - 'force_change': Generate and optionally execute a coordinated change
-        - 'get_state': Get current system state summary
-        
-        Returns:
-            Dictionary with API methods (as callable functions)
-        """
-        def detect_equilibrium() -> bool:
-            """Check if the system is in Nash equilibrium."""
-            return self.detect_nash_equilibrium()
-        
-        def force_change(execute: bool = True) -> Dict[str, Any]:
-            """
-            Generate and optionally execute a coordinated change.
-            
-            Args:
-                execute: If True, execute the change immediately. If False, return plan only.
-                
-            Returns:
-                Dictionary with change plan or execution result
-            """
-            num_to_change = 3
-            plan = self.force_coordinated_change(num_to_change)
-            if execute:
-                result = self.execute_coordinated_change(plan)
-                return result
-            return plan
-        
-        def get_state() -> Dict[str, Any]:
-            """Get current system state summary."""
-            return self.get_system_summary()
-        
-        return {
-            "detect_equilibrium": detect_equilibrium,
-            "force_change": force_change,
-            "get_state": get_state
-        }
-
-    def to_json(self) -> str:
-        """
-        Serialize the current state to JSON.
-        
-        Returns:
-            JSON string representation
-        """
-        state = {
-            "num_modules": self.num_modules,
-            "dependency_matrix": self.dependency_matrix,
-            "module_scores": self.module_scores,
-            "in_equilibrium": self.in_equilibrium,
-            "equilibrium_iterations": self.equilibrium_iterations,
-            "consecutive_no_improvement": self.consecutive_no_improvement,
-            "interaction_frequencies": {str(k): v for k, v in self.interaction_tracker.interaction_frequencies.items()},
-            "interaction_success_rates": {str(k): v for k, v in self.interaction_tracker.interaction_success_rates.items()},
-            "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
-            "equilibrium_pairs": [list(pair) for pair in self.equilibrium_pairs],
-            "logging_metrics": self.interaction_tracker.get_logging_metrics()
-        }
-        return json.dumps(state, indent=2)
-
-    @classmethod
-    def from_json(cls, json_str: str) -> 'NashDetectorAndForcer':
-        """
-        Deserialize from JSON string.
-        
-        Args:
-            json_str: JSON string representation
-            
-        Returns:
-            New NashDetectorAndForcer instance
-        """
-        state = json.loads(json_str)
-        instance = cls(num_modules=state["num_modules"])
-        instance.dependency_matrix = state["dependency_matrix"]
-        instance.module_scores = state["module_scores"]
-        instance.in_equilibrium = state["in_equilibrium"]
-        instance.equilibrium_iterations = state["equilibrium_iterations"]
-        instance.consecutive_no_improvement = state.get("consecutive_no_improvement", 0)
-        
-        # Restore interaction data
-        for key_str, freq in state.get("interaction_frequencies", {}).items():
-            key = tuple(map(int, key_str.strip("()").split(", ")))
-            instance.interaction_tracker.interaction_frequencies[key] = freq
-        
-        for key_str, rate in state.get("interaction_success_rates", {}).items():
-            key = tuple(map(int, key_str.strip("()").split(", ")))
-            instance.interaction_tracker.interaction_success_rates[key] = rate
-        
-        # Restore module interaction pairs
-        for key_str, pair_data in state.get("module_interaction_pairs", {}).items():
-            key = tuple(map(int, key_str.strip("()").split(", ")))
-            instance.module_interaction_pairs[key] = {
-                "success_count": pair_data["success_count"],
-                "total_count": pair_data["total_count"],
-                "success_rate": pair_data["success_rate"],
-                "last_cycles": deque(pair_data.get("last_cycles", []), maxlen=20)
-            }
-        
-        # Restore equilibrium pairs
-        instance.equilibrium_pairs = [tuple(pair) for pair in state.get("equilibrium_pairs", [])]
-        
-        # Restore logging metrics if available
-        if "logging_metrics" in state:
-            metrics = state["logging_metrics"]
-            instance.interaction_tracker.total_cycles = metrics.get("total_cycles", 0)
-            instance.interaction_tracker.cycles_in_equilibrium = metrics.get("cycles_in_equilibrium", 0)
-            instance.interaction_tracker.total_multi_module_perturbations_attempted = metrics.get("total_multi_module_perturbations_attempted", 0)
-            instance.interaction_tracker.successful_multi_module_perturbations = metrics.get("successful_multi_module_perturbations", 0)
-        
-        return instance
-
-    def get_system_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of the current system state.
-        
-        Returns:
-            Dictionary with system summary
-        """
-        return {
-            "num_modules": self.num_modules,
-            "average_score": sum(self.module_scores) / self.num_modules if self.num_modules > 0 else 0.0,
-            "max_score": max(self.module_scores) if self.module_scores else 0.0,
-            "min_score": min(self.module_scores) if self.module_scores else 0.0,
-            "in_equilibrium": self.in_equilibrium,
-            "equilibrium_iterations": self.equilibrium_iterations,
-            "consecutive_no_improvement": self.consecutive_no_improvement,
-            "dependency_density": sum(
-                sum(1 for val in row if val > 0.5) for row in self.dependency_matrix
-            ) / (self.num_modules ** 2) if self.num_modules > 0 else 0.0,
-            "interaction_frequencies": dict(self.interaction_tracker.interaction_frequencies),
-            "interaction_success_rates": dict(self.interaction_tracker.interaction_success_rates),
-            "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
-            "equilibrium_pairs": self.equilibrium_pairs,
-            "logging_metrics": self.interaction_tracker.get_logging_metrics()
-        }
-
-    def detect_nash_equilibrium_with_pairs(self) -> Tuple[bool, List[Tuple[int, int]]]:
-        """
-        Enhanced Nash equilibrium detection that tracks module interaction pairs (caller, callee)
-        and their success rates. Detects when no single module change improves the system by
-        checking if all modules have reached a local optimum (success rate > 0.8 and no improvement
-        in last 3 cycles). Returns a list of module pairs that are in equilibrium and need
-        coordinated changes.
-        
-        Returns:
-            Tuple of (is_in_equilibrium, list_of_equilibrium_pairs)
-        """
-        # Check if we have enough history
-        if len(self.score_history) < self.equilibrium_window:
-            return False, []
-        
-        # Check if scores have stabilized
-        recent_scores = self.score_history[-self.equilibrium_window:]
-        
-        # Check if scores are stable over the window
-        for i in range(self.num_modules):
-            scores_i = [s[i] for s in recent_scores]
-            if max(scores_i) - min(scores_i) > self.equilibrium_tolerance:
-                self.consecutive_no_improvement = 0
-                return False, []
-        
-        # Use interaction tracker for equilibrium detection
-        is_equilibrium, equilibrium_pairs = self.interaction_tracker.detect_nash
+                execution

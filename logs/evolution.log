@@ -5298,3 +5298,83 @@ SyntaxError: invalid syntax
 [2026-06-06 06:46:07] Cycle 330: Phase 2.6: 跨领域新策略注入
 [2026-06-06 06:46:07] Cycle 330: 注入跨领域目标 [ecology]: Niche Construction and Ecosystem Engineering
 [2026-06-06 06:46:07] Cycle 330: 注入跨领域目标 [game_theory]: Nash Equilibrium Detection for Module Interactions
+[2026-06-06 06:46:14] Cycle 330: === Cycle Complete ===
+
+[2026-06-06 06:46:44] Cycle 331: === Starting Evolution Cycle ===
+[2026-06-06 06:46:44] Cycle 331: Phase 1: Self-reflection
+[2026-06-06 06:47:07] Cycle 331: Reflection: {"current_assessment": "{\n  \"current_assessment\": \"The system has completed 331 cycles and generated 130 generations, accumulating a large set of capabilities and insights. However, progress is in
+[2026-06-06 06:47:07] Cycle 331: Phase 2: Goal selection and execution
+[2026-06-06 06:47:07] Cycle 331: Selected goal: [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+[2026-06-06 06:47:07] Cycle 331: Executing goal: [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+[2026-06-06 06:47:17] Cycle 331:   Step: create_file -> ecology_core.py: Create a minimal, self-contained ecology core module with zero external dependencies (only standard library). This module will define: (1) EcologyPressure class with type, description, and severity fields, (2) EcologyTestGenerator that creates simple test cases from pressure definitions, (3) EcologyFeedbackLoop that tracks test results and generates new pressures. No imports from other project modules.
+[2026-06-06 06:47:46] Cycle 331:   Step: modify_file -> tests/test_ecology_core.py: Create a minimal test for ecology_core.py that only tests the EcologyPressure class creation and basic EcologyTestGenerator functionality. This test must import ONLY from ecology_core and standard library.
+[2026-06-06 06:47:51] Cycle 331:   Step: modify_file -> core/goal_generator.py: Add ECOLOGICAL_PRESSURE as a valid goal type in the goal generator. The implementation should be simple: when generating goals, include a 10% chance of generating an ECOLOGICAL_PRESSURE goal that references the ecology_core module's pressure types. Ensure the import of ecology_core is conditional (try/except) to avoid breaking if ecology_core doesn't exist.
+[2026-06-06 06:48:40] Cycle 331:   Step: modify_file -> tests/test_ecology_integration.py: Create a lightweight integration test that: (1) imports ecology_core, (2) creates a simple pressure, (3) generates a test from it, (4) verifies the test is syntactically valid Python. This test must NOT depend on any other project modules except ecology_core.
+[2026-06-06 06:49:28] Cycle 331:   Step: modify_file -> evolution_orchestrator.py: Add a hook in the evolution cycle that, after every 3 successful mutations, calls ecology_core.EcologyFeedbackLoop.generate_new_pressure() and adds the result as a new goal. Use try/except to gracefully handle if ecology_core is not available.
+[2026-06-06 06:50:10] Cycle 331:   Step: create_file -> ecology_engine.py: Create a higher-level ecology engine that imports from ecology_core and adds: (1) pressure severity scoring, (2) automatic test suite expansion based on pressure types, (3) pressure diversity tracking to avoid duplicate pressures. This file can depend on ecology_core but NOT on any other project modules.
+[2026-06-06 06:50:31] Cycle 331: IMPORT FAIL: ecology_engine.py -> ModuleNotFoundError: No module named 'ecology_core'
+[2026-06-06 06:50:31] Cycle 331: Goal REVERTED (import verification failed): Code generated but 1 file(s) failed import: ecology_engine.py
+[2026-06-06 06:50:31] Cycle 331: === Cycle Complete ===
+
+[2026-06-06 06:51:01] Cycle 332: === Starting Evolution Cycle ===
+[2026-06-06 06:51:01] Cycle 332: Phase 2: Goal selection and execution
+[2026-06-06 06:51:01] Cycle 332: Selected goal: [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+[2026-06-06 06:51:01] Cycle 332: Executing goal: [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+[2026-06-06 06:51:11] Cycle 332:   Step: create_file -> ecology_pressure_engine.py: Create a standalone ecology pressure engine module (single file, no external dependencies beyond standard lib) that: (1) defines a registry of 'environmental pressures' (e.g., test coverage minimums, mutation diversity requirements, performance constraints), (2) provides a function to evaluate current test suite against these pressures, (3) provides a function to generate new test templates that introduce missing pressures. Keep it self-contained with zero imports from other agent modules.
+[2026-06-06 06:51:37] Cycle 332:   Step: modify_file -> goal_generator.py: Add a new goal type 'ECOLOGICAL_PRESSURE' that triggers the ecology_pressure_engine to: (a) scan the current test suite for coverage gaps, (b) generate 1-3 new test templates that introduce novel environmental pressures (e.g., performance regression tests, mutation survival rate thresholds, cross-module interaction tests), (c) add these as pending capabilities. Ensure the goal generator imports ecology_pressure_engine only when this goal type is triggered.
+[2026-06-06 06:52:27] Cycle 332:   Step: create_file -> tests/test_ecology_pressure_engine.py: Create a minimal test for ecology_pressure_engine that: (1) tests that the registry starts empty, (2) tests that adding a pressure works, (3) tests that evaluate_pressures returns a dict with pass/fail for each pressure. No imports from agent core modules.
+[2026-06-06 06:52:32] Cycle 332:   Step: modify_file -> tests/test_ecology_feedback.py: Update the existing test_ecology_feedback.py to import and use ecology_pressure_engine instead of the non-existent ecology_engine.py. Test the full loop: goal_generator produces ECOLOGICAL_PRESSURE goal -> pressure engine evaluates -> generates new test templates -> validates they are syntactically valid Python.
+[2026-06-06 06:52:47] Cycle 332:   Step: modify_file -> tests/test_ecology_pressure.py: Update test_ecology_pressure.py to reference ecology_pressure_engine and remove any references to ecology_engine.py. Add a test that verifies the generated test templates actually contain assertions and test functions.
+[2026-06-06 06:53:31] Cycle 332: IMPORT FAIL: test_ecology_pressure_engine.py -> ModuleNotFoundError: No module named 'test_ecology_pressure_engine'
+[2026-06-06 06:53:32] Cycle 332: IMPORT FAIL: test_ecology_feedback.py -> ModuleNotFoundError: No module named 'test_ecology_feedback'
+[2026-06-06 06:53:32] Cycle 332: Goal REVERTED (import verification failed): Code generated but 2 file(s) failed import: test_ecology_pressure_engine.py, test_ecology_feedback.py
+[2026-06-06 06:53:32] Cycle 332: === Cycle Complete ===
+
+[2026-06-06 06:54:02] Cycle 333: === Starting Evolution Cycle ===
+[2026-06-06 06:54:02] Cycle 333: Phase 2: Goal selection and execution
+[2026-06-06 06:54:02] Cycle 333: Selected goal: [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+[2026-06-06 06:54:02] Cycle 333: Executing goal: [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+[2026-06-06 06:54:10] Cycle 333:   Step: create -> ecology/__init__.py: Create an ecology package with __init__.py that exports all ecology modules, ensuring proper import structure
+[2026-06-06 06:54:14] Cycle 333:   Step: modify -> ecology_pressure_engine.py: Refactor ecology_pressure_engine.py to be a standalone module inside ecology/ package with no external dependencies beyond standard library and core interfaces
+[2026-06-06 06:54:36] Cycle 333:   Step: modify -> core/goal_generator.py: Add ECOLOGICAL_PRESSURE goal type that generates goals to create new test suites, mutate existing tests, and introduce novel environmental pressures
+[2026-06-06 06:55:30] Cycle 333:   Step: create -> ecology/test_suite_mutator.py: Create a test suite mutator that can: (1) analyze existing tests, (2) generate new test cases that test untested edge cases, (3) introduce adversarial test conditions, (4) create performance benchmarks
+[2026-06-06 06:55:58] Cycle 333:   Step: create -> ecology/environmental_pressure_generator.py: Create an environmental pressure generator that produces novel constraints: resource limits, timing constraints, input complexity bounds, and cross-module dependency challenges
+[2026-06-06 06:56:26] Cycle 333:   Step: create -> tests/test_ecology_subsystem.py: Create a comprehensive integration test for the ecology subsystem that tests: pressure generation, test suite mutation, goal integration, and import correctness
+[2026-06-06 06:56:58] Cycle 333:   Step: modify -> evolution_orchestrator.py: Add ecology cycle: every 10 cycles, run the ecology subsystem to generate new environmental pressures and mutate the test suite, then validate the changes don't break existing functionality
+[2026-06-06 06:57:41] Cycle 333:   Step: create -> ecology/ecology_validator.py: Create a validator that checks: (1) all ecology modules import correctly, (2) generated pressures are valid, (3) test suite mutations preserve existing test coverage, (4) new pressures are novel (not duplicates)
+[2026-06-06 06:58:03] Cycle 333: IMPORT FAIL: test_ecology_subsystem.py -> ModuleNotFoundError: No module named 'test_ecology_subsystem'
+[2026-06-06 06:58:03] Cycle 333: Goal REVERTED (import verification failed): Code generated but 1 file(s) failed import: test_ecology_subsystem.py
+[2026-06-06 06:58:03] Cycle 333: === Cycle Complete ===
+
+[2026-06-06 06:58:33] Cycle 334: === Starting Evolution Cycle ===
+[2026-06-06 06:58:33] Cycle 334: Phase 1: Self-reflection
+[2026-06-06 06:58:52] Cycle 334: Reflection: {"current_assessment": "After 334 cycles and 130 generations, the system has accumulated a large body of knowledge (200 insights, 500 successful strategies) and implemented many sophisticated mechanis
+[2026-06-06 06:58:52] Cycle 334: Phase 2: Goal selection and execution
+[2026-06-06 06:58:52] Cycle 334: Selected goal: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
+[2026-06-06 06:58:52] Cycle 334: Executing goal: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
+[2026-06-06 06:59:00] Cycle 334:   Step: modify -> core/nash_detector_and_forcer.py: Add a method to detect Nash equilibrium by analyzing the dependency graph for modules where all single-module mutations have failed to improve the system in the last 5 attempts. Track which modules are in equilibrium and which combinations of coordinated changes could break out.
+[2026-06-06 06:59:54] Cycle 334:   Step: modify -> core/evolution_orchestrator.py: Add a hook in the main evolution loop that, after each cycle, calls the Nash detector. If equilibrium is detected, instead of generating a single mutation, generate a coordinated multi-module mutation plan that modifies 2-3 modules simultaneously.
+[2026-06-06 07:00:42] Cycle 334:   Step: modify -> core/mutation_engine.py: Add support for atomic multi-module mutations: accept a list of (file_path, mutation_description) pairs, apply all changes in a single transaction, and run the full test suite once. If any test fails, roll back all changes together.
+[2026-06-06 07:01:33] Cycle 334:   Step: modify -> core/goal_generator.py: Add a method that, when Nash equilibrium is detected, generates a coordinated goal that requires changes to multiple modules simultaneously (e.g., 'Refactor module A and B to share a common interface' or 'Split functionality between module C and D').
+[2026-06-06 07:02:20] Cycle 334:   Step: create -> tests/test_nash_equilibrium_integration.py: Create an integration test that: (1) Sets up a mock system with 3 modules in a Nash equilibrium (each single change fails but a coordinated change succeeds), (2) Verifies the detector identifies the equilibrium, (3) Verifies the orchestrator generates a multi-module mutation, (4) Verifies the mutation engine applies and rolls back atomically.
+[2026-06-06 07:02:41] Cycle 334: IMPORT FAIL: mutation_engine.py -> ImportError: cannot import name 'MutationEngine' from 'mutation_engine' (consider renaming '/root/full-self-evolution-agent/mutation_engine.py' if it 
+[2026-06-06 07:02:41] Cycle 334: IMPORT FAIL: evolution_orchestrator.py -> ImportError: cannot import name 'audit_and_prune' from 'core.capability_bankruptcy' (/root/full-self-evolution-agent/core/capability_bankruptcy.py)
+[2026-06-06 07:02:42] Cycle 334: IMPORT FAIL: test_nash_equilibrium_integration.py -> ModuleNotFoundError: No module named 'test_nash_equilibrium_integration'
+[2026-06-06 07:02:42] Cycle 334: Goal REVERTED (import verification failed): Code generated but 3 file(s) failed import: mutation_engine.py, evolution_orchestrator.py, test_nash_equilibrium_integration.py
+[2026-06-06 07:02:42] Cycle 334: === Cycle Complete ===
+
+[2026-06-06 07:03:12] Cycle 335: === Starting Evolution Cycle ===
+[2026-06-06 07:03:12] Cycle 335: Phase 2: Goal selection and execution
+[2026-06-06 07:03:12] Cycle 335: Selected goal: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
+[2026-06-06 07:03:12] Cycle 335: Executing goal: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
+[2026-06-06 07:03:18] Cycle 335:   Step: read_file -> core/nash_detector_and_forcer.py: Read current state of the existing Nash detector module to understand what's already implemented
+[2026-06-06 07:04:09] Cycle 335:   Step: read_file -> core/evolution_orchestrator.py: Read the orchestrator to understand how modules interact and where Nash detection hooks should integrate
+[2026-06-06 07:04:58] Cycle 335:   Step: modify_file -> core/nash_detector_and_forcer.py: Rewrite the module to implement: (1) Nash equilibrium detection by monitoring module interaction gradients, (2) multi-module change forcing that generates coordinated mutations across 3+ modules, (3) integration hooks that the orchestrator can call without import errors
+[2026-06-06 07:05:50] Cycle 335:   Step: modify_file -> core/evolution_orchestrator.py: Add Nash detection call after each mutation cycle, and coordinated change trigger when equilibrium is detected
+[2026-06-06 07:06:39] Cycle 335:   Step: create_file -> tests/test_nash_integration.py: Create a minimal integration test that validates the Nash detector works end-to-end without breaking existing imports
+[2026-06-06 07:07:24] Cycle 335: IMPORT FAIL: nash_detector_and_forcer.py -> ModuleNotFoundError: No module named 'nash_detector_and_forcer'
+[2026-06-06 07:07:25] Cycle 335: IMPORT FAIL: evolution_orchestrator.py -> ImportError: cannot import name 'audit_and_prune' from 'core.capability_bankruptcy' (/root/full-self-evolution-agent/core/capability_bankruptcy.py)
+[2026-06-06 07:07:25] Cycle 335: IMPORT FAIL: test_nash_integration.py -> ModuleNotFoundError: No module named 'test_nash_integration'
+[2026-06-06 07:07:25] Cycle 335: Goal REVERTED (import verification failed): Code generated but 3 file(s) failed import: nash_detector_and_forcer.py, evolution_orchestrator.py, test_nash_integration.py
+[2026-06-06 07:07:25] Cycle 335: Phase 2.5: Mutation cycle
+[2026-06-06 07:07:25] Cycle 335: Mutation error: 'FileSystemAbstraction' object has no attribute 'read_file'

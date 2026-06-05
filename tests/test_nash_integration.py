@@ -672,6 +672,55 @@ class TestNashIntegration(unittest.TestCase):
         new_is_nash = detector.detect_equilibrium(modules)
         self.assertFalse(new_is_nash, "System should no longer be at equilibrium after successful mutations")
 
+    def test_end_to_end_nash_detection(self):
+        """Minimal end-to-end integration test: validate Nash detector works from setup to detection."""
+        if NashDetectorAndForcer is None:
+            self.skipTest("NashDetectorAndForcer could not be imported")
+        
+        # Load test data
+        with open(os.path.join(self.test_dir, "history.json"), 'r') as f:
+            history = json.load(f)
+        with open(os.path.join(self.test_dir, "interaction_matrix.json"), 'r') as f:
+            interaction_matrix = json.load(f)
+        
+        # Create detector instance
+        detector = NashDetectorAndForcer()
+        
+        # Record fitness history for all modules
+        for module_name, module_history in history.items():
+            for entry in module_history:
+                detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+        
+        # Create mock modules with interaction data
+        class MockModule:
+            def __init__(self, name, fitness):
+                self.name = name
+                self.fitness = fitness
+            def get_scores(self):
+                return interaction_matrix[self.name]
+            def mutate(self):
+                return self
+        
+        module_names = ["ModuleA", "ModuleB", "ModuleC"]
+        modules = []
+        for name in module_names:
+            module_file = os.path.join(self.test_dir, f"{name}.json")
+            with open(module_file, 'r') as f:
+                data = json.load(f)
+            modules.append(MockModule(name, data["fitness"]))
+        
+        # Detect equilibrium
+        is_nash = detector.detect_equilibrium(modules)
+        
+        # Verify equilibrium is detected (all modules have same fitness)
+        self.assertTrue(is_nash, "Nash equilibrium should be detected when all modules have equal fitness")
+        
+        # Verify the detector has recorded history
+        for module_name in module_names:
+            history_data = detector.get_history(module_name)
+            self.assertIsNotNone(history_data, f"History should exist for {module_name}")
+            self.assertEqual(len(history_data), 5, f"History should have 5 entries for {module_name}")
+
     def tearDown(self):
         """Clean up temporary files."""
         import shutil
