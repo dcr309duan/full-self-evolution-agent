@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub repositories related to 'self-evolving systems' or 'meta-learning' (using a pre-approved list), extracts one novel design pattern per repo via a simple keyword and structure analysis, and generates a goal to integrate that pattern into the system (e.g., 'Add a reward-shaping module based on pattern X'). This introduces external insights to break out of self-referential optimization loops.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780651550.8343124
-    },
-    {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
       "priority": 8,
       "status": "pending",
@@ -915,6 +909,13 @@
       "status": "completed",
       "created_at": 1780650487.261601,
       "completed_at": 1780652767.1563735
+    },
+    {
+      "description": "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub repositories related to 'self-evolving systems' or 'meta-learning' (using a pre-approved list), extracts one novel design pattern per repo via a simple keyword and structure analysis, and generates a goal to integrate that pattern into the system (e.g., 'Add a reward-shaping module based on pattern X'). This introduces external insights to break out of self-referential optimization loops.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780651550.8343124,
+      "completed_at": 1780652956.5838404
     }
   ],
   "generated_goals": []
