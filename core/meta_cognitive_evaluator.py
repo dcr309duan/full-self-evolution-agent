@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 import math
+import random
 
 
 class MetaCognitiveEvaluator:
@@ -30,6 +31,14 @@ class MetaCognitiveEvaluator:
         self.novelty_injection_log: List[float] = []
         self.ecological_fitness_log: List[float] = []
 
+        # Fitness landscape mutation weights
+        self.evaluation_weights = {
+            'test_coverage': 0.4,
+            'speed': 0.3,
+            'memory_usage': 0.2,
+            'code_quality': 0.1
+        }
+
         # Initialize fitness log with the provided initial fitness or 0
         if initial_fitness is not None:
             self.fitness_log.append(initial_fitness)
@@ -51,6 +60,11 @@ class MetaCognitiveEvaluator:
                                fitness contribution for this cycle.
         """
         self.cycle_counter += 1
+        
+        # Apply fitness landscape mutation every 5 cycles
+        if self.cycle_counter % 5 == 0:
+            self._apply_fitness_landscape_mutation()
+        
         self.fitness_log.append(fitness_score)
         self.capability_count_log.append(capability_count)
 
@@ -70,6 +84,33 @@ class MetaCognitiveEvaluator:
         # Every 10 cycles, perform evaluation
         if self.cycle_counter % 10 == 0:
             self._evaluate_and_prune()
+
+    def _apply_fitness_landscape_mutation(self) -> None:
+        """
+        Randomly alter the weighting of evaluation criteria to prevent
+        convergence on a static optimum. This mutates the fitness landscape
+        by adjusting weights for test coverage, speed, memory usage, and code quality.
+        """
+        # Get current weights
+        weights = list(self.evaluation_weights.values())
+        keys = list(self.evaluation_weights.keys())
+        
+        # Apply random perturbation to each weight
+        for i in range(len(weights)):
+            # Random perturbation between -0.1 and 0.1
+            perturbation = random.uniform(-0.1, 0.1)
+            weights[i] = max(0.0, min(1.0, weights[i] + perturbation))
+        
+        # Normalize weights to sum to 1.0
+        total = sum(weights)
+        if total > 0:
+            weights = [w / total for w in weights]
+        else:
+            # Fallback to equal weights if all are zero
+            weights = [1.0 / len(weights)] * len(weights)
+        
+        # Update the evaluation weights
+        self.evaluation_weights = dict(zip(keys, weights))
 
     def _evaluate_and_prune(self) -> None:
         """
@@ -162,6 +203,15 @@ class MetaCognitiveEvaluator:
         """
         return self.cycle_counter
 
+    def get_evaluation_weights(self) -> Dict[str, float]:
+        """
+        Get the current evaluation weights.
+
+        Returns:
+            Dictionary mapping evaluation criteria to their current weights.
+        """
+        return self.evaluation_weights.copy()
+
     def reset(self, initial_fitness: Optional[float] = None) -> None:
         """
         Reset the evaluator to its initial state.
@@ -179,6 +229,14 @@ class MetaCognitiveEvaluator:
         self.environmental_pressure_log.clear()
         self.novelty_injection_log.clear()
         self.ecological_fitness_log.clear()
+        
+        # Reset evaluation weights to defaults
+        self.evaluation_weights = {
+            'test_coverage': 0.4,
+            'speed': 0.3,
+            'memory_usage': 0.2,
+            'code_quality': 0.1
+        }
 
         if initial_fitness is not None:
             self.fitness_log.append(initial_fitness)

@@ -613,3 +613,36 @@ class TestMutateTestSuite:
             with open(file_path, 'r') as f:
                 content = f.read()
             assert 'def test_' in content, f"New file {new_file} does not contain a test function"
+
+# Minimal test for the ecology engine itself
+class TestEcologyEngineMinimal:
+    def test_engine_initializes_with_empty_suite(self):
+        """Verify the engine can initialize with an empty test suite."""
+        engine = EcologyEngine(seed=42)
+        assert engine is not None
+        assert len(engine.tests) == 0
+        assert engine.seed == 42
+
+    def test_engine_can_score_diversity(self, engine):
+        """Verify it can score diversity."""
+        # Create a few tests
+        test1 = Test(code="def add(a, b): return a + b", difficulty=DifficultyLevel.EASY, test_cases=[((1, 2), 3)])
+        test2 = Test(code="def sub(a, b): return a - b", difficulty=DifficultyLevel.EASY, test_cases=[((5, 3), 2)])
+        test3 = Test(code="def mul(a, b): return a * b", difficulty=DifficultyLevel.EASY, test_cases=[((2, 3), 6)])
+        
+        engine.add_test(test1)
+        engine.add_test(test2)
+        engine.add_test(test3)
+        
+        # Score diversity should return a float between 0 and 1
+        diversity_score = engine.score_diversity()
+        assert isinstance(diversity_score, float)
+        assert 0.0 <= diversity_score <= 1.0
+
+    def test_engine_can_generate_at_least_one_test_case(self, engine):
+        """Verify it can generate at least one test case."""
+        test = engine.generate_new_test(DifficultyLevel.EASY)
+        assert test is not None
+        assert len(test.test_cases) >= 1
+        assert test.code is not None
+        assert len(test.code) > 0

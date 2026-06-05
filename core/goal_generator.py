@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', or 'ecological_evolution'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', or 'nash_escape'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -64,6 +64,9 @@ current_accuracy_threshold: float = 0.8  # Current accuracy threshold, can be lo
 # Ecological evolution tracking
 diversity_drop_threshold: float = 0.3  # Threshold below which ecological evolution goals are triggered
 previous_diversity: float = 1.0  # Track previous diversity to detect drops
+
+# Ecological gap tracking
+capability_coverage: Dict[str, float] = {}  # Maps capability names to their coverage scores (0.0 to 1.0)
 
 
 def prioritize_pending_goals() -> List[Goal]:
@@ -152,6 +155,61 @@ def prioritize_and_filter_goals(goals: List[Goal]) -> List[Goal]:
     return filtered_goals
 
 
+def generate_nash_escape_goal(stuck_modules: List[str], nash_analysis: Dict) -> Goal:
+    """Generate a coordinated multi-module change proposal to escape Nash equilibrium.
+
+    When called by the orchestrator after equilibrium detection, this method produces
+    a goal specifically targeting the stuck modules with a coordinated multi-module
+    change proposal.
+
+    Args:
+        stuck_modules: List of module names currently stuck in Nash equilibrium.
+        nash_analysis: Dictionary containing Nash equilibrium analysis details,
+            including fitness scores and interaction patterns.
+
+    Returns:
+        A Goal object with type 'nash_escape' that proposes coordinated changes
+        across the stuck modules to break the equilibrium.
+    """
+    if not stuck_modules:
+        logger.warning("generate_nash_escape_goal called with empty stuck_modules list")
+        return None
+
+    # Build a description that proposes coordinated changes
+    modules_str = ", ".join(stuck_modules)
+    description = (
+        f"Coordinated multi-module change proposal to escape Nash equilibrium: "
+        f"modules [{modules_str}] are stuck in a local optimum. "
+        f"Propose simultaneous mutations across all stuck modules to break the "
+        f"equilibrium and explore new fitness landscapes."
+    )
+
+    # Create the goal with high priority
+    goal = Goal(
+        description=description,
+        priority=GoalPriority.CRITICAL,
+        module=",".join(stuck_modules),  # Use comma-separated module names
+        goal_type="nash_escape",
+        source="fitness",
+        tags=["nash_escape", "coordinated_change", "equilibrium_break"]
+    )
+
+    # Add nash analysis details as tags for reference
+    if nash_analysis:
+        for key, value in nash_analysis.items():
+            if isinstance(value, str):
+                goal.tags.append(f"nash_{key}:{value}")
+            elif isinstance(value, (int, float)):
+                goal.tags.append(f"nash_{key}:{value:.2f}")
+
+    logger.info(
+        "Generated Nash escape goal for modules %s with coordinated change proposal",
+        stuck_modules
+    )
+
+    return goal
+
+
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
@@ -175,7 +233,7 @@ def generate_goals(
     Returns:
         List of generated goals, sorted by priority (highest first).
     """
-    global consecutive_successes, current_accuracy_threshold, previous_diversity
+    global consecutive_successes, current_accuracy_threshold, previous_diversity, capability_coverage
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
@@ -315,6 +373,47 @@ def generate_goals(
                 )
             # Update previous diversity for next cycle
             previous_diversity = current_diversity
+
+    # Check for ecological gap triggers after ecology engine evaluation
+    for metrics in metrics_list:
+        if hasattr(metrics, 'test_suite_diversity'):
+            current_diversity = metrics.test_suite_diversity
+            # If diversity drops below threshold, find the least-covered capability
+            if current_diversity < diversity_drop_threshold:
+                # Determine the least-covered capability from capability_coverage
+                if capability_coverage:
+                    least_covered_capability = min(capability_coverage, key=capability_coverage.get)
+                    least_covered_score = capability_coverage[least_covered_capability]
+                    
+                    # Generate ecological gap goal to create tests for the least-covered capability
+                    goal = Goal(
+                        description=f"Create tests for least-covered capability '{least_covered_capability}' in {metrics.module} (coverage: {least_covered_score:.2f})",
+                        priority=GoalPriority.HIGH,
+                        module=metrics.module,
+                        goal_type="ecological_gap",
+                        source="fitness",
+                        tags=["ecological_gap", "capability_coverage", "test_creation"]
+                    )
+                    goals.append(goal)
+                    logger.info(
+                        "Generated ecological gap goal for %s: least-covered capability '%s' (coverage=%.2f, diversity=%.2f, threshold=%.2f)",
+                        metrics.module, least_covered_capability, least_covered_score, current_diversity, diversity_drop_threshold
+                    )
+                else:
+                    # If no capability coverage data, generate a generic ecological gap goal
+                    goal = Goal(
+                        description=f"Assess and expand capability coverage for {metrics.module} to improve test suite diversity",
+                        priority=GoalPriority.HIGH,
+                        module=metrics.module,
+                        goal_type="ecological_gap",
+                        source="fitness",
+                        tags=["ecological_gap", "capability_assessment", "test_creation"]
+                    )
+                    goals.append(goal)
+                    logger.info(
+                        "Generated ecological gap goal for %s (no capability coverage data available, diversity=%.2f, threshold=%.2f)",
+                        metrics.module, current_diversity, diversity_drop_threshold
+                    )
 
     for metrics in metrics_list:
         # Generate accuracy improvement goals if accuracy is below threshold
@@ -790,104 +889,4 @@ def generate_sub_goals(
             sub_goals = [analyze_goal, design_goal, implement_goal]
         elif decomposition_strategy == "dependency-based":
             # Dependency-based: analyze is independent, design depends on analyze, implement depends on design
-            design_goal.dependencies.append(analyze_goal.description)
-            implement_goal.dependencies.append(design_goal.description)
-            sub_goals = [analyze_goal, design_goal, implement_goal]
-        else:
-            # Default to sequential for unknown strategies
-            design_goal.dependencies.append(analyze_goal.description)
-            implement_goal.dependencies.append(design_goal.description)
-            sub_goals = [analyze_goal, design_goal, implement_goal]
-    elif parent_goal.goal_type == "ecological_evolution":
-        # Break ecological evolution into smaller steps
-        analyze_goal = Goal(
-            description=f"Analyze test suite diversity gaps for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="ecological_evolution",
-            source=parent_goal.source
-        )
-        generate_goal = Goal(
-            description=f"Generate new test cases to expand ecosystem for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="ecological_evolution",
-            source=parent_goal.source
-        )
-        validate_goal = Goal(
-            description=f"Validate test ecosystem expansion for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="ecological_evolution",
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: analyze -> generate -> validate
-            generate_goal.dependencies.append(analyze_goal.description)
-            validate_goal.dependencies.append(generate_goal.description)
-            sub_goals = [analyze_goal, generate_goal, validate_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [analyze_goal, generate_goal, validate_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: analyze is independent, generate depends on analyze, validate depends on generate
-            generate_goal.dependencies.append(analyze_goal.description)
-            validate_goal.dependencies.append(generate_goal.description)
-            sub_goals = [analyze_goal, generate_goal, validate_goal]
-        else:
-            # Default to sequential for unknown strategies
-            generate_goal.dependencies.append(analyze_goal.description)
-            validate_goal.dependencies.append(generate_goal.description)
-            sub_goals = [analyze_goal, generate_goal, validate_goal]
-    else:
-        # Generic breakdown for unknown goal types
-        research_goal = Goal(
-            description=f"Research requirements for {parent_goal.description}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type=parent_goal.goal_type,
-            source=parent_goal.source
-        )
-        implement_goal = Goal(
-            description=f"Implement solution for {parent_goal.description}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type=parent_goal.goal_type,
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: research -> implement
-            implement_goal.dependencies.append(research_goal.description)
-            sub_goals = [research_goal, implement_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [research_goal, implement_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: implement depends on research
-            implement_goal.dependencies.append(research_goal.description)
-            sub_goals = [research_goal, implement_goal]
-        else:
-            # Default to sequential for unknown strategies
-            implement_goal.dependencies.append(research_goal.description)
-            sub_goals = [research_goal, implement_goal]
-    
-    logger.debug(
-        "Generated %d sub-goals for parent goal: %s using strategy: %s",
-        len(sub_goals), parent_goal.description, decomposition_strategy
-    )
-    
-    return sub_goals
-
-
-def query_knowledge_base_for_blockers(module: str) -> List[str]:
-    """Query the knowledge base for top blocking dependencies related to a module.
-
-    Args:
-        module: The module to check for blockers.
-
-    Returns:
-        List of blocker descriptions found in the knowledge base.
-    """
-    blockers = []
+            design_goal

@@ -12,6 +12,252 @@ import collections
 from typing import Dict, List, Optional, Set, Tuple
 
 
+class TestSuiteRegistry:
+    """Maintains a registry of test suites with metadata."""
+    
+    def __init__(self):
+        self.registry: Dict[str, Dict] = {}
+    
+    def register_test(self, test_id: str, metadata: Dict) -> None:
+        """Register a test with its metadata (type, complexity, coverage area)."""
+        self.registry[test_id] = metadata
+    
+    def get_test_metadata(self, test_id: str) -> Optional[Dict]:
+        """Get metadata for a specific test."""
+        return self.registry.get(test_id)
+    
+    def get_tests_by_type(self, test_type: str) -> List[str]:
+        """Get all test IDs of a given type."""
+        return [tid for tid, meta in self.registry.items() if meta.get("type") == test_type]
+    
+    def get_tests_by_coverage_area(self, area: str) -> List[str]:
+        """Get all test IDs covering a specific area."""
+        return [tid for tid, meta in self.registry.items() if area in meta.get("coverage_areas", [])]
+    
+    def get_all_test_types(self) -> Set[str]:
+        """Get all unique test types in the registry."""
+        return set(meta.get("type") for meta in self.registry.values() if meta.get("type"))
+    
+    def get_all_coverage_areas(self) -> Set[str]:
+        """Get all unique coverage areas in the registry."""
+        areas = set()
+        for meta in self.registry.values():
+            areas.update(meta.get("coverage_areas", []))
+        return areas
+
+
+class TestSuiteDiversityScorer:
+    """Scores test suite diversity using Shannon entropy."""
+    
+    def __init__(self, registry: TestSuiteRegistry):
+        self.registry = registry
+    
+    def calculate_shannon_entropy(self) -> float:
+        """Calculate Shannon entropy of test type distribution."""
+        type_counts = collections.Counter()
+        for meta in self.registry.registry.values():
+            test_type = meta.get("type", "unknown")
+            type_counts[test_type] += 1
+        
+        total = sum(type_counts.values())
+        if total == 0:
+            return 0.0
+        
+        entropy = 0.0
+        for count in type_counts.values():
+            if count > 0:
+                p = count / total
+                entropy -= p * (p and (p ** 0.5))  # Simplified log approximation
+        return entropy
+    
+    def calculate_coverage_entropy(self) -> float:
+        """Calculate Shannon entropy of coverage area distribution."""
+        area_counts = collections.Counter()
+        for meta in self.registry.registry.values():
+            for area in meta.get("coverage_areas", []):
+                area_counts[area] += 1
+        
+        total = sum(area_counts.values())
+        if total == 0:
+            return 0.0
+        
+        entropy = 0.0
+        for count in area_counts.values():
+            if count > 0:
+                p = count / total
+                entropy -= p * (p and (p ** 0.5))
+        return entropy
+    
+    def calculate_complexity_entropy(self) -> float:
+        """Calculate Shannon entropy of complexity distribution."""
+        complexity_counts = collections.Counter()
+        for meta in self.registry.registry.values():
+            complexity = meta.get("complexity", "medium")
+            complexity_counts[complexity] += 1
+        
+        total = sum(complexity_counts.values())
+        if total == 0:
+            return 0.0
+        
+        entropy = 0.0
+        for count in complexity_counts.values():
+            if count > 0:
+                p = count / total
+                entropy -= p * (p and (p ** 0.5))
+        return entropy
+    
+    def get_diversity_score(self) -> float:
+        """Get overall diversity score as average of all entropies."""
+        type_entropy = self.calculate_shannon_entropy()
+        coverage_entropy = self.calculate_coverage_entropy()
+        complexity_entropy = self.calculate_complexity_entropy()
+        return (type_entropy + coverage_entropy + complexity_entropy) / 3.0
+
+
+class TestCaseGenerator:
+    """Generates new test cases based on identified gaps in coverage."""
+    
+    def __init__(self, registry: TestSuiteRegistry):
+        self.registry = registry
+    
+    def identify_coverage_gaps(self) -> Dict[str, List[str]]:
+        """Identify gaps in coverage by type, complexity, and area."""
+        gaps = {
+            "missing_types": [],
+            "missing_areas": [],
+            "missing_complexities": []
+        }
+        
+        # Define expected types, areas, and complexities
+        expected_types = {"unit", "integration", "stress", "adversarial", "edge_case"}
+        expected_areas = {"core", "api", "performance", "security", "usability"}
+        expected_complexities = {"low", "medium", "high"}
+        
+        # Find missing types
+        existing_types = self.registry.get_all_test_types()
+        gaps["missing_types"] = list(expected_types - existing_types)
+        
+        # Find missing coverage areas
+        existing_areas = self.registry.get_all_coverage_areas()
+        gaps["missing_areas"] = list(expected_areas - existing_areas)
+        
+        # Find missing complexities
+        existing_complexities = set()
+        for meta in self.registry.registry.values():
+            existing_complexities.add(meta.get("complexity", "medium"))
+        gaps["missing_complexities"] = list(expected_complexities - existing_complexities)
+        
+        return gaps
+    
+    def generate_test_case(self, gap_type: str, gap_value: str) -> str:
+        """Generate a test case for a specific gap."""
+        timestamp = hashlib.md5(str(random.random()).encode()).hexdigest()[:8]
+        
+        if gap_type == "missing_types":
+            test_code = [
+                "import pytest",
+                "",
+                f"def test_{gap_value}_{timestamp}():",
+                f"    \"\"\"Test for missing type: {gap_value}.\"\"\"",
+                f"    # TODO: Implement {gap_value} test logic",
+                "    assert True",
+                "",
+            ]
+        elif gap_type == "missing_areas":
+            test_code = [
+                "import pytest",
+                "",
+                f"def test_{gap_value}_coverage_{timestamp}():",
+                f"    \"\"\"Test for missing coverage area: {gap_value}.\"\"\"",
+                f"    # TODO: Implement {gap_value} coverage test",
+                "    assert True",
+                "",
+            ]
+        elif gap_type == "missing_complexities":
+            test_code = [
+                "import pytest",
+                "",
+                f"def test_{gap_value}_complexity_{timestamp}():",
+                f"    \"\"\"Test for missing complexity level: {gap_value}.\"\"\"",
+                f"    # TODO: Implement {gap_value} complexity test",
+                "    assert True",
+                "",
+            ]
+        else:
+            test_code = [
+                "import pytest",
+                "",
+                f"def test_generic_{timestamp}():",
+                "    \"\"\"Generic test for unknown gap.\"\"\"",
+                "    assert True",
+                "",
+            ]
+        
+        return "\n".join(test_code)
+    
+    def generate_tests_for_gaps(self, test_dir: str) -> List[str]:
+        """Generate test files for all identified gaps."""
+        gaps = self.identify_coverage_gaps()
+        generated_files = []
+        
+        for gap_type, gap_values in gaps.items():
+            for gap_value in gap_values:
+                test_code = self.generate_test_case(gap_type, gap_value)
+                filename = f"test_gap_{gap_type}_{gap_value}_{hashlib.md5(str(random.random()).encode()).hexdigest()[:8]}.py"
+                filepath = os.path.join(test_dir, filename)
+                
+                os.makedirs(test_dir, exist_ok=True)
+                with open(filepath, "w") as f:
+                    f.write(test_code)
+                
+                generated_files.append(filepath)
+        
+        return generated_files
+
+
+class CapabilityTracker:
+    """Tracks which capabilities have associated tests vs which are untested."""
+    
+    def __init__(self):
+        self.capabilities: Dict[str, Dict] = {}
+    
+    def register_capability(self, capability_name: str, description: str = "") -> None:
+        """Register a new capability."""
+        self.capabilities[capability_name] = {
+            "description": description,
+            "test_ids": [],
+            "tested": False
+        }
+    
+    def add_test_to_capability(self, capability_name: str, test_id: str) -> None:
+        """Associate a test with a capability."""
+        if capability_name in self.capabilities:
+            self.capabilities[capability_name]["test_ids"].append(test_id)
+            self.capabilities[capability_name]["tested"] = True
+    
+    def get_tested_capabilities(self) -> List[str]:
+        """Get all capabilities that have at least one test."""
+        return [cap for cap, info in self.capabilities.items() if info["tested"]]
+    
+    def get_untested_capabilities(self) -> List[str]:
+        """Get all capabilities that have no tests."""
+        return [cap for cap, info in self.capabilities.items() if not info["tested"]]
+    
+    def get_capability_test_count(self, capability_name: str) -> int:
+        """Get the number of tests for a specific capability."""
+        if capability_name in self.capabilities:
+            return len(self.capabilities[capability_name]["test_ids"])
+        return 0
+    
+    def get_coverage_ratio(self) -> float:
+        """Get the ratio of tested capabilities to total capabilities."""
+        if not self.capabilities:
+            return 0.0
+        tested = len(self.get_tested_capabilities())
+        total = len(self.capabilities)
+        return tested / total if total > 0 else 0.0
+
+
 class TestSuiteMutator:
     """Mutates the test suite by scanning, generating, and modifying test files."""
     
@@ -109,6 +355,10 @@ class TestSuiteEvolver:
         }
         self.module_coverage: Dict[str, Set[str]] = {}
         self.environmental_pressures: List[Dict] = []
+        self.suite_registry = TestSuiteRegistry()
+        self.diversity_scorer = TestSuiteDiversityScorer(self.suite_registry)
+        self.test_generator = TestCaseGenerator(self.suite_registry)
+        self.capability_tracker = CapabilityTracker()
     
     def register_test_type(self, test_type: str, diversity_score: float = 0.5) -> None:
         """Register a new test type with its diversity score."""
@@ -356,6 +606,10 @@ class TestSuiteEvolver:
             f.write(pressure["test_code"])
         modified_files.append(pressure_file)
         
+        # Generate tests for coverage gaps
+        gap_files = self.test_generator.generate_tests_for_gaps(test_dir)
+        modified_files.extend(gap_files)
+        
         return modified_files
     
     def mutate_fitness_landscape(self, project_root: str, test_dir: str = "tests") -> Dict:
@@ -390,6 +644,18 @@ class TestSuiteEvolver:
             # Generate environmental pressure test
             env_pressure = self.generate_environmental_pressure()
             result["environmental_pressure"] = env_pressure
+            
+            # Add coverage gap analysis
+            gaps = self.test_generator.identify_coverage_gaps()
+            result["coverage_gaps"] = gaps
+            
+            # Add capability tracking info
+            result["tested_capabilities"] = self.capability_tracker.get_tested_capabilities()
+            result["untested_capabilities"] = self.capability_tracker.get_untested_capabilities()
+            result["capability_coverage_ratio"] = self.capability_tracker.get_coverage_ratio()
+            
+            # Add diversity score
+            result["diversity_score"] = self.diversity_scorer.get_diversity_score()
                 
         except Exception as e:
             result["details"] = f"Failed to create test file: {str(e)}"
