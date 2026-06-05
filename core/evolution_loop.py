@@ -20,6 +20,7 @@ from core.meta_cognition import meta_cognition_session, question_everything
 from core.mutation_engine import run_mutation_cycle
 from core.knowledge_acquisition import autonomous_research_cycle
 from core.memory_retrieval import recall_lessons
+from core.goal_constraints import check_goal_against_constraints
 
 
 def log_cycle(cycle_num, message):
@@ -32,22 +33,43 @@ def log_cycle(cycle_num, message):
 
 
 def _validate_recent_files(cycle_num):
-    """Check recently modified .py files for import validity."""
+    """Verify recently created/modified .py files can actually be imported.
+    
+    Returns list of files that FAILED import. Empty list = all good.
+    This is real verification — not just syntax check, but actual import.
+    """
     import subprocess, glob
     cutoff = time.time() - 120
+    failed = []
+    
     py_files = glob.glob(os.path.join(PROJECT_ROOT, "*.py")) + \
-               glob.glob(os.path.join(PROJECT_ROOT, "core", "*.py"))
+               glob.glob(os.path.join(PROJECT_ROOT, "core", "*.py")) + \
+               glob.glob(os.path.join(PROJECT_ROOT, "modules", "*.py")) + \
+               glob.glob(os.path.join(PROJECT_ROOT, "tests", "*.py"))
+    
     for fpath in py_files:
         try:
-            if os.path.getmtime(fpath) > cutoff:
-                result = subprocess.run(
-                    [sys.executable, "-c", f"import ast; ast.parse(open('{fpath}').read())"],
-                    capture_output=True, text=True, timeout=10
-                )
-                if result.returncode != 0:
-                    log_cycle(cycle_num, f"WARN: {os.path.basename(fpath)} has syntax errors")
+            if os.path.getmtime(fpath) <= cutoff:
+                continue
+            basename = os.path.basename(fpath)
+            if basename.startswith("__"):
+                continue
+            
+            module_name = basename[:-3]
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 f"import sys; sys.path.insert(0, '{PROJECT_ROOT}'); import {module_name}"],
+                capture_output=True, text=True, timeout=15,
+                cwd=PROJECT_ROOT
+            )
+            if result.returncode != 0:
+                err_short = result.stderr.strip().split('\n')[-1][:150] if result.stderr else "unknown error"
+                log_cycle(cycle_num, f"IMPORT FAIL: {basename} -> {err_short}")
+                failed.append(basename)
         except (OSError, subprocess.TimeoutExpired):
             pass
+    
+    return failed
 
 
 def _goal_similarity(a, b):
@@ -60,12 +82,13 @@ def _goal_similarity(a, b):
 
 
 def select_goal(goals):
-    """Select the highest priority pending goal, filtering repetitive ones."""
+    """Select the highest priority pending goal, filtering repetitive ones and enforcing constraints."""
     pending = [g for g in goals.get("sub_goals", []) if g["status"] == "pending"]
     if not pending:
         return None
 
     state = get_evolution_state()
+    current_cycle = state.get("cycle_count", 0)
     recent_goals = [h.get("goal", "") for h in state.get("history", [])[-15:]]
 
     for g in pending:
@@ -74,10 +97,17 @@ def select_goal(goals):
         desc = g.get("description", "")
         if any(_goal_similarity(desc, rg) > 0.6 for rg in recent_goals):
             continue
+        passes, reason = check_goal_against_constraints(desc, current_cycle)
+        if not passes:
+            log_cycle(current_cycle, f"Goal BLOCKED by constraint: {desc[:80]}... | {reason}")
+            continue
         return g
 
     for g in pending:
         if g.get("consecutive_failures", 0) >= 3:
+            continue
+        passes, _ = check_goal_against_constraints(g.get("description", ""), current_cycle)
+        if not passes:
             continue
         return g
 
@@ -229,14 +259,22 @@ def evolution_cycle(state):
         result = execute_goal(goal, state)
         
         if result["success"]:
-            goal["consecutive_failures"] = 0
-            complete_goal(goal["description"])
-            state["capabilities"].append(goal["description"][:100])
-            if len(state["capabilities"]) > 50:
-                state["capabilities"] = state["capabilities"][-50:]
-            # Validate newly created files are importable
-            _validate_recent_files(cycle_num)
-            log_cycle(cycle_num, f"Goal completed: {goal['description']}")
+            import_failures = _validate_recent_files(cycle_num)
+            if import_failures:
+                result["success"] = False
+                fail_msg = f"Code generated but {len(import_failures)} file(s) failed import: {', '.join(import_failures[:3])}"
+                record_failure(goal["description"], fail_msg)
+                goal["consecutive_failures"] = goal.get("consecutive_failures", 0) + 1
+                from core.memory import save_goals
+                save_goals(goals)
+                log_cycle(cycle_num, f"Goal REVERTED (import verification failed): {fail_msg}")
+            else:
+                goal["consecutive_failures"] = 0
+                complete_goal(goal["description"])
+                state["capabilities"].append(goal["description"][:100])
+                if len(state["capabilities"]) > 50:
+                    state["capabilities"] = state["capabilities"][-50:]
+                log_cycle(cycle_num, f"Goal completed (verified): {goal['description']}")
         else:
             goal["consecutive_failures"] = goal.get("consecutive_failures", 0) + 1
             from core.memory import save_goals

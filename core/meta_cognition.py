@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.llm import call_deepseek, think_deep
 from core.memory import add_insight, get_knowledge_base, get_evolution_state
 from config import MEMORY_DIR, LOGS_DIR
+from core.goal_constraints import derive_constraints_from_shift
 
 
 def load_meta_history():
@@ -100,6 +101,8 @@ def recursive_reflect(seed_thought, max_depth=5, current_depth=0, chain=None):
             "seed": seed_thought
         })
         save_meta_history(history)
+        state = get_evolution_state()
+        derive_constraints_from_shift(result["insight"], state.get("cycle_count", 0))
     
     if result.get("blind_spot"):
         add_insight(f"[盲区发现 L{current_depth}] {result['blind_spot'][:200]}")

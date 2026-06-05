@@ -5,6 +5,8 @@ Records mutation outcomes, maintains rolling windows, computes success rates,
 detects brittleness, and recommends parameter adjustments.
 Includes ecological health metrics: test suite diversity, novelty scoring,
 fitness landscape change rate, correlation analysis, and static test alerts.
+Includes simplicity metrics: LOC growth vs capability ratio, simplicity score,
+and consolidation goal generation.
 """
 
 import time
@@ -24,6 +26,7 @@ class MutationRecord:
     parameters: Dict[str, float]
     test_type: Optional[str] = None  # Type of test for diversity tracking
     test_content: Optional[str] = None  # Content hash for novelty scoring
+    loc_change: int = 0  # Lines of code change (positive = growth, negative = reduction)
 
 @dataclass
 class TrendState:
@@ -42,6 +45,10 @@ class TrendState:
     landscape_change_rate: float = 0.0
     landscape_capability_correlation: float = 0.0
     static_test_alert: bool = False
+    # Simplicity metrics
+    loc_growth_capability_ratio: float = 0.0  # Ratio of LOC growth vs capability acquisition
+    simplicity_score: float = 0.0  # Score rewarding reductions in LOC or consolidations
+    consolidation_goal: Optional[str] = None  # Generated consolidation goal if needed
 
 # --- Main Evaluator Class ---
 
@@ -54,6 +61,8 @@ class MetaCognitiveEvaluator:
     PERFORMANCE_DEGRADATION_THRESHOLD = 0.15  # 15% degradation
     PERFORMANCE_DEGRADATION_CYCLES = 20  # over 20 cycles
     STATIC_TEST_THRESHOLD = 20  # cycles before alerting static tests
+    COMPLEXITY_DEBT_THRESHOLD = 3  # entries before generating consolidation goal
+    CONSOLIDATION_CHECK_INTERVAL = 10  # cycles between consolidation checks
 
     def __init__(self, window_size: int = WINDOW_SIZE):
         self.window_size = window_size
@@ -68,11 +77,17 @@ class MetaCognitiveEvaluator:
         self._landscape_change_history: List[float] = []  # Rate of landscape change
         self._capability_speed_history: List[float] = []  # Capability acquisition speed
         self._cycles_since_last_new_test: int = 0  # Counter for static test detection
+        # Simplicity tracking
+        self._loc_growth_history: List[int] = []  # History of LOC changes
+        self._capability_acquisition_history: List[float] = []  # History of capability acquisition
+        self._complexity_debt_log: List[str] = []  # Log of complexity debt entries
+        self._cycle_count: int = 0  # Counter for consolidation check interval
 
     # --- Recording ---
 
     def record_mutation(self, category: str, success: bool, parameters: Dict[str, float], 
-                       test_type: Optional[str] = None, test_content: Optional[str] = None) -> None:
+                       test_type: Optional[str] = None, test_content: Optional[str] = None,
+                       loc_change: int = 0) -> None:
         """Record a mutation outcome with current timestamp and optional test metadata."""
         record = MutationRecord(
             timestamp=time.time(),
@@ -80,7 +95,8 @@ class MetaCognitiveEvaluator:
             success=success,
             parameters=parameters.copy(),
             test_type=test_type,
-            test_content=test_content
+            test_content=test_content,
+            loc_change=loc_change
         )
         self._records.append(record)
         self._all_records.append(record)
@@ -108,11 +124,22 @@ class MetaCognitiveEvaluator:
         else:
             self._capability_speed_history.append(0.0)
 
+        # Track LOC growth
+        self._loc_growth_history.append(loc_change)
+
+        # Track capability acquisition
+        self._capability_acquisition_history.append(1.0 if success else 0.0)
+
         # Track consecutive core failures
         if category == 'core' and not success:
             self._core_consecutive_failures += 1
         elif category == 'core' and success:
             self._core_consecutive_failures = 0
+
+        # Increment cycle counter and check for consolidation
+        self._cycle_count += 1
+        if self._cycle_count % self.CONSOLIDATION_CHECK_INTERVAL == 0:
+            self._check_complexity_debt()
 
     # --- Analysis ---
 
@@ -250,6 +277,72 @@ class MetaCognitiveEvaluator:
         """Alert if test suite becomes static for >20 cycles."""
         return self._cycles_since_last_new_test > self.STATIC_TEST_THRESHOLD
 
+    def _compute_loc_growth_capability_ratio(self) -> float:
+        """Compute ratio of LOC growth vs capability acquisition."""
+        if not self._loc_growth_history or not self._capability_acquisition_history:
+            return 0.0
+        
+        # Use recent history for calculation
+        recent_loc = self._loc_growth_history[-self.window_size:]
+        recent_cap = self._capability_acquisition_history[-self.window_size:]
+        
+        if not recent_loc or not recent_cap:
+            return 0.0
+        
+        total_loc_growth = sum(recent_loc)
+        total_capability = sum(recent_cap)
+        
+        if total_capability == 0:
+            return float('inf') if total_loc_growth > 0 else 0.0
+        
+        return total_loc_growth / total_capability
+
+    def _compute_simplicity_score(self) -> float:
+        """Compute simplicity score that rewards reductions in LOC or consolidations."""
+        if not self._loc_growth_history:
+            return 0.0
+        
+        # Base score starts at 1.0
+        score = 1.0
+        
+        # Reward for LOC reductions (negative LOC changes)
+        recent_loc = self._loc_growth_history[-self.window_size:]
+        if recent_loc:
+            total_reduction = sum(max(0, -change) for change in recent_loc)
+            score += total_reduction * 0.1  # Each line reduced adds 0.1
+        
+        # Reward for consolidations (zero or negative net LOC change with success)
+        if len(recent_loc) >= 2:
+            net_change = sum(recent_loc)
+            if net_change <= 0:
+                score += 0.5  # Bonus for net reduction or no growth
+        
+        # Penalty for excessive growth
+        if recent_loc:
+            total_growth = sum(max(0, change) for change in recent_loc)
+            if total_growth > 10:
+                score -= (total_growth - 10) * 0.05  # Penalty for growth beyond 10 lines
+        
+        # Normalize to [0, 2] range
+        return max(0.0, min(2.0, score))
+
+    def _check_complexity_debt(self) -> None:
+        """Check complexity debt log and generate consolidation goal if needed."""
+        if len(self._complexity_debt_log) > self.COMPLEXITY_DEBT_THRESHOLD:
+            # Generate consolidation goal
+            self._complexity_debt_log.append(f"Consolidation goal generated at cycle {self._cycle_count}: Reduce complexity debt by consolidating {len(self._complexity_debt_log)} entries")
+        else:
+            # Log current state for future reference
+            loc_ratio = self._compute_loc_growth_capability_ratio()
+            simplicity = self._compute_simplicity_score()
+            self._complexity_debt_log.append(f"Cycle {self._cycle_count}: LOC/Capability ratio={loc_ratio:.2f}, Simplicity score={simplicity:.2f}")
+
+    def _get_consolidation_goal(self) -> Optional[str]:
+        """Get consolidation goal if complexity debt exceeds threshold."""
+        if len(self._complexity_debt_log) > self.COMPLEXITY_DEBT_THRESHOLD:
+            return f"Consolidation needed: {len(self._complexity_debt_log)} complexity debt entries detected. Consider refactoring to reduce LOC and improve simplicity."
+        return None
+
     def _recommend_adjustments(self) -> Dict[str, float]:
         """Generate recommended parameter adjustments based on trend state."""
         adjustments = {}
@@ -310,7 +403,10 @@ class MetaCognitiveEvaluator:
             novelty_score=self._compute_novelty_score(),
             landscape_change_rate=self._compute_landscape_change_rate(),
             landscape_capability_correlation=self._compute_landscape_capability_correlation(),
-            static_test_alert=self._check_static_test_alert()
+            static_test_alert=self._check_static_test_alert(),
+            loc_growth_capability_ratio=self._compute_loc_growth_capability_ratio(),
+            simplicity_score=self._compute_simplicity_score(),
+            consolidation_goal=self._get_consolidation_goal()
         )
 
     def get_recommended_adjustments(self) -> Dict[str, float]:
@@ -389,6 +485,10 @@ class MetaCognitiveEvaluator:
         self._landscape_change_history.clear()
         self._capability_speed_history.clear()
         self._cycles_since_last_new_test = 0
+        self._loc_growth_history.clear()
+        self._capability_acquisition_history.clear()
+        self._complexity_debt_log.clear()
+        self._cycle_count = 0
 
     def __repr__(self) -> str:
         state = self.get_trend_state()
@@ -401,7 +501,9 @@ class MetaCognitiveEvaluator:
             f"diversity={state.test_diversity_index:.3f}, "
             f"novelty={state.novelty_score:.3f}, "
             f"landscape_change={state.landscape_change_rate:.3f}, "
-            f"static_alert={state.static_test_alert})"
+            f"static_alert={state.static_test_alert}, "
+            f"loc_ratio={state.loc_growth_capability_ratio:.2f}, "
+            f"simplicity={state.simplicity_score:.2f})"
         )
 
 

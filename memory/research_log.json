@@ -1710,5 +1710,100 @@
       ]
     },
     "timestamp": 1780652997.382272
+  },
+  {
+    "topic": "Self-Healing Code Generation: Automated Repair of Failed Mutations via Contextual Error Analysis",
+    "data": {
+      "state_of_art": "Current state-of-the-art approaches for self-healing code generation leverage large language models (LLMs) fine-tuned on repair datasets, combined with mutation testing frameworks. Techniques include: (1) LLM-based repair using contextual error analysis from compiler/runtime error messages and test failures; (2) neural program repair (NPR) with graph neural networks (GNNs) encoding abstract syntax trees (ASTs); (3) reinforcement learning from execution feedback (e.g., CodeRL, Self-Refine); (4) iterative mutation-aware repair pipelines that generate, test, and patch mutations in a loop; (5) hybrid symbolic-neural methods that combine static analysis (e.g., type checking, dataflow) with generative models to constrain repairs.",
+      "key_techniques": [
+        "T5-based repair models (e.g., CoditT5, CoCoNuT) for sequence-to-sequence patch generation",
+        "Graph neural networks on ASTs (e.g., GRACE, Hoppity) for structural error localization",
+        "Self-Refine: iterative self-feedback using LLMs to critique and fix code",
+        "CodeRL: reinforcement learning with execution-based rewards for repair",
+        "Mutation-aware repair: using mutation testing to generate targeted failing tests and repair candidates",
+        "Contextual error analysis via embedding error messages and stack traces into repair prompts",
+        "Patch correctness prediction using learned models (e.g., RAPID, CACHE) to filter overfitted patches",
+        "Test-based overfitting detection with differential testing and metamorphic relations"
+      ],
+      "implementation_strategies": [
+        "Build a pipeline: (1) generate mutated code via standard mutation operators (e.g., PITest, Major); (2) run test suite to detect killed mutations; (3) for each surviving mutation, extract error context (test failure, diff, AST); (4) prompt an LLM (e.g., GPT-4, CodeLlama) with the context to generate candidate patches; (5) validate patches against original test suite; (6) use a correctness classifier to filter plausible but overfitted patches.",
+        "Fine-tune a code LLM (e.g., CodeT5, StarCoder) on a dataset of buggy-fixed code pairs from mutation testing (e.g., Defects4J, QuixBugs, or self-generated mutations).",
+        "Implement iterative self-healing: after a patch is applied, re-run mutation testing; if new mutations are introduced, repeat repair until convergence or budget exhausted.",
+        "Use reinforcement learning: define reward as number of tests passed + mutation score improvement; train a policy to generate repair actions.",
+        "Incorporate static analysis tools (e.g., ESLint, mypy) to pre-filter invalid patches and guide LLM attention to type/scope errors."
+      ],
+      "pitfalls": [
+        "Overfitting to the test suite: patches that pass existing tests but break other functionality (plausible but incorrect). Mitigate with held-out validation tests or metamorphic testing.",
+        "Context window limits: error messages and large codebases may exceed LLM context. Use sliding window or hierarchical summarization.",
+        "Mutation operator bias: some operators (e.g., constant replacement) are easier to repair than others (e.g., statement deletion). Balance training data.",
+        "Computational cost: iterative LLM calls and test execution can be expensive. Use caching, early stopping, and cheaper models for initial filtering.",
+        "Error message ambiguity: compiler/runtime errors may be misleading. Combine with AST diff analysis for better localization.",
+        "Catastrophic forgetting during fine-tuning: use parameter-efficient methods (LoRA, adapter) to preserve general code generation ability."
+      ],
+      "unconventional": [
+        "Use adversarial mutation generation: train a separate LLM to generate 'hard' mutations that fool the repair model, improving robustness.",
+        "Apply program synthesis with formal specifications: generate patches that satisfy a formal contract (e.g., using Dafny or symbolic execution) to guarantee correctness beyond tests.",
+        "Leverage evolutionary computation: treat patches as genomes and use genetic programming with crossover/mutation of code snippets, guided by test fitness.",
+        "Incorporate human-in-the-loop via active learning: when the repair model is uncertain, ask a developer for a hint or a single correct example.",
+        "Use multi-agent debate: spawn multiple LLM agents with different repair strategies (e.g., one focuses on type errors, another on logic) and have them critique each other's patches.",
+        "Exploit contrastive learning: train a model to distinguish between correct and incorrect patches by contrasting their execution traces or AST embeddings."
+      ]
+    },
+    "timestamp": 1780654702.0520215
+  },
+  {
+    "topic": "Adaptive Goal Prioritization: Learning to Rank and Filter Self-Generated Goals Based on Historical Success Rates",
+    "data": {
+      "state_of_art": "Adaptive goal prioritization in self-evolving AI systems leverages reinforcement learning (RL) and meta-learning to dynamically rank self-generated goals based on historical success rates. Current approaches include: (1) Intrinsic motivation frameworks like Curiosity-Driven Learning (Pathak et al., 2017) and Empowerment Maximization (Klyubin et al., 2005) that use prediction error or information gain as goal selection criteria. (2) Goal-Conditioned RL with hindsight experience replay (HER, Andrychowicz et al., 2017) to relabel failed goals as successful for sparse reward settings. (3) Meta-learning optimizers (e.g., MAML, Finn et al., 2017) that learn to prioritize goals that maximize long-term learning progress. (4) Hierarchical goal spaces using learned embeddings (e.g., VAE-based goal encoding) to filter redundant or unachievable goals. (5) Bayesian optimization for goal selection, treating success probability as a Gaussian process to balance exploration vs. exploitation. Recent work (e.g., 'Automatic Goal Generation for Reinforcement Learning Agents' by Florensa et al., 2018) formalizes goal generation as a curriculum learning problem, using success rates to adjust difficulty.",
+      "key_techniques": [
+        "Hindsight Experience Replay (HER) – Andrychowicz et al., 2017",
+        "Curiosity-Driven Exploration (ICM) – Pathak et al., 2017",
+        "Goal-GAN for automatic goal generation – Florensa et al., 2018",
+        "Model-Agnostic Meta-Learning (MAML) for fast adaptation – Finn et al., 2017",
+        "Success Rate Estimation via Bayesian Neural Networks",
+        "Intrinsic Motivation with Learning Progress (Oudeyer & Kaplan, 2007)",
+        "Prioritized Experience Replay (PER) adapted for goals – Schaul et al., 2016",
+        "Self-Supervised Goal Proposal via VAE or CVAE",
+        "Multi-Armed Bandit for goal selection (e.g., UCB1, Thompson Sampling)",
+        "Goal-Conditioned RL with Universal Value Function Approximators (UVFA) – Schaul et al., 2015"
+      ],
+      "implementation_strategies": [
+        "Maintain a success history buffer: For each self-generated goal, track success/failure counts and compute a rolling success rate (e.g., exponential moving average).",
+        "Use a goal ranking function: Combine success rate with uncertainty (e.g., Bayesian confidence interval) to prioritize goals with high learning potential (e.g., success rate near 0.5 for maximum learning).",
+        "Implement a goal filter: Discard goals with success rate below a threshold (e.g., <0.1) to avoid wasting resources on impossible tasks, and those above 0.9 to avoid trivial ones.",
+        "Adopt a curriculum learning scheduler: Dynamically adjust goal difficulty based on recent success rates, e.g., using a PID controller to maintain a target success rate (e.g., 0.5).",
+        "Use a meta-controller: A separate neural network that outputs goal priorities, trained via RL to maximize cumulative learning progress (e.g., improvement in task success over time).",
+        "Incorporate goal embedding similarity: Cluster similar goals and share success statistics across clusters to accelerate learning.",
+        "Periodically re-evaluate goals: Use a separate evaluation phase (e.g., every N episodes) to update success rates without interference from ongoing training.",
+        "Leverage offline RL: Pre-train a goal prioritization model on historical data before deploying online.",
+        "Combine with intrinsic rewards: Use success rate as a modulator for intrinsic reward magnitude (e.g., R_int = 1 - success_rate).",
+        "Implement a multi-objective optimization: Balance between exploration (low success rate goals) and exploitation (high success rate goals) using Pareto frontier or scalarization."
+      ],
+      "pitfalls": [
+        "Overfitting to historical success rates: Goals that were once hard may become easy after learning, but stale success rates cause suboptimal prioritization. Use adaptive decay or recency weighting.",
+        "Catastrophic forgetting of goal representations: When goal space shifts, old success rates become irrelevant. Regularly re-cluster or re-embed goals.",
+        "Sparse feedback loops: If success is rare, success rates are noisy. Use Bayesian priors or bootstrapping to stabilize estimates.",
+        "Goal space explosion: Too many self-generated goals can overwhelm memory and computation. Implement deduplication (e.g., via hash of goal embedding) and periodic pruning.",
+        "Reward hacking: The agent might generate trivial goals to inflate success rates. Use diversity penalties or novelty filters (e.g., count-based exploration).",
+        "Cold start problem: Initially, no success history exists. Seed with random goals or use a warm-up phase with uniform sampling.",
+        "Non-stationarity: As the agent improves, the success rate distribution shifts. Use change-point detection to reset statistics when performance plateaus.",
+        "Computational overhead: Real-time goal ranking can be expensive. Use approximate nearest neighbor search for goal similarity and lazy updates.",
+        "Misaligned success criteria: Define success objectively (e.g., environment reward) to avoid subjective biases from the agent's internal model.",
+        "Ignoring goal difficulty correlation: Some goals are prerequisites for others. Use causal structure learning to model dependencies."
+      ],
+      "unconventional": [
+        "Adversarial goal generation: Train a separate 'goal adversary' that generates goals that maximize the agent's failure rate, forcing robust learning (inspired by GANs).",
+        "Evolutionary goal selection: Use a genetic algorithm to evolve a population of goal prioritization strategies, selecting for those that maximize long-term learning curves.",
+        "Goal prioritization via quantum annealing: Formulate goal ranking as a quadratic unconstrained binary optimization (QUBO) problem and solve on quantum hardware for large goal spaces.",
+        "Swarm intelligence: Use particle swarm optimization where each 'particle' is a goal, and success rate acts as fitness, with particles moving in goal embedding space.",
+        "Predictive coding: Use a hierarchical predictive model where goals are prioritized based on the discrepancy between predicted and actual learning progress (free energy minimization).",
+        "Goal ranking via graph neural networks: Model goals as nodes in a graph with edges representing similarity or prerequisite relationships, then use GNNs to propagate success signals.",
+        "Human-inspired curiosity: Implement a 'boredom' mechanism that reduces priority of goals attempted too many times without significant progress, even if success rate is moderate.",
+        "Multi-agent competition: Have two agents with separate goal generators; each agent's goal is to generate goals that the other finds hard, creating an adversarial curriculum.",
+        "Goal prioritization as a bandit with delayed feedback: Use a sleeping bandit algorithm (e.g., EXP3) where goals can be 'awakened' or 'slept' based on recency of attempts.",
+        "Fractal goal spaces: Organize goals in a self-similar hierarchy (like a fractal) and prioritize at multiple scales simultaneously, using renormalization group theory."
+      ]
+    },
+    "timestamp": 1780654722.1370568
   }
 ]

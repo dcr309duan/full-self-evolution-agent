@@ -8,10 +8,22 @@
       "created_at": 1780653703.3882256
     },
     {
+      "description": "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation → test_ecosystem_engine → evolution_orchestrator) that must pass within 3 seconds. Run this test before and after every mutation. If it fails after a mutation, trigger an automatic rollback and generate a new mutation that reduces complexity instead.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780654501.1323383
+    },
+    {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780653063.2412038
+    },
+    {
+      "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780654501.1373088
     }
   ],
   "completed_goals": [
@@ -952,6 +964,13 @@
       "status": "completed",
       "created_at": 1780653703.3850987,
       "completed_at": 1780654443.4744635
+    },
+    {
+      "description": "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of code across all core modules. If the new total exceeds the previous total by more than 5%, automatically revert the change and log the complexity debt. This forces consolidation and deletion of dead code before adding new features.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780654501.1272116,
+      "completed_at": 1780654686.0352132
     }
   ],
   "generated_goals": []
