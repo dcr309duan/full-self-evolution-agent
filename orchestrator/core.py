@@ -1,6 +1,6 @@
 """Core orchestrator for integrating failure pattern mining into the evolution loop."""
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
@@ -8,6 +8,7 @@ import logging
 
 from .miner import FailurePatternMiner, FailurePattern
 from ..evolution.goal_queue import GoalQueue, Goal, GoalPriority
+from ..schema_alignment import SchemaValidator, SchemaConverter
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class OrchestrationConfig:
     min_samples_for_pattern: int = 5
     auto_refactoring_enabled: bool = True
     max_refactoring_goals_per_cycle: int = 3
+    schema_validator: Optional[SchemaValidator] = None
+    schema_converter: Optional[SchemaConverter] = None
 
 
 class EvolutionOrchestrator:
@@ -64,6 +67,14 @@ class EvolutionOrchestrator:
             if not result.get('success', True):
                 failure_data = result.get('failure_data')
                 if failure_data:
+                    # Validate and convert failure_data before processing
+                    if self.config.schema_validator and self.config.schema_converter:
+                        if not self.config.schema_validator.validate(failure_data):
+                            logger.warning(
+                                "Schema mismatch in failure_data: %s",
+                                self.config.schema_validator.get_errors(failure_data)
+                            )
+                            failure_data = self.config.schema_converter.convert(failure_data)
                     failure_data_list.append(failure_data)
 
         if not failure_data_list:
@@ -97,6 +108,14 @@ class EvolutionOrchestrator:
                     break
 
                 goal = self._create_refactoring_goal(pattern, frequency)
+                # Validate and convert goal before adding to queue
+                if self.config.schema_validator and self.config.schema_converter:
+                    if not self.config.schema_validator.validate(goal):
+                        logger.warning(
+                            "Schema mismatch in goal: %s",
+                            self.config.schema_validator.get_errors(goal)
+                        )
+                        goal = self.config.schema_converter.convert(goal)
                 self.config.goal_queue.add_goal(goal)
                 self._refactoring_goals_generated += 1
 
