@@ -1,5 +1,8 @@
 import pytest
 import random
+import os
+import tempfile
+import shutil
 from unittest.mock import Mock, patch, PropertyMock
 from ecology_engine import EcologyEngine, Test, DifficultyLevel, OverfittingDetector
 
@@ -31,6 +34,13 @@ def hard_test():
         difficulty=DifficultyLevel.HARD,
         test_cases=[((0,), 0), ((1,), 1), ((5,), 5), ((10,), 55)]
     )
+
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for test file generation."""
+    dirpath = tempfile.mkdtemp()
+    yield dirpath
+    shutil.rmtree(dirpath)
 
 # Test 1: New tests are generated with appropriate difficulty
 class TestNewTestGeneration:
@@ -212,6 +222,248 @@ class TestOverfittingDetection:
         engine.overfitting_threshold = 0.2  # Very tolerant
         assert engine.detect_overfitting(agent_scores) == False
 
+# Test 5: generate_ecology_pressure creates valid Python test files
+class TestGenerateEcologyPressure:
+    def test_creates_valid_python_file(self, engine, temp_dir):
+        """Test that generate_ecology_pressure() creates valid Python test files."""
+        test_code = "def test_example(): assert 1 + 1 == 2"
+        filepath = os.path.join(temp_dir, "test_generated.py")
+        engine.generate_ecology_pressure(test_code, filepath)
+        
+        assert os.path.exists(filepath)
+        with open(filepath, 'r') as f:
+            content = f.read()
+        assert 'def test_' in content
+        assert 'assert' in content
+        # Verify it's valid Python
+        compile(content, filepath, 'exec')
+
+    def test_creates_multiple_test_files(self, engine, temp_dir):
+        """Test that multiple calls create separate valid files."""
+        test_codes = [
+            "def test_add(): assert 1 + 1 == 2",
+            "def test_sub(): assert 2 - 1 == 1"
+        ]
+        for i, code in enumerate(test_codes):
+            filepath = os.path.join(temp_dir, f"test_generated_{i}.py")
+            engine.generate_ecology_pressure(code, filepath)
+            assert os.path.exists(filepath)
+
+    def test_generated_file_is_executable(self, engine, temp_dir):
+        """Test that generated test files can be executed."""
+        test_code = "def test_example(): assert 1 + 1 == 2"
+        filepath = os.path.join(temp_dir, "test_executable.py")
+        engine.generate_ecology_pressure(test_code, filepath)
+        
+        # Execute the generated file
+        exec_globals = {}
+        with open(filepath, 'r') as f:
+            exec(f.read(), exec_globals)
+        assert 'test_example' in exec_globals
+        exec_globals['test_example']()
+
+# Test 6: Stress tests introduce resource constraints
+class TestStressTests:
+    def test_memory_limit_introduced(self, engine):
+        """Test that stress tests include memory limits."""
+        stress_test = engine.generate_stress_test(memory_limit_mb=100)
+        assert stress_test.memory_limit_mb == 100
+        assert 'memory' in stress_test.code.lower() or 'resource' in stress_test.code.lower()
+
+    def test_timeout_introduced(self, engine):
+        """Test that stress tests include timeouts."""
+        stress_test = engine.generate_stress_test(timeout_seconds=5)
+        assert stress_test.timeout_seconds == 5
+        assert 'timeout' in stress_test.code.lower() or 'time' in stress_test.code.lower()
+
+    def test_both_constraints_applied(self, engine):
+        """Test that both memory and timeout constraints can be applied."""
+        stress_test = engine.generate_stress_test(memory_limit_mb=200, timeout_seconds=10)
+        assert stress_test.memory_limit_mb == 200
+        assert stress_test.timeout_seconds == 10
+
+    def test_default_constraints(self, engine):
+        """Test default constraints when none specified."""
+        stress_test = engine.generate_stress_test()
+        assert stress_test.memory_limit_mb is not None
+        assert stress_test.timeout_seconds is not None
+
+# Test 7: Cross-module tests reference at least 2 different modules
+class TestCrossModuleTests:
+    def test_references_two_modules(self, engine):
+        """Test that cross-module tests reference at least 2 different modules."""
+        cross_module_test = engine.generate_cross_module_test(['module_a', 'module_b'])
+        code = cross_module_test.code
+        assert 'module_a' in code
+        assert 'module_b' in code
+
+    def test_references_multiple_modules(self, engine):
+        """Test that cross-module tests can reference more than 2 modules."""
+        modules = ['module_a', 'module_b', 'module_c']
+        cross_module_test = engine.generate_cross_module_test(modules)
+        code = cross_module_test.code
+        for module in modules:
+            assert module in code
+
+    def test_imports_are_valid(self, engine):
+        """Test that cross-module tests have valid import statements."""
+        cross_module_test = engine.generate_cross_module_test(['os', 'sys'])
+        code = cross_module_test.code
+        assert 'import os' in code or 'from os' in code
+        assert 'import sys' in code or 'from sys' in code
+
+# Test 8: Novel domain tests are not duplicates of existing tests
+class TestNovelDomainTests:
+    def test_not_duplicate_of_existing(self, engine):
+        """Test that novel domain tests are not duplicates of existing tests."""
+        existing_tests = [
+            Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[]),
+            Test(code="def test_sub(): assert 2-1==1", difficulty=DifficultyLevel.EASY, test_cases=[])
+        ]
+        novel_test = engine.generate_novel_domain_test(existing_tests)
+        assert novel_test.code != existing_tests[0].code
+        assert novel_test.code != existing_tests[1].code
+
+    def test_unique_function_name(self, engine):
+        """Test that novel tests have unique function names."""
+        existing_tests = [
+            Test(code="def test_add(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        ]
+        novel_test = engine.generate_novel_domain_test(existing_tests)
+        assert 'test_add' not in novel_test.code
+
+    def test_different_domain(self, engine):
+        """Test that novel tests cover different domains."""
+        existing_tests = [
+            Test(code="def test_math(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        ]
+        novel_test = engine.generate_novel_domain_test(existing_tests)
+        assert 'math' not in novel_test.code.lower() or 'test_math' not in novel_test.code
+
+# Test 9: Novelty threshold filtering works
+class TestNoveltyThreshold:
+    def test_rejects_high_similarity(self, engine):
+        """Test that tests with similarity >0.7 to existing tests are rejected."""
+        existing_tests = [
+            Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        ]
+        similar_test = Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        assert engine.is_novel(similar_test, existing_tests, threshold=0.7) == False
+
+    def test_accepts_low_similarity(self, engine):
+        """Test that tests with similarity <=0.7 are accepted."""
+        existing_tests = [
+            Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        ]
+        novel_test = Test(code="def test_multiply(): assert 2*3==6", difficulty=DifficultyLevel.EASY, test_cases=[])
+        assert engine.is_novel(novel_test, existing_tests, threshold=0.7) == True
+
+    def test_threshold_configurable(self, engine):
+        """Test that the threshold is configurable."""
+        existing_tests = [
+            Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        ]
+        similar_test = Test(code="def test_add(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        # With lower threshold, even similar tests might be accepted
+        assert engine.is_novel(similar_test, existing_tests, threshold=0.5) == False
+        # With higher threshold, similar tests are definitely rejected
+        assert engine.is_novel(similar_test, existing_tests, threshold=0.9) == False
+
+    def test_empty_existing_list(self, engine):
+        """Test that all tests are novel when no existing tests."""
+        test = Test(code="def test_anything(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        assert engine.is_novel(test, [], threshold=0.7) == True
+
+# Test 10: Engine tracks which new tests led to fitness improvements
+class TestFitnessTracking:
+    def test_tracks_improving_tests(self, engine):
+        """Test that the engine correctly tracks which new tests led to fitness improvements."""
+        initial_fitness = 0.5
+        test = Test(code="def test_improve(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        engine.add_test(test)
+        new_fitness = 0.8
+        engine.update_fitness_tracking(test, initial_fitness, new_fitness)
+        assert test in engine.improving_tests
+        assert test not in engine.non_improving_tests
+
+    def test_tracks_non_improving_tests(self, engine):
+        """Test that the engine tracks tests that don't improve fitness."""
+        initial_fitness = 0.5
+        test = Test(code="def test_no_improve(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        engine.add_test(test)
+        new_fitness = 0.5
+        engine.update_fitness_tracking(test, initial_fitness, new_fitness)
+        assert test in engine.non_improving_tests
+        assert test not in engine.improving_tests
+
+    def test_tracks_decreasing_fitness(self, engine):
+        """Test that the engine tracks tests that decrease fitness."""
+        initial_fitness = 0.5
+        test = Test(code="def test_decrease(): assert 1+1==2", difficulty=DifficultyLevel.EASY, test_cases=[])
+        engine.add_test(test)
+        new_fitness = 0.3
+        engine.update_fitness_tracking(test, initial_fitness, new_fitness)
+        assert test in engine.non_improving_tests
+
+    def test_multiple_tests_tracked(self, engine):
+        """Test that multiple tests can be tracked simultaneously."""
+        test1 = Test(code="def test1(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        test2 = Test(code="def test2(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        engine.add_test(test1)
+        engine.add_test(test2)
+        engine.update_fitness_tracking(test1, 0.5, 0.8)
+        engine.update_fitness_tracking(test2, 0.5, 0.4)
+        assert len(engine.improving_tests) == 1
+        assert len(engine.non_improving_tests) == 1
+
+# Test 11: Engine respects max_new_tests_per_cycle limit
+class TestMaxNewTestsPerCycle:
+    def test_respects_limit(self, engine):
+        """Test that the engine respects the max_new_tests_per_cycle limit."""
+        max_tests = 3
+        engine.max_new_tests_per_cycle = max_tests
+        tests_generated = []
+        for _ in range(10):
+            test = engine.generate_new_test(DifficultyLevel.EASY)
+            if engine.can_add_test(test):
+                tests_generated.append(test)
+                engine.add_test(test)
+        assert len(tests_generated) <= max_tests
+
+    def test_blocks_after_limit(self, engine):
+        """Test that the engine blocks adding tests after reaching the limit."""
+        engine.max_new_tests_per_cycle = 2
+        test1 = Test(code="def test1(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        test2 = Test(code="def test2(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        test3 = Test(code="def test3(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        
+        assert engine.can_add_test(test1)
+        engine.add_test(test1)
+        assert engine.can_add_test(test2)
+        engine.add_test(test2)
+        assert not engine.can_add_test(test3)
+
+    def test_resets_after_cycle(self, engine):
+        """Test that the limit resets after a cycle."""
+        engine.max_new_tests_per_cycle = 1
+        test1 = Test(code="def test1(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        test2 = Test(code="def test2(): pass", difficulty=DifficultyLevel.EASY, test_cases=[])
+        
+        assert engine.can_add_test(test1)
+        engine.add_test(test1)
+        assert not engine.can_add_test(test2)
+        
+        engine.reset_cycle()
+        assert engine.can_add_test(test2)
+
+    def test_configurable_limit(self, engine):
+        """Test that the limit is configurable."""
+        engine.max_new_tests_per_cycle = 5
+        assert engine.max_new_tests_per_cycle == 5
+        
+        engine.max_new_tests_per_cycle = 10
+        assert engine.max_new_tests_per_cycle == 10
+
 # Integration tests
 class TestEcologyEngineIntegration:
     def test_full_workflow(self, engine):
@@ -241,3 +493,39 @@ class TestEcologyEngineIntegration:
         # Each subsequent test should be at least as hard
         for i in range(len(tests) - 1):
             assert tests[i].difficulty.value <= tests[i+1].difficulty.value
+
+    def test_comprehensive_pipeline(self, engine, temp_dir):
+        """Test the complete pipeline with all features."""
+        # Generate initial tests
+        test1 = engine.generate_new_test(DifficultyLevel.EASY)
+        test2 = engine.generate_new_test(DifficultyLevel.MEDIUM)
+        
+        # Generate ecology pressure
+        engine.generate_ecology_pressure(test1.code, os.path.join(temp_dir, "test1.py"))
+        engine.generate_ecology_pressure(test2.code, os.path.join(temp_dir, "test2.py"))
+        
+        # Generate stress test
+        stress_test = engine.generate_stress_test(memory_limit_mb=100, timeout_seconds=5)
+        assert stress_test.memory_limit_mb == 100
+        assert stress_test.timeout_seconds == 5
+        
+        # Generate cross-module test
+        cross_test = engine.generate_cross_module_test(['os', 'sys'])
+        assert 'os' in cross_test.code
+        assert 'sys' in cross_test.code
+        
+        # Test novelty filtering
+        existing_tests = [test1, test2]
+        novel_test = engine.generate_novel_domain_test(existing_tests)
+        assert engine.is_novel(novel_test, existing_tests, threshold=0.7)
+        
+        # Test fitness tracking
+        engine.add_test(novel_test)
+        engine.update_fitness_tracking(novel_test, 0.5, 0.8)
+        assert novel_test in engine.improving_tests
+        
+        # Test max tests per cycle
+        engine.max_new_tests_per_cycle = 2
+        assert engine.can_add_test(test1)
+        engine.add_test(test1)
+        assert not engine.can_add_test(test2)

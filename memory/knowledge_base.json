@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified pre_mutation_validator.py to: Add a step to the pre-mutation validation pipeline that checks proposed mutations against the forbidden_mutation_rules.json. If a mutation matches a 'block' rule, reject it immediately with explanation. If 'warn', log warning but allow. If 'require_precheck', trigger additional validation before proceeding.",
-      "timestamp": 1780640802.7111325,
-      "cycle": 95
-    },
-    {
-      "content": "Successfully modified test_failure_pattern_miner.py to: Create a test suite that: (1) seeds fake failure logs with known patterns, (2) runs the miner and verifies it correctly identifies the patterns, (3) tests that generated rules block matching mutations, (4) tests that rules don't block non-matching mutations, (5) tests rule hit counting and decay (old rules without hits get deprioritized).",
-      "timestamp": 1780640824.326413,
-      "cycle": 95
-    },
-    {
-      "content": "Successfully modified system_config.json to: Add configuration parameters: FAILURE_LOG_MAX_ENTRIES=1000, PATTERN_MIN_OCCURRENCES=3 (minimum failures to form a pattern), RULE_AUTO_ACTIVATE=true, RULE_DECAY_DAYS=30 (rules without hits auto-archive), ENABLE_FORBIDDEN_SPACE=true.",
-      "timestamp": 1780640876.743321,
-      "cycle": 95
-    },
-    {
-      "content": "Successfully modified tests/integration/test_data/evolution_test_scenario.json to: Create test scenario configuration that defines: (1) A minimal but realistic codebase structure with 3-5 interdependent modules, (2) Predefined goals that trigger mutations in specific modules, (3) Failure injection schedule (which operations to fail, at what stage, with what error), (4) Expected system behavior for each failure scenario, (5) Post-recovery consistency checks.",
-      "timestamp": 1780641012.1246743,
-      "cycle": 96
-    },
-    {
-      "content": "Successfully modified tests/integration/__init__.py to: Update the integration test package to export the new test modules and ensure proper test discovery.",
-      "timestamp": 1780641015.8829696,
-      "cycle": 96
-    },
-    {
       "content": "Successfully modified tests/integration/test_evolution_loop_file_io_failures.py to: Create a focused test for file I/O failure scenarios: (1) Permission denied on critical files, (2) Concurrent write conflicts, (3) Corrupted file reads, (4) Network filesystem timeouts, (5) Partial write failures, (6) Verifies atomic write guarantees and rollback correctness.",
       "timestamp": 1780641080.314844,
       "cycle": 96
@@ -999,6 +974,31 @@
       "content": "Successfully modified data/operator_success_rates.json to: Create initial empty data file for persisting operator success rates and adjusted weights, with default structure: {'operators': {}, 'last_updated': null, 'total_failures_recorded': 0, 'total_successes_recorded': 0}",
       "timestamp": 1780647113.4511492,
       "cycle": 122
+    },
+    {
+      "content": "Successfully modified config/evolution_config.json to: Add a new 'ecology_engine' configuration section: {'enabled': true, 'generation_interval_cycles': 10, 'max_new_tests_per_cycle': 3, 'stress_test_probability': 0.3, 'cross_module_test_probability': 0.4, 'novel_domain_probability': 0.3, 'benchmark_sources': ['hackerrank', 'leetcode', 'codewars', 'project_euler'], 'persist_file': 'data/ecology_tests.json', 'novelty_threshold': 0.7, 'fitness_tracking_window': 20}",
+      "timestamp": 1780647201.1915426,
+      "cycle": 123
+    },
+    {
+      "content": "Successfully modified modules/orchestrator.py to: Integrate the Ecology Engine into the main evolution loop: after every 10 cycles (or as configured), call ecology_engine.generate_ecology_pressure() to inject new tests. Ensure new tests are added to the test runner's test discovery path. Add a check that prevents duplicate tests (by comparing test function signatures). Log all new test injections with their source (stress, cross-module, novel domain) and track their impact on downstream capability fitness.",
+      "timestamp": 1780647215.2861273,
+      "cycle": 123
+    },
+    {
+      "content": "Successfully modified tests/test_ecology_engine.py to: Create a comprehensive test suite for the Ecology Engine: (1) test that generate_ecology_pressure() creates valid Python test files, (2) test that stress tests actually introduce resource constraints (e.g., memory limits, timeouts), (3) test that cross-module tests reference at least 2 different modules, (4) test that novel domain tests are not duplicates of existing tests, (5) test that the novelty threshold filtering works (tests with similarity >0.7 to existing tests are rejected), (6) test that the engine correctly tracks which new tests led to fitness improvements, and (7) test that the engine respects the max_new_tests_per_cycle limit.",
+      "timestamp": 1780647260.1618848,
+      "cycle": 123
+    },
+    {
+      "content": "Successfully modified data/ecology_tests.json to: Create an initial empty data file for persisting generated ecology tests, with structure: {'generated_tests': [], 'test_impact_scores': {}, 'last_generation_cycle': 0, 'total_tests_generated': 0, 'active_stressors': []}",
+      "timestamp": 1780647263.781996,
+      "cycle": 123
+    },
+    {
+      "content": "Successfully modified modules/goal_generator.py to: Add a new goal type 'ECOLOGY' to the goal generator: when the Ecology Engine generates a new benchmark or stress test, create a corresponding goal to 'Adapt to new environmental pressure: [test description]'. This ensures the agent not only creates new tests but also actively works to pass them, closing the evolution loop.",
+      "timestamp": 1780647273.6490207,
+      "cycle": 123
     }
   ],
   "learned_patterns": [],
@@ -1437,6 +1437,11 @@
       "approach": "modify modules/sandbox_runner.py: Create the sandbox subprocess entry point that: (1) receives serialized state via command-line argument (path to temp state file), (2) deserializes and reconstructs the three core modules in memory, (3) applies the specified mutation to the orchestrator's decision logic (e.g., modify goal_selection_threshold or acceptance_criteria), (4) executes the full test suite via pytest, (5) writes results (pass/fail, test output, errors) to a result file, (6) exits cleanly. This runs in complete isolation from the main process.",
       "reason": "Safety check failed",
       "timestamp": 1780646898.836567
+    },
+    {
+      "approach": "modify modules/ecology_engine.py: Create a new Ecology Engine module that: (1) generates novel synthetic test suites by combining existing test patterns in new ways (e.g., cross-module integration tests, performance stress tests, adversarial edge cases), (2) introduces 'environmental stressors' such as simulated latency, resource constraints, or data corruption to test robustness, (3) creates benchmarks from real-world programming challenges (e.g., implement a sorting algorithm, parse a file format, solve a logic puzzle) that are outside the current test suite, and (4) tracks which new tests produce the most capability growth (measured by downstream fitness improvements). Include a method 'generate_ecology_pressure()' that runs every 10 cycles and injects 1-3 new tests into the test suite.",
+      "reason": "Syntax error: unterminated f-string literal (detected at line 420) (<unknown>, line 420)",
+      "timestamp": 1780647196.715586
     }
   ],
   "successful_strategies": [
@@ -5159,6 +5164,36 @@
       "strategy": "Build a failure-pattern learner that collects the last 50 mutation failures, extracts common error types (e.g., import errors, type mismatches, infinite loops), and adjusts mutation operators accordingly—e.g., disabling operators that caused repeated failures or reducing their probability by 50%. Persist the operator success rates and the adjusted operator weights.",
       "outcome": "7/7 steps succeeded",
       "timestamp": 1780647113.5011246
+    },
+    {
+      "strategy": "modify config/evolution_config.json: Add a new 'ecology_engine' configuration section: {'enabled': true, 'generation_interval_cycles': 10, 'max_new_tests_per_cycle': 3, 'stress_test_probability': 0.3, 'cross_module_test_probability': 0.4, 'novel_domain_probability': 0.3, 'benchmark_sources': ['hackerrank', 'leetcode', 'codewars', 'project_euler'], 'persist_file': 'data/ecology_tests.json', 'novelty_threshold': 0.7, 'fitness_tracking_window': 20}",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647201.1725895
+    },
+    {
+      "strategy": "modify modules/orchestrator.py: Integrate the Ecology Engine into the main evolution loop: after every 10 cycles (or as configured), call ecology_engine.generate_ecology_pressure() to inject new tests. Ensure new tests are added to the test runner's test discovery path. Add a check that prevents duplicate tests (by comparing test function signatures). Log all new test injections with their source (stress, cross-module, novel domain) and track their impact on downstream capability fitness.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647215.2694657
+    },
+    {
+      "strategy": "modify tests/test_ecology_engine.py: Create a comprehensive test suite for the Ecology Engine: (1) test that generate_ecology_pressure() creates valid Python test files, (2) test that stress tests actually introduce resource constraints (e.g., memory limits, timeouts), (3) test that cross-module tests reference at least 2 different modules, (4) test that novel domain tests are not duplicates of existing tests, (5) test that the novelty threshold filtering works (tests with similarity >0.7 to existing tests are rejected), (6) test that the engine correctly tracks which new tests led to fitness improvements, and (7) test that the engine respects the max_new_tests_per_cycle limit.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647260.145048
+    },
+    {
+      "strategy": "modify data/ecology_tests.json: Create an initial empty data file for persisting generated ecology tests, with structure: {'generated_tests': [], 'test_impact_scores': {}, 'last_generation_cycle': 0, 'total_tests_generated': 0, 'active_stressors': []}",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647263.7647238
+    },
+    {
+      "strategy": "modify modules/goal_generator.py: Add a new goal type 'ECOLOGY' to the goal generator: when the Ecology Engine generates a new benchmark or stress test, create a corresponding goal to 'Adapt to new environmental pressure: [test description]'. This ensures the agent not only creates new tests but also actively works to pass them, closing the evolution loop.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647273.6314037
+    },
+    {
+      "strategy": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "outcome": "5/6 steps succeeded",
+      "timestamp": 1780647273.667541
     }
   ],
   "capabilities_developed": []

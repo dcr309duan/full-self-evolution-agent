@@ -105,3 +105,24 @@ class GoalGenerator:
         """Creates a GoalGenerator instance from a JSON string."""
         state = json.loads(json_str)
         return cls.from_serialized_state(state)
+
+    def generate_ecology_goal(self, test_description: str) -> Goal:
+        """
+        Generates a new ECOLOGY goal when the Ecology Engine creates a new benchmark or stress test.
+        
+        Args:
+            test_description: Description of the new environmental pressure/test
+            
+        Returns:
+            A new Goal object with ECOLOGY type
+        """
+        import uuid
+        goal = Goal(
+            id=str(uuid.uuid4()),
+            description=f"Adapt to new environmental pressure: {test_description}",
+            template="ECOLOGY",
+            created_at=datetime.now().isoformat(),
+            parameters={"test_description": test_description, "goal_type": "ECOLOGY"}
+        )
+        self.pending_goals.append(goal)
+        return goal

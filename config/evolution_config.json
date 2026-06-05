@@ -30,5 +30,17 @@
     },
     "persist_file": "data/operator_success_rates.json",
     "analysis_interval_cycles": 5
+  },
+  "ecology_engine": {
+    "enabled": true,
+    "generation_interval_cycles": 10,
+    "max_new_tests_per_cycle": 3,
+    "stress_test_probability": 0.3,
+    "cross_module_test_probability": 0.4,
+    "novel_domain_probability": 0.3,
+    "benchmark_sources": ["hackerrank", "leetcode", "codewars", "project_euler"],
+    "persist_file": "data/ecology_tests.json",
+    "novelty_threshold": 0.7,
+    "fitness_tracking_window": 20
   }
 }
