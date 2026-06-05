@@ -217,5 +217,49 @@
         "timestamp": 1780627722.6834223
       }
     ]
+  },
+  {
+    "timestamp": 1780628669.9699616,
+    "results": [
+      {
+        "parent_a": "quicksorted_primes",
+        "parent_b": "memoized_is_prime",
+        "operator": "hybrid",
+        "code": "def memoized_sorted_primes(limit):\n    cache = {}\n    def is_prime(n):\n        if n < 2:\n            return False\n        if n in cache:\n            return cache[n]\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                cache[n] = False\n                return False\n        cache[n] = True\n        return True\n    primes = [x for x in range(2, limit) if is_prime(x)]\n    if len(primes) <= 1:\n        return primes\n    pivot = primes[len(primes)//2]\n    left = [x for x in primes if x < pivot]\n    mid = [x for x in primes if x == pivot]\n    right = [x for x in primes if x > pivot]\n    return memoized_sorted_primes(len(left)) + mid + memoized_sorted_primes(len(right))",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: memoized_sorted_primes\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780628661.7145245
+      },
+      {
+        "parent_a": "retry_fibonacci",
+        "parent_b": "memoize",
+        "operator": "mutate",
+        "code": "def memoized_retry_fibonacci(n, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    \n    def compute_fib(k):\n        if k in cache:\n            return cache[k]\n        if k < 0:\n            raise ValueError(\"n must be non-negative\")\n        a, b = 0, 1\n        for _ in range(k):\n            a, b = b, a + b\n        cache[k] = a\n        return a\n    \n    for attempt in range(max_attempts):\n        try:\n            return compute_fib(n)\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: memoized_retry_fibonacci\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780628666.0054488
+      },
+      {
+        "parent_a": "quicksort",
+        "parent_b": "retry",
+        "operator": "hybrid",
+        "code": "def retry_sort(lst, max_attempts=3, delay=1):\n    import time\n    if len(lst) <= 1:\n        return lst\n    for attempt in range(max_attempts):\n        try:\n            pivot = lst[len(lst)//2]\n            left = [x for x in lst if x < pivot]\n            mid = [x for x in lst if x == pivot]\n            right = [x for x in lst if x > pivot]\n            return retry_sort(left, max_attempts, delay) + mid + retry_sort(right, max_attempts, delay)\n        except Exception:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)\n    return lst",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_sort\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780628669.9694777
+      }
+    ]
   }
 ]

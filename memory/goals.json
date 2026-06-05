@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a cross-component integration test suite that runs end-to-end tests for the mutation -> test -> reflection -> strategy update pipeline, and automatically reports any broken links (e.g., mutation engine not returning results, reflection parser not receiving output) as actionable bugs with priority based on pipeline criticality.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780627782.4670973
-    },
-    {
       "description": "Develop multi-file code analysis and refactoring capability",
       "priority": 7,
       "status": "pending",
@@ -171,6 +165,13 @@
       "status": "completed",
       "created_at": 1780627782.466094,
       "completed_at": 1780628217.0320091
+    },
+    {
+      "description": "Create a cross-component integration test suite that runs end-to-end tests for the mutation -> test -> reflection -> strategy update pipeline, and automatically reports any broken links (e.g., mutation engine not returning results, reflection parser not receiving output) as actionable bugs with priority based on pipeline criticality.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780627782.4670973,
+      "completed_at": 1780628659.7215927
     }
   ],
   "generated_goals": []

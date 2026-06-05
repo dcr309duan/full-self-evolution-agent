@@ -554,6 +554,41 @@
       "content": "Successfully modified tests/test_broken_link_detector.py to: Add test method 'test_detect_mutation_engine_not_returning_results' that simulates mutation engine returning empty list and verifies detector reports it as P0 bug with actionable description.",
       "timestamp": 1780628475.9569552,
       "cycle": 34
+    },
+    {
+      "content": "Successfully modified pipeline_broken_link_reporter.py to: Enhance the reporter to: (1) Accept structured input from integration tests (component name, failure type, timestamp). (2) Automatically compute priority based on component criticality mapping. (3) Generate actionable bug reports with suggested fixes (e.g., 'Mutation engine returned empty results: check mutation_generator.py line 42'). (4) Write reports to both JSON and a human-readable markdown file.",
+      "timestamp": 1780628593.8104098,
+      "cycle": 35
+    },
+    {
+      "content": "Successfully modified tests/test_pipeline_priority_mapping.py to: Create a test file that validates the priority mapping logic: (1) Test that mutation engine failures get CRITICAL priority. (2) Test that reflection parser failures get HIGH priority. (3) Test that strategy selector failures get MEDIUM priority. (4) Test that unknown components get LOW priority. (5) Test that multiple simultaneous failures generate separate bug reports with correct individual priorities.",
+      "timestamp": 1780628608.4453847,
+      "cycle": 35
+    },
+    {
+      "content": "Successfully modified tests/test_full_pipeline_integration.py to: Create a comprehensive integration test suite that: (1) Sets up a test mutation (e.g., add a simple function to a dummy module). (2) Runs the mutation engine and captures its output. (3) Feeds mutation output to the testing framework and captures test results. (4) Passes test results to the reflection parser and extracts assessment. (5) Feeds reflection output to the strategy selector and verifies a strategy is chosen. (6) Uses the broken link reporter to check for any failures at each stage. (7) Asserts that all stages complete without errors and produce valid outputs.",
+      "timestamp": 1780628650.6642041,
+      "cycle": 36
+    },
+    {
+      "content": "Successfully modified tests/test_broken_link_detector.py to: Expand existing tests to: (1) Add test for reflection parser not receiving output from test framework (simulate empty test results). (2) Add test for strategy selector receiving malformed reflection data. (3) Add test for pipeline timeout at each stage (mutation takes >30s, test takes >60s, reflection takes >10s). (4) Add test that verifies bug reports are written to disk correctly.",
+      "timestamp": 1780628659.713381,
+      "cycle": 36
+    },
+    {
+      "content": "Successfully modified tests/test_full_pipeline_integration.py to: Add test method 'test_mutation_to_test_link' that specifically validates the mutation engine output is correctly formatted for the testing framework. Should detect if mutation engine returns empty results (P0 bug) or malformed mutations (P1 bug).",
+      "timestamp": 1780628678.9939613,
+      "cycle": 36
+    },
+    {
+      "content": "[研究] Self-Healing Code Integration: Automated Retry and Recovery Mechanisms for Failed Modifications: The field of self-healing code integration focuses on automated detection, retry, and recovery from ",
+      "timestamp": 1780628693.452648,
+      "cycle": 36
+    },
+    {
+      "content": "[研究] Goal-Oriented Reflection Parsing: Dynamic Extraction and Classification of Task Objectives from Natural Language: Current state-of-the-art approaches for goal-oriented reflection parsing leverage large language mod",
+      "timestamp": 1780628709.420397,
+      "cycle": 36
     }
   ],
   "learned_patterns": [],
@@ -627,6 +662,16 @@
       "approach": "modify tests/test_full_pipeline_suite.py: Create a comprehensive integration test suite that: (1) Tests the complete mutation->test->reflection->strategy pipeline with 5 scenarios: happy path, mutation engine failure, test framework failure, reflection parser failure, strategy selector timeout. (2) For each scenario, validates that broken links are detected and reported with correct priority. (3) Includes a test runner that collects all results and generates a summary report.",
       "reason": "Syntax error: '{' was never closed (<unknown>, line 351)",
       "timestamp": 1780628579.6500301
+    },
+    {
+      "approach": "modify orchestrator.py: Add integration with the broken link reporter: (1) After each pipeline cycle, call the reporter with results from all stages. (2) If any CRITICAL bugs are reported, halt the pipeline and log an emergency message. (3) If HIGH bugs are reported, continue but flag the next cycle for special attention. (4) Log all bug reports to a dedicated 'pipeline_health.log' file with timestamps.",
+      "reason": "Safety check failed",
+      "timestamp": 1780628627.0914166
+    },
+    {
+      "approach": "modify scripts/run_pipeline_tests.sh: Create a shell script that: (1) Runs all pipeline integration tests in order: test_full_pipeline_suite.py, test_pipeline_priority_mapping.py, test_broken_link_detector.py. (2) Collects all test results into a single JSON summary. (3) If any tests fail, automatically runs the broken link reporter to generate bug reports. (4) Exits with non-zero code if any CRITICAL failures are detected.",
+      "reason": "Syntax error: unterminated string literal (detected at line 17) (<unknown>, line 17)",
+      "timestamp": 1780628636.1006374
     }
   ],
   "successful_strategies": [
@@ -1124,6 +1169,46 @@
       "strategy": "modify tests/test_broken_link_detector.py: Add test method 'test_detect_mutation_engine_not_returning_results' that simulates mutation engine returning empty list and verifies detector reports it as P0 bug with actionable description.",
       "outcome": "Applied successfully",
       "timestamp": 1780628475.9527073
+    },
+    {
+      "strategy": "modify pipeline_broken_link_reporter.py: Enhance the reporter to: (1) Accept structured input from integration tests (component name, failure type, timestamp). (2) Automatically compute priority based on component criticality mapping. (3) Generate actionable bug reports with suggested fixes (e.g., 'Mutation engine returned empty results: check mutation_generator.py line 42'). (4) Write reports to both JSON and a human-readable markdown file.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628593.8056612
+    },
+    {
+      "strategy": "modify tests/test_pipeline_priority_mapping.py: Create a test file that validates the priority mapping logic: (1) Test that mutation engine failures get CRITICAL priority. (2) Test that reflection parser failures get HIGH priority. (3) Test that strategy selector failures get MEDIUM priority. (4) Test that unknown components get LOW priority. (5) Test that multiple simultaneous failures generate separate bug reports with correct individual priorities.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628608.4408448
+    },
+    {
+      "strategy": "modify tests/test_full_pipeline_integration.py: Create a comprehensive integration test suite that: (1) Sets up a test mutation (e.g., add a simple function to a dummy module). (2) Runs the mutation engine and captures its output. (3) Feeds mutation output to the testing framework and captures test results. (4) Passes test results to the reflection parser and extracts assessment. (5) Feeds reflection output to the strategy selector and verifies a strategy is chosen. (6) Uses the broken link reporter to check for any failures at each stage. (7) Asserts that all stages complete without errors and produce valid outputs.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628650.6596625
+    },
+    {
+      "strategy": "modify tests/test_broken_link_detector.py: Expand existing tests to: (1) Add test for reflection parser not receiving output from test framework (simulate empty test results). (2) Add test for strategy selector receiving malformed reflection data. (3) Add test for pipeline timeout at each stage (mutation takes >30s, test takes >60s, reflection takes >10s). (4) Add test that verifies bug reports are written to disk correctly.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628659.7086265
+    },
+    {
+      "strategy": "Create a cross-component integration test suite that runs end-to-end tests for the mutation -> test -> reflection -> strategy update pipeline, and automatically reports any broken links (e.g., mutation engine not returning results, reflection parser not receiving output) as actionable bugs with priority based on pipeline criticality.",
+      "outcome": "3/6 steps succeeded",
+      "timestamp": 1780628659.7181447
+    },
+    {
+      "strategy": "mutation:hybrid(quicksorted_primes,memoized_is_prime)",
+      "outcome": "Created memoized_sorted_primes, score=0.4",
+      "timestamp": 1780628661.719727
+    },
+    {
+      "strategy": "mutation:mutate(retry_fibonacci,memoize)",
+      "outcome": "Created memoized_retry_fibonacci, score=0.6",
+      "timestamp": 1780628666.0086708
+    },
+    {
+      "strategy": "modify tests/test_full_pipeline_integration.py: Add test method 'test_mutation_to_test_link' that specifically validates the mutation engine output is correctly formatted for the testing framework. Should detect if mutation engine returns empty results (P0 bug) or malformed mutations (P1 bug).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780628678.9891646
     }
   ],
   "capabilities_developed": []

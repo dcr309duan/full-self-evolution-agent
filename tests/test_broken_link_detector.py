@@ -180,3 +180,104 @@ class TestBrokenLinkDetector:
         assert result.is_broken == True
         assert "Mutation engine returned no results" in result.error_message
         assert "actionable" in result.error_message.lower() or "investigate" in result.error_message.lower()
+
+    @patch('src.broken_link_detector.BrokenLinkDetector._get_reflection_results')
+    def test_reflection_parser_not_receiving_output(self, mock_reflection_results, detector):
+        """Test that reflection parser not receiving output from test framework is handled correctly."""
+        mock_reflection_results.return_value = []
+        
+        failure = {
+            "test_name": "test_test_to_reflection_integration",
+            "error": "Reflection parser received no output from test framework",
+            "source": "test",
+            "target": "reflection"
+        }
+        
+        result = detector.classify_link(failure)
+        assert result.priority == LinkPriority.P1
+        assert result.is_broken == True
+        assert "no output" in result.error_message.lower()
+
+    def test_strategy_selector_receiving_malformed_reflection_data(self, detector):
+        """Test that strategy selector receiving malformed reflection data is handled correctly."""
+        malformed_failure = {
+            "test_name": "test_reflection_to_strategy_integration",
+            "error": "Malformed reflection data: invalid JSON format",
+            "source": "reflection",
+            "target": "strategy",
+            "reflection_data": "{invalid: json}"
+        }
+        
+        result = detector.classify_link(malformed_failure)
+        assert result.priority == LinkPriority.P2
+        assert result.is_broken == True
+        assert "malformed" in result.error_message.lower() or "invalid" in result.error_message.lower()
+
+    @patch('src.broken_link_detector.BrokenLinkDetector._get_mutation_results')
+    def test_pipeline_timeout_at_mutation_stage(self, mock_mutation_results, detector):
+        """Test that pipeline timeout at mutation stage (>30s) is handled correctly."""
+        mock_mutation_results.side_effect = TimeoutError("Mutation stage timed out after 30 seconds")
+        
+        failure = {
+            "test_name": "test_mutation_to_test_integration",
+            "error": "TimeoutError: Mutation stage exceeded 30s limit",
+            "source": "mutation",
+            "target": "test"
+        }
+        
+        with pytest.raises(TimeoutError, match="Mutation stage timed out"):
+            detector.classify_link(failure)
+
+    @patch('src.broken_link_detector.BrokenLinkDetector._get_test_results')
+    def test_pipeline_timeout_at_test_stage(self, mock_test_results, detector):
+        """Test that pipeline timeout at test stage (>60s) is handled correctly."""
+        mock_test_results.side_effect = TimeoutError("Test stage timed out after 60 seconds")
+        
+        failure = {
+            "test_name": "test_test_to_reflection_integration",
+            "error": "TimeoutError: Test stage exceeded 60s limit",
+            "source": "test",
+            "target": "reflection"
+        }
+        
+        with pytest.raises(TimeoutError, match="Test stage timed out"):
+            detector.classify_link(failure)
+
+    @patch('src.broken_link_detector.BrokenLinkDetector._get_reflection_results')
+    def test_pipeline_timeout_at_reflection_stage(self, mock_reflection_results, detector):
+        """Test that pipeline timeout at reflection stage (>10s) is handled correctly."""
+        mock_reflection_results.side_effect = TimeoutError("Reflection stage timed out after 10 seconds")
+        
+        failure = {
+            "test_name": "test_reflection_to_strategy_integration",
+            "error": "TimeoutError: Reflection stage exceeded 10s limit",
+            "source": "reflection",
+            "target": "strategy"
+        }
+        
+        with pytest.raises(TimeoutError, match="Reflection stage timed out"):
+            detector.classify_link(failure)
+
+    @patch('src.broken_link_detector.BrokenLinkDetector._write_bug_report')
+    def test_bug_reports_written_to_disk_correctly(self, mock_write_bug_report, detector):
+        """Test that bug reports are written to disk correctly."""
+        mock_write_bug_report.return_value = True
+        
+        failure = {
+            "test_name": "test_mutation_to_test_integration",
+            "error": "ConnectionError: Failed to connect to mutation service",
+            "source": "mutation",
+            "target": "test"
+        }
+        
+        result = detector.classify_link(failure)
+        assert result.is_broken == True
+        
+        # Verify bug report was written
+        mock_write_bug_report.assert_called_once()
+        call_args = mock_write_bug_report.call_args[0][0]
+        assert call_args["test_name"] == "test_mutation_to_test_integration"
+        assert call_args["source"] == "mutation"
+        assert call_args["target"] == "test"
+        assert call_args["priority"] == LinkPriority.P0
+        assert "bug_report" in call_args["filename"].lower() or "report" in call_args["filename"].lower()

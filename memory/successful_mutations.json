@@ -23,5 +23,15 @@
     "name": "quicksorted_primes",
     "code": "def quicksorted_primes(limit):\n    def is_prime(n):\n        if n < 2:\n            return False\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                return False\n        return True\n    primes = [x for x in range(2, limit) if is_prime(x)]\n    if len(primes) <= 1:\n        return primes\n    pivot = primes[len(primes)//2]\n    left = [x for x in primes if x < pivot]\n    mid = [x for x in primes if x == pivot]\n    right = [x for x in primes if x > pivot]\n    return quicksorted_primes(left) + mid + quicksorted_primes(right) if isinstance(left, int) else quicksorted_primes(left[0] if left else 2) # fallback",
     "created": 1780626572.0520797
+  },
+  {
+    "name": "memoized_sorted_primes",
+    "code": "def memoized_sorted_primes(limit):\n    cache = {}\n    def is_prime(n):\n        if n < 2:\n            return False\n        if n in cache:\n            return cache[n]\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                cache[n] = False\n                return False\n        cache[n] = True\n        return True\n    primes = [x for x in range(2, limit) if is_prime(x)]\n    if len(primes) <= 1:\n        return primes\n    pivot = primes[len(primes)//2]\n    left = [x for x in primes if x < pivot]\n    mid = [x for x in primes if x == pivot]\n    right = [x for x in primes if x > pivot]\n    return memoized_sorted_primes(len(left)) + mid + memoized_sorted_primes(len(right))",
+    "created": 1780628661.716125
+  },
+  {
+    "name": "memoized_retry_fibonacci",
+    "code": "def memoized_retry_fibonacci(n, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    \n    def compute_fib(k):\n        if k in cache:\n            return cache[k]\n        if k < 0:\n            raise ValueError(\"n must be non-negative\")\n        a, b = 0, 1\n        for _ in range(k):\n            a, b = b, a + b\n        cache[k] = a\n        return a\n    \n    for attempt in range(max_attempts):\n        try:\n            return compute_fib(n)\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+    "created": 1780628666.006087
   }
 ]
