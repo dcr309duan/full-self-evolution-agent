@@ -1,7 +1,7 @@
 """Evolution Orchestrator - Integrates static predictor into mutation pipeline."""
 
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, List
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,12 @@ class EvolutionOrchestrator:
         self._predictor = None
         self._cycle_count = 0
         self._git_orchestrator = None
+        self._nash_detector = None
+        self._coordinated_planner = None
+        self._coordinated_mode = False
+        self._coordinated_cycles_remaining = 0
+        self._equilibrium_detected = False
+        self._coordinated_mutation_outcomes: List[Dict[str, Any]] = []
 
     def set_predictor(self, predictor: Any) -> None:
         """Set the static predictor instance."""
@@ -36,6 +42,14 @@ class EvolutionOrchestrator:
     def set_git_orchestrator(self, git_orchestrator: Any) -> None:
         """Set the git orchestrator instance."""
         self._git_orchestrator = git_orchestrator
+
+    def set_nash_detector(self, detector: Any) -> None:
+        """Set the Nash equilibrium detector instance."""
+        self._nash_detector = detector
+
+    def set_coordinated_planner(self, planner: Any) -> None:
+        """Set the coordinated mutation planner instance."""
+        self._coordinated_planner = planner
 
     def should_execute_mutation(self, mutation: Any) -> bool:
         """Check if mutation should be executed based on predictor analysis.
@@ -68,6 +82,79 @@ class EvolutionOrchestrator:
 
         return True
 
+    def _check_nash_equilibrium(self) -> bool:
+        """Check if Nash equilibrium is detected."""
+        if self._nash_detector is None:
+            return False
+        
+        try:
+            equilibrium_detected = self._nash_detector.detect_equilibrium()
+            if equilibrium_detected:
+                logger.info("Nash equilibrium detected by detector")
+                self._equilibrium_detected = True
+                return True
+        except Exception as e:
+            logger.warning("Nash equilibrium detection failed: %s", e)
+        
+        return False
+
+    def _generate_mutation_bundles(self) -> List[Any]:
+        """Generate mutation bundles for coordinated mutation mode."""
+        if self._coordinated_planner is None:
+            return []
+        
+        try:
+            bundles = self._coordinated_planner.plan_coordinated_mutations()
+            logger.info("Generated %d mutation bundles for coordinated mode", len(bundles))
+            return bundles
+        except Exception as e:
+            logger.error("Failed to generate mutation bundles: %s", e)
+            return []
+
+    def _apply_mutation_bundle(self, bundle: Any) -> bool:
+        """Apply a mutation bundle atomically using git workflow.
+        
+        Args:
+            bundle: The mutation bundle to apply
+            
+        Returns:
+            True if bundle was applied successfully, False otherwise
+        """
+        if self._git_orchestrator is None:
+            logger.warning("Git orchestrator not available, cannot apply bundle atomically")
+            return False
+
+        try:
+            # Create a branch for the bundle
+            self._git_orchestrator.git_create_branch(f"bundle-{self._cycle_count}")
+            
+            # Apply all mutations in the bundle
+            for mutation in bundle.get("mutations", []):
+                if not self.should_execute_mutation(mutation):
+                    logger.warning("Mutation in bundle skipped by predictor")
+                    self._git_orchestrator.git_rollback()
+                    return False
+                
+                try:
+                    mutation.execute()
+                except Exception as e:
+                    logger.error("Mutation in bundle failed: %s", e)
+                    self._git_orchestrator.git_rollback()
+                    return False
+            
+            # Commit the entire bundle
+            self._git_orchestrator.git_commit_mutation()
+            logger.info("Mutation bundle applied successfully")
+            return True
+            
+        except Exception as e:
+            logger.error("Failed to apply mutation bundle: %s", e)
+            try:
+                self._git_orchestrator.git_rollback()
+            except Exception as rollback_error:
+                logger.error("Rollback after bundle failure failed: %s", rollback_error)
+            return False
+
     def execute_mutation_pipeline(self, mutation: Any, executor_func: Callable) -> Any:
         """Execute a mutation through the pipeline with predictive filtering and git workflow.
 
@@ -89,6 +176,44 @@ class EvolutionOrchestrator:
                     return None
             except Exception as e:
                 logger.warning("Failed to check git working tree status: %s", e)
+
+        # Check for Nash equilibrium after standard mutation cycle
+        if not self._coordinated_mode and self._check_nash_equilibrium():
+            logger.info("Switching to coordinated mutation mode")
+            self._coordinated_mode = True
+            self._coordinated_cycles_remaining = 2  # Run coordinated mode for 1-2 cycles
+        
+        # Handle coordinated mutation mode
+        if self._coordinated_mode:
+            if self._coordinated_cycles_remaining > 0:
+                self._coordinated_cycles_remaining -= 1
+                
+                # Generate and apply mutation bundles
+                bundles = self._generate_mutation_bundles()
+                if bundles:
+                    for bundle in bundles:
+                        success = self._apply_mutation_bundle(bundle)
+                        self._coordinated_mutation_outcomes.append({
+                            "cycle": self._cycle_count,
+                            "bundle": str(bundle),
+                            "success": success
+                        })
+                        if success:
+                            logger.info("Coordinated mutation bundle applied successfully")
+                        else:
+                            logger.warning("Coordinated mutation bundle failed")
+                
+                # Check if coordinated mode should end
+                if self._coordinated_cycles_remaining == 0:
+                    logger.info("Returning to normal single-module optimization mode")
+                    self._coordinated_mode = False
+                    self._equilibrium_detected = False
+                
+                return None  # Coordinated mutations are handled differently
+            else:
+                self._coordinated_mode = False
+                self._equilibrium_detected = False
+                logger.info("Returning to normal single-module optimization mode")
 
         if not self.should_execute_mutation(mutation):
             return None
@@ -134,13 +259,18 @@ class EvolutionOrchestrator:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get orchestrator statistics."""
-        return {
+        stats = {
             "predicted_failures": self.predicted_failures,
             "total_mutations_attempted": self.total_mutations_attempted,
             "skipped_mutations": self.skipped_mutations,
             "threshold": self.config.predictor_threshold,
-            "failure_insights_count": len(self.failure_insights)
+            "failure_insights_count": len(self.failure_insights),
+            "coordinated_mode": self._coordinated_mode,
+            "equilibrium_detected": self._equilibrium_detected,
+            "coordinated_cycles_remaining": self._coordinated_cycles_remaining,
+            "coordinated_mutation_outcomes_count": len(self._coordinated_mutation_outcomes)
         }
+        return stats
 
     def reset_counters(self) -> None:
         """Reset all counters and insights."""
@@ -148,6 +278,10 @@ class EvolutionOrchestrator:
         self.total_mutations_attempted = 0
         self.skipped_mutations = 0
         self.failure_insights = []
+        self._coordinated_mutation_outcomes = []
+        self._coordinated_mode = False
+        self._coordinated_cycles_remaining = 0
+        self._equilibrium_detected = False
 
     def get_decision_logic_state(self) -> Dict[str, Any]:
         """Return a serializable dict of the orchestrator's current decision parameters.
@@ -161,7 +295,10 @@ class EvolutionOrchestrator:
             "cycle_count": self._cycle_count,
             "max_mutations": self.config.max_mutations,
             "parallel_workers": self.config.parallel_workers,
-            "additional_params": dict(self.config.additional_params)
+            "additional_params": dict(self.config.additional_params),
+            "coordinated_mode": self._coordinated_mode,
+            "equilibrium_detected": self._equilibrium_detected,
+            "coordinated_cycles_remaining": self._coordinated_cycles_remaining
         }
 
     def apply_decision_mutation(self, mutation_spec: Dict[str, Any]) -> None:

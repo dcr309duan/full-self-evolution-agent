@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780646780.5837617
-    },
-    {
       "description": "Create a minimal end-to-end integration test that runs with a trivial mutation (e.g., adding a comment to a test file). The test must pass with 100% reliability before any new features are added. Use this test to identify and patch the root causes of mutation failures (e.g., atomic write issues, missing imports, conflicting edits).",
       "priority": 9,
       "status": "pending",
@@ -773,6 +767,13 @@
       "status": "completed",
       "created_at": 1780647346.3931592,
       "completed_at": 1780647456.2974617
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780646780.5837617,
+      "completed_at": 1780647647.8119123
     }
   ],
   "generated_goals": []

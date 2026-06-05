@@ -157,6 +157,33 @@ class GoalGenerator:
         self.pending_goals.append(goal)
         return goal
 
+    def generate_game_theory_goal(self, modules_stuck: List[str], coordinated_change: str) -> Goal:
+        """
+        Generates a new GAME_THEORY goal when a Nash equilibrium is detected and broken.
+        
+        Args:
+            modules_stuck: List of modules that were stuck in the equilibrium
+            coordinated_change: Description of the coordinated mutation that broke the deadlock
+            
+        Returns:
+            A new Goal object with GAME_THEORY type and CRITICAL priority
+        """
+        import uuid
+        goal = Goal(
+            id=str(uuid.uuid4()),
+            description=f"Analyze the broken equilibrium: document which modules were stuck, what coordinated change broke the deadlock, and add this pattern to the mutation simulation module for future reference",
+            template="GAME_THEORY",
+            created_at=datetime.now().isoformat(),
+            parameters={
+                "modules_stuck": modules_stuck,
+                "coordinated_change": coordinated_change,
+                "goal_type": "GAME_THEORY",
+                "priority": "CRITICAL"
+            }
+        )
+        self.pending_goals.append(goal)
+        return goal
+
     def process_rollback(self, is_rollback: bool) -> Optional[Goal]:
         """
         Processes a rollback event and generates an INFRASTRUCTURE goal if needed.
