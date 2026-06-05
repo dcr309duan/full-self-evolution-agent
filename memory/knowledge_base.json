@@ -1212,6 +1212,11 @@
       "approach": "modify evolution_engine/reflection_parser.py: Add self_healing section to reflection output: (1) report retry attempts and outcomes, (2) track which strategies were successful/failed, (3) suggest strategy tuning based on historical success rates",
       "reason": "Syntax error: expected ':' (<unknown>, line 861)",
       "timestamp": 1780637217.7881346
+    },
+    {
+      "approach": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
+      "reason": "  File \"<string>\", line 1\n    ```python\n    ^\nSyntaxError: invalid syntax\n",
+      "timestamp": 1780638540.3386445
     }
   ],
   "successful_strategies": [
