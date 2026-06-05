@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/goal_manager.py to: Add a method to record fitness scores from external evaluation (if available). The evaluator will call this after each external test suite run. Store fitness history as a time series in a new field 'fitness_history' in the system state.",
-      "timestamp": 1780643244.2786934,
-      "cycle": 105
-    },
-    {
-      "content": "Successfully modified tests/test_meta_cognitive_evaluator.py to: Create unit tests for the meta-cognitive evaluator: (1) test that it correctly computes fitness/capability ratio, (2) test that it triggers pruning when ratio < 0.1, (3) test that it correctly identifies low-impact modules based on usage frequency, (4) test that it does not trigger pruning when ratio >= 0.1, (5) test integration with orchestrator's cycle counter.",
-      "timestamp": 1780643263.109932,
-      "cycle": 105
-    },
-    {
-      "content": "Successfully modified core/pruning_module.py to: Enhance the existing triage and pruning module (if exists) or create a new pruning routine that: (1) takes a list of low-impact module names from the evaluator, (2) backs up those modules to logs/pruning_backups/, (3) removes them from active codebase, (4) updates capability registry, (5) logs the pruning action with reason and impact analysis.",
-      "timestamp": 1780643276.6054325,
-      "cycle": 105
-    },
-    {
-      "content": "Successfully modified core/system_state.py to: Add fields to system state: 'fitness_history' (list of {cycle, fitness_score}), 'capability_count_history' (list of {cycle, count}), 'pruning_history' (list of pruned modules with timestamps). Ensure these are serialized/deserialized for persistence.",
-      "timestamp": 1780643287.1088948,
-      "cycle": 105
-    },
-    {
-      "content": "[研究] Self-Healing Code Generation: Automated repair of truncated or malformed code modifications: Self-healing code generation focuses on automatically detecting and repairing truncation or malforma",
-      "timestamp": 1780643308.4397008,
-      "cycle": 105
-    },
-    {
       "content": "[研究] Adaptive Context-Aware Mutation: Learning from failure patterns to prioritize and refine mutation strategies: Adaptive context-aware mutation is an emerging area in evolutionary computation and software testing",
       "timestamp": 1780643323.791451,
       "cycle": 105
@@ -999,6 +974,31 @@
       "content": "Successfully modified deprecation_log.json to: Create initial deprecation log state file with: (1) deprecation_records list for tracking all pruned modules, (2) restore_points dict mapping module names to their last known good state, (3) deprecation_reasons for audit trail, (4) timestamp of each deprecation event.",
       "timestamp": 1780649839.312696,
       "cycle": 135
+    },
+    {
+      "content": "Self-reflection: The evolution process currently suffers from a 'complexity snowball': each new feature adds dependencies and failure surfaces faster than the system can stabilize them. True progress requires not just",
+      "timestamp": 1780649908.9856339,
+      "cycle": 136
+    },
+    {
+      "content": "Successfully modified failure_driven_mutation_selector.py to: Create a new module that: (1) Queries the failure pattern miner for the most common failure type in the last 10 cycles, (2) Extracts keywords from the failure description (e.g., 'missing import', 'file write error', 'schema mismatch'), (3) Filters the candidate mutation pool to exclude any mutation whose target file or operation matches those keywords, (4) Returns the filtered mutation pool for selection.",
+      "timestamp": 1780649933.1711195,
+      "cycle": 136
+    },
+    {
+      "content": "Successfully modified failure_pattern_miner.py to: Add a public method 'get_most_common_failure_type(last_n_cycles=10)' that: (1) Analyzes the last N cycles of failure logs, (2) Returns the most frequent failure type with associated keywords, (3) Returns None if no failures in the window.",
+      "timestamp": 1780649995.2161975,
+      "cycle": 136
+    },
+    {
+      "content": "Successfully modified tests/test_failure_driven_mutation_selector.py to: Create comprehensive tests: (1) Test that mutations targeting files matching failure keywords are filtered out, (2) Test that unrelated mutations pass through, (3) Test fallback when no failures exist, (4) Test that the selector handles empty mutation pool gracefully, (5) Test integration with failure pattern miner.",
+      "timestamp": 1780650011.836527,
+      "cycle": 136
+    },
+    {
+      "content": "Successfully modified minimal_core_bootstrap.py to: Add failure_driven_mutation_selector to the list of core modules initialized during bootstrap, ensuring the failure-driven selection mechanism is active from system start.",
+      "timestamp": 1780650055.1312222,
+      "cycle": 136
     }
   ],
   "learned_patterns": [],
@@ -1532,6 +1532,11 @@
       "approach": "modify evolution_orchestrator.py: Integrate failure-driven simplification into the main evolution loop: (1) After each mutation cycle, call failure_driven_simplification.check_and_prune(), (2) Add a new phase 'SIMPLIFICATION' between mutation and promotion, (3) Ensure pruned modules are excluded from future dependency graphs and goal generation.",
       "reason": "Syntax error: expected 'except' or 'finally' block (<unknown>, line 831)",
       "timestamp": 1780649751.0377526
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Integrate the failure-driven mutation selector into the mutation selection pipeline: (1) After generating candidate mutations, call the failure-driven mutation selector to filter them, (2) If no mutations remain after filtering, fall back to the original mutation pool with a warning log, (3) Log which mutations were filtered and why for audit trail.",
+      "reason": "Syntax error: expected 'except' or 'finally' block (<unknown>, line 802)",
+      "timestamp": 1780649976.842208
     }
   ],
   "successful_strategies": [
@@ -5624,6 +5629,31 @@
       "strategy": "mutation:mutate(memoized_fibonacci_factorizer,sorted_prime_fibonacci_factors)",
       "outcome": "Created optimized_fibonacci_factorizer, score=0.6",
       "timestamp": 1780649848.7364166
+    },
+    {
+      "strategy": "modify failure_driven_mutation_selector.py: Create a new module that: (1) Queries the failure pattern miner for the most common failure type in the last 10 cycles, (2) Extracts keywords from the failure description (e.g., 'missing import', 'file write error', 'schema mismatch'), (3) Filters the candidate mutation pool to exclude any mutation whose target file or operation matches those keywords, (4) Returns the filtered mutation pool for selection.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780649933.1514032
+    },
+    {
+      "strategy": "modify failure_pattern_miner.py: Add a public method 'get_most_common_failure_type(last_n_cycles=10)' that: (1) Analyzes the last N cycles of failure logs, (2) Returns the most frequent failure type with associated keywords, (3) Returns None if no failures in the window.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780649995.198639
+    },
+    {
+      "strategy": "modify tests/test_failure_driven_mutation_selector.py: Create comprehensive tests: (1) Test that mutations targeting files matching failure keywords are filtered out, (2) Test that unrelated mutations pass through, (3) Test fallback when no failures exist, (4) Test that the selector handles empty mutation pool gracefully, (5) Test integration with failure pattern miner.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650011.8184857
+    },
+    {
+      "strategy": "modify minimal_core_bootstrap.py: Add failure_driven_mutation_selector to the list of core modules initialized during bootstrap, ensuring the failure-driven selection mechanism is active from system start.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780650055.1096241
+    },
+    {
+      "strategy": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
+      "outcome": "4/5 steps succeeded",
+      "timestamp": 1780650055.1503863
     }
   ],
   "capabilities_developed": []

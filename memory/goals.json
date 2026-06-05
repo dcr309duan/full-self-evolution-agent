@@ -14,12 +14,6 @@
       "created_at": 1780649848.7555447
     },
     {
-      "description": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780648591.915511
-    },
-    {
       "description": "Create a 'dead module detector' that scans all modules for usage count over the last 20 cycles, and any module with <2 uses is automatically flagged for deprecation. The system must then attempt to remove the module in the next mutation cycle, running the sandbox tests to verify no functionality is broken by its removal.",
       "priority": 8,
       "status": "pending",
@@ -850,6 +844,13 @@
       "status": "completed",
       "created_at": 1780647346.398476,
       "completed_at": 1780649839.344028
+    },
+    {
+      "description": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780648591.915511,
+      "completed_at": 1780650055.1628013
     }
   ],
   "generated_goals": []

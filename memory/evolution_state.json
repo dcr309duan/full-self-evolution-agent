@@ -1,9 +1,8 @@
 {
-  "cycle_count": 135,
-  "current_generation": 106,
-  "last_evolution_time": 1780649672.293212,
+  "cycle_count": 136,
+  "current_generation": 107,
+  "last_evolution_time": 1780649891.1522064,
   "capabilities": [
-    "Implement an external fitness function that scores the agent on solving 5 simple programming challen",
     "Create a 'curiosity engine' module that periodically generates a novel synthetic task (e.g., 'implem",
     "Implement a robust file system abstraction layer with atomic writes, retry logic, and automated perm",
     "Build a meta-cognitive monitoring system that detects patterns in failures (e.g., consistent file wr",
@@ -52,15 +51,10 @@
     "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insig",
     "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> gen",
     "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_ge",
-    "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automa"
+    "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automa",
+    "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern min"
   ],
   "history": [
-    {
-      "cycle": 30,
-      "goal": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
-      "success": true,
-      "timestamp": 1780627726.778437
-    },
     {
       "cycle": 31,
       "goal": "Implement a self-healing retry loop for failed goals: when a goal fails, the orchestrator automatically invokes the failure analysis module and reflection parser to generate 2-3 smaller sub-goals or alternative implementation strategies, then enqueues them for retry with a different approach, logging the failure pattern to avoid infinite loops after 3 retries.",
@@ -654,6 +648,12 @@
       "goal": "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automatically deprecate or remove it instead of trying to fix it. This will counter complexity creep and force the system to prune underperforming modules, stabilizing the core loop.",
       "success": true,
       "timestamp": 1780649855.0873008
+    },
+    {
+      "cycle": 136,
+      "goal": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
+      "success": true,
+      "timestamp": 1780650055.2600508
     }
   ],
   "status": "evolving"

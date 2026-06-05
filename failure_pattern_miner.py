@@ -168,6 +168,65 @@ class FailurePatternMiner:
         except Exception as e:
             print(f"Error exporting rules: {e}")
 
+    def get_most_common_failure_type(self, last_n_cycles: int = 10) -> Optional[Dict[str, Any]]:
+        """
+        Analyze the last N cycles of failure logs and return the most frequent
+        failure type with associated keywords.
+        
+        Args:
+            last_n_cycles: Number of recent cycles to analyze (default 10)
+            
+        Returns:
+            Dictionary with 'failure_type' and 'keywords' if failures exist,
+            None if no failures in the window
+        """
+        if not self.failures:
+            return None
+        
+        # Get the last N cycles worth of failures
+        # Assuming failures have a 'cycle' field, otherwise use the last N failures
+        recent_failures = []
+        if 'cycle' in self.failures[0]:
+            # Find unique cycles and get the last N
+            cycles = sorted(set(f.get('cycle', 0) for f in self.failures))
+            if len(cycles) > last_n_cycles:
+                cutoff_cycle = cycles[-last_n_cycles]
+                recent_failures = [f for f in self.failures if f.get('cycle', 0) >= cutoff_cycle]
+            else:
+                recent_failures = self.failures[:]
+        else:
+            # If no cycle field, just take the last N failures
+            recent_failures = self.failures[-last_n_cycles:] if len(self.failures) >= last_n_cycles else self.failures[:]
+        
+        if not recent_failures:
+            return None
+        
+        # Count failure types
+        type_counts = defaultdict(int)
+        type_keywords = defaultdict(set)
+        
+        for failure in recent_failures:
+            error_type = failure.get("error_type", "unknown")
+            type_counts[error_type] += 1
+            
+            # Extract keywords from error message
+            error_msg = failure.get("error_message", "")
+            if error_msg:
+                # Extract meaningful keywords (words longer than 3 characters)
+                words = re.findall(r'\b[a-zA-Z_]{4,}\b', error_msg.lower())
+                type_keywords[error_type].update(words[:5])  # Limit to 5 keywords per failure
+        
+        # Find the most common failure type
+        if not type_counts:
+            return None
+        
+        most_common_type = max(type_counts, key=type_counts.get)
+        
+        return {
+            "failure_type": most_common_type,
+            "keywords": list(type_keywords.get(most_common_type, []))[:10]  # Return top 10 keywords
+        }
+
     def run(self, output_path: str = "forbidden_mutation_rules.json") -> None:
         """Execute the full mining pipeline."""
         print("Loading failure logs...")

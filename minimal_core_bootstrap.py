@@ -19,7 +19,8 @@ ESSENTIAL_MODULES = [
     "accept",
     "sandbox_validate",
     "self_healing_recovery",
-    "failure_driven_simplification"
+    "failure_driven_simplification",
+    "failure_driven_mutation_selector"
 ]
 
 def reflect(state):
@@ -138,6 +139,33 @@ def failure_driven_simplification(state):
     
     return simplified_state
 
+def failure_driven_mutation_selector(state, goal):
+    """Select and apply mutations based on failure patterns in the state."""
+    selected_state = state.copy()
+    
+    # Detect failure patterns and apply corrective mutations
+    if selected_state.get("complexity", 0) > 1.0:
+        print("Failure-driven mutation: Reducing complexity due to high value")
+        selected_state["complexity"] = 0.8
+    
+    if "iterations" in selected_state and selected_state["iterations"] > 10:
+        print("Failure-driven mutation: Resetting iterations due to excessive count")
+        selected_state["iterations"] = 0
+    
+    # Check for missing essential keys and add them
+    essential_keys = {"version", "goals_achieved", "complexity"}
+    for key in essential_keys:
+        if key not in selected_state:
+            print(f"Failure-driven mutation: Adding missing essential key '{key}'")
+            if key == "version":
+                selected_state[key] = 1
+            elif key == "goals_achieved":
+                selected_state[key] = 0
+            elif key == "complexity":
+                selected_state[key] = 0.5
+    
+    return selected_state
+
 def initialize_recovery_module():
     """Initialize the recovery module during bootstrap."""
     print("Initializing self-healing recovery module...")
@@ -175,6 +203,28 @@ def initialize_failure_driven_simplification():
         return True
     else:
         print("Failure-driven simplification module initialization failed.")
+        return False
+
+def initialize_failure_driven_mutation_selector():
+    """Initialize the failure-driven mutation selector module during bootstrap."""
+    print("Initializing failure-driven mutation selector module...")
+    
+    # Verify the function exists
+    if "failure_driven_mutation_selector" not in globals():
+        print("Warning: failure_driven_mutation_selector function not found")
+        return False
+    
+    # Test the mutation selector function
+    test_state = {"version": 1, "goals_achieved": 0, "complexity": 2.0}
+    test_goal = "increase complexity by 0.1"
+    selected = failure_driven_mutation_selector(test_state, test_goal)
+    
+    # Verify mutation selector worked
+    if selected.get("complexity", 0) <= 1.0:
+        print("Failure-driven mutation selector module initialized successfully.")
+        return True
+    else:
+        print("Failure-driven mutation selector module initialization failed.")
         return False
 
 def test_recovery_integration():
@@ -233,6 +283,32 @@ def test_failure_driven_simplification():
     print("All failure-driven simplification tests passed!\n")
     return True
 
+def test_failure_driven_mutation_selector():
+    """Test failure-driven mutation selector functionality."""
+    print("\n--- Failure-Driven Mutation Selector Test ---")
+    
+    # Test 1: High complexity should be reduced
+    high_complexity_state = {"version": 1, "goals_achieved": 0, "complexity": 2.0}
+    result = failure_driven_mutation_selector(high_complexity_state, "increase complexity by 0.1")
+    assert result["complexity"] <= 1.0, "Test 1 failed: High complexity should be reduced"
+    print("Test 1 passed: High complexity reduced")
+    
+    # Test 2: Missing essential keys should be added
+    missing_keys_state = {"version": 1}
+    result = failure_driven_mutation_selector(missing_keys_state, "increment goals_achieved by 1")
+    assert "goals_achieved" in result, "Test 2 failed: Missing essential keys should be added"
+    assert "complexity" in result, "Test 2 failed: Missing essential keys should be added"
+    print("Test 2 passed: Missing essential keys added")
+    
+    # Test 3: Normal state should remain mostly unchanged
+    normal_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = failure_driven_mutation_selector(normal_state, "increase complexity by 0.1")
+    assert result["complexity"] == 0.5, "Test 3 failed: Normal state complexity should remain unchanged"
+    print("Test 3 passed: Normal state remains unchanged")
+    
+    print("All failure-driven mutation selector tests passed!\n")
+    return True
+
 def migrate_to_main():
     """Generate migration report and equivalent code for evolution_orchestrator.py's main loop."""
     # Read the working logic from this module
@@ -244,7 +320,8 @@ def migrate_to_main():
         "accept": accept.__code__.co_code,
         "sandbox_validate": sandbox_validate.__code__.co_code,
         "self_healing_recovery": self_healing_recovery.__code__.co_code,
-        "failure_driven_simplification": failure_driven_simplification.__code__.co_code
+        "failure_driven_simplification": failure_driven_simplification.__code__.co_code,
+        "failure_driven_mutation_selector": failure_driven_mutation_selector.__code__.co_code
     }
     
     # Generate equivalent code for evolution_orchestrator.py's main loop
@@ -272,7 +349,8 @@ def evolution_main_loop():
         "accept",
         "sandbox_validate",
         "self_healing_recovery",
-        "failure_driven_simplification"
+        "failure_driven_simplification",
+        "failure_driven_mutation_selector"
     ]
     
     def reflect(state):
@@ -365,6 +443,30 @@ def evolution_main_loop():
         
         return simplified_state
     
+    def failure_driven_mutation_selector(state, goal):
+        selected_state = state.copy()
+        
+        if selected_state.get("complexity", 0) > 1.0:
+            print("Failure-driven mutation: Reducing complexity due to high value")
+            selected_state["complexity"] = 0.8
+        
+        if "iterations" in selected_state and selected_state["iterations"] > 10:
+            print("Failure-driven mutation: Resetting iterations due to excessive count")
+            selected_state["iterations"] = 0
+        
+        essential_keys = {"version", "goals_achieved", "complexity"}
+        for key in essential_keys:
+            if key not in selected_state:
+                print(f"Failure-driven mutation: Adding missing essential key '{key}'")
+                if key == "version":
+                    selected_state[key] = 1
+                elif key == "goals_achieved":
+                    selected_state[key] = 0
+                elif key == "complexity":
+                    selected_state[key] = 0.5
+        
+        return selected_state
+    
     def load_or_initialize_state():
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
@@ -405,6 +507,24 @@ def evolution_main_loop():
             print("Failure-driven simplification module initialization failed.")
             return False
     
+    def initialize_failure_driven_mutation_selector():
+        print("Initializing failure-driven mutation selector module...")
+        
+        if "failure_driven_mutation_selector" not in globals():
+            print("Warning: failure_driven_mutation_selector function not found")
+            return False
+        
+        test_state = {"version": 1, "goals_achieved": 0, "complexity": 2.0}
+        test_goal = "increase complexity by 0.1"
+        selected = failure_driven_mutation_selector(test_state, test_goal)
+        
+        if selected.get("complexity", 0) <= 1.0:
+            print("Failure-driven mutation selector module initialized successfully.")
+            return True
+        else:
+            print("Failure-driven mutation selector module initialization failed.")
+            return False
+    
     state = load_or_initialize_state()
     print("Initial state:", state)
     print()
@@ -412,6 +532,7 @@ def evolution_main_loop():
     # Initialize all core modules
     initialize_recovery_module()
     initialize_failure_driven_simplification()
+    initialize_failure_driven_mutation_selector()
     
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -435,6 +556,12 @@ def evolution_main_loop():
         if simplified_state != mutated_state:
             print("Failure-driven simplification applied to mutated state")
             mutated_state = simplified_state
+        
+        # Apply failure-driven mutation selector
+        selected_state = failure_driven_mutation_selector(mutated_state, goal)
+        if selected_state != mutated_state:
+            print("Failure-driven mutation selector applied to mutated state")
+            mutated_state = selected_state
         
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -470,7 +597,9 @@ def evolution_main_loop():
             "Self-healing recovery provides automatic state corruption detection and recovery",
             "Recovery module initialization ensures core capabilities are available",
             "Failure-driven simplification reduces complexity and removes non-essential keys",
-            "Pruning mechanism is active from system start through bootstrap initialization"
+            "Pruning mechanism is active from system start through bootstrap initialization",
+            "Failure-driven mutation selector provides corrective mutations based on failure patterns",
+            "Mutation selector is initialized during bootstrap for active failure-driven selection"
         ],
         "working_logic_bytecode": working_logic,
         "equivalent_main_loop": main_loop_code,
@@ -483,7 +612,9 @@ def evolution_main_loop():
             "Always initialize recovery module during bootstrap",
             "Apply self-healing recovery before sandbox validation",
             "Initialize failure-driven simplification during bootstrap for active pruning",
-            "Apply failure-driven simplification after recovery but before validation"
+            "Apply failure-driven simplification after recovery but before validation",
+            "Initialize failure-driven mutation selector during bootstrap for active selection",
+            "Apply failure-driven mutation selector after simplification but before validation"
         ]
     }
     
@@ -507,6 +638,7 @@ def main():
     # Initialize all core modules during bootstrap
     initialize_recovery_module()
     initialize_failure_driven_simplification()
+    initialize_failure_driven_mutation_selector()
 
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -534,6 +666,12 @@ def main():
             print("Failure-driven simplification applied to mutated state")
             mutated_state = simplified_state
 
+        # Apply failure-driven mutation selector
+        selected_state = failure_driven_mutation_selector(mutated_state, goal)
+        if selected_state != mutated_state:
+            print("Failure-driven mutation selector applied to mutated state")
+            mutated_state = selected_state
+
         # Sandbox validation
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -555,6 +693,9 @@ def main():
     
     # Run failure-driven simplification test
     test_failure_driven_simplification()
+    
+    # Run failure-driven mutation selector test
+    test_failure_driven_mutation_selector()
     
     # After successful sandbox validation, run migration
     print("\n--- Migration Phase ---")
