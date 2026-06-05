@@ -85,5 +85,68 @@ class TestCoordinatedMutation(unittest.TestCase):
             self.assertEqual(self.module_a.f(), original_a_return)
             self.assertEqual(self.module_b.g(), original_b_return)
 
+    def test_nash_equilibrium_detection_and_escape(self):
+        """Integration test: (1) sets up 3 mock modules with interdependent fitness functions,
+        (2) artificially creates a Nash equilibrium, (3) verifies the coordinated mutation
+        orchestrator detects it and applies multi-module changes, (4) confirms the system
+        escapes the local optimum."""
+        
+        # (1) Set up 3 mock modules with interdependent fitness functions
+        module_x = MagicMock()
+        module_x.name = "module_x"
+        module_x.fitness = MagicMock(return_value=0.5)
+        module_x.value = 10
+        
+        module_y = MagicMock()
+        module_y.name = "module_y"
+        module_y.fitness = MagicMock(side_effect=lambda: module_x.fitness() * 0.8)
+        module_y.value = 20
+        
+        module_z = MagicMock()
+        module_z.name = "module_z"
+        module_z.fitness = MagicMock(side_effect=lambda: module_y.fitness() + 0.1)
+        module_z.value = 30
+        
+        modules = {"module_x": module_x, "module_y": module_y, "module_z": module_z}
+        
+        # (2) Artificially create a Nash equilibrium by setting fitness values
+        # that are locally optimal but globally suboptimal
+        module_x.fitness.return_value = 0.5
+        # module_y depends on module_x, module_z depends on module_y
+        # This creates a chain where no single module can improve without others changing
+        
+        # (3) Verify the coordinated mutation orchestrator detects it and applies multi-module changes
+        plan = self.planner.generate_coordinated_mutations(modules)
+        
+        self.assertIsNotNone(plan)
+        self.assertIn("module_x", plan)
+        self.assertIn("module_y", plan)
+        self.assertIn("module_z", plan)
+        
+        # Apply the coordinated plan atomically
+        result = self.planner.apply_plan_atomically(modules, plan)
+        self.assertTrue(result)
+        
+        # (4) Confirm the system escapes the local optimum
+        # After coordinated changes, all modules should have improved fitness
+        new_fitness_x = module_x.fitness()
+        new_fitness_y = module_y.fitness()
+        new_fitness_z = module_z.fitness()
+        
+        # Verify all modules improved from their original values
+        self.assertGreater(new_fitness_x, 0.5, "Module X should have improved fitness")
+        self.assertGreater(new_fitness_y, 0.4, "Module Y should have improved fitness")  # 0.5 * 0.8 = 0.4
+        self.assertGreater(new_fitness_z, 0.5, "Module Z should have improved fitness")  # 0.4 + 0.1 = 0.5
+        
+        # Verify the chain dependency is maintained correctly
+        self.assertAlmostEqual(new_fitness_y, new_fitness_x * 0.8, places=5)
+        self.assertAlmostEqual(new_fitness_z, new_fitness_y + 0.1, places=5)
+        
+        # Verify the system is now in a better state (higher combined fitness)
+        original_combined = 0.5 + (0.5 * 0.8) + ((0.5 * 0.8) + 0.1)
+        new_combined = new_fitness_x + new_fitness_y + new_fitness_z
+        self.assertGreater(new_combined, original_combined, 
+                          "Combined fitness should be higher after escaping Nash equilibrium")
+
 if __name__ == '__main__':
     unittest.main()

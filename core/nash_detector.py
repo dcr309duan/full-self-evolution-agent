@@ -125,6 +125,16 @@ class NashEquilibriumDetector:
         
         return True
 
+    def is_at_equilibrium(self) -> bool:
+        """
+        Check if the system is currently at a Nash equilibrium.
+        This is a convenience method that calls detect_equilibrium() and returns the result.
+        
+        Returns:
+            True if the system is at Nash equilibrium, False otherwise
+        """
+        return self.detect_equilibrium()
+
     def suggest_coordinated_changes(self) -> List[Tuple[str, str]]:
         """
         Identify coordinated multi-module change opportunities by finding module pairs
@@ -473,6 +483,145 @@ class NashEquilibriumDetector:
             
         except Exception as e:
             logger.error(f"Error in force_coordinated_mutation: {e}")
+            return False
+
+    def force_coordinated_change(self) -> bool:
+        """
+        Force a coordinated change to break out of Nash equilibrium.
+        
+        This method:
+        1. Identifies modules at Nash equilibrium
+        2. Generates a coordinated mutation plan affecting 3+ modules simultaneously
+        3. Uses the atomic multi-module mutation orchestrator to apply changes
+        4. Verifies the system escapes the local optimum by checking if at least one module improves post-change
+        
+        Returns:
+            True if the coordinated change successfully broke the equilibrium (at least one module improved),
+            False otherwise
+        """
+        try:
+            # Step 1: Identify if system is at Nash equilibrium
+            if not self.detect_equilibrium():
+                logger.info("System is not at Nash equilibrium, no forced change needed")
+                return False
+            
+            # Step 2: Generate a coordinated mutation plan affecting 3+ modules simultaneously
+            # Collect all modules that are part of stagnant pairs
+            stagnant_pairs = self.suggest_coordinated_changes()
+            
+            # If no stagnant pairs, use all modules with non-positive gradients
+            if not stagnant_pairs:
+                # Estimate gradients for all modules
+                for module_name in self.module_names:
+                    self.gradient_estimates[module_name] = self._estimate_gradient(module_name)
+                
+                # Find modules with non-positive gradients (stuck)
+                stuck_modules = [m for m, g in self.gradient_estimates.items() if g <= 0]
+                
+                if len(stuck_modules) < 3:
+                    logger.info(f"Not enough stuck modules for coordinated change: {len(stuck_modules)} found, need at least 3")
+                    return False
+                
+                # Create a plan with at least 3 modules
+                selected_modules = stuck_modules[:3]  # Take first 3 stuck modules
+            else:
+                # Collect all unique modules from stagnant pairs
+                stagnant_modules: Set[str] = set()
+                for m1, m2 in stagnant_pairs:
+                    stagnant_modules.add(m1)
+                    stagnant_modules.add(m2)
+                
+                if len(stagnant_modules) < 3:
+                    logger.info(f"Not enough stagnant modules for coordinated change: {len(stagnant_modules)} found, need at least 3")
+                    return False
+                
+                # Select at least 3 modules from stagnant set
+                selected_modules = list(stagnant_modules)[:3]
+            
+            # Build the coordinated mutation plan
+            coordinated_plan = []
+            for i, module in enumerate(selected_modules):
+                if i == 0:
+                    action = 'change_interface'
+                    description = f"Modify {module}'s interface as part of coordinated escape from Nash equilibrium"
+                elif i == 1:
+                    action = 'change_implementation'
+                    description = f"Modify {module}'s implementation to complement interface changes"
+                else:
+                    action = 'change_parameter'
+                    description = f"Modify {module}'s parameters to complete the coordinated change"
+                
+                coordinated_plan.append({
+                    'module': module,
+                    'action': action,
+                    'description': description
+                })
+            
+            plan = {
+                'coordinated_plan': coordinated_plan,
+                'description': f"Coordinated multi-module change plan involving {len(selected_modules)} modules to break Nash equilibrium"
+            }
+            
+            # Step 3: Use the atomic multi-module mutation orchestrator to apply changes
+            # Record the current fitness values before applying changes
+            pre_change_fitness = {}
+            for module_name in selected_modules:
+                try:
+                    fitness_func = self.fitness_functions.get(module_name)
+                    if fitness_func:
+                        pre_change_fitness[module_name] = fitness_func()
+                    else:
+                        pre_change_fitness[module_name] = self.current_fitness.get(module_name, 0.0)
+                except Exception as e:
+                    logger.error(f"Error getting pre-change fitness for module {module_name}: {e}")
+                    pre_change_fitness[module_name] = self.current_fitness.get(module_name, 0.0)
+            
+            # Apply the coordinated mutation atomically
+            success = self.force_coordinated_mutation(plan)
+            
+            if not success:
+                logger.error("Failed to apply coordinated mutation")
+                return False
+            
+            # Step 4: Verify the system escapes the local optimum by checking if at least one module improves post-change
+            post_change_fitness = {}
+            for module_name in selected_modules:
+                try:
+                    fitness_func = self.fitness_functions.get(module_name)
+                    if fitness_func:
+                        post_change_fitness[module_name] = fitness_func()
+                    else:
+                        post_change_fitness[module_name] = self.current_fitness.get(module_name, 0.0)
+                except Exception as e:
+                    logger.error(f"Error getting post-change fitness for module {module_name}: {e}")
+                    post_change_fitness[module_name] = self.current_fitness.get(module_name, 0.0)
+            
+            # Check if at least one module improved
+            any_improvement = False
+            for module_name in selected_modules:
+                pre = pre_change_fitness.get(module_name, 0.0)
+                post = post_change_fitness.get(module_name, 0.0)
+                
+                if pre > 0:
+                    improvement_ratio = (post - pre) / pre
+                    if improvement_ratio > self.improvement_threshold:
+                        any_improvement = True
+                        logger.info(f"Module {module_name} improved by {improvement_ratio:.4f} after coordinated change")
+                elif post > pre:
+                    any_improvement = True
+                    logger.info(f"Module {module_name} improved from {pre} to {post} after coordinated change")
+            
+            if any_improvement:
+                logger.info(f"Coordinated change successfully broke Nash equilibrium with improvements in {len(selected_modules)} modules")
+                # Reset the equilibrium state since we broke out
+                self.cycles_without_improvement = 0
+                return True
+            else:
+                logger.warning("Coordinated change did not result in any module improvement")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error in force_coordinated_change: {e}")
             return False
 
     def update_fitness_functions(self, fitness_functions: Dict[str, Callable]) -> None:

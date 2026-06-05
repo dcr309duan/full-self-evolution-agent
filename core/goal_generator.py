@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', or 'meta_goal'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', or 'ecological_evolution'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -49,6 +49,7 @@ class SimulationMetrics:
     fs_abstraction_retry_rate: float = 0.0  # 0.0 to 1.0, retry rate for fs_abstraction
     permission_failure_spike: bool = False  # Whether permission failures have spiked
     failure_cluster: bool = False  # Whether a persistent failure cluster is detected
+    test_suite_diversity: float = 1.0  # 0.0 to 1.0, diversity of test suite
 
 
 # Global registries for goals and knowledge
@@ -59,6 +60,10 @@ knowledge_base: Dict[str, str] = {}
 consecutive_successes: int = 0
 success_threshold: int = 10  # Number of consecutive successes before triggering meta-goal
 current_accuracy_threshold: float = 0.8  # Current accuracy threshold, can be lowered
+
+# Ecological evolution tracking
+diversity_drop_threshold: float = 0.3  # Threshold below which ecological evolution goals are triggered
+previous_diversity: float = 1.0  # Track previous diversity to detect drops
 
 
 def prioritize_pending_goals() -> List[Goal]:
@@ -170,7 +175,7 @@ def generate_goals(
     Returns:
         List of generated goals, sorted by priority (highest first).
     """
-    global consecutive_successes, current_accuracy_threshold
+    global consecutive_successes, current_accuracy_threshold, previous_diversity
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
@@ -287,6 +292,29 @@ def generate_goals(
                 consecutive_successes
             )
         consecutive_successes = 0
+
+    # Check for ecological evolution triggers based on test suite diversity
+    for metrics in metrics_list:
+        if hasattr(metrics, 'test_suite_diversity'):
+            current_diversity = metrics.test_suite_diversity
+            # Detect drop in diversity
+            if current_diversity < diversity_drop_threshold:
+                # Generate ecological evolution goal to expand test ecosystem
+                goal = Goal(
+                    description=f"Expand test ecosystem for {metrics.module}: diversity dropped to {current_diversity:.2f}",
+                    priority=GoalPriority.HIGH,
+                    module=metrics.module,
+                    goal_type="ecological_evolution",
+                    source="fitness",
+                    tags=["ecological_evolution", "diversity_drop", "test_ecosystem"]
+                )
+                goals.append(goal)
+                logger.info(
+                    "Generated ecological evolution goal for %s (diversity=%.2f, threshold=%.2f)",
+                    metrics.module, current_diversity, diversity_drop_threshold
+                )
+            # Update previous diversity for next cycle
+            previous_diversity = current_diversity
 
     for metrics in metrics_list:
         # Generate accuracy improvement goals if accuracy is below threshold
@@ -491,7 +519,8 @@ def generate_goals_from_report(
                 "coverage": 0.8,
                 "fs_abstraction_retry_rate": 0.0,
                 "permission_failure_spike": False,
-                "failure_cluster": False
+                "failure_cluster": False,
+                "test_suite_diversity": 1.0
             },
             ...
         ]
@@ -520,7 +549,8 @@ def generate_goals_from_report(
             coverage=module_data.get("coverage", 0.0),
             fs_abstraction_retry_rate=module_data.get("fs_abstraction_retry_rate", 0.0),
             permission_failure_spike=module_data.get("permission_failure_spike", False),
-            failure_cluster=module_data.get("failure_cluster", False)
+            failure_cluster=module_data.get("failure_cluster", False),
+            test_suite_diversity=module_data.get("test_suite_diversity", 1.0)
         )
         metrics_list.append(metrics)
 
@@ -768,6 +798,48 @@ def generate_sub_goals(
             design_goal.dependencies.append(analyze_goal.description)
             implement_goal.dependencies.append(design_goal.description)
             sub_goals = [analyze_goal, design_goal, implement_goal]
+    elif parent_goal.goal_type == "ecological_evolution":
+        # Break ecological evolution into smaller steps
+        analyze_goal = Goal(
+            description=f"Analyze test suite diversity gaps for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="ecological_evolution",
+            source=parent_goal.source
+        )
+        generate_goal = Goal(
+            description=f"Generate new test cases to expand ecosystem for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="ecological_evolution",
+            source=parent_goal.source
+        )
+        validate_goal = Goal(
+            description=f"Validate test ecosystem expansion for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="ecological_evolution",
+            source=parent_goal.source
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: analyze -> generate -> validate
+            generate_goal.dependencies.append(analyze_goal.description)
+            validate_goal.dependencies.append(generate_goal.description)
+            sub_goals = [analyze_goal, generate_goal, validate_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [analyze_goal, generate_goal, validate_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: analyze is independent, generate depends on analyze, validate depends on generate
+            generate_goal.dependencies.append(analyze_goal.description)
+            validate_goal.dependencies.append(generate_goal.description)
+            sub_goals = [analyze_goal, generate_goal, validate_goal]
+        else:
+            # Default to sequential for unknown strategies
+            generate_goal.dependencies.append(analyze_goal.description)
+            validate_goal.dependencies.append(generate_goal.description)
+            sub_goals = [analyze_goal, generate_goal, validate_goal]
     else:
         # Generic breakdown for unknown goal types
         research_goal = Goal(
@@ -819,91 +891,3 @@ def query_knowledge_base_for_blockers(module: str) -> List[str]:
         List of blocker descriptions found in the knowledge base.
     """
     blockers = []
-    # Search knowledge base for entries related to this module that indicate blockers
-    for key, value in knowledge_base.items():
-        if module in key and "blocker" in key.lower():
-            blockers.append(value)
-        # Also check if the value mentions blocking
-        if module in key and "block" in value.lower():
-            blockers.append(value)
-    
-    # Sort by impact (prioritize entries with 'critical' or 'high' impact)
-    high_impact = [b for b in blockers if 'critical' in b.lower() or 'high' in b.lower()]
-    medium_impact = [b for b in blockers if b not in high_impact]
-    
-    return high_impact + medium_impact
-
-
-def generate_blocker_resolution_goals(module: str) -> List[Goal]:
-    """Generate sub-goals to resolve the most impactful blockers for a module.
-
-    Queries the knowledge base for blocking dependencies and creates high-priority
-    sub-goals tagged as 'blocker_resolution' to proactively address them.
-
-    Args:
-        module: The module to generate blocker resolution goals for.
-
-    Returns:
-        List of blocker resolution goals, each with HIGH priority and 'blocker_resolution' tag.
-    """
-    blockers = query_knowledge_base_for_blockers(module)
-    resolution_goals = []
-    
-    if not blockers:
-        logger.debug("No blockers found in knowledge base for module: %s", module)
-        return resolution_goals
-    
-    # Generate resolution goals for top blockers (limit to 3 most impactful)
-    for i, blocker in enumerate(blockers[:3]):
-        goal = Goal(
-            description=f"Resolve blocking dependency: {blocker} in {module}",
-            priority=GoalPriority.HIGH,
-            module=module,
-            goal_type="blocker_resolution",
-            source="fitness",
-            tags=["blocker_resolution"]
-        )
-        resolution_goals.append(goal)
-        logger.info(
-            "Generated blocker resolution goal for %s: %s",
-            module, blocker
-        )
-    
-    return resolution_goals
-
-
-def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
-    """Record the goal as archived in the goal registry and store the lesson in the knowledge base.
-
-    Args:
-        goal: The goal to archive.
-        lesson: The lesson learned from working on this goal.
-    """
-    # Mark the goal as archived and store the lesson
-    goal.archived = True
-    goal.lesson = lesson
-    
-    # Store in goal registry
-    goal_key = f"{goal.module}:{goal.goal_type}:{goal.description}"
-    goal_registry[goal_key] = goal
-    
-    # Store lesson in knowledge base
-    lesson_key = f"lesson:{goal.module}:{goal.goal_type}"
-    knowledge_base[lesson_key] = lesson
-    
-    # If this was a blocker resolution, also store blocker info
-    if "blocker_resolution" in goal.tags:
-        blocker_key = f"blocker:{goal.module}:{goal.description}"
-        knowledge_base[blocker_key] = f"Resolved: {lesson}"
-    
-    # If this was a challenge goal, update the fitness score
-    if "challenge" in goal.tags:
-        fitness_key = f"fitness_score:{goal.module}"
-        knowledge_base[fitness_key] = "1.0"  # Mark as resolved
-    
-    # If this was an infrastructure hardening goal, store the improvement
-    if "infrastructure_hardening" in goal.tags:
-        hardening_key = f"hardening:{goal.module}:{goal.description}"
-        knowledge_base[hardening_key] = f"Improved: {lesson}"
-    
-    # If this was a cluster resolution

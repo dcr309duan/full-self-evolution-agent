@@ -529,3 +529,87 @@ class TestEcologyEngineIntegration:
         assert engine.can_add_test(test1)
         engine.add_test(test1)
         assert not engine.can_add_test(test2)
+
+# New integration tests for mutate_test_suite()
+class TestMutateTestSuite:
+    def test_mutate_test_suite_modifies_at_least_one_file(self, engine, temp_dir):
+        """Test that mutate_test_suite() actually modifies at least one test file."""
+        # Create initial test files
+        test_file1 = os.path.join(temp_dir, "test_example1.py")
+        test_file2 = os.path.join(temp_dir, "test_example2.py")
+        with open(test_file1, 'w') as f:
+            f.write("def test_add(): assert 1 + 1 == 2\n")
+        with open(test_file2, 'w') as f:
+            f.write("def test_sub(): assert 2 - 1 == 1\n")
+        
+        # Record original content
+        with open(test_file1, 'r') as f:
+            original1 = f.read()
+        with open(test_file2, 'r') as f:
+            original2 = f.read()
+        
+        # Run mutate_test_suite
+        engine.mutate_test_suite(temp_dir)
+        
+        # Check that at least one file was modified
+        with open(test_file1, 'r') as f:
+            new1 = f.read()
+        with open(test_file2, 'r') as f:
+            new2 = f.read()
+        
+        assert new1 != original1 or new2 != original2, "No test files were modified"
+
+    def test_mutate_test_suite_can_create_new_test_file(self, engine, temp_dir):
+        """Test that mutate_test_suite() can create a new test file."""
+        # Create initial test files
+        test_file1 = os.path.join(temp_dir, "test_example1.py")
+        with open(test_file1, 'w') as f:
+            f.write("def test_add(): assert 1 + 1 == 2\n")
+        
+        # Count initial files
+        initial_files = set(os.listdir(temp_dir))
+        
+        # Run mutate_test_suite
+        engine.mutate_test_suite(temp_dir)
+        
+        # Check that a new file was created
+        final_files = set(os.listdir(temp_dir))
+        new_files = final_files - initial_files
+        assert len(new_files) > 0, "No new test file was created"
+        
+        # Verify the new file is a Python file
+        for new_file in new_files:
+            assert new_file.endswith('.py'), f"New file {new_file} is not a Python file"
+
+    def test_mutate_test_suite_new_tests_are_valid_python(self, engine, temp_dir):
+        """Test that new tests created by mutate_test_suite() are valid Python."""
+        # Create initial test files
+        test_file1 = os.path.join(temp_dir, "test_example1.py")
+        with open(test_file1, 'w') as f:
+            f.write("def test_add(): assert 1 + 1 == 2\n")
+        
+        # Record initial files
+        initial_files = set(os.listdir(temp_dir))
+        
+        # Run mutate_test_suite
+        engine.mutate_test_suite(temp_dir)
+        
+        # Check all files (including modified ones) for valid Python
+        final_files = set(os.listdir(temp_dir))
+        for file_name in final_files:
+            file_path = os.path.join(temp_dir, file_name)
+            if file_name.endswith('.py'):
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                try:
+                    compile(content, file_path, 'exec')
+                except SyntaxError as e:
+                    pytest.fail(f"File {file_name} contains invalid Python: {e}")
+        
+        # Also verify that new files contain at least one test function
+        new_files = final_files - initial_files
+        for new_file in new_files:
+            file_path = os.path.join(temp_dir, new_file)
+            with open(file_path, 'r') as f:
+                content = f.read()
+            assert 'def test_' in content, f"New file {new_file} does not contain a test function"

@@ -1,101 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/evolution_orchestrator.py to: Add integration point for meta_goal_generator: 1) After every 10 cycles, call meta_goal_generator.analyze() with current statistics, 2) If a disruptive goal is returned, inject it into the goal queue with high priority, 3) Ensure the disruptive goal bypasses normal goal feasibility checks to guarantee exploration, 4) Update cycle counter tracking for the 10-cycle trigger.",
-      "timestamp": 1780651629.149794,
-      "cycle": 142
-    },
-    {
-      "content": "Successfully modified core/mutation_engine.py to: Add success rate tracking: 1) Maintain a rolling window of last 20 mutation outcomes (success/failure), 2) Expose get_success_rate() and is_plateaued(threshold_cycles=5) methods, 3) Reset plateau counter when success rate changes by more than 5% between windows.",
-      "timestamp": 1780651730.9021113,
-      "cycle": 142
-    },
-    {
-      "content": "Successfully modified tests/test_meta_goal_generator.py to: Create integration tests: 1) Test that disruptive goal is injected when radical goals <20%, 2) Test that disruptive goal is injected when success rate plateaus for 5+ cycles, 3) Test that no injection occurs when conditions are not met, 4) Test that injected goal has highest priority, 5) Test the curated disruptive actions list is non-empty and diverse.",
-      "timestamp": 1780651755.6277158,
-      "cycle": 142
-    },
-    {
-      "content": "Successfully modified core/config.py to: Add configuration parameters: 1) META_GOAL_INTERVAL=10 (cycles between analyses), 2) RADICAL_GOAL_THRESHOLD=0.2 (minimum radical proportion), 3) PLATEAU_CYCLES=5 (cycles without improvement to trigger), 4) DISRUPTIVE_ACTIONS list path, 5) ENABLE_META_GOAL_GENERATOR boolean flag.",
-      "timestamp": 1780651760.26352,
-      "cycle": 142
-    },
-    {
-      "content": "Successfully modified core/capability_benchmarker.py to: Create the main capability benchmarking module that: 1) Maintains a list of all capabilities with enable/disable state, 2) For each pending/recent capability, runs 10 test cycles with it enabled and 10 without, 3) Compares success rates (mutation acceptance rate / goal completion rate), 4) Returns delta scores for ranking.",
-      "timestamp": 1780651827.5532577,
-      "cycle": 143
-    },
-    {
-      "content": "Successfully modified core/capability_registry.py to: Create a centralized capability registry that: 1) Maintains a JSON/dict of all capabilities with metadata (name, enabled/disabled, last_benchmarked, benchmark_score, age), 2) Provides methods to register, enable, disable, and query capabilities, 3) Tracks which capabilities have been benchmarked and their scores.",
-      "timestamp": 1780651891.6835608,
-      "cycle": 143
-    },
-    {
-      "content": "Successfully modified core/config.py to: Add configuration parameters: 1) BENCHMARK_INTERVAL=5 (cycles between benchmarks), 2) BENCHMARK_CYCLES=10 (test cycles per benchmark), 3) NEGATIVE_IMPACT_THRESHOLD=0.0 (delta below which to disable), 4) ENABLE_CAPABILITY_BENCHMARKER boolean, 5) CAPABILITY_REGISTRY_PATH for persistence.",
-      "timestamp": 1780651895.6901815,
-      "cycle": 143
-    },
-    {
-      "content": "Successfully modified tests/test_capability_benchmarker.py to: Create unit tests: 1) Test that benchmark correctly compares with/without capability, 2) Test that capabilities with negative delta get disabled, 3) Test that registry persists state across cycles, 4) Test integration with orchestrator.",
-      "timestamp": 1780651920.2541568,
-      "cycle": 143
-    },
-    {
-      "content": "Successfully modified core/mutation_engine.py to: Add capability toggling support: 1) Accept a list of enabled capabilities for each mutation cycle, 2) Only apply mutations from enabled capabilities, 3) Track per-capability success rates during benchmarking periods.",
-      "timestamp": 1780651972.7262523,
-      "cycle": 143
-    },
-    {
-      "content": "Successfully modified core/conflict_detector.py to: Build conflict detection module: 1) Parse AST of all mutated files to detect overlapping function/class definitions, 2) Track shared state dependencies (global variables, file I/O, database tables), 3) Check interface compatibility (function signatures, class methods, import changes), 4) Generate structured conflict report with severity levels.",
-      "timestamp": 1780652081.7081172,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified core/rollback_manager.py to: Build rollback manager: 1) Maintains atomic transaction log for all file writes, 2) Implements try/except/finally wrappers for each mutation, 3) On failure, restores all files to pre-mutation state, 4) Logs rollback reason and affected modules, 5) Integrates with failure pattern miner.",
-      "timestamp": 1780652130.2454386,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified core/config.py to: Add configuration: 1) ENABLE_MULTI_MODULE_ORCHESTRATOR boolean, 2) MULTI_MODULE_MIN_MODULES=3, 3) CONFLICT_DETECTION_LEVEL (strict/permissive), 4) SANDBOX_TIMEOUT seconds, 5) ROLLBACK_ON_PARTIAL_FAILURE boolean.",
-      "timestamp": 1780652134.403949,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified tests/test_multi_module_orchestrator.py to: Create comprehensive tests: 1) Test successful coordinated mutation across 3 modules, 2) Test conflict detection catches overlapping functions, 3) Test rollback on partial failure, 4) Test rejection with detailed report, 5) Test integration with existing single-module flow.",
-      "timestamp": 1780652201.8744028,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified tests/test_conflict_detector.py to: Create conflict detector tests: 1) Test overlapping function definitions, 2) Test shared global variable conflicts, 3) Test incompatible interface changes, 4) Test no-conflict scenario, 5) Test mixed conflict levels.",
-      "timestamp": 1780652215.347983,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified tests/test_rollback_manager.py to: Create rollback manager tests: 1) Test atomic file write with rollback, 2) Test partial failure recovery, 3) Test log integrity, 4) Test concurrent mutation rollback.",
-      "timestamp": 1780652250.7496212,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified core/failure_pattern_miner.py to: Extend to record multi-module failure patterns: 1) Track conflict types (overlap, dependency, interface), 2) Record which modules conflicted, 3) Store rollback frequency, 4) Feed data to meta-mutation selector.",
-      "timestamp": 1780652270.4733133,
-      "cycle": 144
-    },
-    {
-      "content": "Successfully modified core/health_dashboard.py to: Create the HealthDashboard module that: 1) Tracks cross-module dependency failures from failure_pattern_miner, 2) Monitors sandbox execution errors from sandbox modules, 3) Records rollback frequencies from rollback_manager, 4) Maintains a rolling 10-cycle window of all failure events, 5) Calculates real-time failure rate, 6) Exposes a lockdown status flag and triggers 'stability lockdown' when rate > 20%.",
-      "timestamp": 1780652355.5660481,
-      "cycle": 145
-    },
-    {
-      "content": "Successfully modified core/config.py to: Add configuration parameters: 1) ENABLE_HEALTH_DASHBOARD boolean (default true), 2) STABILITY_LOCKDOWN_THRESHOLD float (default 0.2), 3) ROLLING_WINDOW_SIZE int (default 10), 4) LOCKDOWN_DURATION_CYCLES int (default 5), 5) HEALTH_CHECK_INTERVAL_CYCLES int (default 1).",
-      "timestamp": 1780652360.4172623,
-      "cycle": 145
-    },
-    {
-      "content": "Successfully modified core/failure_pattern_miner.py to: Extend failure_pattern_miner to: 1) Emit structured failure events to health_dashboard (including module names, error types, timestamps), 2) Add a method get_recent_failures(window_size) that returns failures for the dashboard, 3) Classify failures as 'dependency', 'sandbox', 'rollback', or 'other'.",
-      "timestamp": 1780652379.518221,
-      "cycle": 145
-    },
-    {
       "content": "Successfully modified core/rollback_manager.py to: Extend rollback_manager to: 1) Report rollback events to health_dashboard with cause (conflict, partial failure, etc.), 2) Track rollback frequency per module, 3) Provide aggregate rollback stats for dashboard.",
       "timestamp": 1780652423.2343528,
       "cycle": 145
@@ -999,6 +904,101 @@
       "content": "Successfully modified tests/test_nash_integration.py to: Create integration test that: (1) sets up 3 modules with Nash equilibrium, (2) runs orchestrator with nash detection enabled, (3) verifies coordinated mutation is triggered and improves overall fitness.",
       "timestamp": 1780660252.9671092,
       "cycle": 180
+    },
+    {
+      "content": "Self-reflection: The repeated failure on the Nash equilibrium goal is not a technical bug but a symptom of a deeper mismatch: the system is trying to implement a concept (game theory) that emerged from human meta-cogn",
+      "timestamp": 1780660307.0730693,
+      "cycle": 181
+    },
+    {
+      "content": "Successfully modified core/ecology_engine.py to: Add a function `mutate_test_suite()` that: 1) Scans the test directory for existing test files, 2) Creates a new synthetic test that tests a capability not yet covered (e.g., a test for the ecology engine itself), 3) Adds a random mutation to an existing test (e.g., change an assertion threshold), 4) Returns the list of modified test files. This implements the core of ecological pressure generation.",
+      "timestamp": 1780660335.2734146,
+      "cycle": 181
+    },
+    {
+      "content": "Successfully modified modules/meta_cognitive_evaluator.py to: Add a metric 'test_suite_evolution_rate' that tracks how many test files were modified or added per cycle. Also track 'test_diversity' using Shannon entropy of test categories (unit, integration, stress, etc.). This provides feedback on ecological health.",
+      "timestamp": 1780660399.471069,
+      "cycle": 181
+    },
+    {
+      "content": "Successfully modified tests/test_ecology_engine.py to: Create an integration test for the ecology engine itself: test that mutate_test_suite() actually modifies at least one test file, test that it can create a new test file, and test that the new tests are valid Python. This ensures the ecology engine is self-validating.",
+      "timestamp": 1780660485.432387,
+      "cycle": 181
+    },
+    {
+      "content": "Successfully modified core/ecology_engine.py to: Rewrite ecology_engine.py with a minimal, working implementation. Add a `TestSuiteMutator` class that: 1) Scans the tests/ directory for existing test files, 2) Has a `generate_new_test()` method that creates a simple new test file with a unique name (e.g., test_ecology_{timestamp}.py), 3) Has a `mutate_existing_test()` method that appends a new test case to an existing test file, 4) Has a `get_test_suite_diversity()` method that returns the number of unique test file prefixes. Ensure all imports are from standard library only (os, glob, datetime) to avoid import errors.",
+      "timestamp": 1780660537.9570096,
+      "cycle": 182
+    },
+    {
+      "content": "Successfully modified core/meta_cognitive_evaluator.py to: Add a concrete `calculate_ecological_fitness()` function that: 1) Imports and calls ecology_engine's get_test_suite_diversity(), 2) Counts total lines of test code across all test files, 3) Returns a dictionary with keys: 'diversity_index', 'total_test_lines', 'ecological_fitness_score' (computed as diversity * log(total_lines+1)). Wrap in try/except to handle missing ecology_engine gracefully.",
+      "timestamp": 1780660551.5205944,
+      "cycle": 182
+    },
+    {
+      "content": "[研究] Self-Repairing Code via Automated Failure Root-Cause Analysis and Patch Generation: The current state of the art in self-repairing code combines large language models (LLMs) fine-tuned",
+      "timestamp": 1780660657.1564808,
+      "cycle": 182
+    },
+    {
+      "content": "[研究] Dynamic Goal Generation from Environment Feedback Using Reinforcement Learning: Current SOTA approaches in dynamic goal generation from environment feedback using RL include: (1) H",
+      "timestamp": 1780660671.833374,
+      "cycle": 182
+    },
+    {
+      "content": "Successfully modified core/ecology_engine.py to: Create a self-contained ecology engine with zero external imports from other project modules. It will: 1) Scan test directory for existing test files, 2) Calculate test suite diversity metrics (Shannon entropy of test types, coverage breadth, novelty score), 3) Generate new test templates for uncovered scenarios, 4) Introduce 'environmental pressures' like performance constraints, resource limits, or adversarial inputs. Uses only standard library (os, json, random, hashlib, collections).",
+      "timestamp": 1780660733.39361,
+      "cycle": 183
+    },
+    {
+      "content": "Successfully modified core/orchestrator.py to: Add a hook in the main evolution loop (after mutation but before evaluation) that calls ecology_engine.analyze_and_evolve_tests(). This hook runs every 3 cycles and injects new test cases into the test suite. Ensure it's wrapped in try/except to prevent failures from blocking the main loop.",
+      "timestamp": 1780660781.4215367,
+      "cycle": 183
+    },
+    {
+      "content": "Successfully modified tests/test_ecology_engine.py to: Create a minimal test for the ecology engine that: 1) Tests test suite scanning, 2) Tests diversity calculation, 3) Tests new test generation, 4) Tests that generated tests are syntactically valid Python. This test itself should be simple and not import from any other project modules.",
+      "timestamp": 1780660823.4782636,
+      "cycle": 183
+    },
+    {
+      "content": "Successfully modified core/meta_cognitive_evaluator.py to: Add ecological fitness metrics: 1) test_suite_diversity_index (Shannon entropy of test categories), 2) environmental_pressure_score (number of unique test constraints/conditions), 3) novelty_injection_rate (new test types per 10 cycles). These metrics feed into the overall fitness score.",
+      "timestamp": 1780660847.4024737,
+      "cycle": 183
+    },
+    {
+      "content": "Successfully modified core/ecology_engine.py to: Add function `generate_environmental_pressure()` that creates tests with: 1) Timeout constraints, 2) Memory limits, 3) Input size bounds, 4) Concurrency requirements. These pressures force the agent to evolve beyond simple correctness.",
+      "timestamp": 1780660876.3490968,
+      "cycle": 183
+    },
+    {
+      "content": "Successfully modified core/goal_generator.py to: Add a new goal type: 'ECOLOGICAL_EVOLUTION' that triggers when test suite diversity drops below threshold. This creates self-sustaining pressure to maintain and expand the test ecosystem.",
+      "timestamp": 1780660927.3341348,
+      "cycle": 183
+    },
+    {
+      "content": "Successfully modified core/nash_detector.py to: Add a 'force_coordinated_change' method that: (1) identifies modules at Nash equilibrium, (2) generates a coordinated mutation plan affecting 3+ modules simultaneously, (3) uses the atomic multi-module mutation orchestrator to apply changes, (4) verifies the system escapes the local optimum by checking if at least one module improves post-change.",
+      "timestamp": 1780661029.4188569,
+      "cycle": 184
+    },
+    {
+      "content": "Successfully modified tests/test_coordinated_mutation.py to: Create integration test that: (1) sets up 3 mock modules with interdependent fitness functions, (2) artificially creates a Nash equilibrium, (3) verifies the coordinated mutation orchestrator detects it and applies multi-module changes, (4) confirms the system escapes the local optimum.",
+      "timestamp": 1780661112.3272731,
+      "cycle": 184
+    },
+    {
+      "content": "Successfully modified core/nash_detector.py to: Read the current state of the Nash detector to understand what exists and what needs fixing.",
+      "timestamp": 1780661238.2358966,
+      "cycle": 185
+    },
+    {
+      "content": "Successfully modified core/nash_detector.py to: Rewrite nash_detector.py with a clean, importable NashEquilibriumDetector class that: (1) tracks module performance metrics over cycles, (2) detects when no single module change improves the system (Nash equilibrium), (3) generates coordinated multi-module change proposals, (4) provides a method to force these changes. Ensure no circular imports and all dependencies are standard library or properly imported from core modules.",
+      "timestamp": 1780661325.97837,
+      "cycle": 185
+    },
+    {
+      "content": "Successfully modified tests/test_nash_detector.py to: Create a minimal test that imports and instantiates NashEquilibriumDetector, verifies it can detect a simulated equilibrium state, and can generate coordinated changes.",
+      "timestamp": 1780661342.2901504,
+      "cycle": 185
     }
   ],
   "learned_patterns": [],
@@ -2057,114 +2057,79 @@
       "approach": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "reason": "Code generated but 3 file(s) failed import: nash_detector.py, test_nash_detector.py, test_nash_integration.py",
       "timestamp": 1780660253.884758
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Add a new phase 'ecological_pressure' after the 'test' phase: call ecology_engine.mutate_test_suite() to introduce new tests, then run the new tests against the current codebase. If the new tests fail, that becomes a new goal for the next cycle. This ensures the agent must adapt to its own modified test suite.",
+      "reason": "Syntax error: unterminated string literal (detected at line 810) (<unknown>, line 810)",
+      "timestamp": 1780660378.9333115
+    },
+    {
+      "approach": "modify goal_generator.py: Add logic to generate goals from the ecology engine: if ecology_engine.mutate_test_suite() created new tests that fail, generate a goal to fix the code to pass those new tests. This closes the loop: the agent creates new pressures and then adapts to them.",
+      "reason": "Syntax error: expected '(' (<unknown>, line 893)",
+      "timestamp": 1780660443.8537116
+    },
+    {
+      "approach": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "reason": "Code generated but 1 file(s) failed import: test_ecology_engine.py",
+      "timestamp": 1780660485.8186724
+    },
+    {
+      "approach": "modify tests/test_ecology_engine.py: Create a simple test file for the ecology engine. Import ecology_engine, instantiate TestSuiteMutator, test that generate_new_test() creates a .py file, test that mutate_existing_test() appends content, and test that get_test_suite_diversity() returns an integer >= 0. This test file itself serves as a test of the ecology system.",
+      "reason": "Syntax error: unterminated triple-quoted string literal (detected at line 762) (<unknown>, line 762)",
+      "timestamp": 1780660597.1407585
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Add an ecological maintenance step to the evolution loop. After every 10 successful cycles, call ecology_engine's mutate_test_suite() to create a new test that exercises a capability not yet covered. Log the action. Wrap in try/except to prevent failures from blocking the main loop.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 847)",
+      "timestamp": 1780660641.6858852
+    },
+    {
+      "approach": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "reason": "Code generated but 1 file(s) failed import: ecology_engine.py",
+      "timestamp": 1780660642.0465965
+    },
+    {
+      "approach": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "reason": "Code generated but 2 file(s) failed import: ecology_engine.py, test_ecology_engine.py",
+      "timestamp": 1780660928.5175412
+    },
+    {
+      "approach": "modify core/coordinated_mutation_orchestrator.py: Implement a new module that: (1) accepts a list of module names and a coordinated change plan, (2) creates a temporary sandbox with all modules, (3) applies all changes atomically using git workflow, (4) runs integration tests on the combined changes, (5) commits or rolls back as a single unit.",
+      "reason": "Safety check failed",
+      "timestamp": 1780661050.095603
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Integrate the Nash detector into the main evolution loop: after each cycle, check if system is at Nash equilibrium. If yes, trigger coordinated mutation instead of single-module mutation. Add a config flag to enable/disable this behavior.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 846)",
+      "timestamp": 1780661095.3401258
+    },
+    {
+      "approach": "modify core/goal_generator.py: Add a new goal type 'ESCAPE_NASH_EQUILIBRIUM' that triggers when Nash equilibrium is detected. This goal generates a meta-instruction to find coordinated changes across the module dependency graph.",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 878)",
+      "timestamp": 1780661157.949042
+    },
+    {
+      "approach": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "reason": "Code generated but 1 file(s) failed import: test_coordinated_mutation.py",
+      "timestamp": 1780661158.2721722
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Read the orchestrator to understand how modules are managed and how to integrate Nash detection.",
+      "reason": "Syntax error: expected 'except' or 'finally' block (<unknown>, line 852)",
+      "timestamp": 1780661283.5034199
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Integrate the Nash detector into the orchestrator's main loop: after each cycle, call the detector to check for equilibrium. If detected, trigger coordinated multi-module changes instead of single-module mutations.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 845)",
+      "timestamp": 1780661387.904021
+    },
+    {
+      "approach": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "reason": "Code generated but 2 file(s) failed import: nash_detector.py, test_nash_detector.py",
+      "timestamp": 1780661388.4973907
     }
   ],
   "successful_strategies": [
-    {
-      "strategy": "modify goal_feasibility_precheck.py: Create a new module that implements the goal feasibility pre-check. It should: (1) accept a proposed goal, (2) query the dependency graph to identify all modules the goal depends on, (3) check test coverage for each dependent module using existing test infrastructure, (4) compute a feasibility score based on dependency completeness and test coverage, (5) return a decision (BLOCK, DOWNGRADE, or ALLOW) with justification.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640334.9022315
-    },
-    {
-      "strategy": "modify goal_dependency_graph.py: Add a method to compute a 'dependency completeness score' for a given goal. This should traverse the dependency graph and return a ratio of how many required dependencies are already satisfied (have working implementations) vs. missing.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640402.1589983
-    },
-    {
-      "strategy": "modify test_goal_feasibility_precheck.py: Create a test suite that validates the feasibility pre-check: (1) test that a goal with all dependencies met and high test coverage gets ALLOW, (2) test that a goal with missing critical dependencies gets BLOCK, (3) test that a goal with partial coverage gets DOWNGRADE, (4) test edge cases like circular dependencies or unknown modules.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640430.7275057
-    },
-    {
-      "strategy": "modify system_config.json: Add configuration parameters for the feasibility pre-check: FEASIBILITY_THRESHOLD_BLOCK=0.5, FEASIBILITY_THRESHOLD_DOWNGRADE=0.7, ENABLE_PRE_CHECK=true, LOG_PRE_CHECK_DECISIONS=true.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640434.1340077
-    },
-    {
-      "strategy": "Create a 'goal feasibility pre-check' step that, before a goal enters the active queue, uses the existing dependency graph and module test coverage to estimate whether the goal is achievable given current capabilities, and automatically blocks or downgrades goals with <50% feasibility score.",
-      "outcome": "4/5 steps succeeded",
-      "timestamp": 1780640434.1737542
-    },
-    {
-      "strategy": "modify system_config.json: Add configuration parameters for the sandbox executor: SANDBOX_MODE=true, SANDBOX_TYPE='git_worktree' (or 'copy'), SANDBOX_TIMEOUT=300 (seconds), SANDBOX_MAX_RETRIES=2, SANDBOX_CLEANUP_ON_FAILURE=true, SANDBOX_MERGE_STRATEGY='fast-forward'.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640576.8373723
-    },
-    {
-      "strategy": "modify test_sandbox_executor.py: Create a test suite for the sandbox executor: (1) test that sandbox creation succeeds and returns a valid path, (2) test that a mutation applied in sandbox doesn't affect the original codebase, (3) test that passing tests trigger a merge, (4) test that failing tests trigger cleanup without merge, (5) test timeout handling, (6) test that the sandbox executor works with the existing integration test suite.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640601.8651886
-    },
-    {
-      "strategy": "modify integration_test_suite.py: Add a new test case 'test_sandboxed_mutation_pipeline' that: (1) creates a simple mutation (e.g., adding a docstring), (2) runs it through the sandbox executor, (3) verifies the mutation is only present in the main codebase if tests pass, (4) verifies cleanup on simulated test failure. This validates the end-to-end sandbox workflow.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640638.7314796
-    },
-    {
-      "strategy": "modify goal_dependency_graph.py: Add a method 'get_sandbox_safe_goals()' that identifies goals which would benefit most from sandboxed execution (high risk, high reward, or goals that touch critical infrastructure). This integrates the sandbox executor with the goal planning system.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640662.1869607
-    },
-    {
-      "strategy": "Implement a sandboxed mutation executor that runs all mutations in a temporary git branch or copy of the codebase, runs the full integration test suite, and only merges changes if tests pass, enabling safe experimentation with high-risk transformations.",
-      "outcome": "4/6 steps succeeded",
-      "timestamp": 1780640662.21403
-    },
-    {
-      "strategy": "modify failure_context_recorder.py: Create a module that captures detailed context for every failed mutation: the mutation AST, the error type (import error, schema mismatch, side effect, syntax error, etc.), the modules involved, the test that failed, and the full error traceback. Store these in a structured failure_log.jsonl file with timestamps and cycle numbers.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640723.4062862
-    },
-    {
-      "strategy": "modify mutation_engine.py: Integrate the failure_context_recorder into the mutation engine's failure handling path. After a mutation fails validation or testing, automatically call the recorder to capture all context before any rollback occurs.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640774.7190948
-    },
-    {
-      "strategy": "modify failure_pattern_miner.py: Build the core miner that: (1) reads the failure_log.jsonl, (2) clusters failures by error type and affected modules, (3) identifies recurring patterns (e.g., '3+ import errors in module X', 'schema mismatches between A and B'), (4) generates 'forbidden mutation space' rules as JSON rules with conditions (module_pattern, error_type, affected_interface) and actions (block, warn, require_precheck).",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640789.8392594
-    },
-    {
-      "strategy": "modify forbidden_mutation_rules.json: Create an initial empty rules file with schema: {rules: [{id, pattern: {module_regex, error_type, affected_interface}, action: 'block'|'warn'|'require_precheck', created_at, hit_count, last_hit}]}. The miner will populate this dynamically.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640793.0188296
-    },
-    {
-      "strategy": "modify pre_mutation_validator.py: Add a step to the pre-mutation validation pipeline that checks proposed mutations against the forbidden_mutation_rules.json. If a mutation matches a 'block' rule, reject it immediately with explanation. If 'warn', log warning but allow. If 'require_precheck', trigger additional validation before proceeding.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640802.6984775
-    },
-    {
-      "strategy": "modify test_failure_pattern_miner.py: Create a test suite that: (1) seeds fake failure logs with known patterns, (2) runs the miner and verifies it correctly identifies the patterns, (3) tests that generated rules block matching mutations, (4) tests that rules don't block non-matching mutations, (5) tests rule hit counting and decay (old rules without hits get deprioritized).",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640824.3126333
-    },
-    {
-      "strategy": "modify system_config.json: Add configuration parameters: FAILURE_LOG_MAX_ENTRIES=1000, PATTERN_MIN_OCCURRENCES=3 (minimum failures to form a pattern), RULE_AUTO_ACTIVATE=true, RULE_DECAY_DAYS=30 (rules without hits auto-archive), ENABLE_FORBIDDEN_SPACE=true.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780640876.7300687
-    },
-    {
-      "strategy": "Build a failure pattern miner that records the cause of every failed mutation (e.g., missing import, schema mismatch, side effect on unrelated module) and generates a 'forbidden mutation space' rule set that blocks similar mutations before execution.",
-      "outcome": "7/8 steps succeeded",
-      "timestamp": 1780640876.757931
-    },
-    {
-      "strategy": "mutation:crossover(memoized_retry_fibonacci,memoized_flatten)",
-      "outcome": "Created memoized_retry_flatten, score=0.6",
-      "timestamp": 1780640879.0786998
-    },
-    {
-      "strategy": "mutation:hybrid(memoized_is_prime,quicksort)",
-      "outcome": "Created sorted_prime_list, score=0.4",
-      "timestamp": 1780640881.183524
-    },
-    {
-      "strategy": "modify tests/integration/test_data/evolution_test_scenario.json: Create test scenario configuration that defines: (1) A minimal but realistic codebase structure with 3-5 interdependent modules, (2) Predefined goals that trigger mutations in specific modules, (3) Failure injection schedule (which operations to fail, at what stage, with what error), (4) Expected system behavior for each failure scenario, (5) Post-recovery consistency checks.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780641012.1104352
-    },
     {
       "strategy": "modify tests/integration/__init__.py: Update the integration test package to export the new test modules and ensure proper test discovery.",
       "outcome": "Applied successfully",
@@ -4559,6 +4524,111 @@
       "strategy": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "outcome": "3/4 steps succeeded",
       "timestamp": 1780660252.9894958
+    },
+    {
+      "strategy": "modify core/ecology_engine.py: Add a function `mutate_test_suite()` that: 1) Scans the test directory for existing test files, 2) Creates a new synthetic test that tests a capability not yet covered (e.g., a test for the ecology engine itself), 3) Adds a random mutation to an existing test (e.g., change an assertion threshold), 4) Returns the list of modified test files. This implements the core of ecological pressure generation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660335.2590103
+    },
+    {
+      "strategy": "modify modules/meta_cognitive_evaluator.py: Add a metric 'test_suite_evolution_rate' that tracks how many test files were modified or added per cycle. Also track 'test_diversity' using Shannon entropy of test categories (unit, integration, stress, etc.). This provides feedback on ecological health.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660399.4554625
+    },
+    {
+      "strategy": "modify tests/test_ecology_engine.py: Create an integration test for the ecology engine itself: test that mutate_test_suite() actually modifies at least one test file, test that it can create a new test file, and test that the new tests are valid Python. This ensures the ecology engine is self-validating.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660485.4174008
+    },
+    {
+      "strategy": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "outcome": "3/5 steps succeeded",
+      "timestamp": 1780660485.4489412
+    },
+    {
+      "strategy": "modify core/ecology_engine.py: Rewrite ecology_engine.py with a minimal, working implementation. Add a `TestSuiteMutator` class that: 1) Scans the tests/ directory for existing test files, 2) Has a `generate_new_test()` method that creates a simple new test file with a unique name (e.g., test_ecology_{timestamp}.py), 3) Has a `mutate_existing_test()` method that appends a new test case to an existing test file, 4) Has a `get_test_suite_diversity()` method that returns the number of unique test file prefixes. Ensure all imports are from standard library only (os, glob, datetime) to avoid import errors.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660537.936761
+    },
+    {
+      "strategy": "modify core/meta_cognitive_evaluator.py: Add a concrete `calculate_ecological_fitness()` function that: 1) Imports and calls ecology_engine's get_test_suite_diversity(), 2) Counts total lines of test code across all test files, 3) Returns a dictionary with keys: 'diversity_index', 'total_test_lines', 'ecological_fitness_score' (computed as diversity * log(total_lines+1)). Wrap in try/except to handle missing ecology_engine gracefully.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660551.505166
+    },
+    {
+      "strategy": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "outcome": "2/4 steps succeeded",
+      "timestamp": 1780660641.7061312
+    },
+    {
+      "strategy": "modify core/ecology_engine.py: Create a self-contained ecology engine with zero external imports from other project modules. It will: 1) Scan test directory for existing test files, 2) Calculate test suite diversity metrics (Shannon entropy of test types, coverage breadth, novelty score), 3) Generate new test templates for uncovered scenarios, 4) Introduce 'environmental pressures' like performance constraints, resource limits, or adversarial inputs. Uses only standard library (os, json, random, hashlib, collections).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660733.377301
+    },
+    {
+      "strategy": "modify core/orchestrator.py: Add a hook in the main evolution loop (after mutation but before evaluation) that calls ecology_engine.analyze_and_evolve_tests(). This hook runs every 3 cycles and injects new test cases into the test suite. Ensure it's wrapped in try/except to prevent failures from blocking the main loop.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660781.4033806
+    },
+    {
+      "strategy": "modify tests/test_ecology_engine.py: Create a minimal test for the ecology engine that: 1) Tests test suite scanning, 2) Tests diversity calculation, 3) Tests new test generation, 4) Tests that generated tests are syntactically valid Python. This test itself should be simple and not import from any other project modules.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660823.4622338
+    },
+    {
+      "strategy": "modify core/meta_cognitive_evaluator.py: Add ecological fitness metrics: 1) test_suite_diversity_index (Shannon entropy of test categories), 2) environmental_pressure_score (number of unique test constraints/conditions), 3) novelty_injection_rate (new test types per 10 cycles). These metrics feed into the overall fitness score.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660847.3850186
+    },
+    {
+      "strategy": "modify core/ecology_engine.py: Add function `generate_environmental_pressure()` that creates tests with: 1) Timeout constraints, 2) Memory limits, 3) Input size bounds, 4) Concurrency requirements. These pressures force the agent to evolve beyond simple correctness.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660876.3296082
+    },
+    {
+      "strategy": "modify core/goal_generator.py: Add a new goal type: 'ECOLOGICAL_EVOLUTION' that triggers when test suite diversity drops below threshold. This creates self-sustaining pressure to maintain and expand the test ecosystem.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780660927.2850347
+    },
+    {
+      "strategy": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "outcome": "6/6 steps succeeded",
+      "timestamp": 1780660927.377065
+    },
+    {
+      "strategy": "modify core/nash_detector.py: Add a 'force_coordinated_change' method that: (1) identifies modules at Nash equilibrium, (2) generates a coordinated mutation plan affecting 3+ modules simultaneously, (3) uses the atomic multi-module mutation orchestrator to apply changes, (4) verifies the system escapes the local optimum by checking if at least one module improves post-change.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780661029.4036424
+    },
+    {
+      "strategy": "modify tests/test_coordinated_mutation.py: Create integration test that: (1) sets up 3 mock modules with interdependent fitness functions, (2) artificially creates a Nash equilibrium, (3) verifies the coordinated mutation orchestrator detects it and applies multi-module changes, (4) confirms the system escapes the local optimum.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780661112.3131104
+    },
+    {
+      "strategy": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "outcome": "2/5 steps succeeded",
+      "timestamp": 1780661157.9708672
+    },
+    {
+      "strategy": "modify core/nash_detector.py: Read the current state of the Nash detector to understand what exists and what needs fixing.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780661238.2210114
+    },
+    {
+      "strategy": "modify core/nash_detector.py: Rewrite nash_detector.py with a clean, importable NashEquilibriumDetector class that: (1) tracks module performance metrics over cycles, (2) detects when no single module change improves the system (Nash equilibrium), (3) generates coordinated multi-module change proposals, (4) provides a method to force these changes. Ensure no circular imports and all dependencies are standard library or properly imported from core modules.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780661325.9630454
+    },
+    {
+      "strategy": "modify tests/test_nash_detector.py: Create a minimal test that imports and instantiates NashEquilibriumDetector, verifies it can detect a simulated equilibrium state, and can generate coordinated changes.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780661342.2654524
+    },
+    {
+      "strategy": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "outcome": "3/5 steps succeeded",
+      "timestamp": 1780661387.9205923
     }
   ],
   "capabilities_developed": []

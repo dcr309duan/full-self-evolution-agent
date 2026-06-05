@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.nash_detector import NashDetector
+from core.nash_detector import NashEquilibriumDetector
 from core.module_interface import BaseModule
 
 
@@ -29,11 +29,11 @@ class MockModule(BaseModule):
         return state
 
 
-class TestNashDetector(unittest.TestCase):
+class TestNashEquilibriumDetector(unittest.TestCase):
     
     def setUp(self):
         """Set up three mock modules with interdependent fitness functions."""
-        self.detector = NashDetector()
+        self.detector = NashEquilibriumDetector()
         
         # Module A: fitness depends on its own state and Module B's state
         def fitness_a(state):
@@ -83,7 +83,13 @@ class TestNashDetector(unittest.TestCase):
             'module_c': 1
         }
     
-    def test_equilibrium_detection_single_changes_no_benefit(self):
+    def test_import_and_instantiation(self):
+        """Test that NashEquilibriumDetector can be imported and instantiated."""
+        detector = NashEquilibriumDetector()
+        self.assertIsNotNone(detector)
+        self.assertIsInstance(detector, NashEquilibriumDetector)
+    
+    def test_equilibrium_detection(self):
         """Verify equilibrium detection when single changes have no benefit."""
         # Test that the equilibrium state is detected as equilibrium
         is_eq, deviations = self.detector.check_equilibrium(
@@ -181,6 +187,36 @@ class TestNashDetector(unittest.TestCase):
         module_c_deviations = [d for d in deviations if d.get('module') == 'module_c']
         self.assertGreater(len(module_c_deviations), 0,
                           "Module C should have deviations")
+    
+    def test_generate_coordinated_changes(self):
+        """Verify that generate_coordinated_changes produces valid mutation plans."""
+        # Test with non-equilibrium state
+        mutation_plans = self.detector.generate_coordinated_changes(
+            self.modules, self.non_equilibrium_state
+        )
+        
+        self.assertIsNotNone(mutation_plans, "Should return mutation plans")
+        self.assertGreater(len(mutation_plans), 0, 
+                          "Should find at least one coordinated change")
+        
+        # Verify each plan has multiple modules
+        for plan in mutation_plans:
+            self.assertIn('modules', plan, "Each plan should specify modules")
+            self.assertIn('new_state', plan, "Each plan should specify new state")
+            self.assertGreaterEqual(
+                len(plan['modules']), 2,
+                "Coordinated change should involve at least 2 modules"
+            )
+            
+            # Verify the plan improves fitness for all involved modules
+            for module_name in plan['modules']:
+                module = self.modules[module_name]
+                current_fitness = module.get_fitness(self.non_equilibrium_state)
+                new_fitness = module.get_fitness(plan['new_state'])
+                self.assertGreater(
+                    new_fitness, current_fitness,
+                    f"Coordinated change should improve fitness for {module_name}"
+                )
 
 
 if __name__ == '__main__':

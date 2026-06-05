@@ -6,6 +6,8 @@ ecology engine's evolution of the fitness landscape. It measures:
 1) Test suite diversity (Shannon entropy of test types)
 2) Novelty pressure (number of unseen test types)
 3) Adaptation rate (speed of improvement on new test types)
+4) Test suite evolution rate (how many test files were modified or added per cycle)
+5) Test diversity (Shannon entropy of test categories: unit, integration, stress, etc.)
 """
 
 import math
@@ -22,6 +24,7 @@ class EcologicalFitnessEvaluator:
     def __init__(self):
         self.history: Dict[str, List[float]] = {}  # test_type -> list of historical scores
         self.seen_test_types: set = set()
+        self.test_file_history: List[int] = []  # track number of modified/added test files per cycle
 
     def compute_diversity_index(self, test_types: List[str]) -> float:
         """
@@ -113,13 +116,77 @@ class EcologicalFitnessEvaluator:
         slope = numerator / denominator
         return slope
 
+    def compute_test_suite_evolution_rate(self, num_modified_or_added: int) -> float:
+        """
+        Track how many test files were modified or added per cycle.
+        Returns the rate of change in test file modifications/additions.
+
+        Args:
+            num_modified_or_added: Number of test files modified or added in current cycle
+
+        Returns:
+            float: Evolution rate (positive = increasing modifications, negative = decreasing)
+        """
+        self.test_file_history.append(num_modified_or_added)
+        
+        if len(self.test_file_history) < 2:
+            return 0.0
+        
+        # Calculate rate of change using simple linear regression
+        n = len(self.test_file_history)
+        x_mean = (n - 1) / 2.0
+        y_mean = sum(self.test_file_history) / n
+        
+        numerator = 0.0
+        denominator = 0.0
+        for i, count in enumerate(self.test_file_history):
+            x_diff = i - x_mean
+            y_diff = count - y_mean
+            numerator += x_diff * y_diff
+            denominator += x_diff * x_diff
+        
+        if denominator == 0:
+            return 0.0
+        
+        slope = numerator / denominator
+        return slope
+
+    def compute_test_diversity(self, test_categories: List[str]) -> float:
+        """
+        Compute Shannon entropy of test categories (unit, integration, stress, etc.).
+        Higher entropy indicates more diverse test categories.
+
+        Args:
+            test_categories: List of test category labels
+
+        Returns:
+            float: Shannon entropy (0 if no categories or single category)
+        """
+        if not test_categories:
+            return 0.0
+        
+        counter = Counter(test_categories)
+        total = len(test_categories)
+        entropy = 0.0
+        
+        for count in counter.values():
+            p = count / total
+            if p > 0:
+                entropy -= p * math.log2(p)
+        
+        return entropy
+
     def compute_ecological_fitness(
         self,
         test_types: List[str],
         test_scores: Dict[str, float],
-        diversity_weight: float = 0.3,
-        novelty_weight: float = 0.3,
-        adaptation_weight: float = 0.4
+        test_categories: Optional[List[str]] = None,
+        num_modified_or_added: int = 0,
+        diversity_weight: float = 0.25,
+        novelty_weight: float = 0.25,
+        adaptation_weight: float = 0.25,
+        evolution_rate_weight: float = 0.15,
+        test_diversity_weight: float = 0.10
     ) -> Dict[str, float]:
         """
         Compute the overall ecological fitness metric.
@@ -127,9 +194,13 @@ class EcologicalFitnessEvaluator:
         Args:
             test_types: List of test type labels
             test_scores: Dict mapping test_type -> current score
-            diversity_weight: Weight for diversity component (default 0.3)
-            novelty_weight: Weight for novelty pressure component (default 0.3)
-            adaptation_weight: Weight for adaptation rate component (default 0.4)
+            test_categories: Optional list of test category labels (unit, integration, stress, etc.)
+            num_modified_or_added: Number of test files modified or added in current cycle
+            diversity_weight: Weight for diversity component (default 0.25)
+            novelty_weight: Weight for novelty pressure component (default 0.25)
+            adaptation_weight: Weight for adaptation rate component (default 0.25)
+            evolution_rate_weight: Weight for test suite evolution rate (default 0.15)
+            test_diversity_weight: Weight for test category diversity (default 0.10)
 
         Returns:
             Dict with keys:
@@ -138,6 +209,8 @@ class EcologicalFitnessEvaluator:
                 - 'novelty_count': number of novel test types
                 - 'novelty_ratio': proportion of novel test types
                 - 'mean_adaptation_rate': average adaptation rate across test types
+                - 'test_suite_evolution_rate': rate of test file modifications/additions
+                - 'test_diversity': Shannon entropy of test categories
                 - 'components': dict of individual component scores
         """
         if not test_types:
@@ -147,6 +220,8 @@ class EcologicalFitnessEvaluator:
                 'novelty_count': 0,
                 'novelty_ratio': 0.0,
                 'mean_adaptation_rate': 0.0,
+                'test_suite_evolution_rate': 0.0,
+                'test_diversity': 0.0,
                 'components': {}
             }
 
@@ -166,6 +241,14 @@ class EcologicalFitnessEvaluator:
 
         mean_adaptation_rate = sum(adaptation_rates) / len(adaptation_rates) if adaptation_rates else 0.0
 
+        # 4) Test suite evolution rate
+        test_suite_evolution_rate = self.compute_test_suite_evolution_rate(num_modified_or_added)
+
+        # 5) Test diversity (categories)
+        if test_categories is None:
+            test_categories = test_types  # fallback to test types if no categories provided
+        test_diversity = self.compute_test_diversity(test_categories)
+
         # Normalize components to [0, 1] range for combination
         # Diversity: entropy / log2(num_types+1) to normalize
         max_possible_entropy = math.log2(len(set(test_types)) + 1) if test_types else 1.0
@@ -178,11 +261,23 @@ class EcologicalFitnessEvaluator:
         # Positive rates are good, negative are bad
         normalized_adaptation = 1.0 / (1.0 + math.exp(-mean_adaptation_rate))
 
+        # Test suite evolution rate: sigmoid transform to map (-inf, inf) to (0, 1)
+        normalized_evolution_rate = 1.0 / (1.0 + math.exp(-test_suite_evolution_rate))
+
+        # Test diversity: entropy / log2(num_categories+1) to normalize
+        if test_categories:
+            max_possible_category_entropy = math.log2(len(set(test_categories)) + 1)
+            normalized_test_diversity = test_diversity / max_possible_category_entropy if max_possible_category_entropy > 0 else 0.0
+        else:
+            normalized_test_diversity = 0.0
+
         # Weighted combination
         ecological_fitness = (
             diversity_weight * normalized_diversity +
             novelty_weight * normalized_novelty +
-            adaptation_weight * normalized_adaptation
+            adaptation_weight * normalized_adaptation +
+            evolution_rate_weight * normalized_evolution_rate +
+            test_diversity_weight * normalized_test_diversity
         )
 
         return {
@@ -191,13 +286,19 @@ class EcologicalFitnessEvaluator:
             'novelty_count': novelty_count,
             'novelty_ratio': novelty_ratio,
             'mean_adaptation_rate': mean_adaptation_rate,
+            'test_suite_evolution_rate': test_suite_evolution_rate,
+            'test_diversity': test_diversity,
             'components': {
                 'normalized_diversity': normalized_diversity,
                 'normalized_novelty': normalized_novelty,
                 'normalized_adaptation': normalized_adaptation,
+                'normalized_evolution_rate': normalized_evolution_rate,
+                'normalized_test_diversity': normalized_test_diversity,
                 'diversity_weight': diversity_weight,
                 'novelty_weight': novelty_weight,
-                'adaptation_weight': adaptation_weight
+                'adaptation_weight': adaptation_weight,
+                'evolution_rate_weight': evolution_rate_weight,
+                'test_diversity_weight': test_diversity_weight
             }
         }
 
@@ -205,12 +306,15 @@ class EcologicalFitnessEvaluator:
         """Reset all historical data (for fresh evaluation cycles)."""
         self.history.clear()
         self.seen_test_types.clear()
+        self.test_file_history.clear()
 
 
 # Convenience function for quick evaluation
 def evaluate_ecological_fitness(
     test_types: List[str],
     test_scores: Dict[str, float],
+    test_categories: Optional[List[str]] = None,
+    num_modified_or_added: int = 0,
     evaluator: Optional[EcologicalFitnessEvaluator] = None
 ) -> Dict[str, float]:
     """
@@ -219,6 +323,8 @@ def evaluate_ecological_fitness(
     Args:
         test_types: List of test type labels
         test_scores: Dict mapping test_type -> current score
+        test_categories: Optional list of test category labels
+        num_modified_or_added: Number of test files modified or added in current cycle
         evaluator: Optional existing evaluator (creates new one if None)
 
     Returns:
@@ -227,4 +333,9 @@ def evaluate_ecological_fitness(
     if evaluator is None:
         evaluator = EcologicalFitnessEvaluator()
 
-    return evaluator.compute_ecological_fitness(test_types, test_scores)
+    return evaluator.compute_ecological_fitness(
+        test_types, 
+        test_scores, 
+        test_categories=test_categories,
+        num_modified_or_added=num_modified_or_added
+    )

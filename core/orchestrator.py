@@ -21,6 +21,7 @@ from core.fs_abstraction import FileSystemAbstraction
 from core.health_audit import compute_average_score, identify_bottom_10_percent
 from core.meta_mutation_selector import MetaMutationSelector
 from core.decision_forest import DecisionForest
+from core.ecology_engine import EcologyEngine
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -91,6 +92,9 @@ meta_mutation_selector = MetaMutationSelector()
 
 # Decision forest instance
 decision_forest = DecisionForest()
+
+# Ecology engine instance
+ecology_engine = EcologyEngine()
 
 # Failure cluster analyzer configuration
 FAILURE_CLUSTER_CONFIG = {
@@ -531,6 +535,7 @@ def run_smoke_test() -> Dict[str, Any]:
     Integrates curiosity engine for autonomous exploration.
     Integrates failure cluster analyzer for detecting and fixing recurring failures.
     Integrates post-mutation hook for health audit and pruning.
+    Integrates ecology engine for test suite evolution.
 
     Returns:
         A structured dictionary containing:
@@ -766,6 +771,31 @@ def run_smoke_test() -> Dict[str, Any]:
                     "simulation_confidence": simulation_confidence
                 }
                 return result
+
+        # Step 4.6: Ecology engine hook - runs every 3 cycles after mutation but before evaluation
+        if cycle_counter % 3 == 0:
+            try:
+                ecology_result = ecology_engine.analyze_and_evolve_tests()
+                logs.append({
+                    "step": 3.8,
+                    "action": "ecology_engine_hook",
+                    "status": "success",
+                    "details": f"Ecology engine injected new test cases: {ecology_result}"
+                })
+                knowledge_base.append({
+                    "type": "ecology_event",
+                    "action": "test_evolution",
+                    "cycle_number": cycle_counter,
+                    "result": ecology_result
+                })
+            except Exception as e:
+                logs.append({
+                    "step": 3.8,
+                    "action": "ecology_engine_hook",
+                    "status": "failed",
+                    "details": f"Ecology engine hook failed: {str(e)}"
+                })
+                print(f"Warning: Ecology engine hook failed at cycle {cycle_counter}: {e}")
 
         # Step 5: Run test suite
         original_cwd = os.getcwd()
