@@ -26,9 +26,16 @@ class GoalDependencyGraph:
         self._node_types: Dict[str, str] = {}
         # adjacency list for coordinated mutation relationships: mutation_node -> set of mutation nodes it coordinates with
         self._coordinated_with: Dict[str, Set[str]] = defaultdict(set)
+        # risk level mapping: goal_name -> risk level (0-10)
+        self._risk_levels: Dict[str, int] = {}
+        # reward level mapping: goal_name -> reward level (0-10)
+        self._reward_levels: Dict[str, int] = {}
+        # critical infrastructure flag: goal_name -> bool
+        self._critical_infrastructure: Dict[str, bool] = {}
 
     def add_goal(self, name: str, dependencies: Optional[List[str]] = None, 
-                 node_type: str = GOAL) -> None:
+                 node_type: str = GOAL, risk_level: int = 0, reward_level: int = 0,
+                 is_critical_infrastructure: bool = False) -> None:
         """
         Add a goal with its dependencies (prerequisites).
         If the goal already exists, its dependencies are updated.
@@ -37,6 +44,9 @@ class GoalDependencyGraph:
             name: The name of the goal/node
             dependencies: List of prerequisite node names
             node_type: Type of node (GOAL, BENCHMARK_CREATION, or COORDINATED_MUTATION)
+            risk_level: Risk level of the goal (0-10, higher = more risky)
+            reward_level: Reward level of the goal (0-10, higher = more rewarding)
+            is_critical_infrastructure: Whether the goal touches critical infrastructure
         """
         if dependencies is None:
             dependencies = []
@@ -61,6 +71,11 @@ class GoalDependencyGraph:
 
         # Set node type
         self._node_types[name] = node_type
+        
+        # Set risk, reward, and critical infrastructure attributes
+        self._risk_levels[name] = max(0, min(10, risk_level))
+        self._reward_levels[name] = max(0, min(10, reward_level))
+        self._critical_infrastructure[name] = is_critical_infrastructure
 
     def remove_goal(self, name: str) -> None:
         """
@@ -95,6 +110,9 @@ class GoalDependencyGraph:
             del self._dependents[name]
         self._met.discard(name)
         self._node_types.pop(name, None)
+        self._risk_levels.pop(name, None)
+        self._reward_levels.pop(name, None)
+        self._critical_infrastructure.pop(name, None)
 
     def get_dependents(self, name: str) -> Set[str]:
         """
@@ -165,7 +183,9 @@ class GoalDependencyGraph:
         return {name for name, ntype in self._node_types.items() if ntype == node_type}
 
     def add_coordinated_mutation(self, name: str, dependencies: Optional[List[str]] = None,
-                                  coordinated_with: Optional[List[str]] = None) -> None:
+                                  coordinated_with: Optional[List[str]] = None,
+                                  risk_level: int = 0, reward_level: int = 0,
+                                  is_critical_infrastructure: bool = False) -> None:
         """
         Add a coordinated mutation node with its dependencies and coordination relationships.
         
@@ -173,8 +193,12 @@ class GoalDependencyGraph:
             name: The name of the coordinated mutation node
             dependencies: List of prerequisite node names (typically the modules being changed)
             coordinated_with: List of other coordinated mutation nodes this is coordinated with
+            risk_level: Risk level of the goal (0-10, higher = more risky)
+            reward_level: Reward level of the goal (0-10, higher = more rewarding)
+            is_critical_infrastructure: Whether the goal touches critical infrastructure
         """
-        self.add_goal(name, dependencies, self.COORDINATED_MUTATION)
+        self.add_goal(name, dependencies, self.COORDINATED_MUTATION, 
+                     risk_level, reward_level, is_critical_infrastructure)
         
         if coordinated_with:
             for other in coordinated_with:
@@ -252,6 +276,31 @@ class GoalDependencyGraph:
         for dep in self._prerequisites.get(name, set()):
             self._collect_transitive_dependencies(dep, visited)
 
+    def get_sandbox_safe_goals(self) -> Set[str]:
+        """
+        Identify goals which would benefit most from sandboxed execution.
+        These are goals that are high risk, high reward, or touch critical infrastructure.
+        
+        Returns:
+            A set of goal names that are candidates for sandboxed execution.
+        """
+        sandbox_candidates = set()
+        
+        for goal in self._prerequisites:
+            # Check if goal has risk level >= 7 (high risk)
+            if self._risk_levels.get(goal, 0) >= 7:
+                sandbox_candidates.add(goal)
+            
+            # Check if goal has reward level >= 7 (high reward)
+            if self._reward_levels.get(goal, 0) >= 7:
+                sandbox_candidates.add(goal)
+            
+            # Check if goal touches critical infrastructure
+            if self._critical_infrastructure.get(goal, False):
+                sandbox_candidates.add(goal)
+        
+        return sandbox_candidates
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Serialize the graph to a dictionary.
@@ -260,7 +309,10 @@ class GoalDependencyGraph:
             "prerequisites": {k: list(v) for k, v in self._prerequisites.items()},
             "met": list(self._met),
             "node_types": dict(self._node_types),
-            "coordinated_with": {k: list(v) for k, v in self._coordinated_with.items()}
+            "coordinated_with": {k: list(v) for k, v in self._coordinated_with.items()},
+            "risk_levels": dict(self._risk_levels),
+            "reward_levels": dict(self._reward_levels),
+            "critical_infrastructure": dict(self._critical_infrastructure)
         }
 
     @classmethod
@@ -270,17 +322,27 @@ class GoalDependencyGraph:
         """
         graph = cls()
         node_types = data.get("node_types", {})
+        risk_levels = data.get("risk_levels", {})
+        reward_levels = data.get("reward_levels", {})
+        critical_infrastructure = data.get("critical_infrastructure", {})
+        
         for goal, prereqs in data.get("prerequisites", {}).items():
             node_type = node_types.get(goal, cls.GOAL)
-            graph.add_goal(goal, prereqs, node_type)
+            risk = risk_levels.get(goal, 0)
+            reward = reward_levels.get(goal, 0)
+            critical = critical_infrastructure.get(goal, False)
+            graph.add_goal(goal, prereqs, node_type, risk, reward, critical)
+        
         for goal in data.get("met", []):
             graph.mark_met(goal)
+        
         # Restore coordinated_with relationships
         coordinated_with = data.get("coordinated_with", {})
         for node, others in coordinated_with.items():
             for other in others:
                 if node in graph and other in graph:
                     graph._coordinated_with[node].add(other)
+        
         return graph
 
     def __contains__(self, name: str) -> bool:

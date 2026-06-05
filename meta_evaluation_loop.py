@@ -9,7 +9,23 @@ improvement momentum.
 import math
 import time
 from collections import deque
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+
+class EvolutionObjective(Enum):
+    IMPROVE_FITNESS = "improve_fitness"
+    INCREASE_DIVERSITY = "increase_diversity"
+    REFACTOR_ARCHITECTURE = "refactor_architecture"
+    EXPLORE_NOVELTY = "explore_novelty"
+
+
+class StagnationType(Enum):
+    NO_STAGNATION = "no_stagnation"
+    FITNESS_PLATEAU = "fitness_plateau"
+    DIVERSITY_LOSS = "diversity_loss"
+    REPEATED_FAILURES = "repeated_failures"
+
 
 # Type alias for objective functions
 ObjectiveFunction = Callable[..., float]

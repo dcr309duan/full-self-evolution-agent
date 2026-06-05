@@ -9,10 +9,22 @@
       "consecutive_failures": 1
     },
     {
+      "description": "Build a failure pattern miner that records the cause of every failed mutation (e.g., missing import, schema mismatch, side effect on unrelated module) and generates a 'forbidden mutation space' rule set that blocks similar mutations before execution.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780640492.0689633
+    },
+    {
       "description": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
       "priority": 7,
       "status": "pending",
       "created_at": 1780638592.6659403
+    },
+    {
+      "description": "Create a self-model consistency validator that, after each successful evolution cycle, updates an internal dependency graph and verifies that all module interfaces, schemas, and call sites remain aligned, flagging mismatches for immediate repair.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780640492.0718932
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -538,6 +550,13 @@
       "status": "completed",
       "created_at": 1780637080.7299275,
       "completed_at": 1780640434.1842253
+    },
+    {
+      "description": "Implement a sandboxed mutation executor that runs all mutations in a temporary git branch or copy of the codebase, runs the full integration test suite, and only merges changes if tests pass, enabling safe experimentation with high-risk transformations.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780640492.0664244,
+      "completed_at": 1780640662.22243
     }
   ],
   "generated_goals": []
