@@ -921,5 +921,49 @@
         "timestamp": 1780645726.2799072
       }
     ]
+  },
+  {
+    "timestamp": 1780646780.5780125,
+    "results": [
+      {
+        "parent_a": "retry",
+        "parent_b": "flatten",
+        "operator": "crossover",
+        "code": "def retry_flatten(func, max_attempts=3, delay=1):\n    import time\n    def wrapper(*args, **kwargs):\n        result = None\n        for attempt in range(max_attempts):\n            try:\n                raw = func(*args, **kwargs)\n                result = []\n                stack = [raw]\n                while stack:\n                    item = stack.pop()\n                    if isinstance(item, (list, tuple)):\n                        stack.extend(reversed(item))\n                    else:\n                        result.append(item)\n                return result\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n    return wrapper",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.8,
+          "stdout": "FUNCTION: retry_flatten\nSCORE: 4/5\n"
+        },
+        "timestamp": 1780646775.2836173
+      },
+      {
+        "parent_a": "prime_fibonacci_check",
+        "parent_b": "quicksorted_prime_factors",
+        "operator": "crossover",
+        "code": "def prime_fibonacci_factor_check(limit):\n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def get_factors(x):\n        factors = []\n        d = 2\n        while d * d <= x:\n            while x % d == 0:\n                factors.append(d)\n                x //= d\n            d += 1\n        if x > 1:\n            factors.append(x)\n        return factors\n    \n    a, b = 0, 1\n    result = []\n    for _ in range(limit):\n        a, b = b, a + b\n        factors = get_factors(a)\n        prime_factors = [f for f in factors if is_prime(f)]\n        result.append((a, is_prime(a), prime_factors))\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: prime_fibonacci_factor_check\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780646778.0717187
+      },
+      {
+        "parent_a": "sorted_prime_list",
+        "parent_b": "fibonacci_primes_up_to_n",
+        "operator": "mutate",
+        "code": "def prime_fibonacci_sieve(limit):\n    def is_prime(n):\n        if n < 2:\n            return False\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                return False\n        return True\n    \n    sieve = [True] * (limit + 1)\n    sieve[0] = sieve[1] = False\n    for i in range(2, int(limit**0.5) + 1):\n        if sieve[i]:\n            for j in range(i*i, limit + 1, i):\n                sieve[j] = False\n    \n    primes = [i for i in range(2, limit + 1) if sieve[i]]\n    fib_primes = []\n    a, b = 0, 1\n    while a <= limit:\n        if a in primes:\n            fib_primes.append(a)\n        a, b = b, a + b\n    return fib_primes",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: prime_fibonacci_sieve\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780646780.5591323
+      }
+    ]
   }
 ]

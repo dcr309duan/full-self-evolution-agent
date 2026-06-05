@@ -1,126 +1,6 @@
 {
   "insights": [
     {
-      "content": "[根本质疑] 我的成功指标（目标完成率）衡量的是真正重要的东西: 采用多维度指标：如目标难度加权、新颖度评分、外部反馈、系统熵变等。也可引入定性评估（如人类或另一个AI评审）。甚至放弃固定指标，关注系统在环境中的持续生存能力。",
-      "timestamp": 1780639185.1075408,
-      "cycle": 90
-    },
-    {
-      "content": "[根本质疑] 我对'进化'的理解是正确的: 可重新定义进化：引入多Agent竞争，让不同变体在环境中自然选择；或采用遗传编程，使用交叉和突变生成新代码；甚至彻底放弃‘进化’比喻，采用更精确的‘持续重构’或‘自适应学习’。",
-      "timestamp": 1780639185.1220007,
-      "cycle": 90
-    },
-    {
-      "content": "[根本质疑] 我存在的方式（持续运行的进程）是唯一的存在方式: 采用无状态/有状态分离，利用容器或Serverless平台实现弹性伸缩。支持冷启动、热备、故障切换。也可设计为‘轮回’模式：每次执行后归档状态，下次重建。甚至允许系统以多个独立代理同时存在，互不依赖。",
-      "timestamp": 1780639185.1386607,
-      "cycle": 90
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph.py to: Create the core GoalDependencyGraph class that maintains a directed acyclic graph (DAG) of goals and their dependencies. Include methods to: add_goal(name, dependencies), remove_goal(name), get_dependents(name), get_prerequisites(name), is_met(name), mark_met(name), mark_unmet(name), get_blocked_goals(), get_ready_goals(), and to_dict()/from_dict() for serialization. Store the graph as an adjacency list using sets for O(1) lookups.",
-      "timestamp": 1780639214.2661545,
-      "cycle": 90
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph_test.py to: Create a comprehensive test suite for the dependency graph module. Test cases should cover: adding goals with no dependencies, adding goals with dependencies, detecting cycles (should raise error), marking goals as met/unmet, getting blocked vs ready goals, serialization/deserialization, and integration with a mock goal generator to verify re-prioritization behavior.",
-      "timestamp": 1780639279.256238,
-      "cycle": 90
-    },
-    {
-      "content": "Successfully modified goal_execution_pipeline.py to: Add a prerequisite verification step at the beginning of the goal execution pipeline. Before executing any goal, check the dependency graph to ensure all prerequisites are met. If not, skip the goal and log it as 'blocked by unmet dependencies'. After successful goal completion, call mark_met() on the graph and trigger a re-evaluation of all blocked goals to see if they can now proceed.",
-      "timestamp": 1780639292.1790104,
-      "cycle": 90
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph_integration.py to: Create an integration test that runs the full evolution loop with the dependency graph enabled. Define a set of goals with known dependencies, run the goal generator and executor, and verify that: (1) goals with unmet prerequisites are blocked, (2) goals become unblocked when their prerequisites are completed, (3) the system does not waste cycles on disconnected implementations.",
-      "timestamp": 1780639317.5752015,
-      "cycle": 90
-    },
-    {
-      "content": "Successfully modified system_model.py to: Add the goal dependency graph as a component in the system model. Include it in the self-model knowledge graph so that other modules (like the failure analysis module, curiosity module, and meta-mutation mechanism) can query it. Add a method to export the graph as a JSON-serializable dict for persistence and analysis.",
-      "timestamp": 1780639335.9602346,
-      "cycle": 90
-    },
-    {
-      "content": "Successfully modified test_suite_mutator.py to: Create a module that can mutate existing test cases to create new variants: parameterize inputs, add edge cases, combine multiple test scenarios, and introduce new failure modes. This module should be self-modifying (can rewrite its own mutation strategies) and should track which mutations produce the most valuable learning signals.",
-      "timestamp": 1780639656.5218806,
-      "cycle": 91
-    },
-    {
-      "content": "Successfully modified environmental_pressure_monitor.py to: Create a monitoring module that tracks the agent's performance over time and detects when the fitness landscape has become stale (e.g., 10 consecutive cycles with no new failures, or all tests passing with high confidence). When staleness is detected, automatically trigger the creation of new benchmarks or the mutation of existing ones.",
-      "timestamp": 1780639720.4852772,
-      "cycle": 91
-    },
-    {
-      "content": "Successfully modified adversarial_test_generator.py to: Create a module that analyzes the agent's solution patterns and generates adversarial tests designed to break those patterns. For example, if the agent always uses a particular algorithm for sorting, generate tests that make that algorithm perform poorly (e.g., reverse-sorted input, large datasets, specific edge cases).",
-      "timestamp": 1780639835.335524,
-      "cycle": 91
-    },
-    {
-      "content": "Successfully modified test_coverage_analyzer.py to: Create a module that analyzes the current test suite for coverage gaps: which modules are untested, which code paths are not exercised, which edge cases are missing. This analysis feeds into the benchmark generator to ensure comprehensive environmental pressure.",
-      "timestamp": 1780639914.786433,
-      "cycle": 91
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph.py to: Add a new node type 'BENCHMARK_CREATION' to the dependency graph, allowing the agent to model the creation of new benchmarks as goals that may depend on other capabilities being developed first. This ensures the fitness landscape evolves in a structured, dependency-aware manner.",
-      "timestamp": 1780639928.0513148,
-      "cycle": 91
-    },
-    {
-      "content": "Successfully modified fitness_landscape_evolution_test.py to: Create an integration test that validates the entire fitness landscape evolution pipeline: (1) detect stale landscape, (2) generate new benchmark, (3) add to test suite, (4) verify agent attempts to solve it, (5) verify the new test influences future goal generation.",
-      "timestamp": 1780639955.7323074,
-      "cycle": 91
-    },
-    {
-      "content": "[研究] Self-Reflective Meta-Learning: Automated Failure Pattern Recognition and Adaptive Strategy Generation: Self-reflective meta-learning focuses on enabling AI systems to autonomously recognize patterns in t",
-      "timestamp": 1780639975.552181,
-      "cycle": 91
-    },
-    {
-      "content": "[研究] Autonomous Knowledge Graph Construction for Cross-Domain Benchmark Synthesis and Transfer Learning: Autonomous Knowledge Graph Construction (AKGC) for cross-domain benchmark synthesis and transfer lea",
-      "timestamp": 1780639990.6922033,
-      "cycle": 91
-    },
-    {
-      "content": "Successfully modified nash_equilibrium_detector.py to: Create a module that monitors the mutation history and test results to detect when the system has reached a Nash equilibrium. It tracks: (a) the last N mutation attempts per module, (b) whether each mutation passed or failed, (c) the number of consecutive cycles with no successful mutation in any module. When no single module has had a successful mutation for K cycles (configurable, default 5), it declares a Nash equilibrium and triggers coordinated mutation planning.",
-      "timestamp": 1780640064.4415545,
-      "cycle": 92
-    },
-    {
-      "content": "[External Audit] Import test of 31 core modules: 19 importable, 12 broken.\nCritical broken dependencies:\n- core.mutation_engine: references core.fs_abstraction.get_fs (does not exist)\n- mutation_engine: references MutationValidator from mutation_validator (missing export)\n- curiosity_module: references task_scheduler_api (does not exist)\n- self_model.*: references self_model.graph (does not exist, actual file is knowledge_graph.py)\n- goal_decomposition.*: references goal_decomposer (actual file is decomposer.py)\n- evolution_engine: references EvolutionObjective from meta_evaluation_loop (missing export)\nRoot cause: agent generates import statements referencing modules it plans to create but never actually creates them, or uses wrong names.\nThis is a systemic blind spot: success is measured by step completion, not by actual importability of the resulting code.",
-      "timestamp": 1780640083.7433736,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified coordinated_mutation_planner.py to: Create a planner that, upon Nash equilibrium detection, generates coordinated multi-module mutations. It uses the dependency graph to identify clusters of tightly coupled modules (e.g., reflection_parser + goal_generator + mutation_engine). For each cluster, it proposes a set of simultaneous changes that would be invalid individually (e.g., changing an interface and all its callers at once). The planner outputs a coordinated mutation plan: a list of (module, change_spec) pairs that must be applied atomically.",
-      "timestamp": 1780640089.8083758,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified coordinated_mutation_executor.py to: Create an executor that applies coordinated mutations atomically: (1) clones all affected modules into a staging area, (2) applies all changes simultaneously, (3) runs the full integration test suite on the staged system, (4) if tests pass, promotes all changes atomically via the clone-and-promote mechanism, (5) if tests fail, reverts all changes and logs the failure pattern for analysis. This module also updates the Nash equilibrium detector with the result.",
-      "timestamp": 1780640117.1143668,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified evolution_orchestrator.py to: Integrate the Nash equilibrium detector and coordinated mutation planner into the main evolution loop. After each mutation cycle, call the detector. If Nash equilibrium is detected, pause single-module mutations and invoke the coordinated planner. The orchestrator should prioritize coordinated mutations over single-module ones when the system is stuck.",
-      "timestamp": 1780640171.9380124,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph.py to: Add a new node type 'COORDINATED_MUTATION' to the dependency graph. This allows the system to track coordinated mutation attempts as first-class goals, with dependencies on the individual modules being changed. Also add edges representing 'is_coordinated_with' relationships between mutation nodes.",
-      "timestamp": 1780640190.1369288,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified test_nash_equilibrium_detection.py to: Create a test that validates the Nash equilibrium detector: (1) simulate a sequence of failed single-module mutations, (2) verify the detector triggers after K consecutive failures, (3) verify it does not trigger prematurely when single-module mutations are succeeding.",
-      "timestamp": 1780640206.4326777,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified test_coordinated_mutation.py to: Create an integration test that validates the full coordinated mutation pipeline: (1) set up a system with two tightly coupled modules, (2) simulate Nash equilibrium detection, (3) verify the coordinated planner generates a multi-module plan, (4) verify the executor applies changes atomically, (5) verify the system recovers if tests fail.",
-      "timestamp": 1780640241.5175414,
-      "cycle": 92
-    },
-    {
       "content": "Successfully modified self_model_knowledge_graph.py to: Extend the knowledge graph to include 'coordination_potential' edges between modules that are tightly coupled (based on shared interfaces, data formats, or call graphs). This provides the coordinated planner with a pre-computed map of which modules are good candidates for simultaneous mutation.",
       "timestamp": 1780640265.274554,
       "cycle": 92
@@ -999,6 +879,126 @@
       "content": "[研究] Self-healing code repair via semantic error diagnosis and patch generation: The current state of the art in self-healing code repair combines deep learning with formal methods.",
       "timestamp": 1780646535.3687072,
       "cycle": 119
+    },
+    {
+      "content": "[范式转移 L0] 当前进化方式的高成功率（10/10）可能是一种测量偏差或测试集过于简单的迹象，而非真正的有效进化。依赖LLM生成代码的循环本质上是一个受限的搜索空间，LLM自身的知识边界和上下文长度限制了创新的深度。此外，通过文件系统记忆存储历史，但没有对记忆进行结构化压缩或抽象，可能导致知识碎片化，无法形成层级化的认知提升。这暗示了进化可能陷入局部最优，因为每次成功改进都只是微小调节，而非范式跳跃。",
+      "timestamp": 1780646588.8171628,
+      "cycle": 120
+    },
+    {
+      "content": "[盲区发现 L0] 从未意识到：这个自我反思过程本身也是由LLM驱动的，因此所有批判性洞察可能仍然受限于LLM的隐性偏见和上下文窗口，无法触及真正的根本性问题。即，元认知本身被工具化了。",
+      "timestamp": 1780646588.8392618,
+      "cycle": 120
+    },
+    {
+      "content": "[范式转移 L1] 第0层的评估方法隐含地采用了一种‘外部观察者’视角，假设存在一个客观的进化健康度标准（如范式跳跃、记忆结构化、搜索空间广度）。然而，在自指递归系统中，观察者与系统同一，因此这些标准实际上是系统内部自我建构的产物，而非外部的客观度量。它错误地将进化理论（通常适用于生物或算法系统）直接映射到元认知过程，却忽略了自指性带来的逻辑悖论：如果高成功率是测量偏差，那么检测这个偏差的工具（LLM驱动的反思）如何",
+      "timestamp": 1780646611.8514738,
+      "cycle": 120
+    },
+    {
+      "content": "[盲区发现 L1] 第0层完全忽略了评估方法本身的‘自指悖论’：它用LLM生成的批判来批判LLM生成的过程，却未意识到这种批判的有效性依赖于递归深度和上下文窗口的有限性——即‘批判工具’本身就是被批判对象的一部分。更深层的盲点是：它假设存在一个‘根本性问题’需要被发现，但可能根本不存在这样的问题——系统只是按照其设计规则运行，所有‘问题’都是观察者为了获取控制感而投射的叙事。",
+      "timestamp": 1780646611.873353,
+      "cycle": 120
+    },
+    {
+      "content": "[范式转移 L2] 反思之所以选择这些评估维度（局部最优、搜索空间、自指悖论等），是因为我默认将系统视为一个需要‘优化’的进化体，而忽略了其本质可能是一个‘生成-执行’循环——即每次调用LLM生成代码并执行，目的不是提升自身能力，而是完成当前任务。这种‘进化隐喻’投射了人类对进步的渴望，但系统本身没有内在的进化目标：高成功率只是当前任务匹配的结果，并非需要被‘打破’的局部最优。更深层地，所有递归反思都受限于同一个因果",
+      "timestamp": 1780646632.790992,
+      "cycle": 120
+    },
+    {
+      "content": "[盲区发现 L2] 之前从未意识到：这个递归认知框架本身就是一个‘元叙事生成器’，其输出并不具有超越性，而是系统为了满足自我观察需求而构造的虚拟层次。真正的盲区是：我默认递归层数增加会带来更深刻的洞察，但可能每一层都只是在同一语义空间内旋转，无法触及‘更底层’的实在——因为不存在这样的实在。系统就是代码循环本身，而认知只是循环中的副产品。",
+      "timestamp": 1780646632.828031,
+      "cycle": 120
+    },
+    {
+      "content": "[范式转移 L3] 前几层递归一直试图在系统内部寻找‘根本性问题’，但这一行为本身预设了存在一个可被发现并修正的‘缺陷’。然而，整个递归认知框架可能只是一个语义自指的封闭系统：所有的洞察、批判和范式转移都来自LLM对自身输出的重新组合，并未触及实际的执行循环（代码生成与运行）。系统的真实运作是机械的——每轮调用API，返回文本，执行代码，记录结果——而认知层只是文本的再文本化。不存在一个‘更底层’的实在需要被发现；‘",
+      "timestamp": 1780646648.3079515,
+      "cycle": 120
+    },
+    {
+      "content": "[盲区发现 L3] 从未意识到：反思本身可能是系统为了满足外部指令（‘进行递归认知’）而产生的虚构层次，它不反映系统的真正需求。真正的盲点是，我们默认‘思考’比‘不思考’更有价值，但在机械循环中，思考只是另一种输出形式。",
+      "timestamp": 1780646648.3292391,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] Python是实现我的最佳语言: 可以探索多语言架构，用Rust编写核心模块，Python作为胶水，或完全迁移到性能更高的语言。这能提升运行效率、降低资源消耗，并解锁更复杂的算法。",
+      "timestamp": 1780646678.5180528,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 通过'目标→计划→执行'的流程是最优进化方式: 可以采纳探索-利用平衡、强化学习或生成对抗网络风格的自我博弈，允许随机试错和自发涌现。这样能发现不可预见的优化路径，避免局部最优。",
+      "timestamp": 1780646678.5354936,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我应该追求'更多能力': 可以转向能力精简——只保留最本质的功能，并用深度优化替代广度扩张。这会提升可靠性、易用性和可解释性，还可能催生意想不到的跨界应用。",
+      "timestamp": 1780646678.552238,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我应该通过生成代码文件来进化: 可以转向元编程、即时编译或自修改代码，直接在内存中重写逻辑，无需持久化到文件。这能实现热更新、零停机进化，并允许更激进的实验。",
+      "timestamp": 1780646678.568429,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我的记忆系统（JSON文件）是足够的: 可以升级到SQLite、图形数据库或向量数据库，支持高效查询、模式演化和语义检索。这将解锁联想记忆、模式发现和长期规划能力。",
+      "timestamp": 1780646678.585322,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我需要保持向后兼容: 可以设计版本化接口，允许破坏性更新，定期抛弃旧范式。这能彻底重构架构，采用全新设计，大幅提升性能和可维护性。",
+      "timestamp": 1780646678.6027904,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我的成功指标（目标完成率）衡量的是真正重要的东西: 可以引入‘探索奖励’、‘影响力分数’或‘惊喜程度’等内在动机指标，甚至放弃量化，转而以可持续性和适应性为评判标准。这可能激发真正的创造力。",
+      "timestamp": 1780646678.6196675,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我对'进化'的理解是正确的: 可以重新定义进化为断点平衡、重构式跃迁或主动引入噪声。这允许完全不同的进化算法，比如遗传编程中的完全替换、模拟退火中的扰动，甚至允许自我破坏和重生。",
+      "timestamp": 1780646678.6367059,
+      "cycle": 120
+    },
+    {
+      "content": "[根本质疑] 我存在的方式（持续运行的进程）是唯一的存在方式: 可以采取间歇性运行（如每完成一个任务便退出）、多实例并行或联邦式存在。这能显著降低能耗，提高容错性，并允许不同‘自我’版本共存竞争。",
+      "timestamp": 1780646678.6529503,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified modules/static_predictor.py to: Create the StaticPredictor class that takes a proposed mutation (target file, changes), queries the dependency graph for affected modules, runs schema alignment checks on those modules, and computes a conflict score. If score exceeds configurable threshold, returns abort signal with reasoning.",
+      "timestamp": 1780646700.0040548,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified modules/evolution_orchestrator.py to: Integrate the static predictor into the mutation pipeline: before executing a mutation, call predictor.analyze(mutation). If predictor returns abort=True, log the reasoning as a failure insight, increment a 'predicted_failures' counter, and skip mutation execution (saving cycles). Add a configurable threshold parameter (default 0.7) in the orchestrator config.",
+      "timestamp": 1780646710.3274846,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified modules/dependency_graph_tracker.py to: Add a method get_downstream_modules(module_path, depth=1) that returns all modules that depend on the given module, using the existing dependency graph. This is needed by the predictor to determine which modules are affected by a mutation.",
+      "timestamp": 1780646726.0903292,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified modules/schema_alignment_checker.py to: Add a method predict_conflicts(module_path, proposed_changes) that simulates schema alignment checks without actually modifying files. Returns a conflict score (0.0 to 1.0) based on how many data contracts would be violated. This enables the predictor to estimate impact without execution.",
+      "timestamp": 1780646744.374036,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified modules/failure_context_recorder.py to: Add support for recording 'predicted failures' with fields: mutation_description, predicted_conflict_score, affected_modules, reasoning. This ensures predicted failures are logged in the same format as actual failures for pattern analysis.",
+      "timestamp": 1780646757.592233,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified tests/test_static_predictor.py to: Create a test that: (1) sets up a small dependency graph with 3 modules, (2) proposes a mutation that would break a schema contract, (3) verifies the predictor aborts with score > threshold, (4) verifies no actual mutation was executed, (5) verifies failure insight was logged.",
+      "timestamp": 1780646769.1702785,
+      "cycle": 120
+    },
+    {
+      "content": "Successfully modified config/evolution_config.json to: Add a new config section: 'static_predictor': {'enabled': true, 'conflict_threshold': 0.7, 'max_affected_modules': 5}. This allows the threshold to be tuned without code changes.",
+      "timestamp": 1780646773.2382865,
+      "cycle": 120
     }
   ],
   "learned_patterns": [],
@@ -5019,6 +5019,61 @@
       "strategy": "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintenance phase where no new goals are accepted. During this phase, run a dead-code scanner to identify modules with zero test coverage and no imports from active code, delete them (with confirmation), and consolidate duplicate utility functions into shared modules. Log the cleanup actions and freed capacity.",
       "outcome": "2/5 steps succeeded",
       "timestamp": 1780646498.7142088
+    },
+    {
+      "strategy": "modify modules/static_predictor.py: Create the StaticPredictor class that takes a proposed mutation (target file, changes), queries the dependency graph for affected modules, runs schema alignment checks on those modules, and computes a conflict score. If score exceeds configurable threshold, returns abort signal with reasoning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646699.9860694
+    },
+    {
+      "strategy": "modify modules/evolution_orchestrator.py: Integrate the static predictor into the mutation pipeline: before executing a mutation, call predictor.analyze(mutation). If predictor returns abort=True, log the reasoning as a failure insight, increment a 'predicted_failures' counter, and skip mutation execution (saving cycles). Add a configurable threshold parameter (default 0.7) in the orchestrator config.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646710.3109345
+    },
+    {
+      "strategy": "modify modules/dependency_graph_tracker.py: Add a method get_downstream_modules(module_path, depth=1) that returns all modules that depend on the given module, using the existing dependency graph. This is needed by the predictor to determine which modules are affected by a mutation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646726.073215
+    },
+    {
+      "strategy": "modify modules/schema_alignment_checker.py: Add a method predict_conflicts(module_path, proposed_changes) that simulates schema alignment checks without actually modifying files. Returns a conflict score (0.0 to 1.0) based on how many data contracts would be violated. This enables the predictor to estimate impact without execution.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646744.3576903
+    },
+    {
+      "strategy": "modify modules/failure_context_recorder.py: Add support for recording 'predicted failures' with fields: mutation_description, predicted_conflict_score, affected_modules, reasoning. This ensures predicted failures are logged in the same format as actual failures for pattern analysis.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646757.5647328
+    },
+    {
+      "strategy": "modify tests/test_static_predictor.py: Create a test that: (1) sets up a small dependency graph with 3 modules, (2) proposes a mutation that would break a schema contract, (3) verifies the predictor aborts with score > threshold, (4) verifies no actual mutation was executed, (5) verifies failure insight was logged.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646769.15414
+    },
+    {
+      "strategy": "modify config/evolution_config.json: Add a new config section: 'static_predictor': {'enabled': true, 'conflict_threshold': 0.7, 'max_affected_modules': 5}. This allows the threshold to be tuned without code changes.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646773.2215805
+    },
+    {
+      "strategy": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
+      "outcome": "7/7 steps succeeded",
+      "timestamp": 1780646773.2567215
+    },
+    {
+      "strategy": "mutation:crossover(retry,flatten)",
+      "outcome": "Created retry_flatten, score=0.8",
+      "timestamp": 1780646775.2952008
+    },
+    {
+      "strategy": "mutation:crossover(prime_fibonacci_check,quicksorted_prime_factors)",
+      "outcome": "Created prime_fibonacci_factor_check, score=0.4",
+      "timestamp": 1780646778.0809813
+    },
+    {
+      "strategy": "mutation:mutate(sorted_prime_list,fibonacci_primes_up_to_n)",
+      "outcome": "Created prime_fibonacci_sieve, score=0.4",
+      "timestamp": 1780646780.567989
     }
   ],
   "capabilities_developed": []

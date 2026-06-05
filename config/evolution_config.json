@@ -1,0 +1,7 @@
+{
+  "static_predictor": {
+    "enabled": true,
+    "conflict_threshold": 0.7,
+    "max_affected_modules": 5
+  }
+}

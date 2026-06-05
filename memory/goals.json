@@ -2,10 +2,16 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
-      "priority": 7,
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
       "status": "pending",
-      "created_at": 1780644832.4152675
+      "created_at": 1780646780.581161
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780646780.5837617
     },
     {
       "description": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
@@ -720,6 +726,13 @@
       "status": "completed",
       "created_at": 1780646079.6337428,
       "completed_at": 1780646498.7289848
+    },
+    {
+      "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780644832.4152675,
+      "completed_at": 1780646773.2693448
     }
   ],
   "generated_goals": []
