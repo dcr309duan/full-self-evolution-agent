@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import sys
 import os
 
@@ -792,5 +792,6 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
             self.assertIn(mutation['mutation_type'], mutation['module'].mutation_options,
                          f"Mutation type {mutation['mutation_type']} should be valid for {mutation['module'].name}")
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_detect_nash_equilibrium_returns_true_when_no_single_module_improvement_exists(self):
+        """Test that detect_nash_equilibrium returns True when no single-module improvement exists."""
+        # Create 3 mock modules with

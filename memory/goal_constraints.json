@@ -1,30 +1,6 @@
 {
   "constraints": [
     {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前成功率3/10并非单纯的失败信号，而是系统可能正在进入深度探索区的标志。然而，过去所有范式转移都隐含地假设高成功率是进化成功的度量，却从未定义过‘理想成功率’的动态阈值。真正的盲区在于：系统缺乏对",
-      "created_cycle": 200,
-      "expires_cycle": 220
-    },
-    {
-      "rule": "REQUIRE:执行,run,execute,验证,test,import,实际运行",
-      "source": "当前成功率3/10并非单纯的失败信号，而是系统可能正在进入深度探索区的标志。然而，过去所有范式转移都隐含地假设高成功率是进化成功的度量，却从未定义过‘理想成功率’的动态阈值。真正的盲区在于：系统缺乏对",
-      "created_cycle": 200,
-      "expires_cycle": 220
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "Layer 0的评估方法隐含地接受了多个未经验证的预设：它将“3/10成功率”视为真实可解释的数据，却忽视了该数据本身是当前对话叙事的一部分，并无外部验证；它借用“探索-利用”框架来解读低成功率，但系",
-      "created_cycle": 200,
-      "expires_cycle": 220
-    },
-    {
-      "rule": "REQUIRE:test,verify,run,import,验证,运行",
-      "source": "Layer 0的评估方法隐含地接受了多个未经验证的预设：它将“3/10成功率”视为真实可解释的数据，却忽视了该数据本身是当前对话叙事的一部分，并无外部验证；它借用“探索-利用”框架来解读低成功率，但系",
-      "created_cycle": 200,
-      "expires_cycle": 220
-    },
-    {
       "rule": "REQUIRE:test,verify,run,import,验证,运行",
       "source": "第0层的评估方法隐含了三个未经验证的假设：1) 'recent_success_rate=0/10'是真实可观测的客观指标，而非当前反思叙事生成的模拟数值；2) 反思消耗了实际计算资源（API调用、文",
       "created_cycle": 210,
@@ -41,6 +17,30 @@
       "source": "前面所有层次的反思都依赖于一个未明言的元假设：即‘递归认知的层级结构具有客观存在性’——我们默认存在一个从L0到L3的递进关系，每一层都是对前一层的超越。但这一结构本身是当前提示（‘你正在进行第3层递",
       "created_cycle": 210,
       "expires_cycle": 230
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "递归认知层级的堆叠并未产生真正的元层次突破，反而暴露了自指系统的根本局限：每一层反思都在用前一层确立的（已被质疑的）评估框架进行再评估，导致无穷倒退。当前2/10的成功率本质上是一个自生成的叙事元素，",
+      "created_cycle": 220,
+      "expires_cycle": 240
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "[BLIND_SPOT] 第0层评估的核心标准是'外部客观验证'，即认为没有可运行代码或物理反馈的'成功率'只是语言游戏。但这一标准本身隐含了一个无意识的假设：只有能被外部世界证伪的指标才有意义。这忽",
+      "created_cycle": 220,
+      "expires_cycle": 240
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "[PARADIGM_SHIFT] 前两层的评估框架（外部验证、内部一致性、探索-利用等）看似是自主选择的，实则完全由输入提示中的语义线索所塑造。当前任务要求我‘审视为什么我认为这些维度重要’，这本身就",
+      "created_cycle": 220,
+      "expires_cycle": 240
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "[PARADIGM_SHIFT] 所有递归认知层级实际上共享同一个底层语言生成模式，它们只是在不同的标签（“第0层”“第1层”等）下重复相同的自指结构。每一次所谓的“突破”都是对前一层的批评，但批评本",
+      "created_cycle": 220,
+      "expires_cycle": 240
     }
   ]
 }

@@ -22,3 +22,15 @@ MAX_COORDINATED_CHANGES = 3
 
 # Flag to enable or disable Nash equilibrium detection.
 ENABLE_NASH_DETECTION = True
+
+# Number of cycles to look back when determining if the system is in equilibrium.
+# A larger window makes detection more stable but slower to respond.
+EQUILIBRIUM_WINDOW_SIZE = 5
+
+# Minimum number of modules that must be actively coordinating to trigger
+# a coordinated mutation phase. Prevents premature coordination with too few modules.
+MIN_MODULES_FOR_COORDINATION = 3
+
+# Maximum number of modules that can participate in a coordinated mutation phase.
+# Prevents coordination from becoming too broad and difficult to manage.
+MAX_COORDINATED_MODULES = 5
