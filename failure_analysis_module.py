@@ -169,6 +169,8 @@ class FailureAnalyzer:
             recommendation = self._handle_parameter_error(parameters, mutation_type)
         elif error_type == 'mutation_failure':
             recommendation = self._handle_mutation_failure(mutation_type, parameters)
+        elif error_type == 'CONSISTENCY_CONTRACT_VIOLATION':
+            recommendation = self._handle_consistency_contract_violation(failure_report)
         else:
             recommendation = self._handle_unknown_error(failure_report)
         
@@ -224,6 +226,8 @@ class FailureAnalyzer:
             recommendation = self._handle_subsystem_parameter_error(subsystem_name, parameters, mutation_type)
         elif error_type == 'mutation_failure':
             recommendation = self._handle_subsystem_mutation_failure(subsystem_name, mutation_type, parameters)
+        elif error_type == 'CONSISTENCY_CONTRACT_VIOLATION':
+            recommendation = self._handle_subsystem_consistency_contract_violation(subsystem_name, failure_report)
         else:
             recommendation = self._handle_subsystem_unknown_error(subsystem_name, failure_report)
         
@@ -266,6 +270,7 @@ class FailureAnalyzer:
         template_failures = defaultdict(int)
         mutation_failures = defaultdict(int)
         parameter_failures = defaultdict(int)
+        consistency_failures = defaultdict(int)
         
         for failure in recent_failures:
             error_type = failure.get('error_type', 'unknown')
@@ -281,6 +286,10 @@ class FailureAnalyzer:
                 params = failure.get('parameters', {})
                 for param in params:
                     parameter_failures[param] += 1
+            elif error_type == 'CONSISTENCY_CONTRACT_VIOLATION':
+                modules = failure.get('modules_involved', [])
+                for module in modules:
+                    consistency_failures[module] += 1
         
         # Check for mutation_strategy_too_aggressive signal
         total_mutation_failures = sum(mutation_failures.values())
@@ -296,8 +305,6 @@ class FailureAnalyzer:
             })
         
         # Check for dependency_graph_cyclic signal
-        # This is detected when template errors occur repeatedly with the same template
-        # suggesting circular dependencies in template composition
         for template, count in template_failures.items():
             if count >= 2 and count / len(recent_failures) > 0.2:
                 redesign_signals.append({
@@ -310,8 +317,6 @@ class FailureAnalyzer:
                 })
         
         # Check for component_under-specified signal
-        # This is detected when parameter errors occur frequently with specific parameters
-        # suggesting the component specification is incomplete
         for param, count in parameter_failures.items():
             if count >= 2 and count / len(recent_failures) > 0.15:
                 redesign_signals.append({
@@ -322,6 +327,19 @@ class FailureAnalyzer:
                     'recommended_action': f"Review and expand the specification for parameter '{param}'. Consider adding validation rules, expanding allowed ranges, or implementing adaptive parameter bounds.",
                     'frequency': count
                 })
+        
+        # Check for consistency_contract_violation signal
+        total_consistency_failures = sum(consistency_failures.values())
+        if total_consistency_failures >= 2:
+            most_common_module = max(consistency_failures, key=consistency_failures.get)
+            redesign_signals.append({
+                'signal_type': 'consistency_contract_violation',
+                'severity': 'high' if total_consistency_failures >= 4 else 'medium',
+                'description': f"Consistency contract violations detected {total_consistency_failures} times in the last {len(recent_failures)} cycles. Module '{most_common_module}' is most frequently involved, indicating potential schema mismatch or contract incompatibility.",
+                'affected_components': list(consistency_failures.keys()),
+                'recommended_action': f"Review and align the contracts between modules, especially '{most_common_module}'. Consider implementing contract validation, schema versioning, or automatic schema migration mechanisms.",
+                'frequency': total_consistency_failures
+            })
         
         # Check for general structural issues based on error type distribution
         if len(error_type_counts) >= 3 and sum(error_type_counts.values()) >= 5:
@@ -400,7 +418,8 @@ class FailureAnalyzer:
         design_limitation_indicators = [
             'template_error',
             'mutation_failure',
-            'parameter_out_of_bounds'
+            'parameter_out_of_bounds',
+            'CONSISTENCY_CONTRACT_VIOLATION'
         ]
         
         # Check if error type suggests design limitation
@@ -450,6 +469,14 @@ class FailureAnalyzer:
                 f"(2) Implement mutation validation before application, "
                 f"(3) Add mutation rate adaptation based on failure history."
             )
+        elif error_type == 'CONSISTENCY_CONTRACT_VIOLATION':
+            recommendations.append(
+                f"Design limitation detected with consistency contract violation. "
+                f"Consider implementing contract validation and schema alignment mechanisms. "
+                f"Alternative approaches: (1) Use schema versioning to manage contract evolution, "
+                f"(2) Implement automatic schema migration when mismatches are detected, "
+                f"(3) Add contract enforcement at module boundaries with clear error reporting."
+            )
         else:
             recommendations.append(
                 f"Design limitation detected. Consider reviewing the overall system architecture. "
@@ -459,6 +486,50 @@ class FailureAnalyzer:
             )
         
         return " ".join(recommendations)
+
+    def _handle_consistency_contract_violation(self, failure_report: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle consistency contract violation failures from the self-consistency test suite.
+        
+        Args:
+            failure_report: Dictionary containing failure details with modules_involved and schema_mismatch
+        
+        Returns:
+            Dictionary with recommended strategy for resolving the contract violation
+        """
+        modules_involved = failure_report.get('modules_involved', [])
+        schema_mismatch = failure_report.get('schema_mismatch', {})
+        
+        logger.info(f"Consistency contract violation detected. Modules involved: {modules_involved}. Schema mismatch details: {schema_mismatch}")
+        
+        return {
+            'strategy': 'resolve_contract_violation',
+            'recommended_action': 'Align contracts between modules to resolve schema mismatch',
+            'modules_involved': modules_involved,
+            'schema_mismatch_details': schema_mismatch,
+            'details': f"Consistency contract violation between modules: {', '.join(modules_involved)}. Schema mismatch: {json.dumps(schema_mismatch, indent=2)}"
+        }
+
+    def _handle_subsystem_consistency_contract_violation(self, subsystem_name: str, failure_report: Dict[str, Any]) -> str:
+        """
+        Handle consistency contract violation for a specific subsystem.
+        
+        Args:
+            subsystem_name: Name of the subsystem that failed
+            failure_report: Dictionary containing failure details
+        
+        Returns:
+            String describing the recommended action for the subsystem
+        """
+        modules_involved = failure_report.get('modules_involved', [])
+        schema_mismatch = failure_report.get('schema_mismatch', {})
+        
+        logger.info(f"Subsystem '{subsystem_name}' consistency contract violation. Modules involved: {modules_involved}. Schema mismatch: {schema_mismatch}")
+        
+        return (f"Subsystem '{subsystem_name}' consistency contract violation: Align contracts between modules. "
+                f"Modules involved: {', '.join(modules_involved)}. "
+                f"Schema mismatch details: {json.dumps(schema_mismatch)}. "
+                f"Consider implementing contract validation, schema versioning, or automatic schema migration for this subsystem.")
 
     def _handle_subsystem_template_error(self, subsystem_name: str, template: str, parameters: Dict[str, Any]) -> str:
         """
@@ -667,7 +738,8 @@ class FailureAnalyzer:
             'switch_template': 0.7,
             'tune_parameters': 0.8,
             'change_paradigm': 0.6,
-            'conservative_reset': 0.9
+            'conservative_reset': 0.9,
+            'resolve_contract_violation': 0.75
         }
         return confidence_map.get(recommendation.get('strategy', 'conservative_reset'), 0.5)
 

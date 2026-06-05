@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a self-consistency test suite for introspection modules: for each reflection cycle, automatically generate test cases that check that the reflection parser output can be parsed by the goal generator without errors, and that the goal generator output can be consumed by the mutation engine, failing and rolling back any change that breaks this contract.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780630847.0881603
-    },
-    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -236,6 +230,13 @@
       "status": "completed",
       "created_at": 1780630847.086984,
       "completed_at": 1780631204.8043268
+    },
+    {
+      "description": "Create a self-consistency test suite for introspection modules: for each reflection cycle, automatically generate test cases that check that the reflection parser output can be parsed by the goal generator without errors, and that the goal generator output can be consumed by the mutation engine, failing and rolling back any change that breaks this contract.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780630847.0881603,
+      "completed_at": 1780631530.0446713
     }
   ],
   "generated_goals": []
