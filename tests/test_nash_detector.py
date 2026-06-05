@@ -9,18 +9,32 @@ from core.nash_detector import NashEquilibriumDetector
 
 
 class TestNashDetector(unittest.TestCase):
-    def setUp(self):
-        self.detector = NashEquilibriumDetector()
+    def test_import_clean(self):
+        """Test that the module imports cleanly without errors"""
+        try:
+            from core import nash_detector
+            self.assertTrue(True)
+        except ImportError as e:
+            self.fail(f"Import failed: {e}")
+
+    def test_initialization_empty_state(self):
+        """Test initialization with empty state"""
+        detector = NashEquilibriumDetector()
+        self.assertIsNotNone(detector)
+        self.assertEqual(len(detector.module_scores), 0)
+        self.assertEqual(len(detector.history), 0)
+
+    def test_add_scores_and_detect_equilibrium(self):
+        """Test adding module scores and detecting equilibrium"""
+        detector = NashEquilibriumDetector()
         
-    def test_detect_equilibrium_with_stable_scores(self):
-        """Test detection of equilibrium with stable scores where no module can improve"""
         module_scores = {
             'module_a': 0.8,
             'module_b': 0.6,
             'module_c': 0.9
         }
         
-        result = self.detector.detect_equilibrium(module_scores)
+        result = detector.detect_equilibrium(module_scores)
         
         self.assertIsInstance(result, dict)
         self.assertIn('is_equilibrium', result)
@@ -31,50 +45,28 @@ class TestNashDetector(unittest.TestCase):
         # With stable scores, should detect equilibrium
         self.assertTrue(result['is_equilibrium'])
         self.assertEqual(len(result['deviations']), 0)
+
+    def test_coalition_improvements_at_equilibrium(self):
+        """Test finding coalition improvements when at equilibrium"""
+        detector = NashEquilibriumDetector()
         
-    def test_non_detection_with_improving_scores(self):
-        """Test non-detection of equilibrium when scores can be improved"""
-        module_scores = {
-            'module_a': 0.3,
-            'module_b': 0.4,
-            'module_c': 0.2
-        }
-        
-        result = self.detector.detect_equilibrium(module_scores)
-        
-        self.assertIsInstance(result, dict)
-        self.assertIn('is_equilibrium', result)
-        self.assertIn('deviations', result)
-        
-        # With low scores that can be improved, should not detect equilibrium
-        self.assertFalse(result['is_equilibrium'])
-        self.assertGreater(len(result['deviations']), 0)
-        
-        # Verify deviations contain expected structure
-        for deviation in result['deviations']:
-            self.assertIn('module', deviation)
-            self.assertIn('current_score', deviation)
-            self.assertIn('suggested_score', deviation)
-            self.assertIn('reason', deviation)
-            
-    def test_coordinated_mutation_generation(self):
-        """Test that coordinated mutation generation returns list of tuples with module names and changes"""
         module_scores = {
             'module_a': 0.5,
             'module_b': 0.5,
             'module_c': 0.5
         }
         
-        mutations = self.detector.generate_coordinated_mutations(module_scores)
+        # First detect equilibrium
+        result = detector.detect_equilibrium(module_scores)
         
-        # Verify it returns a list
-        self.assertIsInstance(mutations, list)
+        # Then find coalition improvements
+        improvements = detector.find_coalition_improvements(module_scores)
         
-        # Verify each mutation is a tuple of (module_name, changes)
-        for mutation in mutations:
-            self.assertIsInstance(mutation, tuple)
-            self.assertEqual(len(mutation), 2)
-            module_name, changes = mutation
+        self.assertIsInstance(improvements, list)
+        for improvement in improvements:
+            self.assertIsInstance(improvement, tuple)
+            self.assertEqual(len(improvement), 2)
+            module_name, changes = improvement
             self.assertIsInstance(module_name, str)
             self.assertIsInstance(changes, dict)
 

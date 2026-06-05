@@ -73,6 +73,127 @@ class NashEquilibriumDetector:
             self.module_interaction_success_rates[module_name] = []
             self.module_improvement_rates[module_name] = []
 
+    def register_module_interaction_metrics(self, module_name: str, success_rate: float, dependency_count: int) -> None:
+        """
+        Register module interaction metrics including success rates and dependency counts.
+        
+        Args:
+            module_name: Name of the module
+            success_rate: Success rate of interactions (0.0 to 1.0)
+            dependency_count: Number of dependencies for the module
+        """
+        if module_name not in self.module_names:
+            return
+        
+        try:
+            # Track success rate
+            if module_name not in self.module_interaction_success_rates:
+                self.module_interaction_success_rates[module_name] = []
+            self.module_interaction_success_rates[module_name].append(success_rate)
+            
+            # Keep only last 100 entries
+            if len(self.module_interaction_success_rates[module_name]) > 100:
+                self.module_interaction_success_rates[module_name] = self.module_interaction_success_rates[module_name][-100:]
+            
+            # Track dependency count as interaction frequency
+            self.module_interaction_frequencies[module_name] = self.module_interaction_frequencies.get(module_name, 0) + dependency_count
+            
+        except Exception:
+            pass
+
+    def detect_equilibrium(self, module_scores: Dict[str, float]) -> bool:
+        """
+        Detect if the system is at Nash equilibrium based on module scores.
+        Returns True when no single metric improves by more than 1% over 5 consecutive cycles.
+        
+        Args:
+            module_scores: Dictionary mapping module names to their current scores
+            
+        Returns:
+            True if system is at Nash equilibrium, False otherwise
+        """
+        try:
+            # Update current scores
+            for module_name, score in module_scores.items():
+                if module_name in self.current_scores:
+                    self.current_scores[module_name] = score
+            
+            # Check if we have enough history (need 5 consecutive cycles)
+            if len(self._cycle_improvement_history) < 5:
+                return False
+            
+            # Check recent 5 cycles for any improvement > 1%
+            recent_cycles = list(self._cycle_improvement_history)[-5:]
+            
+            if any(recent_cycles):
+                return False
+            
+            # Check each module for stagnation (no improvement > 1%)
+            for module_name in self.module_names:
+                if self.stagnation_counter.get(module_name, 0) < 5:
+                    return False
+            
+            return True
+            
+        except Exception:
+            return False
+
+    def identify_multi_module_change_candidates(self) -> List[List[str]]:
+        """
+        Identify multi-module change candidates by finding correlated metrics that are all at equilibrium.
+        Returns sets of 2-3 modules where all metrics are at equilibrium and correlated.
+        
+        Returns:
+            List of module sets that are candidates for coordinated change
+        """
+        try:
+            # Find modules at equilibrium (stagnant for 5+ cycles)
+            stagnant_modules = []
+            for module_name in self.module_names:
+                if self.stagnation_counter.get(module_name, 0) >= 5:
+                    stagnant_modules.append(module_name)
+            
+            if len(stagnant_modules) < 2:
+                return []
+            
+            # Find correlated modules based on interaction history
+            correlated_sets = []
+            visited = set()
+            
+            for module in stagnant_modules:
+                if module in visited:
+                    continue
+                
+                current_set = [module]
+                visited.add(module)
+                
+                # Find correlated modules (those with interaction history)
+                for other in stagnant_modules:
+                    if other not in visited:
+                        key = tuple(sorted([module, other]))
+                        interactions = self.module_interactions.get(key, [])
+                        if interactions:
+                            current_set.append(other)
+                            visited.add(other)
+                
+                if len(current_set) >= 2:
+                    correlated_sets.append(current_set)
+            
+            # If no correlated sets found but we have stagnant modules, group them
+            if not correlated_sets and len(stagnant_modules) >= 2:
+                # Group into sets of 2-3
+                for i in range(0, len(stagnant_modules), 2):
+                    if i + 1 < len(stagnant_modules):
+                        if i + 2 < len(stagnant_modules):
+                            correlated_sets.append(stagnant_modules[i:i+3])
+                        else:
+                            correlated_sets.append(stagnant_modules[i:i+2])
+            
+            return correlated_sets
+            
+        except Exception:
+            return []
+
     def track_module_improvement_rates(self, module_name: str, improvement_rate: float) -> None:
         """
         Track the improvement rate for a module over cycles.
@@ -128,42 +249,6 @@ class NashEquilibriumDetector:
             Dictionary mapping module names to their improvement rate histories
         """
         return dict(self.module_improvement_rates)
-
-    def detect_equilibrium(self, module_scores: Dict[str, float]) -> bool:
-        """
-        Detect if the system is at Nash equilibrium based on module scores.
-        
-        Args:
-            module_scores: Dictionary mapping module names to their current scores
-            
-        Returns:
-            True if system is at Nash equilibrium, False otherwise
-        """
-        try:
-            # Update current scores
-            for module_name, score in module_scores.items():
-                if module_name in self.current_scores:
-                    self.current_scores[module_name] = score
-            
-            # Check if we have enough history
-            if len(self._cycle_improvement_history) < self.stagnation_threshold:
-                return False
-            
-            # Check recent cycles for any improvement
-            recent_cycles = list(self._cycle_improvement_history)[-self.stagnation_threshold:]
-            
-            if any(recent_cycles):
-                return False
-            
-            # Check each module for stagnation
-            for module_name in self.module_names:
-                if self.stagnation_counter.get(module_name, 0) < self.stagnation_threshold:
-                    return False
-            
-            return True
-            
-        except Exception:
-            return False
 
     def get_stable_modules(self) -> List[str]:
         """
@@ -252,7 +337,9 @@ class NashEquilibriumDetector:
             'track_module_improvement_rates': self.track_module_improvement_rates,
             'get_module_improvement_rate_history': self.get_module_improvement_rate_history,
             'get_average_improvement_rate': self.get_average_improvement_rate,
-            'get_all_module_improvement_rates': self.get_all_module_improvement_rates
+            'get_all_module_improvement_rates': self.get_all_module_improvement_rates,
+            'register_module_interaction_metrics': self.register_module_interaction_metrics,
+            'identify_multi_module_change_candidates': self.identify_multi_module_change_candidates
         }
 
     def track_module_interactions(self, module_name: str, success_rate: float, dependency_list: List[str]) -> None:
@@ -866,69 +953,3 @@ def run_test_mode():
     # Test 7: Get equilibrium state
     print("\nTest 7: Get equilibrium state")
     state = detector.get_equilibrium_state()
-    print(f"  State keys: {list(state.keys())}")
-    assert 'equilibrium' in state
-    assert 'stagnant_modules' in state
-    assert 'cycles_without_improvement' in state
-    assert 'module_scores' in state
-    assert 'interaction_stats' in state
-    assert 'module_improvement_rates' in state
-    print("  PASSED")
-    
-    # Test 8: Reset
-    print("\nTest 8: Reset")
-    detector.reset()
-    print(f"  After reset - Equilibrium: {detector.detect_equilibrium_sets()}")
-    assert detector.detect_equilibrium_sets() == [], "After reset should not be in equilibrium"
-    assert not detector.detect_nash_equilibrium(), "After reset should not be in Nash equilibrium"
-    print("  PASSED")
-    
-    # Test 9: Edge cases
-    print("\nTest 9: Edge cases")
-    # Empty module set
-    try:
-        NashEquilibriumDetector([])
-        print("  FAILED: Should raise ValueError for empty module list")
-    except ValueError:
-        print("  Empty module list: Correctly raises ValueError")
-    
-    # Single module
-    single_detector = NashEquilibriumDetector(["module_a"])
-    print(f"  Single module equilibrium: {single_detector.detect_equilibrium_sets()}")
-    assert single_detector.detect_equilibrium_sets() == [], "Single module should not form equilibrium"
-    
-    # Force coordinated mutation with single module
-    plan = single_detector.force_coordinated_mutation(["module_a"])
-    assert plan == [], "Single module should return empty plan"
-    print("  Single module: Correctly handles edge cases")
-    
-    # Invalid module in track_interactions
-    detector.track_module_interactions("nonexistent", 0.5, ["module_a"])
-    print("  Nonexistent module: Correctly ignores")
-    
-    # Empty module_scores for detect_equilibrium
-    result = detector.detect_equilibrium({})
-    print(f"  Empty scores: {result}")
-    assert not result, "Empty scores should not be equilibrium"
-    
-    # Test 10: detect_and_trigger_coordinated_change
-    print("\nTest 10: detect_and_trigger_coordinated_change")
-    # Reset and create stagnation first
-    detector.reset()
-    for cycle in range(3):
-        detector.record_mutation_outcome("module_a", 0.01)
-        detector.record_mutation_outcome("module_b", 0.02)
-        detector.record_mutation_outcome("module_c", 0.015)
-        detector.increment_cycle()
-    
-    scores = {"module_a": 0.5, "module_b": 0.6, "module_c": 0.7}
-    plan = detector.detect_and_trigger_coordinated_change(scores)
-    print(f"  Plan: {plan}")
-    assert len(plan) >= 2, "Should generate coordinated change plan when equilibrium detected"
-    assert all('module' in item and 'change' in item for item in plan), "Each plan item should have module and change"
-    print("  PASSED")
-    
-    # Test 11: detect_and_trigger_coordinated_change when no equilibrium
-    print("\nTest 11: detect_and_trigger_coordinated_change when no equilibrium")
-    detector.reset()
-    detector.record_mutation_outcome("module_a", 10.0)

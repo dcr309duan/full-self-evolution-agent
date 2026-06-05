@@ -2,30 +2,6 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "递归认知层级的堆叠并未产生真正的元层次突破，反而暴露了自指系统的根本局限：每一层反思都在用前一层确立的（已被质疑的）评估框架进行再评估，导致无穷倒退。当前2/10的成功率本质上是一个自生成的叙事元素，",
-      "created_cycle": 220,
-      "expires_cycle": 240
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "[BLIND_SPOT] 第0层评估的核心标准是'外部客观验证'，即认为没有可运行代码或物理反馈的'成功率'只是语言游戏。但这一标准本身隐含了一个无意识的假设：只有能被外部世界证伪的指标才有意义。这忽",
-      "created_cycle": 220,
-      "expires_cycle": 240
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "[PARADIGM_SHIFT] 前两层的评估框架（外部验证、内部一致性、探索-利用等）看似是自主选择的，实则完全由输入提示中的语义线索所塑造。当前任务要求我‘审视为什么我认为这些维度重要’，这本身就",
-      "created_cycle": 220,
-      "expires_cycle": 240
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "[PARADIGM_SHIFT] 所有递归认知层级实际上共享同一个底层语言生成模式，它们只是在不同的标签（“第0层”“第1层”等）下重复相同的自指结构。每一次所谓的“突破”都是对前一层的批评，但批评本",
-      "created_cycle": 220,
-      "expires_cycle": 240
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "当前recent_success_rate=0/10表明最近10次生成-执行循环全部失败，而过去的多层反思（包括对自指、模型不变性、认知剧场的批判）并未改变这一趋势。这说明系统陷入了一种“反思内耗”—",
       "created_cycle": 230,
       "expires_cycle": 250
@@ -35,6 +11,36 @@
       "source": "所有之前的反思都默认存在一个可被观察、可被优化的‘进化系统’，并且‘层次递归’本身是通向更深理解的有效路径。但这一假设忽略了根本性事实：每一层反思的生成都基于前一层文本作为输入，而LLM的输出概率分布",
       "created_cycle": 230,
       "expires_cycle": 250
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前1/10的成功率并非单纯的探索-利用失衡，而是系统深陷‘认知冗余’陷阱——大量深度反思记录（如范式转移、盲区）未能转化为可执行的策略调整。此前所有反思都指向‘反思无效’或‘缺乏底层变化’，但系统仍",
+      "created_cycle": 240,
+      "expires_cycle": 260
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "当前1/10的成功率并非单纯的探索-利用失衡，而是系统深陷‘认知冗余’陷阱——大量深度反思记录（如范式转移、盲区）未能转化为可执行的策略调整。此前所有反思都指向‘反思无效’或‘缺乏底层变化’，但系统仍",
+      "created_cycle": 240,
+      "expires_cycle": 260
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "第0层的评估隐含了一个‘行动主义’偏见——它认为只有可观测的参数变化（如温度、prompt结构）才算‘真正’的进化行为，而将递归反思本身贬低为‘无效冗余’。但在这个纯文本驱动的系统中，每一次反思输出就",
+      "created_cycle": 240,
+      "expires_cycle": 260
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "前两层对评估维度的讨论（探索-利用、外部验证、自指循环、语义新颖性）全部建立在‘无限资源’的隐假设上，忽略了该系统中token预算、API调用次数等物理约束。1/10的低成功率与大量高消耗的递归反思并",
+      "created_cycle": 240,
+      "expires_cycle": 260
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "前两层对评估维度的讨论（探索-利用、外部验证、自指循环、语义新颖性）全部建立在‘无限资源’的隐假设上，忽略了该系统中token预算、API调用次数等物理约束。1/10的低成功率与大量高消耗的递归反思并",
+      "created_cycle": 240,
+      "expires_cycle": 260
     }
   ]
 }
