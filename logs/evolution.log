@@ -1548,3 +1548,15 @@ SyntaxError: invalid syntax
 [2026-06-05 14:48:54] Cycle 100: Mutations: 3, successes: 2
 [2026-06-05 14:49:01] Cycle 100: === Cycle Complete ===
 
+[2026-06-05 14:49:38] Cycle 101: === Starting Evolution Cycle ===
+[2026-06-05 14:49:38] Cycle 101: Phase 2: Goal selection and execution
+[2026-06-05 14:49:38] Cycle 101: Selected goal: Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.
+[2026-06-05 14:49:38] Cycle 101: Executing goal: Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.
+[2026-06-05 14:49:46] Cycle 101:   Step: create -> core/consolidation_scanner.py: Create the main consolidation scanner module with: (1) Function signature comparison using AST parsing to detect identical parameter patterns, (2) Docstring similarity analysis using TF-IDF vectorization, (3) Logic pattern matching by normalizing ASTs (removing variable names, comparing control flow structure), (4) Output generator that produces a prioritized merge/delete plan with confidence scores
+[2026-06-05 14:50:18] Cycle 101:   Step: modify -> core/self_model.py: Add a 'register_module_interface' method that stores function signatures and docstrings for all public functions in each module, enabling the scanner to access this data without re-parsing
+[2026-06-05 14:50:45] Cycle 101:   Step: modify -> core/mutation_engine.py: Add a 'consolidation_mutation' mode that, when a merge/delete plan is approved, can safely merge two modules by: (1) Creating a new combined module, (2) Updating all callers to use the new module, (3) Deleting old modules after verification
+[2026-06-05 14:51:34] Cycle 101:   Step: create -> tests/test_consolidation_scanner.py: Create test suite that: (1) Creates synthetic duplicate modules with known overlap, (2) Verifies scanner detects them with >90% accuracy, (3) Tests the merge/delete plan generation, (4) Validates that the plan respects dependency constraints
+[2026-06-05 14:52:08] Cycle 101:   Step: modify -> core/goal_selector.py: Add a 'consolidation_priority' parameter that, when consolidation scanner outputs a high-confidence plan, elevates consolidation goals above new capability goals
+[2026-06-05 14:52:23] Cycle 101: Goal completed: Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.
+[2026-06-05 14:52:23] Cycle 101: === Cycle Complete ===
+

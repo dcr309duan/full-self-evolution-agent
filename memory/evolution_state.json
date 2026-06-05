@@ -1,9 +1,8 @@
 {
-  "cycle_count": 100,
-  "current_generation": 71,
-  "last_evolution_time": 1780641740.4083471,
+  "cycle_count": 101,
+  "current_generation": 72,
+  "last_evolution_time": 1780642178.0183716,
   "capabilities": [
-    "Create a self-consistency test suite for introspection modules: for each reflection cycle, automatic",
     "Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs",
     "Build a machine-readable self-model as a knowledge graph capturing all codebase components, their in",
     "Design and integrate a hierarchical goal decomposition system that automatically breaks abstract evo",
@@ -52,7 +51,8 @@
     "Create a 'system health audit' module that scores each existing capability on novelty (age since las",
     "Implement a 'meta-mutation' selector that, after each 5 evolution cycles, analyzes the last 50 mutat",
     "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (",
-    "Create a 'systemic integration test harness' that runs the full evolution loop (reflection → goal se"
+    "Create a 'systemic integration test harness' that runs the full evolution loop (reflection → goal se",
+    "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifi"
   ],
   "history": [
     {
@@ -594,6 +594,12 @@
       "goal": "Create a 'systemic integration test harness' that runs the full evolution loop (reflection → goal selection → mutation → testing → promotion) on a realistic multi-step task (e.g., adding a new capability that requires schema updates and dependency changes), logs each failure point with context, and automatically generates repair goals for the next cycle.",
       "success": true,
       "timestamp": 1780642141.9334164
+    },
+    {
+      "cycle": 101,
+      "goal": "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.",
+      "success": true,
+      "timestamp": 1780642343.7161324
     }
   ],
   "status": "evolving"

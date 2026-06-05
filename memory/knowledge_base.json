@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate the triage module into the main orchestration loop: add a 'run_triage' step that executes after every 5 evolution cycles (configurable), calls module_triage.scan_and_prune(), and logs the report. Add a '--triage-interval' parameter to the orchestrator config.",
-      "timestamp": 1780636243.7160158,
-      "cycle": 74
-    },
-    {
-      "content": "Successfully modified tests/test_core_evolution_loop.py to: Add a test case that verifies the triage integration: creates a sandbox with a known broken module, runs the orchestrator with a short triage interval, and verifies the broken module gets archived after 3 cycles.",
-      "timestamp": 1780636273.564381,
-      "cycle": 74
-    },
-    {
-      "content": "Successfully modified evolution_engine/meta_monitor.py to: Create the meta-monitor module with: 1) a FailureCategoryTracker that maintains a dict of category -> list of (timestamp, goal_id, outcome) with consecutive failure count, 2) detect_consecutive_failures() that returns categories with 3+ consecutive failures, 3) trigger_reprioritization() that marks all goals in affected categories as 'blocked' and sets a 'requires_root_cause' flag, 4) generate_root_cause_hypothesis() that analyzes the last 3 failed goals in a category and produces a structured hypothesis (suspected root cause, evidence, recommended fix category).",
-      "timestamp": 1780636329.5917804,
-      "cycle": 75
-    },
-    {
-      "content": "Successfully modified tests/test_meta_monitor.py to: Create test suite for meta_monitor that: 1) tests that a single failure doesn't trigger, 2) tests that 2 consecutive failures don't trigger, 3) tests that 3 consecutive failures in same category trigger reprioritization, 4) tests that a success resets the counter, 5) tests that different categories are tracked independently, 6) tests that root cause hypothesis is generated with valid structure.",
-      "timestamp": 1780636336.5775797,
-      "cycle": 75
-    },
-    {
       "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate meta_monitor into the orchestrator: 1) add a 'run_meta_monitor' step after each goal completion (success or failure), 2) on goal failure, call meta_monitor.record_failure(category, goal_id) and check for 3+ consecutive failures, 3) if triggered, call meta_monitor.trigger_reprioritization() which updates the goal queue, 4) before retrying any goal in a blocked category, require meta_monitor.generate_root_cause_hypothesis() and log the hypothesis, 5) add a '--meta-monitor-enabled' config flag.",
       "timestamp": 1780636361.2835588,
       "cycle": 75
@@ -999,6 +979,26 @@
       "content": "Successfully modified core/self_model.py to: Add methods to support integration testing: (1) 'snapshot_state()' that serializes the entire self-model (capabilities, dependency graph, goal queue, module registry), (2) 'restore_state(snapshot)' for resetting after test cycles, (3) 'validate_consistency()' that checks for orphaned modules, circular dependencies, and missing schema references.",
       "timestamp": 1780642127.1364522,
       "cycle": 100
+    },
+    {
+      "content": "Successfully modified core/consolidation_scanner.py to: Create the main consolidation scanner module with: (1) Function signature comparison using AST parsing to detect identical parameter patterns, (2) Docstring similarity analysis using TF-IDF vectorization, (3) Logic pattern matching by normalizing ASTs (removing variable names, comparing control flow structure), (4) Output generator that produces a prioritized merge/delete plan with confidence scores",
+      "timestamp": 1780642218.7269363,
+      "cycle": 101
+    },
+    {
+      "content": "Successfully modified core/self_model.py to: Add a 'register_module_interface' method that stores function signatures and docstrings for all public functions in each module, enabling the scanner to access this data without re-parsing",
+      "timestamp": 1780642245.0171137,
+      "cycle": 101
+    },
+    {
+      "content": "Successfully modified tests/test_consolidation_scanner.py to: Create test suite that: (1) Creates synthetic duplicate modules with known overlap, (2) Verifies scanner detects them with >90% accuracy, (3) Tests the merge/delete plan generation, (4) Validates that the plan respects dependency constraints",
+      "timestamp": 1780642328.172854,
+      "cycle": 101
+    },
+    {
+      "content": "Successfully modified core/goal_selector.py to: Add a 'consolidation_priority' parameter that, when consolidation scanner outputs a high-confidence plan, elevates consolidation goals above new capability goals",
+      "timestamp": 1780642343.5831976,
+      "cycle": 101
     }
   ],
   "learned_patterns": [],
@@ -1312,6 +1312,11 @@
       "approach": "modify core/evolution_orchestrator.py: Add a 'run_integration_test_cycle' method that: (1) Loads the multi-step scenario, (2) Executes each step through the normal evolution pipeline (goal selection → mutation → test → promote), (3) Captures failure context at each step (AST of mutated code, error trace, module state before/after, dependency graph state), (4) Generates a structured repair goal JSON object with: failure_type, affected_modules, root_cause_hypothesis, suggested_fix_priority, and prerequisite_goals needed.",
       "reason": "Syntax error: unterminated triple-quoted string literal (detected at line 861) (<unknown>, line 861)",
       "timestamp": 1780641971.2481682
+    },
+    {
+      "approach": "modify core/mutation_engine.py: Add a 'consolidation_mutation' mode that, when a merge/delete plan is approved, can safely merge two modules by: (1) Creating a new combined module, (2) Updating all callers to use the new module, (3) Deleting old modules after verification",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 904)",
+      "timestamp": 1780642294.270736
     }
   ],
   "successful_strategies": [
@@ -4284,6 +4289,31 @@
       "strategy": "mutation:crossover(quicksort_factors,quicksorted_prime_factors)",
       "outcome": "Created quicksort_factors_optimized, score=0.4",
       "timestamp": 1780642134.686165
+    },
+    {
+      "strategy": "modify core/consolidation_scanner.py: Create the main consolidation scanner module with: (1) Function signature comparison using AST parsing to detect identical parameter patterns, (2) Docstring similarity analysis using TF-IDF vectorization, (3) Logic pattern matching by normalizing ASTs (removing variable names, comparing control flow structure), (4) Output generator that produces a prioritized merge/delete plan with confidence scores",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642218.7115605
+    },
+    {
+      "strategy": "modify core/self_model.py: Add a 'register_module_interface' method that stores function signatures and docstrings for all public functions in each module, enabling the scanner to access this data without re-parsing",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642245.000174
+    },
+    {
+      "strategy": "modify tests/test_consolidation_scanner.py: Create test suite that: (1) Creates synthetic duplicate modules with known overlap, (2) Verifies scanner detects them with >90% accuracy, (3) Tests the merge/delete plan generation, (4) Validates that the plan respects dependency constraints",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642328.1477919
+    },
+    {
+      "strategy": "modify core/goal_selector.py: Add a 'consolidation_priority' parameter that, when consolidation scanner outputs a high-confidence plan, elevates consolidation goals above new capability goals",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642343.5683193
+    },
+    {
+      "strategy": "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.",
+      "outcome": "4/5 steps succeeded",
+      "timestamp": 1780642343.600107
     }
   ],
   "capabilities_developed": []

@@ -94,6 +94,20 @@ class SelfModelKnowledgeGraph:
         self.nodes: Dict[str, SimulationNode] = {}
         self.edges: List[DependencyEdge] = []
         self.failure_clusters: Dict[str, FailureClusterNode] = {}  # Cluster ID -> FailureClusterNode
+        self.module_interfaces: Dict[str, Dict[str, Dict[str, Any]]] = {}  # Module ID -> {function_name: {signature, docstring}}
+
+    def register_module_interface(self, module_id: str, function_name: str, signature: str, docstring: str):
+        """Register a function's signature and docstring for a module, enabling the scanner to access this data without re-parsing."""
+        if module_id not in self.module_interfaces:
+            self.module_interfaces[module_id] = {}
+        self.module_interfaces[module_id][function_name] = {
+            "signature": signature,
+            "docstring": docstring
+        }
+
+    def get_module_interface(self, module_id: str) -> Dict[str, Dict[str, Any]]:
+        """Retrieve all registered function interfaces for a given module."""
+        return self.module_interfaces.get(module_id, {})
 
     def add_module_node(self, module_id: str, module_name: str, accuracy: float = 0.0) -> SimulationNode:
         """Add a simulation node for a module."""
@@ -219,6 +233,9 @@ class SelfModelKnowledgeGraph:
                     self.unlink_failure_cluster_from_module(cluster_id, module_id)
                 # Remove the node itself
                 del self.nodes[module_id]
+                # Remove module interface data
+                if module_id in self.module_interfaces:
+                    del self.module_interfaces[module_id]
 
     def update_dependency_counts(self, merged_pairs: List[tuple]):
         """Update dependency counts after merging capabilities, adjusting edges to reflect new capability set."""
@@ -238,6 +255,12 @@ class SelfModelKnowledgeGraph:
                         new_module.add_failure_cluster(cluster_id)
                         if cluster_id in self.failure_clusters:
                             self.failure_clusters[cluster_id].add_affected_module(new_id)
+                # Merge module interfaces from old module to new module
+                if old_id in self.module_interfaces:
+                    if new_id not in self.module_interfaces:
+                        self.module_interfaces[new_id] = {}
+                    self.module_interfaces[new_id].update(self.module_interfaces[old_id])
+                    del self.module_interfaces[old_id]
                 # Remove old module
                 self.remove_deleted_capabilities([old_id])
 
@@ -246,7 +269,8 @@ class SelfModelKnowledgeGraph:
         snapshot = {
             "nodes": {},
             "edges": [],
-            "failure_clusters": {}
+            "failure_clusters": {},
+            "module_interfaces": {}
         }
         # Deep copy nodes to avoid mutation of original data
         for node_id, node in self.nodes.items():
@@ -274,6 +298,9 @@ class SelfModelKnowledgeGraph:
                 "affected_modules": copy.deepcopy(cluster.affected_modules),
                 "active": cluster.active
             }
+        # Deep copy module interfaces
+        for module_id, interfaces in self.module_interfaces.items():
+            snapshot["module_interfaces"][module_id] = copy.deepcopy(interfaces)
         return snapshot
 
     def restore_state(self, snapshot: Dict[str, Any]):
@@ -282,6 +309,7 @@ class SelfModelKnowledgeGraph:
         self.nodes.clear()
         self.edges.clear()
         self.failure_clusters.clear()
+        self.module_interfaces.clear()
         # Restore nodes
         for node_id, node_data in snapshot["nodes"].items():
             node = SimulationNode(node_data["id"], node_data["name"], node_data["accuracy"])
@@ -300,6 +328,10 @@ class SelfModelKnowledgeGraph:
             cluster.affected_modules = copy.deepcopy(cluster_data["affected_modules"])
             cluster.active = cluster_data["active"]
             self.failure_clusters[cluster_id] = cluster
+        # Restore module interfaces
+        if "module_interfaces" in snapshot:
+            for module_id, interfaces in snapshot["module_interfaces"].items():
+                self.module_interfaces[module_id] = copy.deepcopy(interfaces)
 
     def validate_consistency(self) -> List[str]:
         """Check for orphaned modules, circular dependencies, and missing schema references.
