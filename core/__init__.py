@@ -33,6 +33,7 @@ def __getattr__(name):
 
 from .coordinated_mutation_engine import CoordinatedMutationEngine, MutationConfig, MutationResult
 from .coordinated_change_executor import CoordinatedChangeExecutor, ChangeExecutorConfig, ChangeResult
+from .ecology_engine import EcologyEngine
 from . import nash_detector
 from . import multi_module_forcer
 
@@ -53,6 +54,7 @@ __all__ = [
     'CoordinatedChangeExecutor',
     'ChangeExecutorConfig',
     'ChangeResult',
+    'EcologyEngine',
     'nash_detector',
     'multi_module_forcer',
     'equilibrium_detector',

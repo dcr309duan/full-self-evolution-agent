@@ -1,10 +1,5 @@
 # Evolution Timeline
 
-[2026-06-05 19:16] [-] Cycle 170: Add a 'goal impact prioritizer' that scores each pending goal by its expected ef
-[2026-06-05 19:19] [-] Cycle 171: Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each
-[2026-06-05 19:23] [-] Cycle 172: Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each
-[2026-06-05 19:27] [-] Cycle 173: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
-[2026-06-05 19:29] [-] Cycle 174: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
 [2026-06-05 19:33] [-] Cycle 175: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
 [2026-06-05 19:36] [-] Cycle 176: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
 [2026-06-05 19:39] [-] Cycle 177: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
@@ -100,3 +95,8 @@
 [2026-06-06 02:22] [-] Cycle 267: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
 [2026-06-06 02:26] [-] Cycle 268: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
 [2026-06-06 02:28] [-] Cycle 269: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
+[2026-06-06 02:34] [-] Cycle 270: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl
+[2026-06-06 02:38] [-] Cycle 271: [ECOLOGY] The agent should not just adapt to its current test suite — it should 
+[2026-06-06 02:42] [-] Cycle 272: [ECOLOGY] The agent should not just adapt to its current test suite — it should 
+[2026-06-06 02:46] [-] Cycle 273: [ECOLOGY] The agent should not just adapt to its current test suite — it should 
+[2026-06-06 02:50] [-] Cycle 274: [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no singl

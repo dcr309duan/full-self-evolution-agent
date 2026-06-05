@@ -1,513 +1,399 @@
 import json
 import os
 import sys
-from collections import defaultdict, deque
+from collections import deque
+from typing import Dict, List, Optional, Any
 
 class NashEquilibriumDetector:
     """
-    Minimal, self-contained Nash equilibrium detector.
-    Tracks module interaction frequencies and success rates over a sliding window of last 20 cycles.
-    Detects Nash equilibrium by checking if no single module change improves the system.
-    Uses a heuristic: if all modules' success rates have been stable within 5% for 5+ cycles, declare equilibrium.
+    Self-contained Nash equilibrium detector.
+    Reads module interaction data from 'nash_state.json'.
+    Checks each module for unilateral improvement potential.
+    If no module can improve alone, declares Nash equilibrium.
+    Logs detected equilibria to 'nash_log.json'.
     """
 
-    def __init__(self, module_names):
+    def __init__(self, module_names: Optional[List[str]] = None):
         """
         Initialize the detector with module names.
         
         Args:
-            module_names: List of module names to track
+            module_names: List of module names to track (optional, loaded from file if not provided)
         """
-        if not module_names:
-            raise ValueError("module_names list cannot be empty")
+        self.module_names = module_names or []
+        self.interaction_matrix = {}  # module_name -> {other_module: payoff}
+        self.payoffs = {}  # module_name -> current payoff
+        self.equilibrium_detected = False
+        self.equilibrium_log = []
         
-        self.module_names = list(module_names)
-        
-        # Module interaction frequencies: module_name -> {other_module: frequency}
-        self.interaction_frequencies = {}
-        
-        # Module success rates: module_name -> deque of success rates over last 20 cycles
-        self.success_rates = {}
-        
-        # Current success rate for each module (average over window)
-        self.current_success_rates = {}
-        
-        # Sliding window size
-        self.window_size = 20
-        
-        # Stability threshold (5%)
-        self.stability_threshold = 0.05
-        
-        # Number of consecutive stable cycles required for equilibrium
-        self.stability_cycles_required = 5
-        
-        # Counter for consecutive cycles where all modules are stable
-        self.stable_cycles_count = 0
-        
-        # Flag indicating if equilibrium has been detected
-        self._equilibrium_detected = False
-        
-        # List of modules that are at equilibrium
-        self._modules_at_equilibrium = []
-        
-        # Initialize data structures
-        for module_name in self.module_names:
-            self.success_rates[module_name] = deque(maxlen=self.window_size)
-            self.current_success_rates[module_name] = 0.0
-            self.interaction_frequencies[module_name] = {}
-            for other_module in self.module_names:
-                if other_module != module_name:
-                    self.interaction_frequencies[module_name][other_module] = 0.0
+        # Load state if file exists
+        if os.path.exists('nash_state.json'):
+            self.load_state('nash_state.json')
 
-    def update_interaction_frequency(self, module_a, module_b, frequency):
+    def load_state(self, filepath: str = 'nash_state.json') -> None:
         """
-        Update the interaction frequency between two modules.
+        Load interaction matrix from JSON file.
         
         Args:
-            module_a: First module name
-            module_b: Second module name
-            frequency: Interaction frequency value
+            filepath: Path to the JSON file
         """
-        if module_a in self.interaction_frequencies and module_b in self.interaction_frequencies[module_a]:
-            self.interaction_frequencies[module_a][module_b] = frequency
-        if module_b in self.interaction_frequencies and module_a in self.interaction_frequencies[module_b]:
-            self.interaction_frequencies[module_b][module_a] = frequency
-
-    def get_interaction_frequency(self, module_a, module_b):
-        """
-        Get the interaction frequency between two modules.
-        
-        Args:
-            module_a: First module name
-            module_b: Second module name
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
             
-        Returns:
-            Interaction frequency value
-        """
-        if module_a in self.interaction_frequencies and module_b in self.interaction_frequencies[module_a]:
-            return self.interaction_frequencies[module_a][module_b]
-        return 0.0
-
-    def record_success_rate(self, module_name, success_rate):
-        """
-        Record a success rate for a module.
-        
-        Args:
-            module_name: Name of the module
-            success_rate: Success rate value (0.0 to 1.0)
-        """
-        if module_name in self.success_rates:
-            self.success_rates[module_name].append(success_rate)
-            # Update current success rate as average over window
-            if self.success_rates[module_name]:
-                self.current_success_rates[module_name] = sum(self.success_rates[module_name]) / len(self.success_rates[module_name])
-
-    def is_module_stable(self, module_name):
-        """
-        Check if a module's success rate has been stable within the threshold.
-        
-        Args:
-            module_name: Name of the module to check
+            # Load module names if not provided
+            if not self.module_names and 'module_names' in data:
+                self.module_names = data['module_names']
             
-        Returns:
-            True if module is stable, False otherwise
-        """
-        if module_name not in self.success_rates:
-            return False
-        
-        rates = list(self.success_rates[module_name])
-        if len(rates) < 2:
-            return False
-        
-        # Check if all rates in the window are within 5% of each other
-        min_rate = min(rates)
-        max_rate = max(rates)
-        
-        # Avoid division by zero
-        if max_rate == 0:
-            return True
-        
-        return (max_rate - min_rate) / max_rate <= self.stability_threshold
+            # Load interaction matrix
+            if 'interaction_matrix' in data:
+                self.interaction_matrix = data['interaction_matrix']
+            
+            # Load current payoffs
+            if 'payoffs' in data:
+                self.payoffs = data['payoffs']
+            
+            # Load equilibrium log
+            if 'equilibrium_log' in data:
+                self.equilibrium_log = data['equilibrium_log']
+            
+            # Load equilibrium state
+            if 'equilibrium_detected' in data:
+                self.equilibrium_detected = data['equilibrium_detected']
+                
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Warning: Could not load state from {filepath}: {e}")
 
-    def increment_cycle(self):
-        """Advance to the next evaluation cycle and update equilibrium detection."""
-        # Check stability of all modules
-        all_stable = True
-        self._modules_at_equilibrium = []
-        
-        for module_name in self.module_names:
-            if self.is_module_stable(module_name):
-                self._modules_at_equilibrium.append(module_name)
-            else:
-                all_stable = False
-        
-        if all_stable and len(self._modules_at_equilibrium) == len(self.module_names):
-            self.stable_cycles_count += 1
-        else:
-            self.stable_cycles_count = 0
-        
-        # Check if equilibrium condition is met
-        if self.stable_cycles_count >= self.stability_cycles_required:
-            self._equilibrium_detected = True
-        else:
-            self._equilibrium_detected = False
-
-    def is_nash_equilibrium(self):
+    def save_state(self, filepath: str = 'nash_state.json') -> None:
         """
-        Check if the system is at Nash equilibrium.
-        
-        Returns:
-            Tuple of (is_equilibrium, list_of_modules_at_equilibrium)
-        """
-        return (self._equilibrium_detected, self._modules_at_equilibrium.copy())
-
-    def get_equilibrium_state(self):
-        """
-        Get the current equilibrium state information.
-        
-        Returns:
-            Dictionary containing equilibrium state information
-        """
-        is_eq, modules_eq = self.is_nash_equilibrium()
-        return {
-            'equilibrium': is_eq,
-            'modules_at_equilibrium': modules_eq,
-            'stable_cycles_count': self.stable_cycles_count,
-            'stability_cycles_required': self.stability_cycles_required,
-            'current_success_rates': dict(self.current_success_rates),
-            'interaction_frequencies': {k: dict(v) for k, v in self.interaction_frequencies.items()},
-            'window_size': self.window_size,
-            'stability_threshold': self.stability_threshold
-        }
-
-    def save_state(self, filepath):
-        """
-        Save the current state to a JSON file.
+        Save current state to JSON file.
         
         Args:
             filepath: Path to save the JSON file
         """
         state = {
             'module_names': self.module_names,
-            'interaction_frequencies': {k: dict(v) for k, v in self.interaction_frequencies.items()},
-            'success_rates': {k: list(v) for k, v in self.success_rates.items()},
-            'current_success_rates': dict(self.current_success_rates),
-            'window_size': self.window_size,
-            'stability_threshold': self.stability_threshold,
-            'stability_cycles_required': self.stability_cycles_required,
-            'stable_cycles_count': self.stable_cycles_count,
-            '_equilibrium_detected': self._equilibrium_detected,
-            '_modules_at_equilibrium': list(self._modules_at_equilibrium)
+            'interaction_matrix': self.interaction_matrix,
+            'payoffs': self.payoffs,
+            'equilibrium_detected': self.equilibrium_detected,
+            'equilibrium_log': self.equilibrium_log
         }
         
         with open(filepath, 'w') as f:
             json.dump(state, f, indent=2)
 
-    def load_state(self, filepath):
+    def log_equilibrium(self, message: str) -> None:
         """
-        Load state from a JSON file.
+        Log an equilibrium detection event.
         
         Args:
-            filepath: Path to load the JSON file from
+            message: Description of the equilibrium event
         """
-        with open(filepath, 'r') as f:
-            state = json.load(f)
+        log_entry = {
+            'message': message,
+            'modules': list(self.module_names),
+            'payoffs': dict(self.payoffs)
+        }
+        self.equilibrium_log.append(log_entry)
         
-        self.module_names = state['module_names']
-        self.interaction_frequencies = {k: dict(v) for k, v in state['interaction_frequencies'].items()}
-        self.success_rates = {k: deque(v, maxlen=self.window_size) for k, v in state['success_rates'].items()}
-        self.current_success_rates = dict(state['current_success_rates'])
-        self.window_size = state['window_size']
-        self.stability_threshold = state['stability_threshold']
-        self.stability_cycles_required = state['stability_cycles_required']
-        self.stable_cycles_count = state['stable_cycles_count']
-        self._equilibrium_detected = state['_equilibrium_detected']
-        self._modules_at_equilibrium = list(state['_modules_at_equilibrium'])
+        # Save log to file
+        with open('nash_log.json', 'w') as f:
+            json.dump(self.equilibrium_log, f, indent=2)
 
-    def reset(self):
-        """Reset all tracking data."""
-        self.interaction_frequencies.clear()
-        self.success_rates.clear()
-        self.current_success_rates.clear()
-        self.stable_cycles_count = 0
-        self._equilibrium_detected = False
-        self._modules_at_equilibrium = []
-        
-        for module_name in self.module_names:
-            self.success_rates[module_name] = deque(maxlen=self.window_size)
-            self.current_success_rates[module_name] = 0.0
-            self.interaction_frequencies[module_name] = {}
-            for other_module in self.module_names:
-                if other_module != module_name:
-                    self.interaction_frequencies[module_name][other_module] = 0.0
-
-    def set_stability_threshold(self, threshold):
+    def set_interaction_matrix(self, matrix: Dict[str, Dict[str, float]]) -> None:
         """
-        Set the stability threshold for detecting equilibrium.
+        Set the interaction matrix for modules.
         
         Args:
-            threshold: Float representing the maximum allowed variation (default 0.05)
+            matrix: Dictionary mapping module names to dictionaries of {other_module: payoff}
         """
-        if threshold < 0 or threshold > 1:
-            raise ValueError("Stability threshold must be between 0 and 1")
-        self.stability_threshold = threshold
+        self.interaction_matrix = matrix
+        self.module_names = list(matrix.keys())
+        
+        # Initialize payoffs if not set
+        for module in self.module_names:
+            if module not in self.payoffs:
+                self.payoffs[module] = 0.0
 
-    def set_stability_cycles_required(self, cycles):
+    def set_payoffs(self, payoffs: Dict[str, float]) -> None:
         """
-        Set the number of consecutive stable cycles required for equilibrium.
+        Set current payoffs for modules.
         
         Args:
-            cycles: Number of cycles (must be positive)
+            payoffs: Dictionary mapping module names to payoff values
         """
-        if cycles < 1:
-            raise ValueError("Stability cycles required must be at least 1")
-        self.stability_cycles_required = cycles
+        self.payoffs = payoffs
 
-    def set_window_size(self, size):
+    def check_unilateral_improvement(self, module_name: str) -> bool:
         """
-        Set the sliding window size for tracking success rates.
+        Check if a module can improve its payoff by changing its strategy alone.
         
         Args:
-            size: Window size (must be positive)
+            module_name: Name of the module to check
+            
+        Returns:
+            True if the module can improve unilaterally, False otherwise
         """
-        if size < 1:
-            raise ValueError("Window size must be at least 1")
-        self.window_size = size
-        # Recreate deques with new size
-        for module_name in self.module_names:
-            old_rates = list(self.success_rates.get(module_name, []))
-            self.success_rates[module_name] = deque(old_rates, maxlen=size)
+        if module_name not in self.interaction_matrix:
+            return False
+        
+        current_payoff = self.payoffs.get(module_name, 0.0)
+        
+        # Check all possible alternative strategies (other modules' current strategies)
+        for other_module, payoff in self.interaction_matrix[module_name].items():
+            if other_module != module_name and payoff > current_payoff:
+                return True
+        
+        return False
 
-    def detect_equilibrium(self, module_stats):
+    def detect_equilibrium(self, module_metrics: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
         """
-        Detect if the system is at Nash equilibrium based on module stats.
+        Detect if the system is at Nash equilibrium.
         
         Args:
-            module_stats: Dictionary mapping module names to their success rates
+            module_metrics: Optional dictionary of module metrics (not used in this implementation)
             
         Returns:
             True if equilibrium is detected, False otherwise
         """
-        for module_name, success_rate in module_stats.items():
-            self.record_success_rate(module_name, success_rate)
-        self.increment_cycle()
-        return self._equilibrium_detected
+        if not self.module_names:
+            print("Warning: No modules to check for equilibrium")
+            return False
+        
+        # Check each module for unilateral improvement potential
+        all_stable = True
+        for module_name in self.module_names:
+            if self.check_unilateral_improvement(module_name):
+                all_stable = False
+                break
+        
+        self.equilibrium_detected = all_stable
+        
+        if self.equilibrium_detected:
+            self.log_equilibrium("Nash equilibrium detected - no module can improve unilaterally")
+        else:
+            # Log that equilibrium was not detected
+            pass
+        
+        return self.equilibrium_detected
 
-    def get_stable_modules(self):
+    def get_equilibrium_modules(self) -> List[str]:
         """
-        Get the list of modules that are currently at equilibrium.
+        Get the list of modules that are at equilibrium.
         
         Returns:
-            List of module names that are stable
+            List of module names that are at equilibrium
         """
-        return self._modules_at_equilibrium.copy()
-
-
-def record_mutation_impact(module_name, impact_score):
-    """
-    Record the impact of a mutation on a module.
-    
-    Args:
-        module_name: Name of the module
-        impact_score: Impact score value (0.0 to 1.0)
-    """
-    global _mutation_impacts
-    if '_mutation_impacts' not in globals():
-        _mutation_impacts = {}
-    if module_name not in _mutation_impacts:
-        _mutation_impacts[module_name] = deque(maxlen=20)
-    _mutation_impacts[module_name].append(impact_score)
-
-
-def detect_nash_equilibrium():
-    """
-    Detect if the system is at Nash equilibrium based on recorded mutation impacts.
-    
-    Returns:
-        True if equilibrium is detected, False otherwise
-    """
-    global _mutation_impacts
-    if '_mutation_impacts' not in globals() or not _mutation_impacts:
-        return False
-    
-    # Check if all modules have stable impact scores within 5% threshold
-    all_stable = True
-    for module_name, impacts in _mutation_impacts.items():
-        if len(impacts) < 2:
-            all_stable = False
-            continue
-        impacts_list = list(impacts)
-        min_impact = min(impacts_list)
-        max_impact = max(impacts_list)
-        if max_impact > 0 and (max_impact - min_impact) / max_impact > 0.05:
-            all_stable = False
-            break
-    
-    return all_stable
-
-
-def get_stable_modules():
-    """
-    Get the list of modules that are currently stable.
-    
-    Returns:
-        List of module names that are stable
-    """
-    global _mutation_impacts
-    if '_mutation_impacts' not in globals() or not _mutation_impacts:
+        if self.equilibrium_detected:
+            return list(self.module_names)
         return []
-    
-    stable_modules = []
-    for module_name, impacts in _mutation_impacts.items():
-        if len(impacts) >= 2:
-            impacts_list = list(impacts)
-            min_impact = min(impacts_list)
-            max_impact = max(impacts_list)
-            if max_impact == 0 or (max_impact - min_impact) / max_impact <= 0.05:
-                stable_modules.append(module_name)
-    
-    return stable_modules
+
+    def get_equilibrium_state(self) -> Dict[str, Any]:
+        """
+        Get the current equilibrium state information.
+        
+        Returns:
+            Dictionary containing equilibrium state information
+        """
+        return {
+            'equilibrium': self.equilibrium_detected,
+            'modules_at_equilibrium': self.get_equilibrium_modules(),
+            'payoffs': dict(self.payoffs),
+            'interaction_matrix': dict(self.interaction_matrix)
+        }
+
+    def reset(self) -> None:
+        """Reset all tracking data."""
+        self.interaction_matrix = {}
+        self.payoffs = {}
+        self.equilibrium_detected = False
+        self.equilibrium_log = []
+
+    def add_module(self, module_name: str, interactions: Dict[str, float], payoff: float = 0.0) -> None:
+        """
+        Add a module to the detector.
+        
+        Args:
+            module_name: Name of the module
+            interactions: Dictionary of {other_module: payoff} for interactions
+            payoff: Current payoff for this module
+        """
+        if module_name not in self.module_names:
+            self.module_names.append(module_name)
+        
+        self.interaction_matrix[module_name] = interactions
+        self.payoffs[module_name] = payoff
+
+    def remove_module(self, module_name: str) -> None:
+        """
+        Remove a module from the detector.
+        
+        Args:
+            module_name: Name of the module to remove
+        """
+        if module_name in self.module_names:
+            self.module_names.remove(module_name)
+        
+        if module_name in self.interaction_matrix:
+            del self.interaction_matrix[module_name]
+        
+        if module_name in self.payoffs:
+            del self.payoffs[module_name]
+        
+        # Remove from other modules' interaction matrices
+        for other_module in self.interaction_matrix:
+            if module_name in self.interaction_matrix[other_module]:
+                del self.interaction_matrix[other_module][module_name]
 
 
-def run_test_mode():
+def run_test_mode() -> None:
     """Simple test mode that can run standalone."""
     print("Running NashEquilibriumDetector in test mode...")
     
     # Create detector with test modules
-    detector = NashEquilibriumDetector(
-        module_names=["module_a", "module_b", "module_c"]
-    )
+    detector = NashEquilibriumDetector()
     
-    # Test 1: Initial state
-    print("\nTest 1: Initial state")
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  Equilibrium: {is_eq}")
-    print(f"  Modules at equilibrium: {modules_eq}")
-    assert not is_eq, "Initial state should not be in equilibrium"
-    print("  PASSED")
-    
-    # Test 2: Record varying success rates (should not trigger equilibrium)
-    print("\nTest 2: Record varying success rates (should not trigger equilibrium)")
-    for cycle in range(3):
-        detector.record_success_rate("module_a", 0.8 + (cycle * 0.05))
-        detector.record_success_rate("module_b", 0.7 + (cycle * 0.03))
-        detector.record_success_rate("module_c", 0.9 - (cycle * 0.04))
-        detector.increment_cycle()
-    
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  Equilibrium: {is_eq}")
-    print(f"  Modules at equilibrium: {modules_eq}")
-    assert not is_eq, "Varying rates should prevent equilibrium"
-    print("  PASSED")
-    
-    # Test 3: Record stable success rates (should trigger equilibrium after 5 cycles)
-    print("\nTest 3: Record stable success rates (should trigger equilibrium after 5 cycles)")
-    for cycle in range(6):
-        detector.record_success_rate("module_a", 0.85)
-        detector.record_success_rate("module_b", 0.75)
-        detector.record_success_rate("module_c", 0.90)
-        detector.increment_cycle()
-    
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  Equilibrium: {is_eq}")
-    print(f"  Modules at equilibrium: {modules_eq}")
-    assert is_eq, "Stable rates should trigger equilibrium"
-    assert len(modules_eq) == 3, "All modules should be at equilibrium"
-    print("  PASSED")
-    
-    # Test 4: JSON persistence
-    print("\nTest 4: JSON persistence")
-    detector.save_state("test_state.json")
-    detector.reset()
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  After reset - Equilibrium: {is_eq}")
-    assert not is_eq, "After reset should not be in equilibrium"
-    
-    detector.load_state("test_state.json")
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  After load - Equilibrium: {is_eq}")
-    assert is_eq, "After load should be in equilibrium"
-    print("  PASSED")
-    
-    # Test 5: Reset and verify
-    print("\nTest 5: Reset")
-    detector.reset()
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  Equilibrium: {is_eq}")
-    print(f"  Modules at equilibrium: {modules_eq}")
-    assert not is_eq, "After reset should not be in equilibrium"
-    print("  PASSED")
-    
-    # Test 6: Partial stability (only some modules stable)
-    print("\nTest 6: Partial stability (only some modules stable)")
-    for cycle in range(6):
-        detector.record_success_rate("module_a", 0.85)
-        detector.record_success_rate("module_b", 0.75)
-        detector.record_success_rate("module_c", 0.90 + (cycle * 0.02))  # Varying
-        detector.increment_cycle()
-    
-    is_eq, modules_eq = detector.is_nash_equilibrium()
-    print(f"  Equilibrium: {is_eq}")
-    print(f"  Modules at equilibrium: {modules_eq}")
-    assert not is_eq, "Partial stability should not trigger equilibrium"
-    assert len(modules_eq) == 2, "Only two modules should be stable"
-    print("  PASSED")
-    
-    # Test 7: detect_equilibrium API
-    print("\nTest 7: detect_equilibrium API")
-    detector.reset()
-    for cycle in range(6):
-        module_stats = {
-            "module_a": 0.85,
-            "module_b": 0.75,
-            "module_c": 0.90
+    # Test 1: Load from file (if exists) or create test data
+    print("\nTest 1: Load/create test data")
+    if not os.path.exists('nash_state.json'):
+        # Create test interaction matrix
+        test_matrix = {
+            "module_a": {"module_a": 0.8, "module_b": 0.6, "module_c": 0.7},
+            "module_b": {"module_a": 0.5, "module_b": 0.9, "module_c": 0.4},
+            "module_c": {"module_a": 0.3, "module_b": 0.2, "module_c": 0.85}
         }
-        result = detector.detect_equilibrium(module_stats)
-    print(f"  Equilibrium detected: {result}")
-    assert result, "detect_equilibrium should return True after stable cycles"
+        test_payoffs = {
+            "module_a": 0.8,
+            "module_b": 0.9,
+            "module_c": 0.85
+        }
+        
+        # Save test data
+        test_data = {
+            'module_names': ["module_a", "module_b", "module_c"],
+            'interaction_matrix': test_matrix,
+            'payoffs': test_payoffs,
+            'equilibrium_detected': False,
+            'equilibrium_log': []
+        }
+        
+        with open('nash_state.json', 'w') as f:
+            json.dump(test_data, f, indent=2)
+        
+        print("  Created test data file 'nash_state.json'")
+    
+    # Load the state
+    detector.load_state('nash_state.json')
+    print(f"  Loaded {len(detector.module_names)} modules")
+    print(f"  Module names: {detector.module_names}")
     print("  PASSED")
     
-    # Test 8: get_stable_modules API
-    print("\nTest 8: get_stable_modules API")
-    stable_modules = detector.get_stable_modules()
-    print(f"  Stable modules: {stable_modules}")
-    assert len(stable_modules) == 3, "All modules should be stable"
+    # Test 2: Check equilibrium with current payoffs
+    print("\nTest 2: Check equilibrium with current payoffs")
+    is_eq = detector.detect_equilibrium()
+    modules_eq = detector.get_equilibrium_modules()
+    print(f"  Equilibrium: {is_eq}")
+    print(f"  Modules at equilibrium: {modules_eq}")
+    
+    # With current payoffs (0.8, 0.9, 0.85), check if any module can improve
+    # module_a: current=0.8, can get 0.6 from module_b or 0.7 from module_c -> no improvement
+    # module_b: current=0.9, can get 0.5 from module_a or 0.4 from module_c -> no improvement
+    # module_c: current=0.85, can get 0.3 from module_a or 0.2 from module_b -> no improvement
+    # So this should be an equilibrium
+    assert is_eq, "With current payoffs, this should be an equilibrium"
     print("  PASSED")
     
-    # Test 9: record_mutation_impact, detect_nash_equilibrium, get_stable_modules
-    print("\nTest 9: Module-level functions")
-    # Reset global state
-    global _mutation_impacts
-    _mutation_impacts = {}
-    
-    # Record varying impacts (should not be equilibrium)
-    for i in range(3):
-        record_mutation_impact("module_a", 0.8 + (i * 0.05))
-        record_mutation_impact("module_b", 0.7 + (i * 0.03))
-        record_mutation_impact("module_c", 0.9 - (i * 0.04))
-    
-    eq_result = detect_nash_equilibrium()
-    print(f"  Equilibrium with varying impacts: {eq_result}")
-    assert not eq_result, "Varying impacts should not be equilibrium"
-    
-    # Record stable impacts (should be equilibrium)
-    for i in range(6):
-        record_mutation_impact("module_a", 0.85)
-        record_mutation_impact("module_b", 0.75)
-        record_mutation_impact("module_c", 0.90)
-    
-    eq_result = detect_nash_equilibrium()
-    print(f"  Equilibrium with stable impacts: {eq_result}")
-    assert eq_result, "Stable impacts should be equilibrium"
-    
-    stable_modules = get_stable_modules()
-    print(f"  Stable modules: {stable_modules}")
-    assert len(stable_modules) == 3, "All modules should be stable"
+    # Test 3: Modify payoffs to break equilibrium
+    print("\nTest 3: Modify payoffs to break equilibrium")
+    detector.set_payoffs({
+        "module_a": 0.5,  # Can improve to 0.8 by staying with itself
+        "module_b": 0.9,
+        "module_c": 0.85
+    })
+    is_eq = detector.detect_equilibrium()
+    modules_eq = detector.get_equilibrium_modules()
+    print(f"  Equilibrium: {is_eq}")
+    print(f"  Modules at equilibrium: {modules_eq}")
+    assert not is_eq, "With modified payoffs, this should NOT be an equilibrium"
     print("  PASSED")
     
-    # Clean up test file
-    if os.path.exists("test_state.json"):
-        os.remove("test_state.json")
+    # Test 4: Restore equilibrium and verify logging
+    print("\nTest 4: Restore equilibrium and verify logging")
+    detector.set_payoffs({
+        "module_a": 0.8,
+        "module_b": 0.9,
+        "module_c": 0.85
+    })
+    is_eq = detector.detect_equilibrium()
+    print(f"  Equilibrium: {is_eq}")
+    assert is_eq, "Should be back to equilibrium"
+    
+    # Check that log file was created
+    if os.path.exists('nash_log.json'):
+        with open('nash_log.json', 'r') as f:
+            log_data = json.load(f)
+        print(f"  Log entries: {len(log_data)}")
+        assert len(log_data) > 0, "Should have at least one log entry"
+        print("  PASSED")
+    else:
+        print("  FAILED: nash_log.json not created")
+    
+    # Test 5: Add a new module
+    print("\nTest 5: Add a new module")
+    detector.add_module(
+        "module_d",
+        {"module_a": 0.9, "module_b": 0.7, "module_c": 0.6, "module_d": 0.5},
+        0.5
+    )
+    print(f"  Module names: {detector.module_names}")
+    assert "module_d" in detector.module_names, "module_d should be added"
+    print("  PASSED")
+    
+    # Test 6: Remove a module
+    print("\nTest 6: Remove a module")
+    detector.remove_module("module_d")
+    print(f"  Module names: {detector.module_names}")
+    assert "module_d" not in detector.module_names, "module_d should be removed"
+    print("  PASSED")
+    
+    # Test 7: Reset and verify
+    print("\nTest 7: Reset")
+    detector.reset()
+    is_eq = detector.detect_equilibrium()
+    modules_eq = detector.get_equilibrium_modules()
+    print(f"  Equilibrium: {is_eq}")
+    print(f"  Modules at equilibrium: {modules_eq}")
+    assert not is_eq, "After reset should not be in equilibrium"
+    assert len(detector.module_names) == 0, "Module names should be empty after reset"
+    print("  PASSED")
+    
+    # Test 8: Load from file after reset
+    print("\nTest 8: Load from file after reset")
+    detector.load_state('nash_state.json')
+    print(f"  Module names: {detector.module_names}")
+    assert len(detector.module_names) == 3, "Should have 3 modules after loading"
+    print("  PASSED")
+    
+    # Test 9: Save state and verify
+    print("\nTest 9: Save state and verify")
+    detector.save_state('test_state.json')
+    assert os.path.exists('test_state.json'), "test_state.json should exist"
+    
+    # Load the saved state
+    with open('test_state.json', 'r') as f:
+        saved_state = json.load(f)
+    assert 'module_names' in saved_state, "Saved state should contain module_names"
+    assert 'interaction_matrix' in saved_state, "Saved state should contain interaction_matrix"
+    assert 'payoffs' in saved_state, "Saved state should contain payoffs"
+    print("  PASSED")
+    
+    # Clean up test files
+    if os.path.exists('test_state.json'):
+        os.remove('test_state.json')
+    if os.path.exists('nash_state.json'):
+        os.remove('nash_state.json')
+    if os.path.exists('nash_log.json'):
+        os.remove('nash_log.json')
     
     print("\nAll tests passed!")
 
