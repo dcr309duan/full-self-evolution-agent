@@ -32,7 +32,8 @@
       "description": "Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each existing module by its usage frequency, test pass rate, and lines of code. Modules below a threshold are archived (not deleted), and the system must re-derive their core functionality from scratch using the LLM, forcing simplification and removal of accumulated cruft.",
       "priority": 8,
       "status": "pending",
-      "created_at": 1780655268.6256523
+      "created_at": 1780655268.6256523,
+      "consecutive_failures": 1
     }
   ],
   "completed_goals": [

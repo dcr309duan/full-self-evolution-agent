@@ -19,7 +19,8 @@ class CapabilityConsolidationEngine:
     """
     
     def __init__(self, codebase_root: str, archive_dir: str = "archive", 
-                 module_registry_path: str = "module_registry.json"):
+                 module_registry_path: str = "module_registry.json",
+                 bankruptcy_module=None):
         """
         Initialize the consolidation engine.
         
@@ -27,6 +28,7 @@ class CapabilityConsolidationEngine:
             codebase_root: Root directory of the codebase to analyze
             archive_dir: Directory to move archived modules to
             module_registry_path: Path to the module registry JSON file
+            bankruptcy_module: Reference to CapabilityBankruptcyEngine for archival decisions
         """
         self.codebase_root = Path(codebase_root)
         self.archive_dir = self.codebase_root / archive_dir
@@ -35,6 +37,8 @@ class CapabilityConsolidationEngine:
         self.import_graph: Dict[str, List[str]] = defaultdict(list)
         self.mutation_log: Dict[str, int] = {}
         self.last_modification_time: Dict[str, float] = {}
+        self.bankruptcy_module = bankruptcy_module
+        self.cycle_interval = 50  # Match bankruptcy cycle interval
         
         # Ensure archive directory exists
         self.archive_dir.mkdir(parents=True, exist_ok=True)
@@ -212,6 +216,7 @@ class CapabilityConsolidationEngine:
     def archive_module(self, module_path: str, threshold: float = 20.0) -> bool:
         """
         Move a low-scoring module to the archive directory and update the registry.
+        Defers to bankruptcy module if available for archival decisions.
         
         Args:
             module_path: Path of the module to archive
@@ -225,6 +230,20 @@ class CapabilityConsolidationEngine:
             return False
         
         module = self.modules[module_path]
+        
+        # Defer to bankruptcy module if available
+        if self.bankruptcy_module is not None:
+            # Check if bankruptcy module has already archived this module
+            if hasattr(self.bankruptcy_module, 'archived_modules'):
+                if module_path in self.bankruptcy_module.archived_modules:
+                    logger.info(f"Module {module_path} already archived by bankruptcy module, skipping")
+                    return False
+            
+            # Use bankruptcy module's archival decision
+            if hasattr(self.bankruptcy_module, 'should_archive'):
+                if not self.bankruptcy_module.should_archive(module_path):
+                    logger.info(f"Bankruptcy module decided not to archive {module_path}, skipping")
+                    return False
         
         # Check if module score is below threshold
         if module['score'] > threshold:

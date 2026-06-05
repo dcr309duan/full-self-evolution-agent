@@ -520,3 +520,242 @@ class TestCapabilityBankruptcy:
             if cap.id.startswith("core_"):
                 assert cap.status == CapabilityStatus.ACTIVE or cap.status == CapabilityStatus.REIMPLEMENTED
                 assert cap.is_critical == True
+
+    def test_bankruptcy_runs_only_at_cycle_mod_50(
+        self, bankruptcy_protocol, sample_capabilities, mock_knowledge_base
+    ):
+        """Test that bankruptcy runs only when cycle % 50 == 0."""
+        # Arrange
+        bankruptcy_protocol.capabilities = sample_capabilities
+        
+        # Test cycles that are not divisible by 50
+        for cycle in [1, 49, 51, 99, 101, 149]:
+            bankruptcy_protocol.current_cycle = cycle
+            result = bankruptcy_protocol.execute_bankruptcy()
+            assert result is None or result.summary['total_archived'] == 0
+            assert not mock_knowledge_base.update.called
+        
+        # Test cycles that are divisible by 50
+        for cycle in [50, 100, 150, 200]:
+            bankruptcy_protocol.current_cycle = cycle
+            result = bankruptcy_protocol.execute_bankruptcy()
+            assert result is not None
+            assert result.summary['total_archived'] > 0
+            assert mock_knowledge_base.update.called
+
+    def test_scoring_with_mock_modules_known_usage_test_pass_loc(
+        self, bankruptcy_protocol, mock_knowledge_base
+    ):
+        """Test scoring with mock modules of known usage/test_pass/LOC."""
+        # Arrange
+        capabilities = {}
+        
+        # Module A: high usage, high test pass rate, high LOC
+        cap_a = Capability(
+            id="module_a",
+            name="Module A",
+            score=CapabilityScore(value=80, confidence=0.9),
+            status=CapabilityStatus.ACTIVE,
+            essential=False,
+            last_used=datetime(2024, 11, 1),
+            usage_count=100,
+            test_pass_rate=0.95,
+            lines_of_code=500
+        )
+        capabilities[cap_a.id] = cap_a
+        
+        # Module B: medium usage, medium test pass rate, medium LOC
+        cap_b = Capability(
+            id="module_b",
+            name="Module B",
+            score=CapabilityScore(value=50, confidence=0.8),
+            status=CapabilityStatus.ACTIVE,
+            essential=False,
+            last_used=datetime(2024, 6, 1),
+            usage_count=50,
+            test_pass_rate=0.80,
+            lines_of_code=300
+        )
+        capabilities[cap_b.id] = cap_b
+        
+        # Module C: low usage, low test pass rate, low LOC
+        cap_c = Capability(
+            id="module_c",
+            name="Module C",
+            score=CapabilityScore(value=20, confidence=0.7),
+            status=CapabilityStatus.ACTIVE,
+            essential=False,
+            last_used=datetime(2024, 1, 1),
+            usage_count=10,
+            test_pass_rate=0.60,
+            lines_of_code=100
+        )
+        capabilities[cap_c.id] = cap_c
+        
+        bankruptcy_protocol.capabilities = capabilities
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        archived_ids = [cap.id for cap in result.archived_capabilities]
+        reimplemented_ids = [cap.id for cap in result.reimplemented_capabilities]
+        active_ids = [cap.id for cap in result.active_capabilities]
+        
+        # Module C (low usage, low test pass, low LOC) should be archived
+        assert "module_c" in archived_ids
+        
+        # Module A (high usage, high test pass, high LOC) should remain active
+        assert "module_a" in active_ids
+        
+        # Module B (medium) might be active or reimplemented
+        assert "module_b" in active_ids or "module_b" in reimplemented_ids
+
+    def test_archival_moves_file_to_archive_directory(
+        self, bankruptcy_protocol, sample_capabilities, mock_knowledge_base, tmp_path
+    ):
+        """Test that archival moves file to archive/ directory."""
+        # Arrange
+        bankruptcy_protocol.capabilities = sample_capabilities
+        bankruptcy_protocol.archive_dir = tmp_path / "archive"
+        bankruptcy_protocol.archive_dir.mkdir(exist_ok=True)
+        
+        # Create mock files for capabilities
+        for cap_id, cap in sample_capabilities.items():
+            cap_file = tmp_path / f"{cap_id}.py"
+            cap_file.write_text(f"# {cap.name} module")
+            cap.file_path = str(cap_file)
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        for cap in result.archived_capabilities:
+            # Check that the file was moved to archive directory
+            archived_file = bankruptcy_protocol.archive_dir / f"{cap.id}.py"
+            assert archived_file.exists()
+            # Check that the original file no longer exists
+            original_file = tmp_path / f"{cap.id}.py"
+            assert not original_file.exists()
+
+    def test_re_derived_module_created_with_v2_suffix(
+        self, bankruptcy_protocol, sample_capabilities, mock_knowledge_base, tmp_path
+    ):
+        """Test that re-derived module is created with _v2 suffix."""
+        # Arrange
+        bankruptcy_protocol.capabilities = sample_capabilities
+        bankruptcy_protocol.output_dir = tmp_path
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        for cap in result.reimplemented_capabilities:
+            # Check that a _v2 file was created
+            v2_file = tmp_path / f"{cap.id}_v2.py"
+            assert v2_file.exists()
+            # Check that the original file still exists
+            original_file = tmp_path / f"{cap.id}.py"
+            assert original_file.exists()
+
+    def test_modules_above_threshold_not_touched(
+        self, bankruptcy_protocol, mock_knowledge_base
+    ):
+        """Test that modules above threshold are not touched."""
+        # Arrange
+        capabilities = {}
+        
+        # Create modules with scores above and below threshold
+        for i in range(5):
+            cap = Capability(
+                id=f"cap_{i}",
+                name=f"Capability {i}",
+                score=CapabilityScore(value=i * 25, confidence=0.8),  # Scores: 0, 25, 50, 75, 100
+                status=CapabilityStatus.ACTIVE,
+                essential=False,
+                last_used=datetime(2024, 1, 1),
+                usage_count=10
+            )
+            capabilities[cap.id] = cap
+        
+        bankruptcy_protocol.capabilities = capabilities
+        bankruptcy_protocol.score_threshold = 60  # Set threshold to 60
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        archived_ids = [cap.id for cap in result.archived_capabilities]
+        reimplemented_ids = [cap.id for cap in result.reimplemented_capabilities]
+        active_ids = [cap.id for cap in result.active_capabilities]
+        
+        # Modules above threshold (score >= 60) should not be archived or reimplemented
+        assert "cap_3" not in archived_ids  # Score 75
+        assert "cap_3" not in reimplemented_ids  # Score 75
+        assert "cap_4" not in archived_ids  # Score 100
+        assert "cap_4" not in reimplemented_ids  # Score 100
+        
+        # Modules above threshold should remain active
+        assert "cap_3" in active_ids
+        assert "cap_4" in active_ids
+        
+        # Modules below threshold may be archived or reimplemented
+        assert "cap_0" in archived_ids or "cap_0" in reimplemented_ids
+        assert "cap_1" in archived_ids or "cap_1" in reimplemented_ids
+
+    def test_all_modules_below_threshold(
+        self, bankruptcy_protocol, mock_knowledge_base
+    ):
+        """Test edge case: all modules below threshold."""
+        # Arrange
+        capabilities = {}
+        
+        # Create all modules with scores below threshold
+        for i in range(5):
+            cap = Capability(
+                id=f"cap_{i}",
+                name=f"Capability {i}",
+                score=CapabilityScore(value=i * 10, confidence=0.8),  # Scores: 0, 10, 20, 30, 40
+                status=CapabilityStatus.ACTIVE,
+                essential=False,
+                last_used=datetime(2024, 1, 1),
+                usage_count=5
+            )
+            capabilities[cap.id] = cap
+        
+        bankruptcy_protocol.capabilities = capabilities
+        bankruptcy_protocol.score_threshold = 50  # Set threshold above all scores
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        archived_ids = [cap.id for cap in result.archived_capabilities]
+        reimplemented_ids = [cap.id for cap in result.reimplemented_capabilities]
+        active_ids = [cap.id for cap in result.active_capabilities]
+        
+        # All modules should be either archived or reimplemented
+        all_processed = set(archived_ids + reimplemented_ids)
+        for i in range(5):
+            assert f"cap_{i}" in all_processed
+        
+        # No modules should remain active
+        assert len(active_ids) == 0
+
+    def test_no_modules_exist(
+        self, bankruptcy_protocol
+    ):
+        """Test edge case: no modules exist."""
+        # Arrange
+        bankruptcy_protocol.capabilities = {}
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        assert len(result.archived_capabilities) == 0
+        assert len(result.reimplemented_capabilities) == 0
+        assert len(result.active_capabilities) == 0
+        assert result.summary['total_archived'] == 0
+        assert result.summary['total_reimplemented'] == 0
+        assert result.summary['total_active'] == 0

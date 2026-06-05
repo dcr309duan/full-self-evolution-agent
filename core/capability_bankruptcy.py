@@ -1,21 +1,25 @@
 """Capability Bankruptcy & Consolidation Engine.
 
 Scans capabilities from knowledge base and module registry, computes usage scores,
-flags underperforming capabilities for removal or merge, and enforces execution every 5 cycles.
+flags underperforming capabilities for removal or merge, and enforces execution every 50 cycles.
 """
 
 import logging
 import copy
 import time
+import os
+import shutil
+from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 
 logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_THRESHOLD = 0.3
-EXECUTION_INTERVAL = 5  # cycles
+EXECUTION_INTERVAL = 50  # cycles
 RECENCY_DECAY_CYCLES = 20
 COVERAGE_THRESHOLD = 0.6  # 60% functionality coverage for merge suggestion
+MAX_LOC = 1000  # Maximum lines of code for normalization
 
 
 class CapabilityBankruptcyEngine:
@@ -29,6 +33,7 @@ class CapabilityBankruptcyEngine:
         self.cycle_count = 0
         self.rollback_snapshots: List[Dict[str, Any]] = []
         self.capability_scores: Dict[str, float] = {}
+        self.bankruptcy_log: List[Dict[str, Any]] = []
 
     def _get_capabilities(self) -> Dict[str, Dict[str, Any]]:
         """Retrieve all capabilities from knowledge base and module registry."""
@@ -44,23 +49,116 @@ class CapabilityBankruptcyEngine:
                     capabilities[full_name] = cap_data
         return capabilities
 
-    def _compute_usage_score(self, capability: Dict[str, Any]) -> float:
-        """Compute usage score based on call frequency, recency, dependencies, and age."""
-        times_called = capability.get("times_called", 0)
-        last_called_cycle = capability.get("last_called_cycle", 0)
-        dependency_count = capability.get("dependency_count", 0)
-        creation_cycle = capability.get("creation_cycle", 0)
+    def _compute_usage_frequency(self, module_name: str) -> float:
+        """Compute usage frequency as count of references in last 50 cycles / 50."""
+        module_info = self.module_registry.get(module_name, {})
+        reference_history = module_info.get("reference_history", [])
+        # Count references in last 50 cycles
+        recent_references = [ref for ref in reference_history if ref >= self.cycle_count - 50]
+        return len(recent_references) / 50.0
 
-        # Recency bonus: decays over RECENCY_DECAY_CYCLES
-        cycles_since_last_call = self.cycle_count - last_called_cycle
-        recency_bonus = max(0, 1 - (cycles_since_last_call / RECENCY_DECAY_CYCLES))
+    def _compute_test_pass_rate(self, module_name: str) -> float:
+        """Compute test pass rate from recent test results."""
+        module_info = self.module_registry.get(module_name, {})
+        test_results = module_info.get("test_results", [])
+        if not test_results:
+            return 0.0
+        # Use recent test results (last 10)
+        recent_tests = test_results[-10:]
+        passed = sum(1 for result in recent_tests if result.get("passed", False))
+        return passed / len(recent_tests)
 
-        # Age penalty: increases with age
-        age = self.cycle_count - creation_cycle
-        age_penalty = min(1, age / 100)  # Cap at 1
+    def _compute_lines_of_code(self, module_name: str) -> int:
+        """Compute lines of code from file length."""
+        module_info = self.module_registry.get(module_name, {})
+        file_path = module_info.get("file_path", "")
+        if not file_path or not os.path.exists(file_path):
+            return 0
+        try:
+            with open(file_path, "r") as f:
+                return len(f.readlines())
+        except Exception:
+            return 0
 
-        score = (times_called * 0.4) + (recency_bonus * 0.3) + (dependency_count * 0.2) - (age_penalty * 0.1)
-        return max(0, score)  # Ensure non-negative
+    def _compute_composite_score(self, module_name: str) -> float:
+        """Compute composite score = 0.4*usage + 0.35*test_pass + 0.25*(1 - LOC/max_LOC)."""
+        usage = self._compute_usage_frequency(module_name)
+        test_pass = self._compute_test_pass_rate(module_name)
+        loc = self._compute_lines_of_code(module_name)
+        loc_score = 1.0 - (loc / MAX_LOC) if MAX_LOC > 0 else 0.0
+        composite = 0.4 * usage + 0.35 * test_pass + 0.25 * loc_score
+        return max(0.0, min(1.0, composite))  # Clamp to [0, 1]
+
+    def _get_module_description(self, module_name: str) -> str:
+        """Get description of a module from registry."""
+        module_info = self.module_registry.get(module_name, {})
+        return module_info.get("description", "No description available")
+
+    def _archive_module(self, module_name: str) -> None:
+        """Archive module by moving to archive/ directory with timestamp."""
+        module_info = self.module_registry.get(module_name, {})
+        file_path = module_info.get("file_path", "")
+        if not file_path or not os.path.exists(file_path):
+            logger.warning("Cannot archive module '%s': file not found", module_name)
+            return
+
+        # Create archive directory if not exists
+        archive_dir = "archive"
+        os.makedirs(archive_dir, exist_ok=True)
+
+        # Generate timestamped filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_filename = f"{module_name}_{timestamp}.py"
+        archive_path = os.path.join(archive_dir, archive_filename)
+
+        try:
+            shutil.move(file_path, archive_path)
+            logger.info("Archived module '%s' to '%s'", module_name, archive_path)
+        except Exception as e:
+            logger.error("Failed to archive module '%s': %s", module_name, str(e))
+
+    def _rederive_module(self, module_name: str) -> None:
+        """Call LLM to re-derive core functionality from scratch."""
+        description = self._get_module_description(module_name)
+        prompt = (
+            f"Given the archived module {module_name} which provided {description}, "
+            "re-implement its essential functionality in <50 lines of code, removing all cruft."
+        )
+
+        # Placeholder for LLM call - in production, integrate with actual LLM API
+        # For now, we create a minimal stub
+        rederived_code = f"""# Re-derived module: {module_name}_v2
+# Original description: {description}
+# Generated at: {datetime.now().isoformat()}
+
+def core_functionality():
+    \"\"\"Core functionality re-derived from {module_name}.\"\"\"
+    pass
+"""
+        # Write re-derived module to active directory with _v2 suffix
+        active_dir = "modules"
+        os.makedirs(active_dir, exist_ok=True)
+        new_filename = f"{module_name}_v2.py"
+        new_filepath = os.path.join(active_dir, new_filename)
+
+        try:
+            with open(new_filepath, "w") as f:
+                f.write(rederived_code)
+            logger.info("Re-derived module written to '%s'", new_filepath)
+        except Exception as e:
+            logger.error("Failed to write re-derived module '%s': %s", new_filepath, str(e))
+
+    def _log_action(self, action: str, module_name: str, details: Dict[str, Any]) -> None:
+        """Log action to bankruptcy_log."""
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "cycle": self.cycle_count,
+            "action": action,
+            "module": module_name,
+            "details": details,
+        }
+        self.bankruptcy_log.append(log_entry)
+        logger.info("Bankruptcy log: %s", log_entry)
 
     def _find_merge_candidates(self, flagged_capabilities: List[str]) -> Dict[str, List[str]]:
         """Find merge suggestions for flagged capabilities."""
@@ -179,41 +277,49 @@ class CapabilityBankruptcyEngine:
             logger.info("No capabilities found")
             return {"status": "no_capabilities", "cycle": self.cycle_count}
 
-        # Step 2: Compute usage scores
+        # Step 2: Compute composite scores for each module
         self.capability_scores = {}
-        for cap_name, cap_data in capabilities.items():
-            self.capability_scores[cap_name] = self._compute_usage_score(cap_data)
+        for module_name in self.module_registry:
+            score = self._compute_composite_score(module_name)
+            self.capability_scores[module_name] = score
 
-        # Step 3: Flag low-scoring capabilities
+        # Step 3: Flag low-scoring modules
         flagged = [name for name, score in self.capability_scores.items() if score < self.threshold]
-        logger.info("Flagged %d capabilities with score < %.2f", len(flagged), self.threshold)
+        logger.info("Flagged %d modules with score < %.2f", len(flagged), self.threshold)
 
         if not flagged:
             return {"status": "no_action", "cycle": self.cycle_count, "scores": self.capability_scores}
 
-        # Step 4: Find merge candidates for flagged capabilities
+        # Step 4: Find merge candidates for flagged modules
         merge_suggestions = self._find_merge_candidates(flagged)
 
         # Step 5: Create rollback snapshot
         snapshot = self._create_rollback_snapshot()
         logger.info("Created rollback snapshot at cycle %d", self.cycle_count)
 
-        # Step 6: Apply changes (remove or merge)
+        # Step 6: Apply changes (archive and re-derive)
         changes_made = []
-        for cap_name in flagged:
-            if cap_name in merge_suggestions:
-                target = merge_suggestions[cap_name][0]
-                self._merge_capabilities(cap_name, target)
-                changes_made.append({"action": "merge", "source": cap_name, "target": target})
-            else:
-                self._remove_capability(cap_name)
-                changes_made.append({"action": "remove", "capability": cap_name})
+        for module_name in flagged:
+            # Archive module
+            self._archive_module(module_name)
+            self._log_action("archive", module_name, {"score": self.capability_scores[module_name]})
+
+            # Re-derive module
+            self._rederive_module(module_name)
+            self._log_action("rederive", module_name, {"v2_suffix": True})
+
+            changes_made.append({
+                "action": "archive_and_rederive",
+                "module": module_name,
+                "score": self.capability_scores[module_name]
+            })
 
         # Step 7: Run critical tests and revert if needed
         tests_passed = self._run_critical_tests()
         if not tests_passed:
             logger.error("Critical tests failed! Reverting changes.")
             self._revert_changes(snapshot)
+            self._log_action("revert", "system", {"reason": "tests_failed"})
             return {
                 "status": "reverted",
                 "cycle": self.cycle_count,
@@ -238,4 +344,5 @@ class CapabilityBankruptcyEngine:
             "threshold": self.threshold,
             "capability_scores": self.capability_scores,
             "snapshots_count": len(self.rollback_snapshots),
+            "bankruptcy_log_count": len(self.bankruptcy_log),
         }

@@ -1,0 +1,10 @@
+{
+  "constraints": [
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "尽管已识别出多次范式转移和盲区（如系统实质是静态LLM采样、递归认知是叙事剧场），但第0层评估本身仍陷入一个更深的自指陷阱：我们反复将‘反思’当作改进机制，却从未真正验证反思是否改变了后续的行为输出。",
+      "created_cycle": 160,
+      "expires_cycle": 180
+    }
+  ]
+}
