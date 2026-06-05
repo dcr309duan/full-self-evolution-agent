@@ -4,7 +4,7 @@ system_health_audit.py
 Provides meta-cognitive health metrics for an evolving system.
 Tracks mutation rate, acceptance threshold, brittleness, parameter adjustment frequency,
 flags stuck-at-extreme parameters, and includes conflict resolution metrics.
-Also includes atomic write failure metrics.
+Also includes atomic write failure metrics and auto-generated fix success rate metrics.
 """
 
 import time
@@ -20,11 +20,13 @@ EXTREME_HIGH = 0.99
 ADJUSTMENT_WINDOW = 30  # cycles
 CONFLICT_WINDOW = 30  # cycles for conflict tracking
 WRITE_FAILURE_WINDOW = 30  # cycles for write failure tracking
+FIX_EFFECTIVENESS_WINDOW = 30  # cycles for fix effectiveness tracking
 
 class SystemHealthAudit:
     """
     Tracks and reports meta-cognitive health metrics for an evolving system.
-    Includes conflict resolution metrics and atomic write failure metrics for health audit.
+    Includes conflict resolution metrics, atomic write failure metrics, and
+    auto-generated fix effectiveness metrics for health audit.
     """
 
     def __init__(self, mutation_rate: float = DEFAULT_MUTATION_RATE,
@@ -45,6 +47,12 @@ class SystemHealthAudit:
         self.write_failures_last_30: deque = deque(maxlen=WRITE_FAILURE_WINDOW)
         self.rollback_attempts: int = 0
         self.rollback_successes: int = 0
+
+        # Auto-generated fix effectiveness tracking
+        self.fix_log: deque = deque(maxlen=1000)  # Store recent fixes
+        self.fixes_last_30: deque = deque(maxlen=FIX_EFFECTIVENESS_WINDOW)
+        self.total_fixes_applied: int = 0
+        self.fixes_prevented_failures: int = 0
 
     def record_adjustment(self, parameter_name: str, old_value: float, new_value: float) -> None:
         """Record a parameter adjustment with timestamp."""
@@ -116,6 +124,33 @@ class SystemHealthAudit:
         self.rollback_attempts += 1
         if rollback_successful:
             self.rollback_successes += 1
+
+    def record_fix(self, module: str, fix_type: str, prevented_failure: bool = False) -> None:
+        """
+        Record an auto-generated fix event.
+        
+        Args:
+            module: The module where fix was applied
+            fix_type: Type of fix applied (e.g., 'parameter_adjustment', 'conflict_resolution', 'rollback')
+            prevented_failure: Whether the fix prevented a subsequent failure
+        """
+        fix_entry = {
+            'module': module,
+            'type': fix_type,
+            'prevented_failure': prevented_failure,
+            'cycle': self.cycle_count,
+            'timestamp': time.time()
+        }
+        self.fix_log.append(fix_entry)
+        
+        # Track in last 30 cycles
+        if self.cycle_count > 0:
+            self.fixes_last_30.append(fix_entry)
+        
+        # Track fix statistics
+        self.total_fixes_applied += 1
+        if prevented_failure:
+            self.fixes_prevented_failures += 1
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter."""
@@ -287,10 +322,94 @@ class SystemHealthAudit:
         
         return list(summary.values())
 
+    def get_fix_count_last_30(self) -> int:
+        """Return number of auto-generated fixes applied in last 30 cycles."""
+        cutoff_cycle = self.cycle_count - FIX_EFFECTIVENESS_WINDOW
+        return sum(1 for f in self.fix_log if f['cycle'] >= cutoff_cycle)
+
+    def get_fix_success_rate(self) -> float:
+        """
+        Calculate success rate of auto-generated fixes (fixes that prevented subsequent failures vs total fixes applied).
+        Returns a float between 0 and 1, or 0 if no fixes applied.
+        """
+        if self.total_fixes_applied == 0:
+            return 0.0
+        return self.fixes_prevented_failures / self.total_fixes_applied
+
+    def get_fix_success_rate_last_30(self) -> float:
+        """
+        Calculate success rate of auto-generated fixes in last 30 cycles.
+        Returns a float between 0 and 1, or 0 if no fixes applied in that window.
+        """
+        cutoff_cycle = self.cycle_count - FIX_EFFECTIVENESS_WINDOW
+        recent_fixes = [f for f in self.fix_log if f['cycle'] >= cutoff_cycle]
+        
+        if not recent_fixes:
+            return 0.0
+        
+        prevented = sum(1 for f in recent_fixes if f['prevented_failure'])
+        return prevented / len(recent_fixes)
+
+    def get_modules_with_high_fix_failures(self) -> List[str]:
+        """
+        Return list of modules with >2 fixes that did NOT prevent failures in last 30 cycles.
+        """
+        cutoff_cycle = self.cycle_count - FIX_EFFECTIVENESS_WINDOW
+        recent_fixes = [f for f in self.fix_log if f['cycle'] >= cutoff_cycle and not f['prevented_failure']]
+        
+        module_failure_count = {}
+        for fix in recent_fixes:
+            module = fix['module']
+            module_failure_count[module] = module_failure_count.get(module, 0) + 1
+        
+        return [module for module, count in module_failure_count.items() if count > 2]
+
+    def get_fix_log_summary(self) -> List[Dict]:
+        """Return a summary of recent fix log entries."""
+        cutoff_cycle = self.cycle_count - FIX_EFFECTIVENESS_WINDOW
+        recent_fixes = [f for f in self.fix_log if f['cycle'] >= cutoff_cycle]
+        
+        # Group by module and fix type
+        summary = {}
+        for fix in recent_fixes:
+            module = fix['module']
+            if module not in summary:
+                summary[module] = {
+                    'module': module,
+                    'total_fixes': 0,
+                    'parameter_adjustment': 0,
+                    'conflict_resolution': 0,
+                    'rollback': 0,
+                    'other': 0,
+                    'prevented_failure': 0,
+                    'did_not_prevent': 0,
+                    'last_fix': None
+                }
+            summary[module]['total_fixes'] += 1
+            if fix['type'] == 'parameter_adjustment':
+                summary[module]['parameter_adjustment'] += 1
+            elif fix['type'] == 'conflict_resolution':
+                summary[module]['conflict_resolution'] += 1
+            elif fix['type'] == 'rollback':
+                summary[module]['rollback'] += 1
+            else:
+                summary[module]['other'] += 1
+            
+            if fix['prevented_failure']:
+                summary[module]['prevented_failure'] += 1
+            else:
+                summary[module]['did_not_prevent'] += 1
+            
+            if summary[module]['last_fix'] is None or fix['timestamp'] > summary[module]['last_fix']['timestamp']:
+                summary[module]['last_fix'] = fix
+        
+        return list(summary.values())
+
     def generate_health_report(self) -> Dict:
         """
         Generate a comprehensive health report with all meta-cognitive metrics
-        including conflict resolution metrics and atomic write failure metrics.
+        including conflict resolution metrics, atomic write failure metrics, and
+        auto-generated fix effectiveness metrics.
         """
         conflict_count = self.get_conflict_count_last_30()
         resolution_rate = self.get_conflict_resolution_success_rate()
@@ -299,6 +418,11 @@ class SystemHealthAudit:
         write_failure_count = self.get_write_failure_count_last_30()
         rollback_success_rate = self.get_rollback_success_rate()
         modules_with_high_write_failures = self.get_modules_with_high_write_failures()
+        
+        fix_count = self.get_fix_count_last_30()
+        fix_success_rate = self.get_fix_success_rate()
+        fix_success_rate_last_30 = self.get_fix_success_rate_last_30()
+        modules_with_high_fix_failures = self.get_modules_with_high_fix_failures()
         
         report = {
             'mutation_rate': self.mutation_rate,
@@ -318,7 +442,15 @@ class SystemHealthAudit:
             'write_failures_last_30_cycles': write_failure_count,
             'rollback_success_rate': rollback_success_rate,
             'modules_with_high_write_failures': modules_with_high_write_failures,
-            'write_failure_log_summary': self.get_write_failure_log_summary()
+            'write_failure_log_summary': self.get_write_failure_log_summary(),
+            # Auto-generated fix effectiveness metrics
+            'fixes_applied_last_30_cycles': fix_count,
+            'fix_success_rate_overall': fix_success_rate,
+            'fix_success_rate_last_30_cycles': fix_success_rate_last_30,
+            'total_fixes_applied': self.total_fixes_applied,
+            'fixes_prevented_failures': self.fixes_prevented_failures,
+            'modules_with_high_fix_failures': modules_with_high_fix_failures,
+            'fix_log_summary': self.get_fix_log_summary()
         }
         return report
 
@@ -362,6 +494,11 @@ if __name__ == "__main__":
             auditor.record_write_failure('module_a', 'disk_full', rollback_successful=(i % 3 != 0))
         if i % 8 == 0:
             auditor.record_write_failure('module_b', 'corruption', rollback_successful=(i % 2 == 0))
+        # Simulate some auto-generated fixes
+        if i % 2 == 0:
+            auditor.record_fix('module_a', 'parameter_adjustment', prevented_failure=(i % 4 == 0))
+        if i % 3 == 0:
+            auditor.record_fix('module_b', 'conflict_resolution', prevented_failure=(i % 5 == 0))
     
     # Generate and print report
     report = auditor.generate_health_report()

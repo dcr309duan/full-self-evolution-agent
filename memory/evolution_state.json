@@ -1,9 +1,8 @@
 {
-  "cycle_count": 116,
-  "current_generation": 87,
-  "last_evolution_time": 1780645768.3343368,
+  "cycle_count": 117,
+  "current_generation": 88,
+  "last_evolution_time": 1780645886.5595853,
   "capabilities": [
-    "Implement a canonical schema alignment layer that converts all inter-module data (reflection output,",
     "Build a self-consistency test suite that runs after every mutation to verify system integrity: it ch",
     "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a depe",
     "Implement a canonical schema alignment layer that normalizes data formats between all core modules (",
@@ -52,15 +51,10 @@
     "Build a meta-cognitive evaluator that tracks long-term fitness trends (e.g., success rate on core vs",
     "Implement automated rollback and conflict resolution for overlapping module edits: when two mutation",
     "Implement atomic file write with rollback in the orchestrator: wrap all module file writes in a try/",
-    "Create a 'minimal core' end-to-end integration test that runs the full reflection → goal generation "
+    "Create a 'minimal core' end-to-end integration test that runs the full reflection → goal generation ",
+    "Build a self-diagnosis module that scans the last 20 failure logs for the most common error type (e."
   ],
   "history": [
-    {
-      "cycle": 8,
-      "goal": "Implement a testing framework to validate self-modifications",
-      "success": true,
-      "timestamp": 1780624156.4987853
-    },
     {
       "cycle": 9,
       "goal": "Create a 'mutation' mechanism that randomly selects two existing functions or strategies from the knowledge base, combines or modifies them, and tests the result against a basic problem suite, logging success or failure to generate new experimental capabilities.",
@@ -654,6 +648,12 @@
       "goal": "Create a 'minimal core' end-to-end integration test that runs the full reflection → goal generation → mutation → test → promote cycle on a simplified toy module (e.g., a single function that returns a constant), and asserts the cycle completes without any file-system or import errors; add this test to the pre-commit hook.",
       "success": true,
       "timestamp": 1780645849.847544
+    },
+    {
+      "cycle": 117,
+      "goal": "Build a self-diagnosis module that scans the last 20 failure logs for the most common error type (e.g., ModuleNotFoundError, NameError, PermissionError) and generates a targeted fix snippet (e.g., missing import line) that is automatically injected before the next mutation attempt.",
+      "success": true,
+      "timestamp": 1780646022.4643369
     }
   ],
   "status": "evolving"

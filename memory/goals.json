@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a self-diagnosis module that scans the last 20 failure logs for the most common error type (e.g., ModuleNotFoundError, NameError, PermissionError) and generates a targeted fix snippet (e.g., missing import line) that is automatically injected before the next mutation attempt.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780645590.946733
-    },
-    {
       "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
       "priority": 7,
       "status": "pending",
@@ -699,6 +693,13 @@
       "status": "completed",
       "created_at": 1780645590.9446285,
       "completed_at": 1780645849.8351276
+    },
+    {
+      "description": "Build a self-diagnosis module that scans the last 20 failure logs for the most common error type (e.g., ModuleNotFoundError, NameError, PermissionError) and generates a targeted fix snippet (e.g., missing import line) that is automatically injected before the next mutation attempt.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780645590.946733,
+      "completed_at": 1780646022.3144097
     }
   ],
   "generated_goals": []
