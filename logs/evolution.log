@@ -1146,3 +1146,5 @@ ModuleNotFoundError: No module named 'core.self_model_builder'
 [2026-06-05 13:13:53] Cycle 75: Mutations: 3, successes: 3
 [2026-06-05 13:13:53] Cycle 75: Phase 2.6: 跨领域新策略注入
 [2026-06-05 13:13:53] Cycle 75: 跨领域注入异常: cannot import name 'schema_alignment' from 'agents' (consider renaming '/root/full-self-evolution-ag
+[2026-06-05 13:13:57] Cycle 75: === Cycle Complete ===
+
