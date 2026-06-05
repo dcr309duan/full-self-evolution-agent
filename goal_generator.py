@@ -11,6 +11,7 @@ After each reflection cycle, this module:
 7. Supports retry_generation mode for self-healing loops with focused sub-goals.
 8. Generates alternative strategies using different approaches than original failed goals.
 9. Integrates feasibility estimator to check goal viability before generation.
+10. Analyzes accumulated knowledge base to autonomously generate new sub-goals.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -52,16 +53,275 @@ class Goal:
     """Represents a single goal with metadata."""
     description: str
     priority: int  # Lower number = higher priority
-    source: str  # e.g., "parsed", "experimental", "manual", "retry", "alternative"
+    source: str  # e.g., "parsed", "experimental", "manual", "retry", "alternative", "autonomous"
     success_count: int = 0
     failure_count: int = 0
     last_selected: Optional[datetime] = None
     failure_type: Optional[FailureType] = None  # Track failure type for retry
     original_goal: Optional[str] = None  # Reference to original goal for alternatives
+    rationale: Optional[str] = None  # Rationale for autonomous goal generation
 
     def success_rate(self) -> float:
         total = self.success_count + self.failure_count
         return self.success_count / total if total > 0 else 0.0
+
+@dataclass
+class KnowledgeEntry:
+    """Represents a single entry in the knowledge base."""
+    type: str  # "failure_pattern", "successful_strategy", "self_reflection"
+    description: str
+    frequency: int = 1
+    impact_score: float = 0.5  # 0.0 to 1.0
+    alignment_score: float = 0.5  # 0.0 to 1.0
+    timestamp: datetime = field(default_factory=datetime.now)
+
+class KnowledgeBase:
+    """
+    Accumulates and analyzes knowledge from failures, successes, and self-reflections.
+    Used by AutonomousGoalAnalyzer to generate new goals.
+    """
+    
+    def __init__(self):
+        self.entries: List[KnowledgeEntry] = []
+        self.logger = logging.getLogger(__name__)
+    
+    def add_entry(self, entry: KnowledgeEntry) -> None:
+        """Add a new entry to the knowledge base."""
+        # Check if similar entry exists and update frequency
+        for existing in self.entries:
+            if (existing.type == entry.type and 
+                existing.description.lower() == entry.description.lower()):
+                existing.frequency += 1
+                existing.impact_score = max(existing.impact_score, entry.impact_score)
+                existing.alignment_score = max(existing.alignment_score, entry.alignment_score)
+                existing.timestamp = datetime.now()
+                self.logger.debug(f"Updated existing knowledge entry: {entry.description}")
+                return
+        
+        self.entries.append(entry)
+        self.logger.debug(f"Added new knowledge entry: {entry.description}")
+    
+    def add_failure_pattern(self, description: str, impact_score: float = 0.5) -> None:
+        """Add a failure pattern to the knowledge base."""
+        entry = KnowledgeEntry(
+            type="failure_pattern",
+            description=description,
+            impact_score=impact_score,
+            alignment_score=0.3  # Default alignment for failures
+        )
+        self.add_entry(entry)
+    
+    def add_successful_strategy(self, description: str, impact_score: float = 0.7) -> None:
+        """Add a successful strategy to the knowledge base."""
+        entry = KnowledgeEntry(
+            type="successful_strategy",
+            description=description,
+            impact_score=impact_score,
+            alignment_score=0.8  # Default alignment for successes
+        )
+        self.add_entry(entry)
+    
+    def add_self_reflection(self, description: str, alignment_score: float = 0.6) -> None:
+        """Add a self-reflection insight to the knowledge base."""
+        entry = KnowledgeEntry(
+            type="self_reflection",
+            description=description,
+            impact_score=0.4,  # Default impact for reflections
+            alignment_score=alignment_score
+        )
+        self.add_entry(entry)
+    
+    def get_failure_patterns(self) -> List[KnowledgeEntry]:
+        """Get all failure pattern entries."""
+        return [e for e in self.entries if e.type == "failure_pattern"]
+    
+    def get_successful_strategies(self) -> List[KnowledgeEntry]:
+        """Get all successful strategy entries."""
+        return [e for e in self.entries if e.type == "successful_strategy"]
+    
+    def get_self_reflections(self) -> List[KnowledgeEntry]:
+        """Get all self-reflection entries."""
+        return [e for e in self.entries if e.type == "self_reflection"]
+    
+    def get_all_entries(self) -> List[KnowledgeEntry]:
+        """Get all knowledge entries."""
+        return self.entries
+    
+    def clear(self) -> None:
+        """Clear all knowledge entries."""
+        self.entries.clear()
+        self.logger.debug("Knowledge base cleared")
+
+class AutonomousGoalAnalyzer:
+    """
+    Analyzes the accumulated knowledge base and autonomously generates new sub-goals.
+    Uses priority scoring based on frequency of failure, potential impact, and alignment with self-reflection insights.
+    """
+    
+    def __init__(self, knowledge_base: KnowledgeBase):
+        self.knowledge_base = knowledge_base
+        self.logger = logging.getLogger(__name__)
+    
+    def analyze_and_generate_goals(self, max_goals: int = 5) -> List[Goal]:
+        """
+        Analyze knowledge base and generate new sub-goals with priority scores.
+        
+        Args:
+            max_goals: Maximum number of goals to generate
+            
+        Returns:
+            List of Goal objects with priority scores and rationale
+        """
+        failure_patterns = self.knowledge_base.get_failure_patterns()
+        successful_strategies = self.knowledge_base.get_successful_strategies()
+        self_reflections = self.knowledge_base.get_self_reflections()
+        
+        if not failure_patterns and not successful_strategies and not self_reflections:
+            self.logger.info("Knowledge base is empty, no goals to generate")
+            return []
+        
+        # Calculate priority scores for potential goals
+        goal_candidates = []
+        
+        # 1. Generate goals from failure patterns (address recurring issues)
+        for pattern in failure_patterns:
+            priority_score = self._calculate_priority_score(
+                frequency=pattern.frequency,
+                impact=pattern.impact_score,
+                alignment=pattern.alignment_score,
+                is_failure=True
+            )
+            
+            # Generate goal description from failure pattern
+            goal_desc = self._generate_goal_from_failure(pattern.description)
+            
+            goal_candidates.append({
+                "description": goal_desc,
+                "priority_score": priority_score,
+                "rationale": f"Addresses recurring failure pattern: '{pattern.description}' (frequency: {pattern.frequency}, impact: {pattern.impact_score:.2f})",
+                "source": "autonomous_failure"
+            })
+        
+        # 2. Generate goals from successful strategies (reinforce what works)
+        for strategy in successful_strategies:
+            priority_score = self._calculate_priority_score(
+                frequency=strategy.frequency,
+                impact=strategy.impact_score,
+                alignment=strategy.alignment_score,
+                is_failure=False
+            )
+            
+            # Generate goal description from successful strategy
+            goal_desc = self._generate_goal_from_success(strategy.description)
+            
+            goal_candidates.append({
+                "description": goal_desc,
+                "priority_score": priority_score,
+                "rationale": f"Reinforces successful strategy: '{strategy.description}' (frequency: {strategy.frequency}, impact: {strategy.impact_score:.2f})",
+                "source": "autonomous_success"
+            })
+        
+        # 3. Generate goals from self-reflections (align with insights)
+        for reflection in self_reflections:
+            priority_score = self._calculate_priority_score(
+                frequency=reflection.frequency,
+                impact=reflection.impact_score,
+                alignment=reflection.alignment_score,
+                is_failure=False
+            )
+            
+            # Generate goal description from self-reflection
+            goal_desc = self._generate_goal_from_reflection(reflection.description)
+            
+            goal_candidates.append({
+                "description": goal_desc,
+                "priority_score": priority_score,
+                "rationale": f"Aligns with self-reflection insight: '{reflection.description}' (alignment: {reflection.alignment_score:.2f})",
+                "source": "autonomous_reflection"
+            })
+        
+        # Sort by priority score (higher is better)
+        goal_candidates.sort(key=lambda x: x["priority_score"], reverse=True)
+        
+        # Select top goals
+        selected_candidates = goal_candidates[:max_goals]
+        
+        # Create Goal objects
+        generated_goals = []
+        for i, candidate in enumerate(selected_candidates):
+            goal = Goal(
+                description=candidate["description"],
+                priority=i + 1,  # Sequential priority based on score
+                source=candidate["source"],
+                last_selected=datetime.now(),
+                rationale=candidate["rationale"]
+            )
+            generated_goals.append(goal)
+            self.logger.info(f"Generated autonomous goal: '{goal.description}' (priority: {goal.priority}, score: {candidate['priority_score']:.2f})")
+        
+        return generated_goals
+    
+    def _calculate_priority_score(self, frequency: int, impact: float, alignment: float, is_failure: bool) -> float:
+        """
+        Calculate priority score for a goal candidate.
+        
+        Formula: (frequency_weight * frequency_normalized) + (impact_weight * impact) + (alignment_weight * alignment)
+        
+        Args:
+            frequency: How often this pattern/strategy appears
+            impact: Potential impact score (0.0 to 1.0)
+            alignment: Alignment with self-reflection insights (0.0 to 1.0)
+            is_failure: Whether this is from a failure pattern
+            
+        Returns:
+            Priority score (0.0 to 1.0)
+        """
+        # Normalize frequency (assume max frequency of 10 for normalization)
+        frequency_normalized = min(frequency / 10.0, 1.0)
+        
+        # Weights for different components
+        frequency_weight = 0.3
+        impact_weight = 0.4
+        alignment_weight = 0.3
+        
+        # Boost impact for failure patterns (they need more attention)
+        if is_failure:
+            impact_weight += 0.1
+            frequency_weight += 0.1
+            alignment_weight -= 0.2
+        
+        # Ensure weights sum to 1.0
+        total_weight = frequency_weight + impact_weight + alignment_weight
+        frequency_weight /= total_weight
+        impact_weight /= total_weight
+        alignment_weight /= total_weight
+        
+        score = (frequency_weight * frequency_normalized) + (impact_weight * impact) + (alignment_weight * alignment)
+        return min(max(score, 0.0), 1.0)  # Clamp to [0.0, 1.0]
+    
+    def _generate_goal_from_failure(self, failure_description: str) -> str:
+        """Generate a goal description from a failure pattern."""
+        # Simple transformation: add "Fix" or "Address" prefix
+        prefixes = ["Fix", "Address", "Resolve", "Eliminate", "Prevent"]
+        import random
+        prefix = random.choice(prefixes)
+        return f"{prefix} {failure_description}"
+    
+    def _generate_goal_from_success(self, success_description: str) -> str:
+        """Generate a goal description from a successful strategy."""
+        # Simple transformation: add "Continue" or "Expand" prefix
+        prefixes = ["Continue", "Expand", "Reinforce", "Optimize", "Scale"]
+        import random
+        prefix = random.choice(prefixes)
+        return f"{prefix} {success_description}"
+    
+    def _generate_goal_from_reflection(self, reflection_description: str) -> str:
+        """Generate a goal description from a self-reflection insight."""
+        # Simple transformation: add "Implement" or "Apply" prefix
+        prefixes = ["Implement", "Apply", "Integrate", "Adopt", "Practice"]
+        import random
+        prefix = random.choice(prefixes)
+        return f"{prefix} {reflection_description}"
 
 class FeasibilityEstimator:
     """
@@ -136,6 +396,7 @@ class GoalGenerator:
     Integrates ReflectionParser into goal generation.
     Maintains a feedback loop tracking how parsed reflections influence goal selection.
     Supports retry_generation mode for self-healing loops.
+    Includes autonomous goal generation from knowledge base analysis.
     """
 
     def __init__(self, parser: Optional[ReflectionParser] = None, feasibility_check: bool = True):
@@ -150,6 +411,8 @@ class GoalGenerator:
         self.failed_goals: List[Goal] = []  # Track failed goals for retry
         self.alternative_strategies: List[Goal] = []  # Track alternative strategies
         self.blocked_goals: List[Dict[str, Any]] = []  # Track blocked goals with reasons
+        self.knowledge_base = KnowledgeBase()  # Initialize knowledge base
+        self.autonomous_analyzer = AutonomousGoalAnalyzer(self.knowledge_base)  # Initialize analyzer
         self.logger = logging.getLogger(__name__)
 
     def process_reflection(self, reflection_text: str) -> Dict[str, Any]:
@@ -162,9 +425,84 @@ class GoalGenerator:
         self._prioritize_goals(parsed.get("key_gaps", []))
         self._set_primary_goal(parsed.get("next_priority", ""))
         self._inject_experimental_goals(parsed.get("novel_ideas", []))
+        
+        # Add reflection insights to knowledge base
+        self._add_reflection_to_knowledge_base(reflection_text)
+        
+        # Generate autonomous goals from knowledge base
+        self._generate_autonomous_goals()
+        
         summary = self._generate_summary(parsed)
         self._record_feedback(parsed, summary)
         return summary
+
+    def _add_reflection_to_knowledge_base(self, reflection_text: str) -> None:
+        """Parse reflection text and add relevant entries to knowledge base."""
+        # Simple parsing: look for keywords indicating failures, successes, or reflections
+        reflection_lower = reflection_text.lower()
+        
+        # Check for failure indicators
+        failure_indicators = ["failed", "struggled", "couldn't", "didn't work", "error", "bug", "issue", "problem"]
+        for indicator in failure_indicators:
+            if indicator in reflection_lower:
+                # Extract the context around the failure indicator
+                idx = reflection_lower.find(indicator)
+                start = max(0, idx - 50)
+                end = min(len(reflection_text), idx + 50)
+                context = reflection_text[start:end].strip()
+                self.knowledge_base.add_failure_pattern(context, impact_score=0.6)
+                break
+        
+        # Check for success indicators
+        success_indicators = ["succeeded", "completed", "achieved", "solved", "fixed", "resolved", "worked"]
+        for indicator in success_indicators:
+            if indicator in reflection_lower:
+                idx = reflection_lower.find(indicator)
+                start = max(0, idx - 50)
+                end = min(len(reflection_text), idx + 50)
+                context = reflection_text[start:end].strip()
+                self.knowledge_base.add_successful_strategy(context, impact_score=0.7)
+                break
+        
+        # Check for self-reflection indicators
+        reflection_indicators = ["realized", "learned", "understood", "noticed", "observed", "felt", "thought"]
+        for indicator in reflection_indicators:
+            if indicator in reflection_lower:
+                idx = reflection_lower.find(indicator)
+                start = max(0, idx - 50)
+                end = min(len(reflection_text), idx + 50)
+                context = reflection_text[start:end].strip()
+                self.knowledge_base.add_self_reflection(context, alignment_score=0.6)
+                break
+
+    def _generate_autonomous_goals(self, max_goals: int = 3) -> None:
+        """
+        Generate autonomous goals from knowledge base analysis.
+        Adds generated goals to the regular goals list.
+        """
+        generated_goals = self.autonomous_analyzer.analyze_and_generate_goals(max_goals=max_goals)
+        
+        for goal in generated_goals:
+            # Check if similar goal already exists
+            if not any(g.description.lower() == goal.description.lower() for g in self.goals):
+                # Perform feasibility check
+                if self.feasibility_check:
+                    feasibility_result = self.feasibility_estimator.estimate(goal.description, self.current_assessment)
+                    
+                    if feasibility_result == FeasibilityResult.BLOCK:
+                        self.logger.info(f"Feasibility check blocked autonomous goal: '{goal.description}'")
+                        self.blocked_goals.append({
+                            "description": goal.description,
+                            "reason": "Feasibility check blocked autonomous goal",
+                            "timestamp": datetime.now().isoformat()
+                        })
+                        continue
+                    elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                        goal.description = self._simplify_goal(goal.description)
+                        self.logger.info(f"Feasibility check adjusted autonomous goal complexity: '{goal.description}'")
+                
+                self.goals.append(goal)
+                self.logger.info(f"Added autonomous goal: '{goal.description}' (priority: {goal.priority})")
 
     def _update_assessment(self, assessment: Dict[str, Any]) -> None:
         """Update current_assessment with parsed context."""
@@ -355,14 +693,22 @@ class GoalGenerator:
         """
         Record the outcome of a goal execution for feedback tracking.
         Optionally specify failure type for retry generation.
+        Also updates knowledge base with outcome.
         """
         if success:
             goal.success_count += 1
+            # Add successful strategy to knowledge base
+            self.knowledge_base.add_successful_strategy(goal.description, impact_score=0.7)
         else:
             goal.failure_count += 1
             if failure_type:
                 goal.failure_type = failure_type
                 self.failed_goals.append(goal)
+                # Add failure pattern to knowledge base
+                self.knowledge_base.add_failure_pattern(goal.description, impact_score=0.6)
+            else:
+                # Add generic failure pattern
+                self.knowledge_base.add_failure_pattern(goal.description, impact_score=0.4)
 
         # Update feedback history
         feedback_entry = {
@@ -489,201 +835,4 @@ class GoalGenerator:
                 f"Alternative approach: Seek external expertise for {failed_goal.description}"
             ]
 
-        # Select the requested number of alternatives
-        selected_alternatives = alternatives[:min(num_alternatives, len(alternatives))]
-
-        for i, alt_desc in enumerate(selected_alternatives):
-            # Perform feasibility check for each alternative strategy
-            if self.feasibility_check:
-                feasibility_result = self.feasibility_estimator.estimate(alt_desc, self.current_assessment)
-                
-                if feasibility_result == FeasibilityResult.BLOCK:
-                    self.logger.info(f"Feasibility check blocked alternative strategy: '{alt_desc}'")
-                    self.blocked_goals.append({
-                        "description": alt_desc,
-                        "reason": "Feasibility check blocked alternative strategy",
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    continue
-                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                    alt_desc = self._simplify_goal(alt_desc)
-                    self.logger.info(f"Feasibility check adjusted alternative strategy complexity: '{alt_desc}'")
-            
-            alt_goal = Goal(
-                description=alt_desc,
-                priority=10 + i,  # Lower priority than retry goals
-                source="alternative",
-                last_selected=datetime.now(),
-                failure_type=failure_type,
-                original_goal=failed_goal.description
-            )
-            alternative_goals.append(alt_goal)
-            self.alternative_strategies.append(alt_goal)
-            self.goals.append(alt_goal)
-            self.logger.debug(f"Generated alternative strategy: {alt_desc}")
-
-        return alternative_goals
-
-    def handle_failed_goal(self, goal: Goal, failure_type: FailureType, generate_alternatives: bool = True) -> Dict[str, Any]:
-        """
-        Complete handler for failed goals in retry mode.
-        Generates retry sub-goals and optionally alternative strategies.
-        Returns a summary of what was generated.
-        """
-        if not self.retry_mode:
-            return {"message": "Retry mode not enabled", "retry_goals": [], "alternatives": []}
-
-        # Record the failure with type
-        self.record_goal_outcome(goal, success=False, failure_type=failure_type)
-
-        # Generate retry sub-goals
-        retry_goals = self.generate_retry_goals(goal)
-
-        # Generate alternative strategies if requested
-        alternatives = []
-        if generate_alternatives:
-            alternatives = self.generate_alternative_strategies(goal)
-
-        return {
-            "failed_goal": goal.description,
-            "failure_type": failure_type.value,
-            "retry_goals_generated": len(retry_goals),
-            "alternative_strategies_generated": len(alternatives),
-            "retry_goals": [g.description for g in retry_goals],
-            "alternatives": [g.description for g in alternatives]
-        }
-
-    def _generate_summary(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a summary of changes made during processing."""
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "assessment_updated": bool(parsed.get("current_assessment")),
-            "goals_prioritized": len(parsed.get("key_gaps", [])),
-            "primary_goal_set": bool(parsed.get("next_priority")),
-            "experimental_goals_injected": len(parsed.get("novel_ideas", [])),
-            "total_goals": len(self.goals),
-            "total_experimental": len(self.experimental_goals),
-            "retry_mode": self.retry_mode,
-            "failed_goals_count": len(self.failed_goals),
-            "alternative_strategies_count": len(self.alternative_strategies),
-            "blocked_goals_count": len(self.blocked_goals),
-            "feasibility_check_enabled": self.feasibility_check
-        }
-
-    def _record_feedback(self, parsed: Dict[str, Any], summary: Dict[str, Any]) -> None:
-        """Record feedback for the feedback loop."""
-        feedback = {
-            "parsed_data": parsed,
-            "summary": summary,
-            "timestamp": datetime.now().isoformat()
-        }
-        self.feedback_history.append(feedback)
-        self.logger.debug("Feedback recorded")
-
-    def get_feedback_analysis(self) -> Dict[str, Any]:
-        """
-        Analyze feedback history to determine how parsed reflections influence goal success.
-        Returns statistics and insights.
-        """
-        if not self.feedback_history:
-            return {"message": "No feedback data available"}
-
-        total_goals = len(self.goals) + len(self.experimental_goals)
-        successful_goals = sum(1 for g in self.goals if g.success_count > 0)
-        successful_exp = sum(1 for g in self.experimental_goals if g.success_count > 0)
-
-        # Analyze correlation between parsed reflections and goal success
-        parsed_sources = [g for g in self.goals if g.source == "parsed"]
-        parsed_success_rate = sum(g.success_rate() for g in parsed_sources) / len(parsed_sources) if parsed_sources else 0
-
-        experimental_success_rate = sum(g.success_rate() for g in self.experimental_goals) / len(self.experimental_goals) if self.experimental_goals else 0
-
-        # Analyze retry and alternative strategy success
-        retry_goals = [g for g in self.goals if g.source == "retry"]
-        alternative_goals = [g for g in self.goals if g.source == "alternative"]
-        retry_success_rate = sum(g.success_rate() for g in retry_goals) / len(retry_goals) if retry_goals else 0
-        alternative_success_rate = sum(g.success_rate() for g in alternative_goals) / len(alternative_goals) if alternative_goals else 0
-
-        # Analyze blocked goals
-        blocked_by_reason = {}
-        for blocked in self.blocked_goals:
-            reason = blocked.get("reason", "unknown")
-            blocked_by_reason[reason] = blocked_by_reason.get(reason, 0) + 1
-
-        return {
-            "total_goals": total_goals,
-            "successful_goals": successful_goals + successful_exp,
-            "parsed_goal_success_rate": round(parsed_success_rate, 2),
-            "experimental_goal_success_rate": round(experimental_success_rate, 2),
-            "retry_goal_success_rate": round(retry_success_rate, 2),
-            "alternative_strategy_success_rate": round(alternative_success_rate, 2),
-            "feedback_entries": len(self.feedback_history),
-            "current_assessment": self.current_assessment,
-            "top_priority_goal": self.goals[0].description if self.goals else None,
-            "retry_mode": self.retry_mode,
-            "failed_goals_count": len(self.failed_goals),
-            "alternative_strategies_count": len(self.alternative_strategies),
-            "blocked_goals_count": len(self.blocked_goals),
-            "blocked_goals_by_reason": blocked_by_reason,
-            "feasibility_check_enabled": self.feasibility_check
-        }
-
-    def get_goals(self) -> List[Goal]:
-        """Return current list of regular goals."""
-        return self.goals
-
-    def get_experimental_goals(self) -> List[Goal]:
-        """Return current list of experimental goals."""
-        return self.experimental_goals
-
-    def get_current_assessment(self) -> Dict[str, Any]:
-        """Return current assessment context."""
-        return self.current_assessment
-
-    def get_failed_goals(self) -> List[Goal]:
-        """Return list of failed goals for retry analysis."""
-        return self.failed_goals
-
-    def get_alternative_strategies(self) -> List[Goal]:
-        """Return list of generated alternative strategies."""
-        return self.alternative_strategies
-
-    def get_blocked_goals(self) -> List[Dict[str, Any]]:
-        """Return list of blocked goals with reasons."""
-        return self.blocked_goals
-
-    def set_feasibility_check(self, enabled: bool) -> None:
-        """Enable or disable feasibility checking."""
-        self.feasibility_check = enabled
-        self.logger.info(f"Feasibility check {'enabled' if enabled else 'disabled'}")
-
-# Example usage (commented out):
-# if __name__ == "__main__":
-#     logging.basicConfig(level=logging.INFO)
-#     generator = GoalGenerator(feasibility_check=True)
-#     
-#     # Enable retry mode
-#     generator.enable_retry_mode(True)
-#     
-#     # Process initial reflection
-#     reflection = "I struggled with focus today. Key gaps: lack of focus, time management. Next priority: improve focus. Novel ideas: pomodoro technique, deep work blocks."
-#     summary = generator.process_reflection(reflection)
-#     print(json.dumps(summary, indent=2))
-#     
-#     # Select and execute a goal
-#     goal = generator.select_goal()
-#     if goal:
-#         print(f"Selected goal: {goal.description}")
-#         # Simulate failure with implementation bug
-#         result = generator.handle_failed_goal(goal, FailureType.IMPLEMENTATION_BUG, generate_alternatives=True)
-#         print(json.dumps(result, indent=2))
-#     
-#     # Get analysis
-#     analysis = generator.get_feedback_analysis()
-#     print(json.dumps(analysis, indent=2))
-#     
-#     # Check blocked goals
-#     blocked = generator.get_blocked_goals()
-#     print(f"Blocked goals: {len(blocked)}")
-#     for b in blocked:
-#         print(f"  - {b['description']}: {b['reason']}")
+        #

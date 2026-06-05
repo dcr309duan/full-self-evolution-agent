@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a self-directed goal generator that analyzes the knowledge base (especially failure patterns and successful strategies) to autonomously propose and prioritize new sub-goals, closing the loop from reflection to action.",
-      "priority": 10,
-      "status": "pending",
-      "created_at": 1780628993.6981742
-    },
-    {
       "description": "Integrate the failure analysis module with the goal generator so that repeated failures trigger a redesign of the failing component (e.g., modifying the mutation strategy or dependency graph) rather than just a retry, enabling proactive prevention of recurring issues.",
       "priority": 9,
       "status": "pending",
@@ -191,6 +185,13 @@
       "created_at": 1780623346.3650715,
       "consecutive_failures": 0,
       "completed_at": 1780628965.6692204
+    },
+    {
+      "description": "Implement a self-directed goal generator that analyzes the knowledge base (especially failure patterns and successful strategies) to autonomously propose and prioritize new sub-goals, closing the loop from reflection to action.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780628993.6981742,
+      "completed_at": 1780629338.723046
     }
   ],
   "generated_goals": []

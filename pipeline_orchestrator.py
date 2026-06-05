@@ -1,6 +1,6 @@
 """pipeline_orchestrator.py
 
-Coordinates the full mutation -> test -> reflection -> strategy pipeline.
+Coordinates the full mutation -> test -> reflection -> goal_generation -> strategy pipeline.
 Integrates with broken link reporter, implements retry logic with backoff,
 and provides a structured result dict with stage outputs.
 """
@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class PipelineOrchestrator:
-    """Orchestrates the mutation -> test -> reflection -> strategy pipeline."""
+    """Orchestrates the mutation -> test -> reflection -> goal_generation -> strategy pipeline."""
 
     def __init__(
         self,
         mutation_fn: Callable[[], Any],
         test_fn: Callable[[Any], Tuple[bool, Optional[str]]],
         reflection_fn: Callable[[Any, str], Any],
+        goal_generation_fn: Callable[[List[str], List[str], List[str]], Optional[Dict[str, Any]]],
         strategy_fn: Callable[[Any], Any],
         broken_link_reporter: Optional[BrokenLinkReporter] = None,
         max_retries: int = 3,
@@ -36,6 +37,8 @@ class PipelineOrchestrator:
                 (success: bool, error_message: Optional[str]).
             reflection_fn: Callable that takes (mutation_result, error_message)
                 and returns a reflection result.
+            goal_generation_fn: Callable that takes (failure_logs, success_patterns, self_reflections)
+                and returns a goal dict with 'goal' and 'priority' keys, or None if no new goal.
             strategy_fn: Callable that takes a reflection result and returns
                 a strategy result.
             broken_link_reporter: Optional reporter for logging broken links.
@@ -47,12 +50,14 @@ class PipelineOrchestrator:
         self.mutation_fn = mutation_fn
         self.test_fn = test_fn
         self.reflection_fn = reflection_fn
+        self.goal_generation_fn = goal_generation_fn
         self.strategy_fn = strategy_fn
         self.reporter = broken_link_reporter or BrokenLinkReporter()
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.initial_delay = initial_delay
         self.dry_run = dry_run
+        self._pending_goals: List[Dict[str, Any]] = []
 
     def run_pipeline(self) -> Dict[str, Any]:
         """Execute the full pipeline with retry logic.
@@ -62,19 +67,23 @@ class PipelineOrchestrator:
                 - 'mutation_output': result from mutation stage
                 - 'test_output': (success, error_message) from test stage
                 - 'reflection_output': result from reflection stage
+                - 'goal_generation_output': result from goal generation stage
                 - 'strategy_output': result from strategy stage
                 - 'broken_links': list of broken links reported
                 - 'retries': number of retries performed
                 - 'success': overall pipeline success flag
+                - 'pending_goals': list of goals queued for next cycle
         """
         result: Dict[str, Any] = {
             "mutation_output": None,
             "test_output": None,
             "reflection_output": None,
+            "goal_generation_output": None,
             "strategy_output": None,
             "broken_links": [],
             "retries": 0,
             "success": False,
+            "pending_goals": [],
         }
 
         if self.dry_run:
@@ -114,7 +123,37 @@ class PipelineOrchestrator:
                 else:
                     result["reflection_output"] = None
 
-                # Stage 4: Strategy
+                # Stage 4: Goal Generation (after reflection)
+                # Collect recent failure logs, success patterns, and self-reflections
+                failure_logs = []
+                success_patterns = []
+                self_reflections = []
+
+                if not test_success and test_error:
+                    failure_logs.append(test_error)
+
+                if test_success:
+                    success_patterns.append(f"Test passed for mutation: {mutation_output}")
+
+                if result["reflection_output"] is not None:
+                    self_reflections.append(str(result["reflection_output"]))
+
+                goal_generation_output = self._run_stage(
+                    "goal_generation",
+                    lambda: self.goal_generation_fn(failure_logs, success_patterns, self_reflections),
+                )
+                result["goal_generation_output"] = goal_generation_output
+
+                # If a new goal is generated and prioritized, queue it for execution
+                if goal_generation_output is not None and "goal" in goal_generation_output:
+                    priority = goal_generation_output.get("priority", 0)
+                    if priority > 0:
+                        self._pending_goals.append(goal_generation_output)
+                        result["pending_goals"].append(goal_generation_output)
+                        logger.info("New goal queued: %s (priority: %d)", 
+                                    goal_generation_output["goal"], priority)
+
+                # Stage 5: Strategy
                 strategy_output = self._run_stage(
                     "strategy",
                     lambda: self.strategy_fn(
@@ -166,21 +205,25 @@ class PipelineOrchestrator:
                 - 'mutation_output': result from mutation stage
                 - 'test_output': (success, error_message) from test stage
                 - 'reflection_output': result from reflection stage
+                - 'goal_generation_output': result from goal generation stage
                 - 'strategy_output': result from strategy stage
                 - 'broken_links': list of broken links reported
                 - 'retries': number of retries performed
                 - 'success': overall pipeline success flag
                 - 'auto_heal_attempts': number of auto-heal retries performed
+                - 'pending_goals': list of goals queued for next cycle
         """
         result: Dict[str, Any] = {
             "mutation_output": None,
             "test_output": None,
             "reflection_output": None,
+            "goal_generation_output": None,
             "strategy_output": None,
             "broken_links": [],
             "retries": 0,
             "success": False,
             "auto_heal_attempts": 0,
+            "pending_goals": [],
         }
 
         if self.dry_run:
@@ -223,7 +266,35 @@ class PipelineOrchestrator:
                 else:
                     result["reflection_output"] = None
 
-                # Stage 4: Strategy
+                # Stage 4: Goal Generation (after reflection)
+                failure_logs = []
+                success_patterns = []
+                self_reflections = []
+
+                if not test_success and test_error:
+                    failure_logs.append(test_error)
+
+                if test_success:
+                    success_patterns.append(f"Test passed for mutation: {mutation_output}")
+
+                if result["reflection_output"] is not None:
+                    self_reflections.append(str(result["reflection_output"]))
+
+                goal_generation_output = self._run_stage(
+                    "goal_generation",
+                    lambda: self.goal_generation_fn(failure_logs, success_patterns, self_reflections),
+                )
+                result["goal_generation_output"] = goal_generation_output
+
+                if goal_generation_output is not None and "goal" in goal_generation_output:
+                    priority = goal_generation_output.get("priority", 0)
+                    if priority > 0:
+                        self._pending_goals.append(goal_generation_output)
+                        result["pending_goals"].append(goal_generation_output)
+                        logger.info("New goal queued: %s (priority: %d)", 
+                                    goal_generation_output["goal"], priority)
+
+                # Stage 5: Strategy
                 strategy_output = self._run_stage(
                     "strategy",
                     lambda: self.strategy_fn(
@@ -276,6 +347,10 @@ class PipelineOrchestrator:
 
         return result
 
+    def get_pending_goals(self) -> List[Dict[str, Any]]:
+        """Return the list of pending goals queued for execution."""
+        return self._pending_goals
+
     def _run_stage(self, stage_name: str, stage_fn: Callable[[], Any]) -> Any:
         """Execute a pipeline stage with logging.
 
@@ -315,6 +390,8 @@ class PipelineOrchestrator:
         logger.info("[DRY RUN] Would execute mutation stage.")
         logger.info("[DRY RUN] Would execute test stage.")
         logger.info("[DRY RUN] Would execute reflection stage (if test fails).")
+        logger.info("[DRY RUN] Would execute goal_generation stage after reflection.")
+        logger.info("[DRY RUN] Would queue new goals if generated with priority > 0.")
         logger.info("[DRY RUN] Would execute strategy stage.")
         logger.info("[DRY RUN] Would apply retry logic with max_retries=%d, backoff_factor=%.1f, initial_delay=%.1f",
                      self.max_retries, self.backoff_factor, self.initial_delay)
@@ -328,6 +405,7 @@ def run_pipeline(
     mutation_fn: Callable[[], Any],
     test_fn: Callable[[Any], Tuple[bool, Optional[str]]],
     reflection_fn: Callable[[Any, str], Any],
+    goal_generation_fn: Callable[[List[str], List[str], List[str]], Optional[Dict[str, Any]]],
     strategy_fn: Callable[[Any], Any],
     **kwargs: Any,
 ) -> Dict[str, Any]:
@@ -337,6 +415,7 @@ def run_pipeline(
         mutation_fn: Mutation stage callable.
         test_fn: Test stage callable.
         reflection_fn: Reflection stage callable.
+        goal_generation_fn: Goal generation stage callable.
         strategy_fn: Strategy stage callable.
         **kwargs: Additional arguments passed to PipelineOrchestrator.
 
@@ -347,6 +426,7 @@ def run_pipeline(
         mutation_fn=mutation_fn,
         test_fn=test_fn,
         reflection_fn=reflection_fn,
+        goal_generation_fn=goal_generation_fn,
         strategy_fn=strategy_fn,
         **kwargs,
     )
