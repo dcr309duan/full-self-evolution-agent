@@ -1,11 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified scripts/decompose_goal.py to: Create standalone script that takes a goal description as argument and outputs the decomposition plan as JSON for external consumption.",
-      "timestamp": 1780632452.1363113,
-      "cycle": 51
-    },
-    {
       "content": "Successfully modified self_model/builder.py to: Extend SelfModelBuilder to expose a method get_dependency_graph() that returns the current dependency graph in a format consumable by the DependencyResolver.",
       "timestamp": 1780632460.8703737,
       "cycle": 51
@@ -999,6 +994,11 @@
       "content": "[研究] Meta-learning for adaptive task decomposition and prioritization: Meta-learning for adaptive task decomposition and prioritization is an emerging area that combines h",
       "timestamp": 1780636838.9187999,
       "cycle": 77
+    },
+    {
+      "content": "Successfully modified evolution_engine/capability_fitness_tracker.py to: Create CapabilityFitnessTracker class that: (1) maintains a registry of all capabilities with unique IDs, (2) tracks which downstream tasks/goals each capability is used by via a dependency graph, (3) computes fitness score = count of downstream uses, (4) provides method to get capabilities below threshold, (5) supports configurable threshold (default=2) and cycles_before_deprecation (default=10), (6) logs deprecation events with timestamp and reason",
+      "timestamp": 1780636900.3200872,
+      "cycle": 78
     }
   ],
   "learned_patterns": [],
@@ -3364,6 +3364,11 @@
       "strategy": "Build a failure pattern detector that logs recurring test failures by error type and module, and automatically inserts a 'debugging' goal into the pending goals list when the same failure type occurs in 3 consecutive cycles",
       "outcome": "5/5 steps succeeded",
       "timestamp": 1780636808.0936048
+    },
+    {
+      "strategy": "modify evolution_engine/capability_fitness_tracker.py: Create CapabilityFitnessTracker class that: (1) maintains a registry of all capabilities with unique IDs, (2) tracks which downstream tasks/goals each capability is used by via a dependency graph, (3) computes fitness score = count of downstream uses, (4) provides method to get capabilities below threshold, (5) supports configurable threshold (default=2) and cycles_before_deprecation (default=10), (6) logs deprecation events with timestamp and reason",
+      "outcome": "Applied successfully",
+      "timestamp": 1780636900.3065283
     }
   ],
   "capabilities_developed": []
