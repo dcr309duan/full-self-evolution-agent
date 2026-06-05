@@ -5,6 +5,7 @@ Before executing retry logic for a failed goal, checks if failure analysis
 suggests a redesign is needed. If so, executes the redesign goal first,
 then retries the original goal with the modified component.
 Also integrates integration_test_suite execution after successful mutations.
+Integrates meta_mutation_engine to check for meta-mutations after each evolution cycle.
 """
 
 import logging
@@ -16,6 +17,7 @@ from failure_analyzer import FailureAnalyzer
 from component_registry import ComponentRegistry
 from execution_engine import ExecutionEngine
 from integration_test_suite import IntegrationTestSuite
+from meta_mutation_engine import MetaMutationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,7 @@ class UnifiedEvolutionLoopOrchestrator:
         execution_engine: ExecutionEngine,
         redesign_orchestrator: ProactiveRedesignOrchestrator,
         integration_test_suite: IntegrationTestSuite,
+        meta_mutation_engine: MetaMutationEngine,
         max_retries: int = 3,
     ):
         self.goal_manager = goal_manager
@@ -39,10 +42,14 @@ class UnifiedEvolutionLoopOrchestrator:
         self.execution_engine = execution_engine
         self.redesign_orchestrator = redesign_orchestrator
         self.integration_test_suite = integration_test_suite
+        self.meta_mutation_engine = meta_mutation_engine
         self.max_retries = max_retries
         self._loop_active = False
         self.validation_failure_count = 0
         self.degraded_cycles = 0
+        self.cycle_number = 0
+        self.recent_failures = 0
+        self.consecutive_successes = 0
 
     def run_evolution_loop(self) -> None:
         """Main evolution loop that integrates redesign and integration testing when needed."""
@@ -54,6 +61,79 @@ class UnifiedEvolutionLoopOrchestrator:
                 break
 
             self._process_goal_with_redesign(goal)
+            self.cycle_number += 1
+            
+            # After each evolution cycle, check for meta-mutation
+            aggregated_stats = self._get_aggregated_stats()
+            self._check_and_apply_meta_mutation(aggregated_stats)
+
+    def _get_aggregated_stats(self) -> Dict[str, Any]:
+        """Aggregate stats from reflection parser and meta-evaluation loop."""
+        stats = {
+            "cycle_number": self.cycle_number,
+            "validation_failure_count": self.validation_failure_count,
+            "degraded_cycles": self.degraded_cycles,
+            "recent_failures": self.recent_failures,
+            "consecutive_successes": self.consecutive_successes,
+            "goals_pending": self.goal_manager.get_pending_goal_count(),
+            "goals_completed": self.goal_manager.get_completed_goal_count(),
+            "goals_failed": self.goal_manager.get_failed_goal_count(),
+            "component_count": self.component_registry.get_component_count(),
+        }
+        return stats
+
+    def _check_and_apply_meta_mutation(self, aggregated_stats: Dict[str, Any]) -> None:
+        """Check if meta-mutation is needed and apply it when system is stable."""
+        # Check if system is in a stable state (no recent failures)
+        if self._is_system_stable():
+            logger.info(f"System is stable. Checking meta-mutation for cycle {self.cycle_number}")
+            try:
+                meta_result = self.meta_mutation_engine.evaluate_and_mutate(
+                    cycle_number=self.cycle_number,
+                    aggregated_stats=aggregated_stats
+                )
+                
+                if meta_result.get("mutation_applied", False):
+                    logger.info(f"Meta-mutation applied successfully at cycle {self.cycle_number}")
+                    logger.info(f"Meta-mutation details: {meta_result.get('details', {})}")
+                    
+                    # Update system state based on meta-mutation
+                    if "modified_parameters" in meta_result:
+                        self._apply_meta_mutation_parameters(meta_result["modified_parameters"])
+                else:
+                    logger.debug(f"No meta-mutation needed at cycle {self.cycle_number}")
+                    
+            except Exception as e:
+                logger.error(f"Error during meta-mutation evaluation at cycle {self.cycle_number}: {e}")
+        else:
+            logger.debug(f"System not stable (recent_failures={self.recent_failures}), skipping meta-mutation check")
+
+    def _is_system_stable(self) -> bool:
+        """Check if the system is in a stable state for meta-mutation."""
+        # System is stable if there are no recent failures and no degraded cycles
+        return self.recent_failures == 0 and self.degraded_cycles == 0
+
+    def _apply_meta_mutation_parameters(self, parameters: Dict[str, Any]) -> None:
+        """Apply modified parameters from meta-mutation to the system."""
+        try:
+            if "max_retries" in parameters:
+                new_max_retries = parameters["max_retries"]
+                if isinstance(new_max_retries, int) and new_max_retries > 0:
+                    logger.info(f"Updating max_retries from {self.max_retries} to {new_max_retries}")
+                    self.max_retries = new_max_retries
+                    
+            if "validation_threshold" in parameters:
+                # Apply validation threshold changes if applicable
+                logger.info(f"Validation threshold updated: {parameters['validation_threshold']}")
+                
+            if "mutation_rate" in parameters:
+                # Apply mutation rate changes if applicable
+                logger.info(f"Mutation rate updated: {parameters['mutation_rate']}")
+                
+            logger.info(f"Meta-mutation parameters applied successfully")
+            
+        except Exception as e:
+            logger.error(f"Error applying meta-mutation parameters: {e}")
 
     def _process_goal_with_redesign(self, goal: Dict[str, Any]) -> None:
         """Process a single goal, potentially triggering redesign on failure."""
@@ -67,6 +147,8 @@ class UnifiedEvolutionLoopOrchestrator:
 
             if result.get("success", False):
                 logger.info(f"Goal {goal_id} succeeded on attempt {attempt}")
+                self.consecutive_successes += 1
+                self.recent_failures = 0
                 
                 # After successful mutation and test run, execute integration tests
                 if self._is_mutation_goal(goal):
@@ -82,6 +164,8 @@ class UnifiedEvolutionLoopOrchestrator:
                 return
 
             # Goal failed - analyze failure
+            self.recent_failures += 1
+            self.consecutive_successes = 0
             failure_analysis = self.failure_analyzer.analyze_failure(goal, result)
             logger.warning(f"Goal {goal_id} failed: {failure_analysis.get('reason', 'unknown')}")
 
@@ -255,10 +339,14 @@ class UnifiedEvolutionLoopOrchestrator:
         """Get current status of the evolution loop."""
         return {
             "active": self._loop_active,
+            "cycle_number": self.cycle_number,
             "goals_pending": self.goal_manager.get_pending_goal_count(),
             "goals_completed": self.goal_manager.get_completed_goal_count(),
             "goals_failed": self.goal_manager.get_failed_goal_count(),
             "components": self.component_registry.get_component_count(),
             "validation_failure_count": self.validation_failure_count,
             "degraded_cycles": self.degraded_cycles,
+            "recent_failures": self.recent_failures,
+            "consecutive_successes": self.consecutive_successes,
+            "max_retries": self.max_retries,
         }
