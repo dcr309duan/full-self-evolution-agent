@@ -15,6 +15,7 @@ logger = logging.getLogger('self_healing_recovery')
 # Constants
 STATE_FILE = 'recovery_state.json'
 MAX_CONSECUTIVE_FAILURES = 2
+MAX_FAILURE_CHAIN = 3
 KNOWN_GOOD_COMMIT_FILE = 'last_good_commit.txt'
 SIMPLIFIED_MODULE_SUFFIX = '_simplified'
 
@@ -27,6 +28,7 @@ class SelfHealingRecovery:
     def __init__(self, state_file: str = STATE_FILE):
         self.state_file = state_file
         self.failure_tracker: Dict[str, List[Dict[str, Any]]] = {}
+        self.consecutive_failure_chain: Dict[str, int] = {}
         self._load_state()
 
     def _load_state(self) -> None:
@@ -36,19 +38,25 @@ class SelfHealingRecovery:
                 with open(self.state_file, 'r') as f:
                     data = json.load(f)
                     self.failure_tracker = data.get('failures', {})
+                    self.consecutive_failure_chain = data.get('failure_chain', {})
                     logger.info(f"Loaded state from {self.state_file}")
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Failed to load state file: {e}")
                 self.failure_tracker = {}
+                self.consecutive_failure_chain = {}
         else:
             logger.info("No state file found, starting fresh")
             self.failure_tracker = {}
+            self.consecutive_failure_chain = {}
 
     def _save_state(self) -> None:
         """Save current failure tracking state to JSON file."""
         try:
             with open(self.state_file, 'w') as f:
-                json.dump({'failures': self.failure_tracker}, f, indent=2)
+                json.dump({
+                    'failures': self.failure_tracker,
+                    'failure_chain': self.consecutive_failure_chain
+                }, f, indent=2)
             logger.info(f"State saved to {self.state_file}")
         except IOError as e:
             logger.error(f"Failed to save state file: {e}")
@@ -114,6 +122,27 @@ class SelfHealingRecovery:
             True if recovery was successful, False otherwise
         """
         logger.info(f"Triggering recovery for module: {module_name}")
+
+        # Increment failure chain counter
+        if module_name not in self.consecutive_failure_chain:
+            self.consecutive_failure_chain[module_name] = 0
+        self.consecutive_failure_chain[module_name] += 1
+        self._save_state()
+
+        # Check if failure chain has reached threshold
+        if self.consecutive_failure_chain[module_name] >= MAX_FAILURE_CHAIN:
+            logger.warning(f"Module {module_name} has reached {MAX_FAILURE_CHAIN} failures in chain. Calling deprecate_module.")
+            try:
+                import failure_driven_simplification
+                failure_driven_simplification.deprecate_module(module_name)
+                self._log_recovery(module_name, 'deprecation', f"Module deprecated after {MAX_FAILURE_CHAIN} failures")
+                return True
+            except ImportError:
+                logger.error("failure_driven_simplification module not available")
+                return False
+            except Exception as e:
+                logger.error(f"Failed to deprecate module {module_name}: {e}")
+                return False
 
         # Get last known-good commit
         good_commit = self._get_last_good_commit(module_name)
@@ -279,6 +308,12 @@ class SelfHealingRecovery:
             True if restoration was successful, False otherwise
         """
         logger.info(f"Attempting to restore full functionality for {module_name}")
+
+        # Reset failure chain counter on successful execution
+        if module_name in self.consecutive_failure_chain:
+            self.consecutive_failure_chain[module_name] = 0
+            self._save_state()
+            logger.info(f"Reset failure chain counter for {module_name}")
 
         # Check if there's a simplified version to restore from
         simplified_filename = f"{module_name}{SIMPLIFIED_MODULE_SUFFIX}.py"

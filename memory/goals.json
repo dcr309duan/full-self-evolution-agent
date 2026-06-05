@@ -2,10 +2,16 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automatically deprecate or remove it instead of trying to fix it. This will counter complexity creep and force the system to prune underperforming modules, stabilizing the core loop.",
-      "priority": 8,
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
       "status": "pending",
-      "created_at": 1780647346.398476
+      "created_at": 1780649848.752571
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780649848.7555447
     },
     {
       "description": "Develop a 'failure-driven mutation selector' that, after each cycle, queries the failure pattern miner for the most common failure type in the last 10 cycles. Then, before the next mutation, filter the candidate mutation pool to exclude any mutation that is likely to trigger that failure type (based on a simple keyword match between the failure description and the mutation's target file or operation). This integrates real-time learning from failures into mutation selection, addressing the key gap of not adjusting mutation strategy based on failures.",
@@ -837,6 +843,13 @@
       "status": "completed",
       "created_at": 1780649372.3593426,
       "completed_at": 1780649635.0273447
+    },
+    {
+      "description": "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automatically deprecate or remove it instead of trying to fix it. This will counter complexity creep and force the system to prune underperforming modules, stabilizing the core loop.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780647346.398476,
+      "completed_at": 1780649839.344028
     }
   ],
   "generated_goals": []

@@ -18,7 +18,8 @@ ESSENTIAL_MODULES = [
     "test",
     "accept",
     "sandbox_validate",
-    "self_healing_recovery"
+    "self_healing_recovery",
+    "failure_driven_simplification"
 ]
 
 def reflect(state):
@@ -119,6 +120,24 @@ def self_healing_recovery(state):
     # State is valid, return as is
     return state
 
+def failure_driven_simplification(state):
+    """Simplify state by removing unnecessary complexity when failures are detected."""
+    simplified_state = state.copy()
+    
+    # Check for excessive complexity and reduce it
+    if simplified_state.get("complexity", 0) > 1.5:
+        print("Excessive complexity detected. Simplifying...")
+        simplified_state["complexity"] = 1.0
+    
+    # Remove non-essential keys that may cause issues
+    essential_keys = {"version", "goals_achieved", "complexity"}
+    for key in list(simplified_state.keys()):
+        if key not in essential_keys:
+            del simplified_state[key]
+            print(f"Removed non-essential key: {key}")
+    
+    return simplified_state
+
 def initialize_recovery_module():
     """Initialize the recovery module during bootstrap."""
     print("Initializing self-healing recovery module...")
@@ -135,6 +154,27 @@ def initialize_recovery_module():
         return True
     else:
         print("Recovery module initialization failed.")
+        return False
+
+def initialize_failure_driven_simplification():
+    """Initialize the failure-driven simplification module during bootstrap."""
+    print("Initializing failure-driven simplification module...")
+    
+    # Verify the function exists
+    if "failure_driven_simplification" not in globals():
+        print("Warning: failure_driven_simplification function not found")
+        return False
+    
+    # Test the simplification function
+    test_state = {"version": 1, "goals_achieved": 0, "complexity": 2.0, "extra_key": "test"}
+    simplified = failure_driven_simplification(test_state)
+    
+    # Verify simplification worked
+    if simplified.get("complexity", 0) <= 1.0 and "extra_key" not in simplified:
+        print("Failure-driven simplification module initialized successfully.")
+        return True
+    else:
+        print("Failure-driven simplification module initialization failed.")
         return False
 
 def test_recovery_integration():
@@ -168,6 +208,31 @@ def test_recovery_integration():
     print("All recovery integration tests passed!\n")
     return True
 
+def test_failure_driven_simplification():
+    """Test failure-driven simplification functionality."""
+    print("\n--- Failure-Driven Simplification Test ---")
+    
+    # Test 1: High complexity should be reduced
+    high_complexity_state = {"version": 1, "goals_achieved": 0, "complexity": 2.0}
+    result = failure_driven_simplification(high_complexity_state)
+    assert result["complexity"] <= 1.0, "Test 1 failed: High complexity should be reduced"
+    print("Test 1 passed: High complexity reduced")
+    
+    # Test 2: Non-essential keys should be removed
+    extra_keys_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5, "extra": "data"}
+    result = failure_driven_simplification(extra_keys_state)
+    assert "extra" not in result, "Test 2 failed: Non-essential keys should be removed"
+    print("Test 2 passed: Non-essential keys removed")
+    
+    # Test 3: Normal state should remain unchanged
+    normal_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = failure_driven_simplification(normal_state)
+    assert result == normal_state, "Test 3 failed: Normal state should remain unchanged"
+    print("Test 3 passed: Normal state remains unchanged")
+    
+    print("All failure-driven simplification tests passed!\n")
+    return True
+
 def migrate_to_main():
     """Generate migration report and equivalent code for evolution_orchestrator.py's main loop."""
     # Read the working logic from this module
@@ -178,7 +243,8 @@ def migrate_to_main():
         "test": test.__code__.co_code,
         "accept": accept.__code__.co_code,
         "sandbox_validate": sandbox_validate.__code__.co_code,
-        "self_healing_recovery": self_healing_recovery.__code__.co_code
+        "self_healing_recovery": self_healing_recovery.__code__.co_code,
+        "failure_driven_simplification": failure_driven_simplification.__code__.co_code
     }
     
     # Generate equivalent code for evolution_orchestrator.py's main loop
@@ -205,7 +271,8 @@ def evolution_main_loop():
         "test",
         "accept",
         "sandbox_validate",
-        "self_healing_recovery"
+        "self_healing_recovery",
+        "failure_driven_simplification"
     ]
     
     def reflect(state):
@@ -283,6 +350,21 @@ def evolution_main_loop():
         
         return state
     
+    def failure_driven_simplification(state):
+        simplified_state = state.copy()
+        
+        if simplified_state.get("complexity", 0) > 1.5:
+            print("Excessive complexity detected. Simplifying...")
+            simplified_state["complexity"] = 1.0
+        
+        essential_keys = {"version", "goals_achieved", "complexity"}
+        for key in list(simplified_state.keys()):
+            if key not in essential_keys:
+                del simplified_state[key]
+                print(f"Removed non-essential key: {key}")
+        
+        return simplified_state
+    
     def load_or_initialize_state():
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
@@ -306,12 +388,30 @@ def evolution_main_loop():
             print("Recovery module initialization failed.")
             return False
     
+    def initialize_failure_driven_simplification():
+        print("Initializing failure-driven simplification module...")
+        
+        if "failure_driven_simplification" not in globals():
+            print("Warning: failure_driven_simplification function not found")
+            return False
+        
+        test_state = {"version": 1, "goals_achieved": 0, "complexity": 2.0, "extra_key": "test"}
+        simplified = failure_driven_simplification(test_state)
+        
+        if simplified.get("complexity", 0) <= 1.0 and "extra_key" not in simplified:
+            print("Failure-driven simplification module initialized successfully.")
+            return True
+        else:
+            print("Failure-driven simplification module initialization failed.")
+            return False
+    
     state = load_or_initialize_state()
     print("Initial state:", state)
     print()
     
-    # Initialize recovery module
+    # Initialize all core modules
     initialize_recovery_module()
+    initialize_failure_driven_simplification()
     
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -329,6 +429,12 @@ def evolution_main_loop():
         if recovered_state != mutated_state:
             print("Recovery applied to mutated state")
             mutated_state = recovered_state
+        
+        # Apply failure-driven simplification
+        simplified_state = failure_driven_simplification(mutated_state)
+        if simplified_state != mutated_state:
+            print("Failure-driven simplification applied to mutated state")
+            mutated_state = simplified_state
         
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -362,7 +468,9 @@ def evolution_main_loop():
             "Error handling in sandbox prevents corrupted state acceptance",
             "Deep copy pattern ensures original state preservation during mutation",
             "Self-healing recovery provides automatic state corruption detection and recovery",
-            "Recovery module initialization ensures core capabilities are available"
+            "Recovery module initialization ensures core capabilities are available",
+            "Failure-driven simplification reduces complexity and removes non-essential keys",
+            "Pruning mechanism is active from system start through bootstrap initialization"
         ],
         "working_logic_bytecode": working_logic,
         "equivalent_main_loop": main_loop_code,
@@ -373,7 +481,9 @@ def evolution_main_loop():
             "Implement reflection for monitoring state evolution",
             "Consider extending goal set for more complex behaviors",
             "Always initialize recovery module during bootstrap",
-            "Apply self-healing recovery before sandbox validation"
+            "Apply self-healing recovery before sandbox validation",
+            "Initialize failure-driven simplification during bootstrap for active pruning",
+            "Apply failure-driven simplification after recovery but before validation"
         ]
     }
     
@@ -394,8 +504,9 @@ def main():
     print("Initial state:", state)
     print()
     
-    # Initialize recovery module during bootstrap
+    # Initialize all core modules during bootstrap
     initialize_recovery_module()
+    initialize_failure_driven_simplification()
 
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -417,6 +528,12 @@ def main():
             print("Recovery applied to mutated state")
             mutated_state = recovered_state
 
+        # Apply failure-driven simplification
+        simplified_state = failure_driven_simplification(mutated_state)
+        if simplified_state != mutated_state:
+            print("Failure-driven simplification applied to mutated state")
+            mutated_state = simplified_state
+
         # Sandbox validation
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -435,6 +552,9 @@ def main():
     
     # Run recovery integration test
     test_recovery_integration()
+    
+    # Run failure-driven simplification test
+    test_failure_driven_simplification()
     
     # After successful sandbox validation, run migration
     print("\n--- Migration Phase ---")

@@ -1053,5 +1053,49 @@
         "timestamp": 1780648820.711562
       }
     ]
+  },
+  {
+    "timestamp": 1780649848.7486935,
+    "results": [
+      {
+        "parent_a": "retry_prime_fibonacci",
+        "parent_b": "prime_fibonacci_factors",
+        "operator": "mutate",
+        "code": "def prime_fibonacci_factorization_with_retry(n, max_attempts=3, delay=1):\n    import time\n    if not isinstance(n, int) or n < 1:\n        raise ValueError(\"n must be a positive integer\")\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def get_factors(x):\n        factors = []\n        d = 2\n        while d * d <= x:\n            while x % d == 0:\n                factors.append(d)\n                x //= d\n            d += 1\n        if x > 1:\n            factors.append(x)\n        return factors\n    \n    for attempt in range(max_attempts):\n        try:\n            a, b = 0, 1\n            result = []\n            while len(result) < n:\n                a, b = b, a + b\n                factors = get_factors(a)\n                prime_factors = [f for f in factors if is_prime(f)]\n                if prime_factors:\n                    result.append((a, factors, prime_factors))\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: prime_fibonacci_factorization_with_retry\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780649842.1317737
+      },
+      {
+        "parent_a": "prime_fibonacci_factors",
+        "parent_b": "memoized_retry_fibonacci",
+        "operator": "hybrid",
+        "code": "def memoized_fibonacci_prime_factors(limit, max_attempts=3, delay=1):\n    import time\n    cache = {}\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def get_factors(x):\n        factors = []\n        d = 2\n        while d * d <= x:\n            while x % d == 0:\n                factors.append(d)\n                x //= d\n            d += 1\n        if x > 1:\n            factors.append(x)\n        return factors\n    \n    def compute_fib(k):\n        if k in cache:\n            return cache[k]\n        if k < 0:\n            raise ValueError(\"n must be non-negative\")\n        a, b = 0, 1\n        for _ in range(k):\n            a, b = b, a + b\n        cache[k] = a\n        return a\n    \n    result = []\n    for n in range(limit):\n        for attempt in range(max_attempts):\n            try:\n                fib_value = compute_fib(n)\n                factors = get_factors(fib_value)\n                prime_factors = [f for f in factors if is_prime(f)]\n                result.append((n, fib_value, factors, prime_factors))\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: memoized_fibonacci_prime_factors\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780649845.090347
+      },
+      {
+        "parent_a": "memoized_fibonacci_factorizer",
+        "parent_b": "sorted_prime_fibonacci_factors",
+        "operator": "mutate",
+        "code": "def optimized_fibonacci_factorizer(limit, max_attempts=3, delay=1):\n    import time\n    fib_cache = {}\n    factor_cache = {}\n    prime_cache = {}\n    \n    def fibonacci(n):\n        if n in fib_cache:\n            return fib_cache[n]\n        if n < 2:\n            fib_cache[n] = n\n            return n\n        a, b = 0, 1\n        for _ in range(2, n + 1):\n            a, b = b, a + b\n        fib_cache[n] = b\n        return b\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        if num in prime_cache:\n            return prime_cache[num]\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                prime_cache[num] = False\n                return False\n        prime_cache[num] = True\n        return True\n    \n    def get_factors(m):\n        if m in factor_cache:\n            return factor_cache[m]\n        original = m\n        factors = []\n        d = 2\n        while d * d <= m:\n            while m % d == 0:\n                factors.append(d)\n                m //= d\n            d += 1\n        if m > 1:\n            factors.append(m)\n        factor_cache[original] = factors\n        return factors\n    \n    def quicksort(arr):\n        if len(arr) <= 1:\n            return arr\n        pivot = arr[len(arr)//2]\n        left = [x for x in arr if x < pivot]\n        mid = [x for x in arr if x == pivot]\n        right = [x for x in arr if x > pivot]\n        return quicksort(left) + mid + quicksort(right)\n    \n    result = []\n    for x in range(limit):\n        for attempt in range(max_attempts):\n            try:\n                fib_val = fibonacci(x)\n                factors = get_factors(fib_val)\n                sorted_factors = quicksort(factors)\n                prime_factors = [f for f in sorted_factors if is_prime(f)]\n                result.append((fib_val, sorted_factors, prime_factors))\n                break\n            except Exception as e:\n                if attempt == max_attempts - 1:\n                    raise\n                time.sleep(delay)\n                fib_cache.clear()\n                factor_cache.clear()\n                prime_cache.clear()\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: optimized_fibonacci_factorizer\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780649848.7259288
+      }
+    ]
   }
 ]
