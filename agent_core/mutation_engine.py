@@ -43,7 +43,7 @@ class MutationEngine:
                 f"Input validation failed for {source} ({schema_name} v{schema_version}): {e}"
             )
 
-    @validate_schema('mutation_output', '1.0')
+    @validate_schema('mutation_engine', version=1)
     def generate_mutation(self, input_data: Dict[str, Any], 
                           source: str = 'data_source') -> Dict[str, Any]:
         """Main mutation generation method with input validation and output schema validation."""
@@ -63,6 +63,22 @@ class MutationEngine:
         mutation_result['schema_version'] = '1.0'
         
         return mutation_result
+
+    @validate_schema('mutation_result', version=1)
+    def return_result(self, result_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Return mutation result with schema validation."""
+        # Version check before processing incoming test results
+        if 'schema_version' in result_data:
+            version = result_data['schema_version']
+            if version != '1.0':
+                raise SchemaValidationError(
+                    f"Unsupported schema version: {version}. Expected: 1.0"
+                )
+        else:
+            raise SchemaValidationError("Missing schema_version in result data")
+        
+        # Process and return the result
+        return result_data
 
     def _apply_mutations(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply mutations to the input data (placeholder implementation)."""

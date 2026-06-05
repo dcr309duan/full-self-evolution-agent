@@ -1,26 +1,26 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-05 12:52:54
+> Generated: 2026-06-05 12:57:19
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 66 |
-| Generation | 38 |
-| Last Activity | 2026-06-05 12:50:59 |
-| Speed | ~17.6 cycles/hour |
+| Current Cycle | 68 |
+| Generation | 39 |
+| Last Activity | 2026-06-05 12:55:15 |
+| Speed | ~17.7 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 82.5% (47/57) |
+| Total Success Rate | 82.8% (48/58) |
 | Recent Success Rate (last 20) | 100.0% (20/20) |
-| Capabilities Developed | 48 |
-| Goals Completed | 49 |
-| Goals Pending | 2 |
+| Capabilities Developed | 49 |
+| Goals Completed | 50 |
+| Goals Pending | 4 |
 
 ## Capabilities Acquired
 
@@ -72,15 +72,17 @@
 46. Build a minimal end-to-end integration test suite that exercises the full mutation → test → system m
 47. Implement a canonical schema alignment layer that converts all inter-module data (reflection output,
 48. Build a self-consistency test suite that runs after every mutation to verify system integrity: it ch
+49. Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a depe
 
 ## Current Goals (Pending)
 
+- [9/10] Build a minimal end-to-end integration test suite that validates the full mutation → test → promote pipeline with at least three distinct data flow scenarios, including one that simulates a format mismatch to verify the schema alignment layer catches it, and integrate it into the testing framework to run before each generation.
+- [8/10] Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.
 - [7/10] Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.
 - [6/10] Create a performance monitoring and optimization system
 
 ## Completed Goals
 
-- ~~Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and generates a fundamentally different approach (e.g., if AST rewriting fails, try a wrapper-based strategy instead). Include a failure pattern classifier that logs the root cause and adjusts the mutation strategy selector to avoid repeating the same mistake.~~ (06-05 12:25)
 - ~~Implement a canonical schema alignment layer: a validated, versioned data contract that normalizes outputs from reflection_parser, goal_generator, and failure_analysis modules into a shared format, with automatic migration scripts to resolve mismatches and a validation test that runs before any mutation cycle.~~ (06-05 12:29)
 - ~~Build a system-wide integration test suite that validates the end-to-end data flow from reflection → goal generation → mutation → testing → self-repair, catching SCHEMA_MISMATCH errors early and blocking execution of any mutation that would violate the canonical schema.~~ (06-05 12:33)
 - ~~Create a dependency-aware goal feasibility estimator that penalizes goals requiring untested cross-component interactions by analyzing the current integration test coverage and schema alignment status, and automatically blocks goals whose prerequisites (e.g., schema alignment layer) are not yet met.~~ (06-05 12:37)
@@ -90,28 +92,28 @@
 - ~~Implement a canonical schema alignment layer that converts all inter-module data (reflection output, goals, system model state) into a unified JSON format with strict validation, and add a pre-mutation check that verifies schema compliance before any mutation is applied.~~ (06-05 12:47)
 - ~~Build a self-consistency test suite that runs after every mutation to verify system integrity: it checks that the mutation engine, reflection parser, and goal generator outputs are consistent with the actual code state, and triggers an automatic rollback if any check fails.~~ (06-05 12:50)
 - ~~Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a dependency graph (tracking prerequisites like 'pre-mutation validation depends on mutation engine'), automatically blocks goals with unmet dependencies, and re-prioritizes the backlog to focus on completing the end-to-end pipeline first.~~ (06-05 12:52)
+- ~~Implement a canonical schema alignment layer that normalizes data formats between all core modules (mutation engine, testing framework, failure analysis, planning) using a shared JSON schema registry with validation on every inter-module call, and add a schema version check to block mismatched data before processing.~~ (06-05 12:57)
 
 ## Knowledge Base
 
 | Category | Count |
 |----------|-------|
 | Insights | 200 |
-| Successful Strategies | 347 |
+| Successful Strategies | 363 |
 | Failed Approaches | 37 |
 
 ### Recent Insights
 
-- [06-05 12:51] Successfully modified agent_core/goal_feasibility_estimator.py to: Create the main feasibility estimator module that: (1
-- [06-05 12:52] Successfully modified agent_core/system_model.py to: Add methods to system_model.py to: (1) register dependency graph up
-- [06-05 12:52] Successfully modified agent_core/orchestrator.py to: Integrate the feasibility estimator into the orchestrator: (1) befo
-- [06-05 12:52] Successfully modified tests/test_goal_feasibility_estimator.py to: Create a test suite for the feasibility estimator: (1
-- [06-05 12:52] Successfully modified config/evolution_config.py to: Add configuration parameters: FEASIBILITY_THRESHOLD (default 0.5), 
+- [06-05 12:56] Successfully modified agent_core/failure_analysis.py to: Add schema validation to failure analysis module: (1) @validate
+- [06-05 12:56] Successfully modified agent_core/planner.py to: Add schema validation to planning module: (1) @validate_schema('plan_req
+- [06-05 12:57] Successfully modified agent_core/orchestrator.py to: Add inter-module call validation: (1) before any module call, call 
+- [06-05 12:57] Successfully modified tests/test_schema_alignment.py to: Create a comprehensive test suite for schema alignment: (1) tes
+- [06-05 12:57] Successfully modified config/evolution_config.py to: Add schema alignment configuration: ENABLE_SCHEMA_VALIDATION (defau
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 56 | Build a dependency-aware planning system that parses the cur | SUCCESS |
 | 57 | Create a self-repair mechanism that, upon mutation failure,  | SUCCESS |
 | 58 | Implement a canonical schema alignment layer: a validated, v | SUCCESS |
 | 59 | Build a system-wide integration test suite that validates th | SUCCESS |
@@ -121,6 +123,7 @@
 | 63 | Build a minimal end-to-end integration test suite that exerc | SUCCESS |
 | 64 | Implement a canonical schema alignment layer that converts a | SUCCESS |
 | 65 | Build a self-consistency test suite that runs after every mu | SUCCESS |
+| 66 | Create a dependency-aware goal feasibility estimator that ev | SUCCESS |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

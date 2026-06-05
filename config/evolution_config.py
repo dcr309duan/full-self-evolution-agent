@@ -20,3 +20,9 @@ MAX_BLOCKED_GOALS_BEFORE_PAUSE = 5
 
 # Priority weight for end-to-end pipeline completion (higher = more priority)
 PRIORITY_WEIGHT_FOR_PIPELINE = 2.0
+
+# Schema alignment configuration
+ENABLE_SCHEMA_VALIDATION = True
+SCHEMA_VERSION_STRICT_MODE = True
+SCHEMA_AUTO_MIGRATE = False
+SCHEMA_VALIDATION_LOG_LEVEL = 'WARNING'

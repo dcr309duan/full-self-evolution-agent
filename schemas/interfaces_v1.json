@@ -1,0 +1,321 @@
+{
+  "schema_version": "1.0.0",
+  "definitions": {
+    "mutation_output": {
+      "type": "object",
+      "required": ["mutated_code", "mutation_id", "timestamp"],
+      "properties": {
+        "mutated_code": {
+          "type": "string",
+          "description": "The mutated source code"
+        },
+        "mutation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for the mutation"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of mutation creation"
+        },
+        "mutation_type": {
+          "type": "string",
+          "enum": ["insertion", "deletion", "substitution", "rearrangement"],
+          "description": "Type of mutation applied"
+        },
+        "original_code": {
+          "type": "string",
+          "description": "Original code before mutation"
+        },
+        "line_range": {
+          "type": "object",
+          "properties": {
+            "start": {"type": "integer", "minimum": 1},
+            "end": {"type": "integer", "minimum": 1}
+          },
+          "description": "Line range affected by mutation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "test_result": {
+      "type": "object",
+      "required": ["test_id", "status", "execution_time", "timestamp"],
+      "properties": {
+        "test_id": {
+          "type": "string",
+          "description": "Unique identifier for the test"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "error", "skipped", "timeout"],
+          "description": "Outcome of the test execution"
+        },
+        "execution_time": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time taken to execute the test in seconds"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of test completion"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Error message if test failed or errored"
+        },
+        "stack_trace": {
+          "type": "string",
+          "description": "Stack trace if test failed or errored"
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "lines_covered": {"type": "integer", "minimum": 0},
+            "lines_total": {"type": "integer", "minimum": 0},
+            "branch_coverage": {"type": "number", "minimum": 0, "maximum": 100}
+          },
+          "description": "Code coverage metrics"
+        }
+      },
+      "additionalProperties": false
+    },
+    "failure_analysis": {
+      "type": "object",
+      "required": ["failure_id", "test_id", "failure_type", "analysis_timestamp"],
+      "properties": {
+        "failure_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for the failure analysis"
+        },
+        "test_id": {
+          "type": "string",
+          "description": "Reference to the failed test"
+        },
+        "failure_type": {
+          "type": "string",
+          "enum": ["assertion_error", "runtime_error", "compilation_error", "timeout", "unknown"],
+          "description": "Category of the failure"
+        },
+        "analysis_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of analysis completion"
+        },
+        "root_cause": {
+          "type": "string",
+          "description": "Identified root cause of the failure"
+        },
+        "affected_lines": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "description": "Line numbers affected by the failure"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "cosmetic"],
+          "description": "Severity level of the failure"
+        },
+        "suggested_fix": {
+          "type": "string",
+          "description": "Suggested code fix for the failure"
+        },
+        "related_mutations": {
+          "type": "array",
+          "items": {"type": "string", "format": "uuid"},
+          "description": "IDs of related mutations"
+        }
+      },
+      "additionalProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": ["plan_id", "steps", "created_timestamp"],
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for the plan"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step_id", "action", "target"],
+            "properties": {
+              "step_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique identifier for the step"
+              },
+              "action": {
+                "type": "string",
+                "enum": ["mutate", "test", "analyze", "reflect", "generate", "validate"],
+                "description": "Action to perform"
+              },
+              "target": {
+                "type": "string",
+                "description": "Target of the action (e.g., file path, function name)"
+              },
+              "parameters": {
+                "type": "object",
+                "description": "Additional parameters for the action"
+              },
+              "dependencies": {
+                "type": "array",
+                "items": {"type": "string", "format": "uuid"},
+                "description": "Step IDs that must complete before this step"
+              },
+              "expected_output": {
+                "type": "string",
+                "description": "Expected output or outcome"
+              }
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "Ordered list of steps in the plan"
+        },
+        "created_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of plan creation"
+        },
+        "goal_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Reference to the associated goal"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed", "failed", "cancelled"],
+          "description": "Current status of the plan"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata for the plan"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reflection_output": {
+      "type": "object",
+      "required": ["reflection_id", "source", "content", "timestamp"],
+      "properties": {
+        "reflection_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for the reflection"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["mutation_analysis", "test_execution", "failure_analysis", "plan_execution", "goal_evaluation"],
+          "description": "Source that triggered the reflection"
+        },
+        "content": {
+          "type": "string",
+          "description": "Reflection content and insights"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of reflection creation"
+        },
+        "related_ids": {
+          "type": "array",
+          "items": {"type": "string", "format": "uuid"},
+          "description": "IDs of related entities (mutations, tests, etc.)"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence level in the reflection (0-1)"
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Suggested actions based on reflection"
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "impact_score": {"type": "number", "minimum": 0, "maximum": 1},
+            "novelty_score": {"type": "number", "minimum": 0, "maximum": 1}
+          },
+          "description": "Quantitative metrics for the reflection"
+        }
+      },
+      "additionalProperties": false
+    },
+    "goal_spec": {
+      "type": "object",
+      "required": ["goal_id", "description", "created_timestamp", "priority"],
+      "properties": {
+        "goal_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for the goal"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the goal"
+        },
+        "created_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of goal creation"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Priority level (1=highest, 5=lowest)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "completed", "cancelled", "deferred"],
+          "description": "Current status of the goal"
+        },
+        "success_criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["criterion", "metric"],
+            "properties": {
+              "criterion": {"type": "string", "description": "Description of success criterion"},
+              "metric": {"type": "string", "description": "Metric to measure success"},
+              "target_value": {"type": "string", "description": "Target value for the metric"}
+            },
+            "additionalProperties": false
+          },
+          "description": "Criteria that define goal completion"
+        },
+        "constraints": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Constraints or limitations for achieving the goal"
+        },
+        "parent_goal_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Reference to parent goal if this is a sub-goal"
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional deadline for goal completion"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Tags for categorizing the goal"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
