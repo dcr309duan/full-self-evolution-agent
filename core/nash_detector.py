@@ -14,14 +14,18 @@ class NashDetector:
         self.reverse_dependency: Dict[str, Set[str]] = defaultdict(set)
         # Module outputs -> list of input modules that consume them
         self.output_to_inputs: Dict[str, Set[str]] = defaultdict(set)
-        # Fitness delta history per module: module -> list of recent deltas
-        self.fitness_deltas: Dict[str, List[float]] = defaultdict(list)
-        # Consecutive non-improvement counter per module
-        self.stagnation_counter: Dict[str, int] = defaultdict(int)
+        # Fitness delta history per module pair: (module1, module2) -> list of recent deltas
+        self.fitness_deltas: Dict[Tuple[str, str], List[float]] = defaultdict(list)
+        # Consecutive non-improvement counter per module pair
+        self.stagnation_counter: Dict[Tuple[str, str], int] = defaultdict(int)
         # Threshold for consecutive non-improvement cycles
-        self.stagnation_threshold: int = 3
+        self.stagnation_threshold: int = 5
         # Current cycle number
         self.current_cycle: int = 0
+        # Maximum history length per module pair
+        self.max_history_length: int = 10
+        # Stagnation scores per module pair (0-1)
+        self.stagnation_scores: Dict[Tuple[str, str], float] = defaultdict(float)
 
     def register_data_flow(self, source_module: str, target_module: str) -> None:
         """
@@ -61,18 +65,79 @@ class NashDetector:
     def record_fitness_delta(self, module: str, delta: float) -> None:
         """
         Record the fitness delta resulting from a mutation of the given module.
+        For Nash equilibrium detection, we track deltas per module pair.
         
         Args:
             module: The module that was mutated
             delta: The change in system fitness (positive = improvement)
         """
-        self.fitness_deltas[module].append(delta)
+        # Get all module pairs involving this module
+        module_pairs = self._get_module_pairs(module)
         
-        # Update stagnation counter
-        if delta <= 0:
-            self.stagnation_counter[module] += 1
-        else:
-            self.stagnation_counter[module] = 0
+        for pair in module_pairs:
+            self.fitness_deltas[pair].append(delta)
+            
+            # Keep only last 10 entries
+            if len(self.fitness_deltas[pair]) > self.max_history_length:
+                self.fitness_deltas[pair] = self.fitness_deltas[pair][-self.max_history_length:]
+            
+            # Update stagnation counter
+            if delta <= 0:
+                self.stagnation_counter[pair] += 1
+            else:
+                self.stagnation_counter[pair] = 0
+            
+            # Update stagnation score
+            self._update_stagnation_score(pair)
+
+    def _get_module_pairs(self, module: str) -> List[Tuple[str, str]]:
+        """
+        Get all module pairs involving the given module.
+        
+        Args:
+            module: The module to find pairs for
+            
+        Returns:
+            List of module pairs (sorted tuples)
+        """
+        pairs = []
+        # Pairs with dependent modules
+        for dep in self.dependency_graph.get(module, set()):
+            pair = tuple(sorted([module, dep]))
+            pairs.append(pair)
+        # Pairs with dependency modules
+        for dep in self.reverse_dependency.get(module, set()):
+            pair = tuple(sorted([module, dep]))
+            pairs.append(pair)
+        return pairs
+
+    def _update_stagnation_score(self, pair: Tuple[str, str]) -> None:
+        """
+        Update the stagnation score for a module pair (0-1).
+        
+        Args:
+            pair: The module pair to update
+        """
+        deltas = self.fitness_deltas.get(pair, [])
+        if not deltas:
+            self.stagnation_scores[pair] = 0.0
+            return
+        
+        # Calculate stagnation score based on:
+        # 1. Proportion of non-improving deltas in history
+        # 2. Consecutive non-improvement count
+        # 3. Recent trend (last 5 deltas)
+        
+        recent_deltas = deltas[-5:] if len(deltas) >= 5 else deltas
+        non_improving_count = sum(1 for d in recent_deltas if d <= 0)
+        non_improving_ratio = non_improving_count / max(len(recent_deltas), 1)
+        
+        consecutive_count = self.stagnation_counter.get(pair, 0)
+        consecutive_factor = min(consecutive_count / self.stagnation_threshold, 1.0)
+        
+        # Combine factors with weights
+        score = (non_improving_ratio * 0.4) + (consecutive_factor * 0.6)
+        self.stagnation_scores[pair] = min(max(score, 0.0), 1.0)
 
     def get_dependent_modules(self, module: str) -> Set[str]:
         """
@@ -122,35 +187,35 @@ class NashDetector:
         visited.discard(module)
         return visited
 
-    def is_module_stagnant(self, module: str) -> bool:
+    def is_module_pair_stagnant(self, pair: Tuple[str, str]) -> bool:
         """
-        Check if a specific module has reached stagnation (no improvement).
+        Check if a specific module pair has reached stagnation (no improvement).
         
         Args:
-            module: The module to check
+            pair: The module pair to check
             
         Returns:
-            True if module has no improvement for threshold cycles
+            True if module pair has no improvement for threshold cycles
         """
-        return self.stagnation_counter.get(module, 0) >= self.stagnation_threshold
+        return self.stagnation_counter.get(pair, 0) >= self.stagnation_threshold
 
-    def get_stagnant_modules(self) -> List[str]:
+    def get_stagnant_module_pairs(self) -> List[Tuple[str, str]]:
         """
-        Get all modules that are currently stagnant.
+        Get all module pairs that are currently stagnant.
         
         Returns:
-            List of stagnant module names
+            List of stagnant module pairs
         """
         return [
-            module for module, count in self.stagnation_counter.items()
+            pair for pair, count in self.stagnation_counter.items()
             if count >= self.stagnation_threshold
         ]
 
     def is_nash_equilibrium(self) -> bool:
         """
         Check if the system has reached a Nash equilibrium state.
-        This occurs when ALL modules have no single-module mutation
-        that improves fitness for the threshold number of consecutive cycles.
+        This occurs when no single module change has improved the system
+        for the threshold number of consecutive cycles.
         
         Returns:
             True if system is in Nash equilibrium
@@ -158,20 +223,20 @@ class NashDetector:
         if not self.fitness_deltas:
             return False
         
-        # Check if all modules that have been mutated are stagnant
-        all_modules = set(self.fitness_deltas.keys())
-        stagnant_modules = set(self.get_stagnant_modules())
+        # Check if all module pairs that have been evaluated are stagnant
+        all_pairs = set(self.fitness_deltas.keys())
+        stagnant_pairs = set(self.get_stagnant_module_pairs())
         
-        # Only consider modules that have been evaluated
-        evaluated_modules = {
-            module for module, deltas in self.fitness_deltas.items()
+        # Only consider pairs that have been evaluated enough
+        evaluated_pairs = {
+            pair for pair, deltas in self.fitness_deltas.items()
             if len(deltas) >= self.stagnation_threshold
         }
         
-        if not evaluated_modules:
+        if not evaluated_pairs:
             return False
         
-        return evaluated_modules.issubset(stagnant_modules)
+        return evaluated_pairs.issubset(stagnant_pairs)
 
     def get_system_analysis(self) -> Dict:
         """
@@ -180,26 +245,29 @@ class NashDetector:
         Returns:
             Dictionary containing:
             - 'nash_equilibrium': bool
-            - 'stagnant_modules': list of module names
+            - 'stagnant_module_pairs': list of module pairs
             - 'dependency_graph': dict of module dependencies
-            - 'fitness_summary': dict of module fitness trends
+            - 'fitness_summary': dict of module pair fitness trends
+            - 'stagnation_scores': dict of module pair stagnation scores
             - 'cycle_count': int
         """
         return {
             'nash_equilibrium': self.is_nash_equilibrium(),
-            'stagnant_modules': self.get_stagnant_modules(),
+            'stagnant_module_pairs': self.get_stagnant_module_pairs(),
             'dependency_graph': {
                 module: list(deps) 
                 for module, deps in self.dependency_graph.items()
             },
             'fitness_summary': {
-                module: {
+                pair: {
                     'recent_deltas': deltas[-5:],
                     'average_delta': sum(deltas[-5:]) / max(len(deltas[-5:]), 1),
-                    'stagnant': self.is_module_stagnant(module)
+                    'stagnant': self.is_module_pair_stagnant(pair),
+                    'stagnation_score': self.stagnation_scores.get(pair, 0.0)
                 }
-                for module, deltas in self.fitness_deltas.items()
+                for pair, deltas in self.fitness_deltas.items()
             },
+            'stagnation_scores': dict(self.stagnation_scores),
             'cycle_count': self.current_cycle
         }
 
@@ -207,16 +275,19 @@ class NashDetector:
         """Advance to the next evaluation cycle."""
         self.current_cycle += 1
 
-    def reset_module(self, module: str) -> None:
+    def reset_module_pair(self, module1: str, module2: str) -> None:
         """
-        Reset stagnation tracking for a specific module.
-        Useful when a module is significantly restructured.
+        Reset stagnation tracking for a specific module pair.
+        Useful when modules are significantly restructured.
         
         Args:
-            module: The module to reset
+            module1: First module in the pair
+            module2: Second module in the pair
         """
-        self.stagnation_counter[module] = 0
-        self.fitness_deltas[module] = []
+        pair = tuple(sorted([module1, module2]))
+        self.stagnation_counter[pair] = 0
+        self.fitness_deltas[pair] = []
+        self.stagnation_scores[pair] = 0.0
 
     def reset_all(self) -> None:
         """Reset all tracking data."""
@@ -225,6 +296,7 @@ class NashDetector:
         self.output_to_inputs.clear()
         self.fitness_deltas.clear()
         self.stagnation_counter.clear()
+        self.stagnation_scores.clear()
         self.current_cycle = 0
 
     def set_stagnation_threshold(self, threshold: int) -> None:
@@ -237,3 +309,26 @@ class NashDetector:
         if threshold < 1:
             raise ValueError("Stagnation threshold must be at least 1")
         self.stagnation_threshold = threshold
+
+    def get_stagnation_score(self, module1: str, module2: str) -> float:
+        """
+        Get the stagnation score for a module pair (0-1).
+        
+        Args:
+            module1: First module in the pair
+            module2: Second module in the pair
+            
+        Returns:
+            Stagnation score between 0 and 1
+        """
+        pair = tuple(sorted([module1, module2]))
+        return self.stagnation_scores.get(pair, 0.0)
+
+    def get_all_stagnation_scores(self) -> Dict[Tuple[str, str], float]:
+        """
+        Get all stagnation scores for all module pairs.
+        
+        Returns:
+            Dictionary mapping module pairs to their stagnation scores
+        """
+        return dict(self.stagnation_scores)

@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780649848.7555447
-    },
-    {
       "description": "Implement an automated impact prioritization system: for each pending or recently added capability, run a quick benchmark (e.g., 10 test cycles) comparing system success rate with and without that capability enabled. Rank capabilities by delta in success rate. Disable or archive capabilities that show negative or near-zero impact.",
       "priority": 9,
       "status": "pending",
@@ -873,6 +867,13 @@
       "status": "completed",
       "created_at": 1780649848.752571,
       "completed_at": 1780651174.8277817
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780649848.7555447,
+      "completed_at": 1780651487.0585701
     }
   ],
   "generated_goals": []
