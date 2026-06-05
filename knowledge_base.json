@@ -13,5 +13,8 @@
       }
     }
   },
+  "capability_bankruptcy_history": {
+    "cycles": []
+  },
   "version": "1.0"
 }

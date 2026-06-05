@@ -1,9 +1,8 @@
 {
-  "cycle_count": 128,
-  "current_generation": 99,
-  "last_evolution_time": 1780648163.9068587,
+  "cycle_count": 129,
+  "current_generation": 100,
+  "last_evolution_time": 1780648343.0072427,
   "capabilities": [
-    "Build a failure pattern detector that logs recurring test failures by error type and module, and aut",
     "Create a 'capability fitness function' that measures the number of downstream tasks each capability ",
     "Implement the self-healing retry mechanism for the evolution orchestrator: when a mutation fails val",
     "Create a self-contained integration smoke test that runs the full evolution loop (goal selection → m",
@@ -52,15 +51,10 @@
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
     "Create a minimal end-to-end integration test that runs with a trivial mutation (e.g., adding a comme",
     "Create a 'test-first evolution' workflow: before any mutation can be accepted into the knowledge bas",
-    "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflect"
+    "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflect",
+    "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabiliti"
   ],
   "history": [
-    {
-      "cycle": 23,
-      "goal": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
-      "success": false,
-      "timestamp": 1780626260.5287683
-    },
     {
       "cycle": 24,
       "goal": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
@@ -654,6 +648,12 @@
       "goal": "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflection → goal selection → mutation → test → promotion) without manual intervention. This test must run every cycle and block new features if it fails, ensuring foundational stability before adding capabilities.",
       "success": true,
       "timestamp": 1780648305.7946587
+    },
+    {
+      "cycle": 129,
+      "goal": "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabilities for novelty and usage scores; drop the bottom 30% and re-implement only the essential ones with improved design. This directly counters the identified tendency to prioritize quantity over quality.",
+      "success": true,
+      "timestamp": 1780648522.9602718
     }
   ],
   "status": "evolving"

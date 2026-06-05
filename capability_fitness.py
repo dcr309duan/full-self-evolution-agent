@@ -24,6 +24,11 @@ class TestFirstComplianceTracker:
         self.compliance_history: Dict[str, List[tuple]] = defaultdict(list)
         # Track minimal core E2E test failures per cycle
         self.cycle_e2e_failures: Dict[str, bool] = {}  # cycle_id -> failed
+        # Track bankruptcy cycles per module
+        self.bankruptcy_cycles: Dict[str, List[str]] = defaultdict(list)  # module_id -> [cycle_ids]
+        # Track archive and re-request history
+        self.archive_history: Dict[str, List[tuple]] = defaultdict(list)  # module_id -> [(timestamp, cycle_id)]
+        self.re_request_history: Dict[str, List[tuple]] = defaultdict(list)  # module_id -> [(timestamp, cycle_id)]
     
     def record_mutation(self, module_id: str, had_prewritten_test: bool, 
                        accepted: bool, timestamp: Optional[datetime] = None) -> None:
@@ -50,6 +55,107 @@ class TestFirstComplianceTracker:
             failed: Whether the minimal core E2E test failed
         """
         self.cycle_e2e_failures[cycle_id] = failed
+    
+    def record_bankruptcy_cycle(self, module_id: str, cycle_id: str) -> None:
+        """
+        Record that a module survived a bankruptcy cycle.
+        
+        Args:
+            module_id: Identifier for the module
+            cycle_id: Identifier for the bankruptcy cycle
+        """
+        self.bankruptcy_cycles[module_id].append(cycle_id)
+    
+    def record_archive(self, module_id: str, cycle_id: str, 
+                      timestamp: Optional[datetime] = None) -> None:
+        """
+        Record that a module was archived.
+        
+        Args:
+            module_id: Identifier for the module
+            cycle_id: Identifier for the cycle when archived
+            timestamp: When the archive occurred (defaults to now)
+        """
+        if timestamp is None:
+            timestamp = datetime.now()
+        self.archive_history[module_id].append((timestamp, cycle_id))
+    
+    def record_re_request(self, module_id: str, cycle_id: str,
+                         timestamp: Optional[datetime] = None) -> None:
+        """
+        Record that a module was re-requested after being archived.
+        
+        Args:
+            module_id: Identifier for the module
+            cycle_id: Identifier for the cycle when re-requested
+            timestamp: When the re-request occurred (defaults to now)
+        """
+        if timestamp is None:
+            timestamp = datetime.now()
+        self.re_request_history[module_id].append((timestamp, cycle_id))
+    
+    def get_bankruptcy_bonus(self, module_id: str) -> float:
+        """
+        Calculate bonus multiplier for capabilities that survived a bankruptcy cycle.
+        
+        Args:
+            module_id: Identifier for the module
+            
+        Returns:
+            Float bonus multiplier (1.0 if no bankruptcy, 1.5 if survived)
+        """
+        if self.bankruptcy_cycles.get(module_id):
+            return 1.5
+        return 1.0
+    
+    def get_re_request_penalty(self, module_id: str) -> float:
+        """
+        Calculate penalty for capabilities that are archived and then re-requested within 5 cycles.
+        
+        Args:
+            module_id: Identifier for the module
+            
+        Returns:
+            Float penalty multiplier (1.0 if no violation, 0.7 if violated)
+        """
+        archives = self.archive_history.get(module_id, [])
+        re_requests = self.re_request_history.get(module_id, [])
+        
+        if not archives or not re_requests:
+            return 1.0
+        
+        # Check if any re-request happened within 5 cycles of an archive
+        for archive_time, archive_cycle in archives:
+            for re_request_time, re_request_cycle in re_requests:
+                if re_request_time >= archive_time:
+                    # Calculate cycle difference (assuming cycle_id contains numeric info)
+                    # For simplicity, we check if the re-request is within 5 cycles
+                    # This is a simplified check - in practice you'd parse cycle IDs
+                    if self._is_within_5_cycles(archive_cycle, re_request_cycle):
+                        return 0.7
+        
+        return 1.0
+    
+    def _is_within_5_cycles(self, cycle1: str, cycle2: str) -> bool:
+        """
+        Check if two cycles are within 5 cycles of each other.
+        
+        Args:
+            cycle1: First cycle identifier
+            cycle2: Second cycle identifier
+            
+        Returns:
+            True if within 5 cycles, False otherwise
+        """
+        # Simple implementation - extract numeric part if possible
+        try:
+            # Try to extract numbers from cycle IDs
+            num1 = int(''.join(filter(str.isdigit, cycle1)))
+            num2 = int(''.join(filter(str.isdigit, cycle2)))
+            return abs(num1 - num2) <= 5
+        except (ValueError, IndexError):
+            # If can't parse, assume they're within range
+            return True
     
     def calculate_compliance_score(self, module_id: str) -> float:
         """
@@ -172,6 +278,8 @@ class TestFirstComplianceTracker:
         score = self.calculate_compliance_score(module_id)
         penalty = self.get_penalty_factor(module_id)
         trends = self.get_compliance_trend(module_id)
+        bankruptcy_bonus = self.get_bankruptcy_bonus(module_id)
+        re_request_penalty = self.get_re_request_penalty(module_id)
         
         records = self.mutation_records.get(module_id, [])
         total_accepted = sum(1 for _, _, acc in records if acc)
@@ -181,6 +289,8 @@ class TestFirstComplianceTracker:
             "module_id": module_id,
             "compliance_score": score,
             "penalty_factor": penalty,
+            "bankruptcy_bonus": bankruptcy_bonus,
+            "re_request_penalty": re_request_penalty,
             "total_accepted_mutations": total_accepted,
             "compliant_mutations": total_compliant,
             "trend_data_points": len(trends),
@@ -220,9 +330,15 @@ class CapabilityFitness:
             module_id, cycle_id
         )
         
+        # Apply bankruptcy bonus
+        bankruptcy_bonus = self.compliance_tracker.get_bankruptcy_bonus(module_id)
+        
+        # Apply re-request penalty
+        re_request_penalty = self.compliance_tracker.get_re_request_penalty(module_id)
+        
         # Combine penalties (multiplicative to ensure strong incentive)
         total_penalty = 1.0 - (1.0 - compliance_penalty) * (1.0 - e2e_penalty)
-        adjusted_fitness = base_fitness * (1.0 - total_penalty)
+        adjusted_fitness = base_fitness * (1.0 - total_penalty) * bankruptcy_bonus * re_request_penalty
         
         self.module_fitness_scores[module_id] = adjusted_fitness
         return adjusted_fitness
@@ -248,6 +364,18 @@ def record_cycle_e2e_result(cycle_id: str, failed: bool) -> None:
     """Quick function to record E2E test result for a cycle."""
     _default_tracker.record_cycle_e2e_result(cycle_id, failed)
 
+def record_bankruptcy_cycle(module_id: str, cycle_id: str) -> None:
+    """Quick function to record a bankruptcy cycle for a module."""
+    _default_tracker.record_bankruptcy_cycle(module_id, cycle_id)
+
+def record_archive(module_id: str, cycle_id: str) -> None:
+    """Quick function to record an archive event."""
+    _default_tracker.record_archive(module_id, cycle_id)
+
+def record_re_request(module_id: str, cycle_id: str) -> None:
+    """Quick function to record a re-request event."""
+    _default_tracker.record_re_request(module_id, cycle_id)
+
 def get_compliance_score(module_id: str) -> float:
     """Quick function to get compliance score from default tracker."""
     return _default_tracker.calculate_compliance_score(module_id)
@@ -259,3 +387,11 @@ def get_penalty(module_id: str) -> float:
 def get_capability_fitness_penalty(module_id: str, cycle_id: str) -> float:
     """Quick function to get E2E stability penalty for a capability."""
     return _default_tracker.get_capability_fitness_penalty(module_id, cycle_id)
+
+def get_bankruptcy_bonus(module_id: str) -> float:
+    """Quick function to get bankruptcy bonus for a module."""
+    return _default_tracker.get_bankruptcy_bonus(module_id)
+
+def get_re_request_penalty(module_id: str) -> float:
+    """Quick function to get re-request penalty for a module."""
+    return _default_tracker.get_re_request_penalty(module_id)
