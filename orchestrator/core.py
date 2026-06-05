@@ -64,6 +64,9 @@ class EvolutionOrchestrator:
         self._knowledge_gaps: List[Dict[str, Any]] = []  # knowledge gap entries
         # Store latest reflection_parser output for schema validation
         self._latest_reflection_output: Optional[Dict[str, Any]] = None
+        # Integration test hooks state
+        self._schema_validation_status: Dict[str, bool] = {}  # step_name -> is_valid
+        self._schema_mismatch_diagnostics: List[Dict[str, Any]] = []  # detailed diagnostics
 
     def set_reflection_output(self, output: Dict[str, Any]) -> None:
         """Set the latest reflection_parser output for schema validation.
@@ -73,16 +76,18 @@ class EvolutionOrchestrator:
         """
         self._latest_reflection_output = output
 
-    def _validate_schema_alignment(self, data: Dict[str, Any]) -> bool:
+    def _validate_schema_alignment(self, data: Dict[str, Any], step_name: str = "unknown") -> bool:
         """Validate schema alignment using the latest reflection_parser output.
 
         Args:
             data: The data to validate.
+            step_name: Name of the pipeline step for logging.
 
         Returns:
             True if validation passes, False otherwise.
         """
         if not self.config.schema_validator or not self._latest_reflection_output:
+            self._schema_validation_status[step_name] = True
             return True  # No validation configured or no reflection output available
 
         try:
@@ -90,6 +95,8 @@ class EvolutionOrchestrator:
             is_valid = self.config.schema_validator.validate_alignment(
                 data, self._latest_reflection_output
             )
+            self._schema_validation_status[step_name] = is_valid
+            
             if not is_valid:
                 errors = self.config.schema_validator.get_errors(data)
                 logger.error(
@@ -97,10 +104,105 @@ class EvolutionOrchestrator:
                     data.get('id', 'unknown'),
                     errors
                 )
+                
+                # Generate detailed diagnostic for SCHEMA_MISMATCH
+                diagnostic = {
+                    'step': step_name,
+                    'data_id': data.get('id', 'unknown'),
+                    'component_names': list(data.keys()) if isinstance(data, dict) else [],
+                    'field_mismatches': errors,
+                    'validation_type': 'alignment'
+                }
+                self._schema_mismatch_diagnostics.append(diagnostic)
+                
+                # Trigger self-repair with specific error message about schema mismatch location
+                self._trigger_self_repair(diagnostic)
+            else:
+                logger.info("Schema validation passed for step '%s'", step_name)
+                
             return is_valid
         except Exception as e:
             logger.error("Error during schema alignment validation: %s", str(e))
+            self._schema_validation_status[step_name] = False
             return False
+
+    def _validate_schema_integrity(self, data: Dict[str, Any], step_name: str = "unknown") -> bool:
+        """Validate schema integrity after mutation.
+
+        Args:
+            data: The data to validate.
+            step_name: Name of the pipeline step for logging.
+
+        Returns:
+            True if validation passes, False otherwise.
+        """
+        if not self.config.schema_validator:
+            self._schema_validation_status[step_name] = True
+            return True
+
+        try:
+            is_valid = self.config.schema_validator.validate(data)
+            self._schema_validation_status[step_name] = is_valid
+            
+            if not is_valid:
+                errors = self.config.schema_validator.get_errors(data)
+                logger.error(
+                    "Schema integrity validation failed for data: %s. Errors: %s",
+                    data.get('id', 'unknown'),
+                    errors
+                )
+                
+                # Generate detailed diagnostic for SCHEMA_MISMATCH
+                diagnostic = {
+                    'step': step_name,
+                    'data_id': data.get('id', 'unknown'),
+                    'component_names': list(data.keys()) if isinstance(data, dict) else [],
+                    'field_mismatches': errors,
+                    'validation_type': 'integrity'
+                }
+                self._schema_mismatch_diagnostics.append(diagnostic)
+                
+                # Trigger self-repair with specific error message about schema mismatch location
+                self._trigger_self_repair(diagnostic)
+            else:
+                logger.info("Schema integrity validation passed for step '%s'", step_name)
+                
+            return is_valid
+        except Exception as e:
+            logger.error("Error during schema integrity validation: %s", str(e))
+            self._schema_validation_status[step_name] = False
+            return False
+
+    def _trigger_self_repair(self, diagnostic: Dict[str, Any]) -> None:
+        """Trigger self-repair with specific error message about schema mismatch location.
+
+        Args:
+            diagnostic: The diagnostic information about the schema mismatch.
+        """
+        error_message = (
+            f"SCHEMA_MISMATCH detected at step '{diagnostic['step']}' "
+            f"for data '{diagnostic['data_id']}'. "
+            f"Component names: {diagnostic['component_names']}. "
+            f"Field mismatches: {diagnostic['field_mismatches']}. "
+            f"Validation type: {diagnostic['validation_type']}."
+        )
+        logger.error("Self-repair triggered: %s", error_message)
+        
+        # Generate knowledge gap entry for self-repair
+        gap_entry = {
+            'type': 'schema_mismatch',
+            'step': diagnostic['step'],
+            'data_id': diagnostic['data_id'],
+            'component_names': diagnostic['component_names'],
+            'field_mismatches': diagnostic['field_mismatches'],
+            'error_message': error_message,
+            'severity': 'high',
+            'timestamp': self._get_current_timestamp()
+        }
+        self._knowledge_gaps.append(gap_entry)
+        
+        # Log the self-repair action
+        logger.info("Self-repair knowledge gap entry created: %s", gap_entry)
 
     def after_mutation_cycle(self, mutation_results: List[dict]) -> None:
         """Called after each mutation cycle to mine patterns and generate goals.
@@ -121,7 +223,7 @@ class EvolutionOrchestrator:
                 if failure_data:
                     # Validate and convert failure_data before processing
                     if self.config.schema_validator and self.config.schema_converter:
-                        if not self.config.schema_validator.validate(failure_data):
+                        if not self._validate_schema_integrity(failure_data, "after_mutation_cycle"):
                             logger.warning(
                                 "Schema mismatch in failure_data: %s",
                                 self.config.schema_validator.get_errors(failure_data)
@@ -336,6 +438,22 @@ class EvolutionOrchestrator:
         """
         return getattr(self, '_intervention_required', {})
 
+    def get_schema_validation_status(self) -> Dict[str, bool]:
+        """Get the schema validation status for each pipeline step.
+
+        Returns:
+            Dictionary mapping step names to validation status.
+        """
+        return self._schema_validation_status
+
+    def get_schema_mismatch_diagnostics(self) -> List[Dict[str, Any]]:
+        """Get the list of schema mismatch diagnostics.
+
+        Returns:
+            List of diagnostic dictionaries.
+        """
+        return self._schema_mismatch_diagnostics
+
     def _rebuild_dependency_graph(self) -> None:
         """Rebuild the dependency graph from the current capability list."""
         # Get current capabilities from the goal queue
@@ -364,9 +482,16 @@ class EvolutionOrchestrator:
                 logger.info("Executing ready goal: %s", goal.description)
                 
                 # Validate schema alignment before mutation
-                if not self._validate_schema_alignment(goal.to_dict()):
+                goal_dict = goal.to_dict()
+                if not self._validate_schema_alignment(goal_dict, "pre_mutation"):
                     logger.error(
                         "Schema alignment validation failed for goal '%s'. Skipping mutation cycle.",
+                        goal.description
+                    )
+                    # Block execution of any mutation that would violate canonical schema
+                    logger.warning(
+                        "Blocking mutation for goal '%s' due to schema violation. "
+                        "Self-repair triggered for schema mismatch.",
                         goal.description
                     )
                     continue
@@ -375,7 +500,7 @@ class EvolutionOrchestrator:
                 
                 if result.get('success', True):
                     # Re-validate schema integrity after successful mutation
-                    if not self._validate_schema_alignment(result):
+                    if not self._validate_schema_integrity(result, "post_mutation"):
                         logger.warning(
                             "Schema integrity check failed after successful mutation for goal '%s'. "
                             "Rolling back or logging diagnostic.",
@@ -533,7 +658,7 @@ class EvolutionOrchestrator:
                 goal = self._create_refactoring_goal(pattern, frequency)
                 # Validate and convert goal before adding to queue
                 if self.config.schema_validator and self.config.schema_converter:
-                    if not self.config.schema_validator.validate(goal):
+                    if not self._validate_schema_integrity(goal, "refactoring_goal_creation"):
                         logger.warning(
                             "Schema mismatch in goal: %s",
                             self.config.schema_validator.get_errors(goal)
@@ -612,5 +737,8 @@ class EvolutionOrchestrator:
         self._strategy_effectiveness.clear()
         self._exhausted_targets.clear()
         self._knowledge_gaps.clear()
+        # Reset integration test hooks state
+        self._schema_validation_status.clear()
+        self._schema_mismatch_diagnostics.clear()
         if hasattr(self, '_intervention_required'):
             del self._intervention_required

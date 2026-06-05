@@ -1,36 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/test_pipeline_integration.py to: Add test method 'test_test_to_reflection_flow' that validates test results are passed to reflection parser and parser extracts current_assessment, key_gaps, next_priority. Assert no broken link between test and reflection stages.",
-      "timestamp": 1780628362.5660977,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_pipeline_broken_link_detector.py to: Create a broken link detection module that: (1) Injects specific failures at each pipeline stage (e.g., mutation returns None, test framework returns malformed results, reflection parser throws exception). (2) Verifies the system correctly identifies which component failed and the nature of the failure. (3) Tests that failures are reported with correct priority (CRITICAL for mutation engine failures, HIGH for reflection parser issues, MEDIUM for strategy selector problems). (4) Validates that the failure analysis module receives and classifies these failures.",
-      "timestamp": 1780628368.5377479,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_pipeline_integration.py to: Add test method 'test_reflection_to_strategy_flow' that validates reflection output is used by strategy selector to update mutation strategy (e.g., switch to different mutation operator). Assert no broken link between reflection and strategy stages.",
-      "timestamp": 1780628400.8817208,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_integration_pipeline.py to: Add integration tests for the orchestrator's role in the pipeline: (1) Test that orchestrator correctly sequences mutation -> test -> reflection -> strategy update. (2) Test timeout handling: if a component takes too long, orchestrator should abort and report. (3) Test retry logic: if a component fails transiently, orchestrator retries up to configured limit. (4) Test that orchestrator logs all pipeline stages with timestamps for debugging.",
-      "timestamp": 1780628413.2187958,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified pipeline_broken_link_reporter.py to: Create a reporter module that: (1) Defines priority levels: CRITICAL (pipeline cannot proceed), HIGH (pipeline proceeds with degraded functionality), MEDIUM (non-blocking issues), LOW (cosmetic/performance issues). (2) Maps each pipeline component to its criticality: mutation engine = CRITICAL, test framework = CRITICAL, reflection parser = HIGH, strategy selector = MEDIUM. (3) Generates actionable bug reports with: component name, failure type, timestamp, suggested fix, priority. (4) Writes bug reports to 'pipeline_bug_reports.json' for persistence.",
-      "timestamp": 1780628424.8521998,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_pipeline_integration.py to: Add test method 'test_full_pipeline_end_to_end' that runs the complete pipeline with a known-good mutation and verifies all stages complete successfully. Include assertions for intermediate outputs at each stage.",
-      "timestamp": 1780628445.947104,
-      "cycle": 34
-    },
-    {
       "content": "Successfully modified tests/test_broken_link_detector.py to: Create a new test file for a broken link detector module. This module will analyze integration test failures and classify them as broken links with priority based on pipeline criticality (P0 for mutation->test, P1 for test->reflection, P2 for reflection->strategy).",
       "timestamp": 1780628461.2224007,
       "cycle": 34
@@ -999,6 +969,36 @@
       "content": "Successfully modified mutation/engine.py to: Add pre-mutation hook that calls schema/validator.py to check all component outputs are schema-compliant before allowing mutation. If schema validation fails, abort mutation and trigger self-repair with specific error message about schema mismatch.",
       "timestamp": 1780633755.8961697,
       "cycle": 58
+    },
+    {
+      "content": "Successfully modified tests/test_schema_alignment.py to: Extend existing test_schema_alignment.py to include: (1) Test that pre-mutation validation catches malformed GoalSpec objects, (2) Test that schema version mismatches between components trigger migration, (3) Test that round-trip data flow preserves schema integrity, (4) Test that SCHEMA_MISMATCH errors are properly logged and block execution, (5) Test that self-repair is triggered on schema violation.",
+      "timestamp": 1780633892.0536046,
+      "cycle": 59
+    },
+    {
+      "content": "Successfully modified orchestrator/core.py to: Add integration test hooks: (1) After each pipeline step, log schema validation status, (2) If SCHEMA_MISMATCH detected, generate detailed diagnostic with component names and field mismatches, (3) Block execution of any mutation that would violate canonical schema, (4) Trigger self-repair with specific error message about schema mismatch location.",
+      "timestamp": 1780633954.6616066,
+      "cycle": 59
+    },
+    {
+      "content": "Successfully modified mutation/engine.py to: Enhance pre-mutation hook: (1) Validate all component outputs against canonical schema before allowing mutation, (2) If schema violation detected, log specific field mismatches and component names, (3) Abort mutation and trigger self-repair with detailed diagnostic, (4) After successful mutation, re-validate to ensure schema integrity, (5) Block execution of any mutation that would violate canonical schema.",
+      "timestamp": 1780633975.2652278,
+      "cycle": 59
+    },
+    {
+      "content": "Successfully modified schema/integration_validator.py to: Create a dedicated integration validator module that: (1) Validates end-to-end data flow from reflection → goal generation → mutation → testing → self-repair, (2) Checks schema compatibility between all components at each step, (3) Detects SCHEMA_MISMATCH errors early in the pipeline, (4) Provides detailed diagnostics on mismatches, (5) Blocks execution of any mutation that would violate canonical schema.",
+      "timestamp": 1780634002.5834568,
+      "cycle": 59
+    },
+    {
+      "content": "Successfully modified tests/__init__.py to: Add import for new integration test modules: test_integration_pipeline, test_pipeline_orchestrator, and integration_validator.",
+      "timestamp": 1780634004.9499214,
+      "cycle": 59
+    },
+    {
+      "content": "Successfully modified tests/test_data_flow_consistency.py to: Create a data flow consistency test that: (1) Generates random valid reflection parser outputs, (2) Feeds through full pipeline, (3) Validates each intermediate output matches canonical schema, (4) Ensures no data loss or corruption between components, (5) Tests edge cases like empty fields, null values, and version mismatches.",
+      "timestamp": 1780634031.6673577,
+      "cycle": 59
     }
   ],
   "learned_patterns": [],
@@ -1162,6 +1162,16 @@
       "approach": "modify mutation_engine/compensator.py: Create a compensator module that, given a mutation and a list of affected callers, generates compensating modifications. For each affected caller: (1) if the interface signature changed, update the call site to match new signature, (2) if a function was renamed, replace all calls with new name, (3) if a function was removed, add a wrapper that delegates to the new implementation. Use AST rewriting to apply changes safely.",
       "reason": "Safety check failed",
       "timestamp": 1780632769.600724
+    },
+    {
+      "approach": "modify tests/test_integration_pipeline.py: Create a comprehensive end-to-end integration test suite that: (1) Sets up mock reflection parser output with canonical schema format, (2) Feeds it through goal_generator to produce GoalSpec, (3) Passes GoalSpec through mutation engine with pre-mutation schema validation, (4) Runs mutation output through test framework, (5) Triggers self-repair on failure, (6) Validates schema integrity at each step, (7) Catches SCHEMA_MISMATCH errors and blocks mutation execution if schema violation detected.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 784)",
+      "timestamp": 1780633841.3215847
+    },
+    {
+      "approach": "modify tests/test_pipeline_orchestrator.py: Create an orchestrator-level integration test that: (1) Simulates full cycle: reflection → goal generation → mutation → testing → self-repair, (2) Validates each intermediate output against canonical schema, (3) Ensures SCHEMA_MISMATCH errors abort the pipeline before mutation, (4) Tests rollback mechanism when mutation fails schema validation, (5) Verifies that successful mutations pass all schema checks.",
+      "reason": "Syntax error: unterminated string literal (detected at line 504) (<unknown>, line 504)",
+      "timestamp": 1780633917.596677
     }
   ],
   "successful_strategies": [
@@ -2614,6 +2624,41 @@
       "strategy": "Implement a canonical schema alignment layer: a validated, versioned data contract that normalizes outputs from reflection_parser, goal_generator, and failure_analysis modules into a shared format, with automatic migration scripts to resolve mismatches and a validation test that runs before any mutation cycle.",
       "outcome": "9/9 steps succeeded",
       "timestamp": 1780633755.9060078
+    },
+    {
+      "strategy": "modify tests/test_schema_alignment.py: Extend existing test_schema_alignment.py to include: (1) Test that pre-mutation validation catches malformed GoalSpec objects, (2) Test that schema version mismatches between components trigger migration, (3) Test that round-trip data flow preserves schema integrity, (4) Test that SCHEMA_MISMATCH errors are properly logged and block execution, (5) Test that self-repair is triggered on schema violation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633892.044574
+    },
+    {
+      "strategy": "modify orchestrator/core.py: Add integration test hooks: (1) After each pipeline step, log schema validation status, (2) If SCHEMA_MISMATCH detected, generate detailed diagnostic with component names and field mismatches, (3) Block execution of any mutation that would violate canonical schema, (4) Trigger self-repair with specific error message about schema mismatch location.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633954.649322
+    },
+    {
+      "strategy": "modify mutation/engine.py: Enhance pre-mutation hook: (1) Validate all component outputs against canonical schema before allowing mutation, (2) If schema violation detected, log specific field mismatches and component names, (3) Abort mutation and trigger self-repair with detailed diagnostic, (4) After successful mutation, re-validate to ensure schema integrity, (5) Block execution of any mutation that would violate canonical schema.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633975.2556322
+    },
+    {
+      "strategy": "modify schema/integration_validator.py: Create a dedicated integration validator module that: (1) Validates end-to-end data flow from reflection → goal generation → mutation → testing → self-repair, (2) Checks schema compatibility between all components at each step, (3) Detects SCHEMA_MISMATCH errors early in the pipeline, (4) Provides detailed diagnostics on mismatches, (5) Blocks execution of any mutation that would violate canonical schema.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780634002.573535
+    },
+    {
+      "strategy": "modify tests/__init__.py: Add import for new integration test modules: test_integration_pipeline, test_pipeline_orchestrator, and integration_validator.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780634004.939013
+    },
+    {
+      "strategy": "modify tests/test_data_flow_consistency.py: Create a data flow consistency test that: (1) Generates random valid reflection parser outputs, (2) Feeds through full pipeline, (3) Validates each intermediate output matches canonical schema, (4) Ensures no data loss or corruption between components, (5) Tests edge cases like empty fields, null values, and version mismatches.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780634031.652202
+    },
+    {
+      "strategy": "Build a system-wide integration test suite that validates the end-to-end data flow from reflection → goal generation → mutation → testing → self-repair, catching SCHEMA_MISMATCH errors early and blocking execution of any mutation that would violate the canonical schema.",
+      "outcome": "6/8 steps succeeded",
+      "timestamp": 1780634031.6826928
     }
   ],
   "capabilities_developed": []

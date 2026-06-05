@@ -149,23 +149,51 @@ class MutationEngine:
             mutated_code = code
             success = False
 
-        # Pre-mutation hook: validate all component outputs against schema
+        # Pre-mutation hook: validate all component outputs against canonical schema before allowing mutation
         if success:
             try:
                 # Extract component outputs from mutated code
                 component_outputs = self._extract_component_outputs(mutated_code)
-                # Validate each component output against schema
+                # Validate each component output against canonical schema
+                schema_violations = []
                 for component_name, output in component_outputs.items():
                     if not validate_output_schema(component_name, output):
+                        schema_violations.append((component_name, output))
                         error_msg = f"Schema mismatch for component '{component_name}' after mutation"
+                        logger.error(error_msg)
+                
+                if schema_violations:
+                    # Log specific field mismatches and component names
+                    for component_name, output in schema_violations:
+                        logger.error(f"Component '{component_name}' output {output} violates canonical schema")
+                    
+                    # Abort mutation and trigger self-repair with detailed diagnostic
+                    diagnostic = f"Schema violations detected for components: {[v[0] for v in schema_violations]}"
+                    self._trigger_self_repair(target_id, diagnostic)
+                    return code, False
+            except Exception as e:
+                logger.error(f"Schema validation failed: {e}")
+                # Abort mutation and trigger self-repair
+                self._trigger_self_repair(target_id, f"Schema validation error: {str(e)}")
+                return code, False
+
+        # After successful mutation, re-validate to ensure schema integrity
+        if success:
+            try:
+                # Extract component outputs from mutated code
+                component_outputs = self._extract_component_outputs(mutated_code)
+                # Re-validate each component output against canonical schema
+                for component_name, output in component_outputs.items():
+                    if not validate_output_schema(component_name, output):
+                        error_msg = f"Schema integrity check failed for component '{component_name}' after mutation"
                         logger.error(error_msg)
                         # Abort mutation and trigger self-repair
                         self._trigger_self_repair(target_id, error_msg)
                         return code, False
             except Exception as e:
-                logger.error(f"Schema validation failed: {e}")
+                logger.error(f"Post-mutation schema validation failed: {e}")
                 # Abort mutation and trigger self-repair
-                self._trigger_self_repair(target_id, f"Schema validation error: {str(e)}")
+                self._trigger_self_repair(target_id, f"Post-mutation schema validation error: {str(e)}")
                 return code, False
 
         # Log result to classifier

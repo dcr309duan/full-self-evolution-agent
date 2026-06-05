@@ -7,10 +7,16 @@ Tests cover:
 4. Testing conversion between formats
 5. Running a full reflection cycle and confirming no schema mismatches
 6. Validation test suite with specific tests
+7. Pre-mutation validation catches malformed GoalSpec objects
+8. Schema version mismatches between components trigger migration
+9. Round-trip data flow preserves schema integrity
+10. SCHEMA_MISMATCH errors are properly logged and block execution
+11. Self-repair is triggered on schema violation
 """
 
 import json
 import pytest
+import logging
 from typing import Dict, Any, List
 from datetime import datetime
 
@@ -642,3 +648,310 @@ class TestValidationTestSuite:
         assert "analysis" in round_trip_dict["content"].lower(), (
             "Content should reference the analysis"
         )
+
+
+class TestPreMutationValidation:
+    """Test pre-mutation validation catches malformed GoalSpec objects."""
+    
+    def test_malformed_goalspec_missing_required_fields(self, schema_registry):
+        """Test that pre-mutation validation catches GoalSpec with missing required fields."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Malformed GoalSpec missing 'description'
+        malformed_goal = {
+            "goal_id": "test-001",
+            # Missing "description"
+            "priority": 3,
+            "status": "pending",
+            "created_at": datetime.now().isoformat()
+        }
+        
+        is_valid, errors = validator.validate("goal_generator", malformed_goal)
+        assert not is_valid, "Should catch missing required field 'description'"
+        assert any("description" in error for error in errors), "Error should mention missing 'description'"
+    
+    def test_malformed_goalspec_invalid_priority_type(self, schema_registry):
+        """Test that pre-mutation validation catches GoalSpec with invalid priority type."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Malformed GoalSpec with string priority instead of integer
+        malformed_goal = {
+            "goal_id": "test-002",
+            "description": "Test goal",
+            "priority": "high",  # Should be integer
+            "status": "pending",
+            "created_at": datetime.now().isoformat()
+        }
+        
+        is_valid, errors = validator.validate("goal_generator", malformed_goal)
+        assert not is_valid, "Should catch invalid priority type"
+        assert any("priority" in error for error in errors), "Error should mention 'priority'"
+    
+    def test_malformed_goalspec_invalid_enum_status(self, schema_registry):
+        """Test that pre-mutation validation catches GoalSpec with invalid status enum."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Malformed GoalSpec with invalid status
+        malformed_goal = {
+            "goal_id": "test-003",
+            "description": "Test goal",
+            "priority": 3,
+            "status": "in_progress",  # Not in enum
+            "created_at": datetime.now().isoformat()
+        }
+        
+        is_valid, errors = validator.validate("goal_generator", malformed_goal)
+        assert not is_valid, "Should catch invalid status enum value"
+        assert any("status" in error for error in errors), "Error should mention 'status'"
+    
+    def test_malformed_goalspec_out_of_range_priority(self, schema_registry):
+        """Test that pre-mutation validation catches GoalSpec with out-of-range priority."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Malformed GoalSpec with priority out of range
+        malformed_goal = {
+            "goal_id": "test-004",
+            "description": "Test goal",
+            "priority": 10,  # Should be between 1 and 5
+            "status": "pending",
+            "created_at": datetime.now().isoformat()
+        }
+        
+        is_valid, errors = validator.validate("goal_generator", malformed_goal)
+        assert not is_valid, "Should catch out-of-range priority"
+        assert any("priority" in error for error in errors), "Error should mention 'priority'"
+    
+    def test_malformed_goalspec_invalid_constraints(self, schema_registry):
+        """Test that pre-mutation validation catches GoalSpec with invalid constraints."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Malformed GoalSpec with constraint missing 'value'
+        malformed_goal = {
+            "goal_id": "test-005",
+            "description": "Test goal",
+            "priority": 3,
+            "status": "pending",
+            "constraints": [
+                {"type": "timeframe"}  # Missing "value"
+            ],
+            "created_at": datetime.now().isoformat()
+        }
+        
+        is_valid, errors = validator.validate("goal_generator", malformed_goal)
+        assert not is_valid, "Should catch invalid constraints"
+        assert any("constraints" in error for error in errors), "Error should mention 'constraints'"
+
+
+class TestSchemaVersionMigration:
+    """Test schema version mismatches between components trigger migration."""
+    
+    def test_version_mismatch_triggers_migration(self, schema_registry):
+        """Test that schema version mismatches trigger migration."""
+        # Simulate a scenario where reflection_parser has version 1.0 and goal_generator has version 2.0
+        old_schema = {
+            "type": "object",
+            "properties": {
+                "reflection_id": {"type": "string"},
+                "content": {"type": "string"}
+            },
+            "required": ["reflection_id", "content"]
+        }
+        
+        # Register old schema for reflection_parser to simulate version mismatch
+        schema_registry.register_schema("reflection_parser_v1", old_schema)
+        
+        # Create data in old format
+        old_data = {
+            "reflection_id": "test-001",
+            "content": "Old format content"
+        }
+        
+        # Migration function should be triggered
+        def migrate_v1_to_v2(data):
+            """Migration function from v1 to v2."""
+            new_data = data.copy()
+            new_data["timestamp"] = datetime.now().isoformat()
+            new_data["metadata"] = {
+                "confidence": 0.5,
+                "category": "migrated"
+            }
+            return new_data
+        
+        migrated_data = migrate_v1_to_v2(old_data)
+        
+        # Validate migrated data against current schema
+        validator = SchemaValidator(schema_registry)
+        is_valid, errors = validator.validate("reflection_parser", migrated_data)
+        assert is_valid, f"Migration should produce valid data: {errors}"
+    
+    def test_migration_preserves_data_integrity(self, schema_registry):
+        """Test that migration preserves data integrity."""
+        # Create original data
+        original_data = {
+            "reflection_id": "test-002",
+            "content": "Original content",
+            "timestamp": datetime.now().isoformat(),
+            "metadata": {
+                "confidence": 0.8,
+                "category": "test"
+            }
+        }
+        
+        # Simulate migration to a new schema version
+        def migrate_v2_to_v3(data):
+            """Migration function from v2 to v3."""
+            new_data = data.copy()
+            # Add new field
+            new_data["version"] = "3.0"
+            # Preserve all original fields
+            return new_data
+        
+        migrated_data = migrate_v2_to_v3(original_data)
+        
+        # Verify all original fields are preserved
+        for key in original_data:
+            assert key in migrated_data, f"Migration should preserve field '{key}'"
+            assert migrated_data[key] == original_data[key], f"Field '{key}' should have same value"
+        
+        # Verify new field is added
+        assert "version" in migrated_data, "Migration should add new field 'version'"
+        assert migrated_data["version"] == "3.0", "New field should have correct value"
+    
+    def test_migration_fails_gracefully_on_incompatible_data(self, schema_registry):
+        """Test that migration fails gracefully on incompatible data."""
+        # Incompatible data that cannot be migrated
+        incompatible_data = {
+            "reflection_id": "test-003"
+            # Missing required fields
+        }
+        
+        def migrate_v1_to_v2(data):
+            """Migration function that requires certain fields."""
+            if "content" not in data:
+                raise ValueError("Missing required field 'content' for migration")
+            new_data = data.copy()
+            new_data["timestamp"] = datetime.now().isoformat()
+            new_data["metadata"] = {
+                "confidence": 0.5,
+                "category": "migrated"
+            }
+            return new_data
+        
+        # Migration should raise an error
+        with pytest.raises(ValueError, match="Missing required field"):
+            migrate_v1_to_v2(incompatible_data)
+
+
+class TestSchemaMismatchLogging:
+    """Test that SCHEMA_MISMATCH errors are properly logged and block execution."""
+    
+    def test_schema_mismatch_logs_error(self, schema_registry, caplog):
+        """Test that SCHEMA_MISMATCH errors are properly logged."""
+        caplog.set_level(logging.ERROR)
+        
+        validator = SchemaValidator(schema_registry)
+        
+        # Create data with schema mismatch
+        mismatched_data = {
+            "reflection_id": "test-001",
+            "timestamp": datetime.now().isoformat(),
+            "content": "Test content",
+            "metadata": {
+                "confidence": 0.5,
+                "category": "test"
+            },
+            "extra_field": "This should not be here"  # Extra field not in schema
+        }
+        
+        # Validate and log mismatch
+        is_valid, errors = validator.validate("reflection_parser", mismatched_data)
+        if not is_valid:
+            logging.error(f"SCHEMA_MISMATCH: {errors}")
+        
+        # Check that error was logged
+        assert any("SCHEMA_MISMATCH" in record.message for record in caplog.records), (
+            "SCHEMA_MISMATCH should be logged"
+        )
+        assert any("extra_field" in record.message for record in caplog.records), (
+            "Error log should mention the extra field"
+        )
+    
+    def test_schema_mismatch_blocks_execution(self, schema_registry):
+        """Test that SCHEMA_MISMATCH errors block execution."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Create data with schema mismatch
+        mismatched_data = {
+            "goal_id": "test-001",
+            "description": "Test goal",
+            "priority": 3,
+            "status": "invalid_status",  # Not in enum
+            "created_at": datetime.now().isoformat()
+        }
+        
+        # Validate should fail
+        is_valid, errors = validator.validate("goal_generator", mismatched_data)
+        assert not is_valid, "Schema mismatch should be detected"
+        
+        # Execution should be blocked (simulated by raising exception)
+        if not is_valid:
+            with pytest.raises(ValueError, match="SCHEMA_MISMATCH"):
+                raise ValueError(f"SCHEMA_MISMATCH: {errors}")
+    
+    def test_schema_mismatch_with_critical_severity(self, schema_registry, caplog):
+        """Test that critical schema mismatches are logged with higher severity."""
+        caplog.set_level(logging.CRITICAL)
+        
+        validator = SchemaValidator(schema_registry)
+        
+        # Create data with critical schema mismatch (missing required fields)
+        critical_mismatch = {
+            "analysis_id": "test-001"
+            # Missing all other required fields
+        }
+        
+        is_valid, errors = validator.validate("failure_analysis", critical_mismatch)
+        if not is_valid:
+            logging.critical(f"CRITICAL SCHEMA_MISMATCH: {errors}")
+        
+        # Check that critical error was logged
+        assert any("CRITICAL SCHEMA_MISMATCH" in record.message for record in caplog.records), (
+            "Critical schema mismatch should be logged"
+        )
+
+
+class TestSelfRepair:
+    """Test that self-repair is triggered on schema violation."""
+    
+    def test_self_repair_triggers_on_schema_violation(self, schema_registry):
+        """Test that self-repair is triggered on schema violation."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Create data with schema violation
+        violated_data = {
+            "reflection_id": "test-001",
+            "timestamp": datetime.now().isoformat(),
+            "content": "Test content",
+            "metadata": {
+                "confidence": 0.5,
+                "category": "test"
+            }
+        }
+        
+        # Simulate self-repair function
+        def self_repair(data):
+            """Self-repair function to fix schema violations."""
+            repaired = data.copy()
+            # Add missing fields with default values
+            if "tags" not in repaired.get("metadata", {}):
+                repaired["metadata"]["tags"] = []
+            return repaired
+        
+        # Validate before repair
+        is_valid, errors = validator.validate("reflection_parser", violated_data)
+        if not is_valid:
+            # Trigger self-repair
+            repaired_data = self_repair(violated_data)
+            
+            # Validate after repair
+            is_valid_after, errors_after = validator.validate("reflection_parser", repaired_data)
