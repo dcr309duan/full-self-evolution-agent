@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import logging
-from typing import Optional
+from typing import Optional, Dict, List, Any
 
 from self_model.scanner import Scanner
 from self_model.analyzer import Analyzer
@@ -61,6 +61,22 @@ class SelfModelBuilder:
         logger.info("Self-model building pipeline completed successfully.")
 
         return self.output_path
+
+    def get_dependency_graph(self) -> Dict[str, Any]:
+        """Return the current dependency graph in a format consumable by DependencyResolver.
+        
+        Returns:
+            A dictionary containing nodes and edges representing the dependency graph.
+            Format: {
+                "nodes": [{"id": str, "type": str, "name": str, ...}],
+                "edges": [{"source": str, "target": str, "type": str, ...}]
+            }
+        """
+        graph_data = {
+            "nodes": [node.to_dict() for node in self.knowledge_graph.nodes],
+            "edges": [edge.to_dict() for edge in self.knowledge_graph.edges]
+        }
+        return graph_data
 
     def _serialize(self) -> None:
         """Serialize the knowledge graph to a JSON file."""

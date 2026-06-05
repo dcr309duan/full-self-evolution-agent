@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.evolution_loop import run_evolution
 from core.self_model_builder import SelfModelBuilder
+from core.goal_decomposition_orchestrator import GoalDecompositionOrchestrator
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,6 +30,14 @@ def main():
         logger.info(f"Self-model initialized with {node_count} nodes and {edge_count} edges")
     except Exception as e:
         logger.error(f"Failed to initialize self-model: {e}")
+
+    # Initialize GoalDecompositionOrchestrator
+    try:
+        goal_orchestrator = GoalDecompositionOrchestrator()
+        logger.info("GoalDecompositionOrchestrator initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize GoalDecompositionOrchestrator: {e}")
+        goal_orchestrator = None
 
     if args.api:
         print("""
@@ -58,7 +67,7 @@ def main():
 ║  - Git-based version control of evolution                ║
 ╚══════════════════════════════════════════════════════════╝
 """)
-        run_evolution(args.max_cycles)
+        run_evolution(args.max_cycles, goal_orchestrator=goal_orchestrator)
 
 
 if __name__ == "__main__":

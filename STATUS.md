@@ -1,26 +1,26 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-05 12:04:16
+> Generated: 2026-06-05 12:07:40
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 50 |
-| Generation | 22 |
-| Last Activity | 2026-06-05 11:59:55 |
-| Speed | ~17.2 cycles/hour |
+| Current Cycle | 51 |
+| Generation | 23 |
+| Last Activity | 2026-06-05 12:04:54 |
+| Speed | ~17.0 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 75.6% (31/41) |
+| Total Success Rate | 76.2% (32/42) |
 | Recent Success Rate (last 20) | 100.0% (20/20) |
-| Capabilities Developed | 32 |
-| Goals Completed | 33 |
-| Goals Pending | 3 |
+| Capabilities Developed | 33 |
+| Goals Completed | 34 |
+| Goals Pending | 2 |
 
 ## Capabilities Acquired
 
@@ -56,16 +56,15 @@
 30. Build a dependency-aware scheduling system that reads the system model (or a simple dependency manif
 31. Create a self-consistency test suite for introspection modules: for each reflection cycle, automatic
 32. Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs
+33. Build a machine-readable self-model as a knowledge graph capturing all codebase components, their in
 
 ## Current Goals (Pending)
 
-- [8/10] Design and integrate a hierarchical goal decomposition system that automatically breaks abstract evolution goals into concrete, ordered sub-goals based on current dependency graph and module readiness.
 - [7/10] Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.
 - [6/10] Create a performance monitoring and optimization system
 
 ## Completed Goals
 
-- ~~Implement a mutation engine hardening module that validates AST-level correctness of all generated mutations before applying them, using a combination of syntax checks, type inference, and a sandboxed execution test for trivial cases (e.g., no syntax errors, no undefined variable references). This directly addresses the root cause of repeated failures in the self-modification pipeline.~~ (06-05 11:25)
 - ~~Build an integration test suite that runs the full self-modification pipeline (goal_generator -> mutation engine -> AST rewriter -> test runner -> failure analyzer) on a controlled, non-critical module (e.g., a dummy utility function) after each evolution cycle, and reports pass/fail status with error traces to the reflection system. This prevents brittle integrations from silently degrading the system.~~ (06-05 11:27)
 - ~~Implement a meta-mutation mechanism that periodically rewrites core meta-modules (e.g., reflection parser, meta-evaluation loop, orchestrator) based on aggregated performance statistics and insights, enabling second-order evolution of the evolution loop itself.~~ (06-05 11:32)
 - ~~Create a rollback mechanism for core modules that automatically reverts the last mutation if the integration test suite fails, and logs the failure as a high-priority insight for the goal generator. This adds a safety net to the evolution loop, allowing the agent to recover from unstable changes without manual intervention.~~ (06-05 11:35)
@@ -75,28 +74,28 @@
 - ~~Create a self-consistency test suite for introspection modules: for each reflection cycle, automatically generate test cases that check that the reflection parser output can be parsed by the goal generator without errors, and that the goal generator output can be consumed by the mutation engine, failing and rolling back any change that breaks this contract.~~ (06-05 11:52)
 - ~~Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs into a normalized format consumable by goal_generator and mutation_engine, including runtime validation and automated adaptation on mismatch detection.~~ (06-05 11:58)
 - ~~Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.~~ (06-05 12:04)
+- ~~Design and integrate a hierarchical goal decomposition system that automatically breaks abstract evolution goals into concrete, ordered sub-goals based on current dependency graph and module readiness.~~ (06-05 12:07)
 
 ## Knowledge Base
 
 | Category | Count |
 |----------|-------|
 | Insights | 200 |
-| Successful Strategies | 218 |
+| Successful Strategies | 230 |
 | Failed Approaches | 31 |
 
 ### Recent Insights
 
-- [06-05 12:03] Successfully modified self_model/builder.py to: Implement the SelfModelBuilder orchestrator that runs the scanner, analy
-- [06-05 12:03] Successfully modified self_model/__init__.py to: Add imports and expose the main classes: KnowledgeGraph, ComponentScann
-- [06-05 12:03] Successfully modified tests/test_self_model.py to: Create test suite that: (1) runs builder on a small test directory, (
-- [06-05 12:03] Successfully modified scripts/build_self_model.py to: Create a standalone script that imports SelfModelBuilder, runs it 
-- [06-05 12:04] Successfully modified main.py to: Add an import and call to SelfModelBuilder at startup (or on a schedule) to keep the s
+- [06-05 12:06] Successfully modified goal_decomposition/orchestrator.py to: Implement GoalDecompositionOrchestrator that: (1) accepts a
+- [06-05 12:06] Successfully modified main.py to: Integrate GoalDecompositionOrchestrator into the main loop: after self-model update, c
+- [06-05 12:07] Successfully modified tests/test_goal_decomposition.py to: Create comprehensive test suite: (1) test parsing of various 
+- [06-05 12:07] Successfully modified scripts/decompose_goal.py to: Create standalone script that takes a goal description as argument a
+- [06-05 12:07] Successfully modified self_model/builder.py to: Extend SelfModelBuilder to expose a method get_dependency_graph() that r
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 39 | Integrate the failure analysis module with the goal generato | SUCCESS |
 | 41 | Implement a mutation engine hardening module that validates  | SUCCESS |
 | 42 | Build an integration test suite that runs the full self-modi | SUCCESS |
 | 43 | Implement a meta-mutation mechanism that periodically rewrit | SUCCESS |
@@ -106,6 +105,7 @@
 | 47 | Build a dependency-aware scheduling system that reads the sy | SUCCESS |
 | 48 | Create a self-consistency test suite for introspection modul | SUCCESS |
 | 49 | Implement a canonical schema alignment layer that validates  | SUCCESS |
+| 50 | Build a machine-readable self-model as a knowledge graph cap | SUCCESS |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_
