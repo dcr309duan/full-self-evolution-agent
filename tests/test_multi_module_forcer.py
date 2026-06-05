@@ -44,6 +44,46 @@ class TestMultiModuleForcer(unittest.TestCase):
         with open(module_path, 'r') as f:
             return json.load(f)
 
+    def test_force_multi_module_change_returns_dict_with_at_least_two_entries_when_nash_detected(self):
+        """Test that force_multi_module_change returns a dict with at least 2 module entries when nash is detected."""
+        # Set up modules in Nash equilibrium state
+        self._create_mock_module("module_a", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
+        self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
+
+        # Reinitialize forcer with updated modules
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+
+        # Force multi-module change and get the result
+        result = self.forcer.force_multi_module_change()
+
+        # Verify result is a dict with at least 2 module entries
+        self.assertIsInstance(result, dict, "Result should be a dict")
+        self.assertGreaterEqual(len(result), 2, "Dict should have at least 2 module entries")
+
+        # Verify each entry has expected structure
+        for module_name, changes in result.items():
+            self.assertIn("metric", changes, f"Changes for {module_name} should include 'metric'")
+            self.assertIn("threshold", changes, f"Changes for {module_name} should include 'threshold'")
+
+    def test_force_multi_module_change_returns_empty_dict_when_no_nash(self):
+        """Test that force_multi_module_change returns an empty dict when no nash is detected."""
+        # Modules are already set up with different metrics (no Nash equilibrium)
+        result = self.forcer.force_multi_module_change()
+
+        # Verify result is an empty dict
+        self.assertIsInstance(result, dict, "Result should be a dict")
+        self.assertEqual(len(result), 0, "Dict should be empty when no Nash equilibrium is detected")
+
+        # Verify no modules were modified
+        config_a = self._read_module_config("module_a")
+        config_b = self._read_module_config("module_b")
+        config_c = self._read_module_config("module_c")
+
+        self.assertEqual(config_a["metric"], 0.5, "Module A should remain unchanged")
+        self.assertEqual(config_b["metric"], 0.7, "Module B should remain unchanged")
+        self.assertEqual(config_c["metric"], 0.2, "Module C should remain unchanged")
+
     def test_equilibrium_detection_triggers_coordinated_change(self):
         """Test that detecting equilibrium triggers a coordinated change across modules."""
         # Set up modules in equilibrium state

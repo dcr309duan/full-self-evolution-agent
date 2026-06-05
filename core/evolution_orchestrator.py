@@ -7,6 +7,7 @@ Integrates reflection parsing to close the feedback loop between mutation outcom
 Includes a 'fitness landscape mutation' phase that runs every 3 cycles to generate new tests targeting weak areas.
 Includes meta_goal_generator integration that analyzes statistics every 10 cycles and injects disruptive goals.
 Includes a 50-cycle trigger that reads orchestrator state to find clean integration points for targeted evolution.
+Includes Nash equilibrium detection and coordinated mutation after each evolution cycle.
 """
 
 import time
@@ -26,6 +27,34 @@ from failure_analysis import FailureAnalysis
 from meta_evaluation import MetaEvaluation
 from reflection_parser import ReflectionParser  # New import for reflection parsing
 from meta_goal_generator import MetaGoalGenerator  # Import for meta goal generation
+
+# Import guard for Nash equilibrium integration modules
+try:
+    from nash_detector import NashDetector
+    NASH_DETECTOR_AVAILABLE = True
+except ImportError:
+    NashDetector = None
+    NASH_DETECTOR_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("nash_detector module not available; Nash equilibrium detection disabled")
+
+try:
+    from multi_module_forcer import MultiModuleForcer
+    MULTI_MODULE_FORCER_AVAILABLE = True
+except ImportError:
+    MultiModuleForcer = None
+    MULTI_MODULE_FORCER_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("multi_module_forcer module not available; coordinated forcing disabled")
+
+try:
+    from coordinated_mutation_runner import CoordinatedMutationRunner
+    COORDINATED_MUTATION_RUNNER_AVAILABLE = True
+except ImportError:
+    CoordinatedMutationRunner = None
+    COORDINATED_MUTATION_RUNNER_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("coordinated_mutation_runner module not available; coordinated mutation runner disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +85,35 @@ class EvolutionOrchestrator:
         self.meta_evaluation = MetaEvaluation(self.config.get("meta_evaluation", {}))
         self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))  # New subsystem
         self.meta_goal_generator = MetaGoalGenerator(self.config.get("meta_goal_generator", {}))  # Meta goal generator
+
+        # Initialize Nash equilibrium integration modules if available
+        self.nash_detector = None
+        self.multi_module_forcer = None
+        self.coordinated_mutation_runner = None
+        
+        if NASH_DETECTOR_AVAILABLE:
+            try:
+                self.nash_detector = NashDetector(self.config.get("nash_detector", {}))
+                logger.info("NashDetector initialized successfully")
+            except Exception as e:
+                logger.error("Failed to initialize NashDetector: %s", e)
+                self.nash_detector = None
+        
+        if MULTI_MODULE_FORCER_AVAILABLE:
+            try:
+                self.multi_module_forcer = MultiModuleForcer(self.config.get("multi_module_forcer", {}))
+                logger.info("MultiModuleForcer initialized successfully")
+            except Exception as e:
+                logger.error("Failed to initialize MultiModuleForcer: %s", e)
+                self.multi_module_forcer = None
+        
+        if COORDINATED_MUTATION_RUNNER_AVAILABLE:
+            try:
+                self.coordinated_mutation_runner = CoordinatedMutationRunner(self.config.get("coordinated_mutation_runner", {}))
+                logger.info("CoordinatedMutationRunner initialized successfully")
+            except Exception as e:
+                logger.error("Failed to initialize CoordinatedMutationRunner: %s", e)
+                self.coordinated_mutation_runner = None
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -798,62 +856,4 @@ class EvolutionOrchestrator:
         calls meta_goal_generator.analyze(), and if a disruptive goal is returned, injects it
         into the goal queue with high priority, bypassing normal feasibility checks.
         """
-        logger.info("Running meta goal generator analysis (cycle %d)", self.cycle_count)
-        
-        try:
-            # Collect current statistics for analysis
-            current_stats = {
-                "cycle_count": self.cycle_count,
-                "subsystem_scores": self.subsystem_scores.copy(),
-                "consecutive_failures": self.consecutive_failures.copy(),
-                "goal_queue_size": len(self.goal_queue),
-                "evolution_history": self.evolution_history[-10:] if self.evolution_history else [],
-                "timestamp": time.time()
-            }
-            
-            # Call meta_goal_generator.analyze() with current statistics
-            disruptive_goal = self.meta_goal_generator.analyze(current_stats)
-            
-            if disruptive_goal is not None:
-                # Validate the disruptive goal structure
-                if isinstance(disruptive_goal, dict) and "description" in disruptive_goal and "subsystem" in disruptive_goal:
-                    goal_description = disruptive_goal["description"]
-                    target_subsystem = disruptive_goal["subsystem"]
-                    
-                    # Use high priority (0 is highest) to ensure it gets processed quickly
-                    priority = 0
-                    
-                    # Inject the disruptive goal into the goal queue with high priority
-                    # Bypass normal goal feasibility checks to guarantee exploration
-                    self.add_goal(priority, goal_description, target_subsystem)
-                    
-                    logger.info("Injected disruptive goal '%s' for subsystem '%s' with priority %d",
-                              goal_description, target_subsystem, priority)
-                    
-                    # Log the meta goal injection
-                    log_entry = {
-                        "timestamp": time.time(),
-                        "phase": "meta_goal_analysis",
-                        "disruptive_goal": disruptive_goal,
-                        "priority": priority,
-                        "current_stats_summary": {
-                            "avg_score": sum(self.subsystem_scores.values()) / len(self.subsystem_scores) if self.subsystem_scores else 0,
-                            "total_failures": sum(self.consecutive_failures.values()),
-                            "goal_queue_size": len(self.goal_queue)
-                        }
-                    }
-                    
-                    try:
-                        with open("meta_goal_log.json", 'a') as f:
-                            f.write(json.dumps(log_entry) + '\n')
-                    except Exception as e:
-                        logger.error("Failed to log meta goal injection: %s", e)
-                else:
-                    logger.warning("Invalid disruptive goal structure returned: %s", disruptive_goal)
-            else:
-                logger.debug("No disruptive goal returned from meta goal generator")
-                
-        except Exception as e:
-            logger.exception("Error during meta goal generator analysis: %s", e)
-
-   
+       

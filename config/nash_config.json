@@ -2,5 +2,9 @@
   "window_size": 20,
   "improvement_threshold": 0.05,
   "min_stable_cycles": 5,
-  "max_multi_module_attempts": 10
+  "max_multi_module_attempts": 10,
+  "equilibrium_threshold": 3,
+  "history_size": 20,
+  "coordinated_mutation_count": 2,
+  "enabled": true
 }

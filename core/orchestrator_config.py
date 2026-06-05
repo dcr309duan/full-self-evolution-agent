@@ -34,3 +34,12 @@ MIN_MODULES_FOR_COORDINATION = 3
 # Maximum number of modules that can participate in a coordinated mutation phase.
 # Prevents coordination from becoming too broad and difficult to manage.
 MAX_COORDINATED_MODULES = 5
+
+# Flag to enable or disable Nash equilibrium detection specifically for the Nash detector module.
+ENABLE_NASH_DETECTION = True
+
+# Number of stable cycles required to confirm Nash equilibrium.
+NASH_STABLE_CYCLES_THRESHOLD = 3
+
+# Number of cycles between Nash equilibrium checks (overrides NASH_CHECK_INTERVAL for Nash detector).
+NASH_CHECK_INTERVAL = 5

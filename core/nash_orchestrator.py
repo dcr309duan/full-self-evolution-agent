@@ -253,3 +253,47 @@ class NashOrchestrator:
             "failed": failed,
             "success_rate": successful / total if total > 0 else 0.0
         }
+
+    def _detect_nash_equilibrium(self):
+        """
+        Detect if a Nash equilibrium exists across module pairs.
+        Returns True if equilibrium detected, False otherwise.
+        """
+        equilibria = self._detect_equilibria()
+        return len(equilibria) > 0
+
+    def _force_coordinated_changes(self):
+        """
+        Force coordinated changes based on detected equilibrium.
+        Generates and executes a change plan.
+        Returns the execution result.
+        """
+        equilibria = self._detect_equilibria()
+        if not equilibria:
+            return {"status": "no_equilibrium", "message": "No Nash equilibria detected"}
+
+        plan = self._generate_change_plan(equilibria)
+        if plan:
+            self.history["plans"].append(plan)
+            self._save_history()
+
+        result = self._execute_plan(plan)
+        return result
+
+    def run_detection_loop(self):
+        """
+        Run the detection loop: every cycle, call detect_nash_equilibrium(),
+        if True, call force_coordinated_changes() and execute the proposed changes.
+        """
+        self.running = True
+        while self.running:
+            if self._detect_nash_equilibrium():
+                result = self._force_coordinated_changes()
+                if result.get("status") == "success":
+                    # Changes were applied, log success
+                    self._log_error(f"Coordinated changes applied: {result}")
+                else:
+                    self._log_error(f"Failed to apply coordinated changes: {result}")
+                time.sleep(max(1, self.check_interval // 2))
+            else:
+                time.sleep(self.check_interval)

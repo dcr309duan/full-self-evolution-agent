@@ -8,6 +8,24 @@ from .capability_bankruptcy import (
     __all__
 )
 
+try:
+    from .nash_detector_and_forcer import (
+        NashDetectorAndForcer,
+        NashDetectorAndForcerConfig,
+        DetectionResult,
+        ForcingResult
+    )
+except ImportError as e:
+    import logging
+    logging.getLogger(__name__).warning(
+        f"Failed to import nash_detector_and_forcer: {e}. "
+        "Nash detection and forcing functionality will not be available."
+    )
+    NashDetectorAndForcer = None
+    NashDetectorAndForcerConfig = None
+    DetectionResult = None
+    ForcingResult = None
+
 def __getattr__(name):
     if name in ('NashEquilibriumDetector', 'detect_nash_equilibrium', 'NashDetectorConfig'):
         import importlib
@@ -29,6 +47,10 @@ def __getattr__(name):
         import importlib
         mod = importlib.import_module('.orchestrator_hook', __package__)
         return getattr(mod, name)
+    if name in ('NashDetectorAndForcer', 'NashDetectorAndForcerConfig', 'DetectionResult', 'ForcingResult'):
+        if NashDetectorAndForcer is None:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r} (import failed)")
+        return globals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from .coordinated_mutation_engine import CoordinatedMutationEngine, MutationConfig, MutationResult
@@ -59,4 +81,8 @@ __all__ = [
     'multi_module_forcer',
     'equilibrium_detector',
     'orchestrator_hook',
+    'NashDetectorAndForcer',
+    'NashDetectorAndForcerConfig',
+    'DetectionResult',
+    'ForcingResult',
 ]
