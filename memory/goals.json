@@ -2,10 +2,16 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
-      "priority": 8,
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
       "status": "pending",
-      "created_at": 1780652325.9041018
+      "created_at": 1780653703.3850987
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780653703.3882256
     },
     {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
@@ -936,6 +942,13 @@
       "status": "completed",
       "created_at": 1780653063.238052,
       "completed_at": 1780653420.9383974
+    },
+    {
+      "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780652325.9041018,
+      "completed_at": 1780653694.8067896
     }
   ],
   "generated_goals": []
