@@ -316,3 +316,5 @@
 [2026-06-05 10:29:17] Cycle 25: Goal completed: Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the failure type (syntax, semantic, test timeout, assertion error) into a structured failure history. After each failure, the selector probabilistically chooses from a pool of 3 mutation strategies (random AST splicing, template-based replacement, LLM-guided rewrite) with probabilities updated via a simple bandit algorithm (e.g., epsilon-greedy) favoring strategies that have produced successful mutations in the past 10 attempts. This directly couples failure analysis with adaptive mutation, breaking the cycle of repeated failures.
 [2026-06-05 10:29:17] Cycle 25: Phase 2.5: Mutation cycle
 [2026-06-05 10:29:32] Cycle 25: Mutations: 3, successes: 1
+[2026-06-05 10:29:35] Cycle 25: === Cycle Complete ===
+

@@ -1,6 +1,6 @@
 {
   "cycle_count": 25,
-  "current_generation": 1,
+  "current_generation": 2,
   "last_evolution_time": 1780626400.5938618,
   "capabilities": [
     "Develop web scraping capability to gather knowledge from the internet",
@@ -13,7 +13,8 @@
     "Implement a failure analysis module that classifies each failed task as either an implementation bug",
     "Build an API server to expose agent capabilities externally",
     "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the",
-    "Integrate the mutation engine with the existing testing framework to create a closed evolutionary lo"
+    "Integrate the mutation engine with the existing testing framework to create a closed evolutionary lo",
+    "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the f"
   ],
   "history": [
     {
@@ -135,6 +136,12 @@
       "goal": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
       "success": true,
       "timestamp": 1780626370.5922837
+    },
+    {
+      "cycle": 25,
+      "goal": "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the failure type (syntax, semantic, test timeout, assertion error) into a structured failure history. After each failure, the selector probabilistically chooses from a pool of 3 mutation strategies (random AST splicing, template-based replacement, LLM-guided rewrite) with probabilities updated via a simple bandit algorithm (e.g., epsilon-greedy) favoring strategies that have produced successful mutations in the past 10 attempts. This directly couples failure analysis with adaptive mutation, breaking the cycle of repeated failures.",
+      "success": true,
+      "timestamp": 1780626575.9940236
     }
   ],
   "status": "evolving"
