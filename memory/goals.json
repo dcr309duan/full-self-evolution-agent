@@ -2,17 +2,11 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a failure analysis module that classifies each failed task as either an implementation bug or a fundamental design flaw, using patterns in error logs and test results, and then logs this classification to guide future evolution priorities (e.g., prioritize refactoring over new features when design flaws dominate). This closes a key gap in robust failure analysis.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780625287.1252034
-    },
-    {
       "description": "Build an API server to expose agent capabilities externally",
       "priority": 7,
       "status": "pending",
       "created_at": 1780623346.364249,
-      "consecutive_failures": 1
+      "consecutive_failures": 2
     },
     {
       "description": "Develop multi-file code analysis and refactoring capability",
@@ -86,6 +80,13 @@
       "status": "completed",
       "created_at": 1780625287.1245415,
       "completed_at": 1780625525.6834984
+    },
+    {
+      "description": "Implement a failure analysis module that classifies each failed task as either an implementation bug or a fundamental design flaw, using patterns in error logs and test results, and then logs this classification to guide future evolution priorities (e.g., prioritize refactoring over new features when design flaws dominate). This closes a key gap in robust failure analysis.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780625287.1252034,
+      "completed_at": 1780625734.7317593
     }
   ],
   "generated_goals": []

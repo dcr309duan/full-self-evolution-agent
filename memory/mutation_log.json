@@ -86,5 +86,49 @@
         "timestamp": 1780625232.5276856
       }
     ]
+  },
+  {
+    "timestamp": 1780625931.0907333,
+    "results": [
+      {
+        "parent_a": "memoize",
+        "parent_b": "flatten",
+        "operator": "hybrid",
+        "code": "def memoized_flatten(func):\n    cache = {}\n    def wrapper(lst):\n        key = tuple(lst) if isinstance(lst, list) else lst\n        if key not in cache:\n            result = []\n            for item in lst:\n                if isinstance(item, list):\n                    result.extend(wrapper(item))\n                else:\n                    result.append(item)\n            cache[key] = result\n        return cache[key]\n    return wrapper",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: memoized_flatten\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780625918.7393594
+      },
+      {
+        "parent_a": "retry",
+        "parent_b": "flatten",
+        "operator": "crossover",
+        "code": "def retry_flatten(func, max_attempts=3, delay=1):\n    import time\n    def attempt_flatten():\n        result = func()\n        if isinstance(result, list):\n            flat = []\n            for item in result:\n                if isinstance(item, list):\n                    flat.extend(retry_flatten(lambda: item, max_attempts, delay))\n                else:\n                    flat.append(item)\n            return flat\n        return result\n    for attempt in range(max_attempts):\n        try:\n            return attempt_flatten()\n        except Exception as e:\n            if attempt == max_attempts - 1: raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_flatten\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780625929.3590124
+      },
+      {
+        "parent_a": "retry",
+        "parent_b": "fibonacci",
+        "operator": "hybrid",
+        "code": "def retry_fibonacci(max_attempts=3, delay=1):\n    import time\n    a, b = 0, 1\n    for attempt in range(max_attempts):\n        try:\n            result = a\n            a, b = b, a + b\n            return result\n        except Exception as e:\n            if attempt == max_attempts - 1: raise\n            time.sleep(delay)\n            a, b = 0, 1",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: retry_fibonacci\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780625931.0874534
+      }
+    ]
   }
 ]
