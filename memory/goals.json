@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a dependency-aware goal feasibility estimator that penalizes goals requiring untested cross-component interactions by analyzing the current integration test coverage and schema alignment status, and automatically blocks goals whose prerequisites (e.g., schema alignment layer) are not yet met.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780633595.4999726
-    },
-    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -320,6 +314,13 @@
       "status": "completed",
       "created_at": 1780633595.4985788,
       "completed_at": 1780634031.692968
+    },
+    {
+      "description": "Create a dependency-aware goal feasibility estimator that penalizes goals requiring untested cross-component interactions by analyzing the current integration test coverage and schema alignment status, and automatically blocks goals whose prerequisites (e.g., schema alignment layer) are not yet met.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780633595.4999726,
+      "completed_at": 1780634274.5245266
     }
   ],
   "generated_goals": []
