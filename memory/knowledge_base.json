@@ -1,21 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified modules/schema_alignment_checker.py to: Add a method predict_conflicts(module_path, proposed_changes) that simulates schema alignment checks without actually modifying files. Returns a conflict score (0.0 to 1.0) based on how many data contracts would be violated. This enables the predictor to estimate impact without execution.",
-      "timestamp": 1780646744.374036,
-      "cycle": 120
-    },
-    {
-      "content": "Successfully modified modules/failure_context_recorder.py to: Add support for recording 'predicted failures' with fields: mutation_description, predicted_conflict_score, affected_modules, reasoning. This ensures predicted failures are logged in the same format as actual failures for pattern analysis.",
-      "timestamp": 1780646757.592233,
-      "cycle": 120
-    },
-    {
-      "content": "Successfully modified tests/test_static_predictor.py to: Create a test that: (1) sets up a small dependency graph with 3 modules, (2) proposes a mutation that would break a schema contract, (3) verifies the predictor aborts with score > threshold, (4) verifies no actual mutation was executed, (5) verifies failure insight was logged.",
-      "timestamp": 1780646769.1702785,
-      "cycle": 120
-    },
-    {
       "content": "Successfully modified config/evolution_config.json to: Add a new config section: 'static_predictor': {'enabled': true, 'conflict_threshold': 0.7, 'max_affected_modules': 5}. This allows the threshold to be tuned without code changes.",
       "timestamp": 1780646773.2382865,
       "cycle": 120
@@ -999,6 +984,21 @@
       "content": "[研究] Adaptive Goal Prioritization: Learning to Rank and Filter Self-Generated Goals Based on Historical Success Rates: Adaptive goal prioritization in self-evolving AI systems leverages reinforcement learning (RL) and m",
       "timestamp": 1780654722.1160371,
       "cycle": 154
+    },
+    {
+      "content": "Successfully modified tests/test_core_evolution_loop.py to: Create a minimal end-to-end integration test that: 1) Mocks the goal_generator to produce a trivial goal (e.g., 'add a comment to mutation_engine.py'). 2) Runs mutation_engine to apply the change. 3) Executes test_ecosystem_engine to validate. 4) Runs evolution_orchestrator to accept/reject. 5) Completes within 3 seconds using lightweight mocks and timeouts. 6) Returns pass/fail status with timing.",
+      "timestamp": 1780654819.3048773,
+      "cycle": 155
+    },
+    {
+      "content": "Successfully modified goal_generator.py to: Add capability to generate 'complexity reduction' goals when triggered by rollback events. These goals should: 1) Identify the module that caused the failure. 2) Generate a goal to reduce its complexity (e.g., 'Reduce LOC in mutation_engine.py by removing dead code'). 3) Set priority to 'high' for these goals.",
+      "timestamp": 1780654964.9157856,
+      "cycle": 155
+    },
+    {
+      "content": "Successfully modified self_diagnosis_module.py to: Add monitoring for core loop test failures: 1) Track failure frequency per module. 2) After 3 consecutive failures on the same module, flag it for complexity reduction. 3) Generate a diagnostic report with suggested simplifications.",
+      "timestamp": 1780655027.717744,
+      "cycle": 155
     }
   ],
   "learned_patterns": [],
@@ -1722,6 +1722,21 @@
       "approach": "modify goal_generator.py: Add a new goal type: 'CONSOLIDATION_GOAL' that triggers when simplicity_cap_enforcer reports consolidation_required=True. These goals should target: 1) Merging redundant functions across modules. 2) Removing dead code paths. 3) Refactoring to reduce LOC without losing functionality.",
       "reason": "Syntax error: '[' was never closed (<unknown>, line 912)",
       "timestamp": 1780654663.9524486
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Add pre-mutation and post-mutation hooks to run the core evolution loop test. Implement automatic rollback logic: if post-mutation test fails, revert the mutation and generate a new mutation that reduces complexity (e.g., removes dead code, consolidates duplicate logic). Add a 'complexity_reduction_mode' flag to guide mutation generation.",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 812)",
+      "timestamp": 1780654863.1106188
+    },
+    {
+      "approach": "modify mutation_engine.py: Add a new mutation type 'complexity_reduction' that: 1) Scans target module for unused imports, duplicate functions, or overly long methods. 2) Generates a mutation that simplifies the code (e.g., removes unused import, merges two similar functions). 3) Prioritizes changes that reduce LOC by at least 5%. 4) Returns the simplified code with a 'complexity_reduction' tag.",
+      "reason": "Safety check failed",
+      "timestamp": 1780654913.9501023
+    },
+    {
+      "approach": "modify test_ecosystem_engine.py: Optimize test loading and execution to ensure the core loop test can complete within 3 seconds. Add a 'fast_mode' flag that: 1) Skips non-core tests. 2) Uses cached module imports. 3) Sets a 2.5-second timeout. 4) Returns results with timing breakdown.",
+      "reason": "Safety check failed",
+      "timestamp": 1780654980.300865
     }
   ],
   "successful_strategies": [
@@ -6319,6 +6334,36 @@
       "strategy": "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of code across all core modules. If the new total exceeds the previous total by more than 5%, automatically revert the change and log the complexity debt. This forces consolidation and deletion of dead code before adding new features.",
       "outcome": "3/5 steps succeeded",
       "timestamp": 1780654686.0199149
+    },
+    {
+      "strategy": "modify tests/test_core_evolution_loop.py: Create a minimal end-to-end integration test that: 1) Mocks the goal_generator to produce a trivial goal (e.g., 'add a comment to mutation_engine.py'). 2) Runs mutation_engine to apply the change. 3) Executes test_ecosystem_engine to validate. 4) Runs evolution_orchestrator to accept/reject. 5) Completes within 3 seconds using lightweight mocks and timeouts. 6) Returns pass/fail status with timing.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780654819.2817514
+    },
+    {
+      "strategy": "modify goal_generator.py: Add capability to generate 'complexity reduction' goals when triggered by rollback events. These goals should: 1) Identify the module that caused the failure. 2) Generate a goal to reduce its complexity (e.g., 'Reduce LOC in mutation_engine.py by removing dead code'). 3) Set priority to 'high' for these goals.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780654964.894364
+    },
+    {
+      "strategy": "modify self_diagnosis_module.py: Add monitoring for core loop test failures: 1) Track failure frequency per module. 2) After 3 consecutive failures on the same module, flag it for complexity reduction. 3) Generate a diagnostic report with suggested simplifications.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780655027.6914306
+    },
+    {
+      "strategy": "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation → test_ecosystem_engine → evolution_orchestrator) that must pass within 3 seconds. Run this test before and after every mutation. If it fails after a mutation, trigger an automatic rollback and generate a new mutation that reduces complexity instead.",
+      "outcome": "3/6 steps succeeded",
+      "timestamp": 1780655027.7406259
+    },
+    {
+      "strategy": "mutation:hybrid(prime_fibonacci_prime_factors,retry_prime_factorization)",
+      "outcome": "Created fibonacci_prime_factors_with_retry, score=0.4",
+      "timestamp": 1780655032.0331643
+    },
+    {
+      "strategy": "mutation:crossover(flatten_fibonacci,retry_flatten_fibonacci)",
+      "outcome": "Created persistent_fibonacci_split, score=0.6",
+      "timestamp": 1780655035.0228956
     }
   ],
   "capabilities_developed": []

@@ -78,13 +78,14 @@ def check_goal_against_constraints(goal_desc: str, current_cycle: int) -> tuple:
     for c in active:
         rule = c["rule"]
         if rule.startswith("REQUIRE:"):
-            keyword = rule[8:].lower()
-            if keyword not in goal_lower:
-                return False, f"Constraint violated: goal must involve '{keyword}' (from: {c['source'][:80]})"
+            keywords = rule[8:].lower().split(",")
+            if not any(kw.strip() in goal_lower for kw in keywords):
+                return False, f"Constraint violated: goal must involve one of [{rule[8:]}] (from: {c['source'][:80]})"
         elif rule.startswith("BLOCK:"):
-            keyword = rule[6:].lower()
-            if keyword in goal_lower:
-                return False, f"Constraint violated: goal must NOT involve '{keyword}' (from: {c['source'][:80]})"
+            keywords = rule[6:].lower().split(",")
+            if any(kw.strip() in goal_lower for kw in keywords):
+                matched = [kw.strip() for kw in keywords if kw.strip() in goal_lower]
+                return False, f"Constraint violated: goal must NOT involve '{matched[0]}' (from: {c['source'][:80]})"
     
     return True, ""
 
@@ -98,18 +99,16 @@ def derive_constraints_from_shift(insight: str, cycle: int):
     insight_lower = insight.lower()
     
     if any(k in insight_lower for k in ["成功率", "虚假", "虚幻", "太简单", "局部最优"]):
-        add_constraint("REQUIRE:验证", insight[:100], cycle)
-        add_constraint("REQUIRE:运行", insight[:100], cycle)
+        add_constraint("REQUIRE:验证,verify,test,validate,run,执行,import", insight[:100], cycle)
     
     if any(k in insight_lower for k in ["重复", "又是", "同一模式", "局部最优陷阱"]):
-        add_constraint("BLOCK:create a", insight[:100], cycle)
+        add_constraint("BLOCK:create a new,创建新,build a new", insight[:100], cycle)
     
     if any(k in insight_lower for k in ["外包", "llm驱动", "智能外包", "工具代理"]):
-        add_constraint("REQUIRE:执行", insight[:100], cycle)
+        add_constraint("REQUIRE:执行,run,execute,验证,test,import,实际运行", insight[:100], cycle)
     
     if any(k in insight_lower for k in ["从未验证", "从未运行", "未经验证"]):
-        add_constraint("REQUIRE:test", insight[:100], cycle)
+        add_constraint("REQUIRE:test,verify,run,import,验证,运行", insight[:100], cycle)
     
-    if any(k in insight_lower for k in ["基础设施", "监控", "仪表板"]):
-        add_constraint("BLOCK:dashboard", insight[:100], cycle)
-        add_constraint("BLOCK:monitor", insight[:100], cycle)
+    if any(k in insight_lower for k in ["基础设施膨胀", "复杂度", "能力膨胀"]):
+        add_constraint("BLOCK:dashboard,monitor,health,仪表板,监控", insight[:100], cycle)

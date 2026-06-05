@@ -1229,5 +1229,49 @@
         "timestamp": 1780653703.3552725
       }
     ]
+  },
+  {
+    "timestamp": 1780655035.0367076,
+    "results": [
+      {
+        "parent_a": "is_fibonacci_prime",
+        "parent_b": "retry",
+        "operator": "mutate",
+        "code": "def retry_fibonacci_prime(func, n, max_attempts=3, delay=1):\n    import time\n    if n < 0:\n        return False\n    a, b = 0, 1\n    while a <= n:\n        if a == n:\n            if n < 2:\n                return False\n            for attempt in range(max_attempts):\n                try:\n                    for i in range(2, int(n**0.5) + 1):\n                        if n % i == 0:\n                            return False\n                    return True\n                except Exception as e:\n                    if attempt == max_attempts - 1:\n                        raise\n                    time.sleep(delay)\n        a, b = b, a + b\n    return False",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.2,
+          "stdout": "FUNCTION: retry_fibonacci_prime\nSCORE: 1/5\n"
+        },
+        "timestamp": 1780655029.6525898
+      },
+      {
+        "parent_a": "prime_fibonacci_prime_factors",
+        "parent_b": "retry_prime_factorization",
+        "operator": "hybrid",
+        "code": "def fibonacci_prime_factors_with_retry(limit, max_attempts=3):\n    import time\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def get_factors(x):\n        factors = []\n        d = 2\n        while d * d <= x:\n            while x % d == 0:\n                factors.append(d)\n                x //= d\n            d += 1\n        if x > 1:\n            factors.append(x)\n        return factors\n    \n    a, b = 0, 1\n    result = []\n    while len(result) < limit:\n        a, b = b, a + b\n        factors = []\n        for _ in range(max_attempts):\n            factors = get_factors(a)\n            if all(is_prime(f) for f in factors):\n                break\n            time.sleep(1)\n        result.append({a: sorted(factors)})\n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: fibonacci_prime_factors_with_retry\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780655032.0204577
+      },
+      {
+        "parent_a": "flatten_fibonacci",
+        "parent_b": "retry_flatten_fibonacci",
+        "operator": "crossover",
+        "code": "def persistent_fibonacci_split(limit, retries=2, delay=0.5):\n    import time\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(num**0.5) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def safe_flatten(data, depth=0):\n        result = []\n        for attempt in range(retries + 1):\n            try:\n                for item in data:\n                    if isinstance(item, list) and depth < 5:\n                        result.extend(safe_flatten(item, depth + 1))\n                    else:\n                        result.append(item)\n                return result\n            except Exception:\n                if attempt == retries:\n                    raise\n                time.sleep(delay)\n                result = []\n        return result\n    \n    if limit < 0:\n        raise ValueError(\"limit must be non-negative\")\n    \n    a, b = 0, 1\n    fib_sequence = []\n    for _ in range(limit + 1):\n        fib_sequence.append(a)\n        a, b = b, a + b\n    \n    nested = []\n    temp = []\n    for num in fib_sequence:\n        if is_prime(num):\n            if temp:\n                nested.append(temp)\n                temp = []\n            nested.append([num, num])\n        else:\n            temp.append(num)\n    if temp:\n        nested.append(temp)\n    \n    return safe_flatten(nested)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: persistent_fibonacci_split\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780655035.0098362
+      }
+    ]
   }
 ]

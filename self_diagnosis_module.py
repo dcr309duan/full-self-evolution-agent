@@ -114,6 +114,11 @@ class FragilityHotspotMiner:
         self._performance_monitor = PerformanceMonitor()
         self._test_suite_snapshots: List[Tuple[datetime, Set[str]]] = []
         self._ecological_stagnation_cycles = 30
+        # New monitoring attributes for core loop test failures
+        self._module_failure_counts: Dict[str, int] = defaultdict(int)
+        self._module_consecutive_failures: Dict[str, int] = defaultdict(int)
+        self._flagged_modules: Set[str] = set()
+        self._failure_history: Dict[str, List[datetime]] = defaultdict(list)
 
     def record_pair_failure(self, module_a: str, module_b: str, failure_type: str) -> None:
         """Record a failure for a module pair with a specific failure type."""
@@ -235,7 +240,8 @@ class FragilityHotspotMiner:
             "refactoring_goals": self.prioritize_refactoring_goals(),
             "total_pairs_tracked": len(self._pair_failures),
             "performance_correlations": self._performance_monitor.get_performance_impact_summary(),
-            "ecological_stagnation": self.detect_ecological_stagnation()
+            "ecological_stagnation": self.detect_ecological_stagnation(),
+            "core_loop_test_failures": self.get_core_loop_test_failure_report()
         }
 
     def correlate_failure_patterns_with_performance(self) -> List[Dict]:
@@ -382,6 +388,130 @@ class FragilityHotspotMiner:
         sorted_patterns = sorted(failure_patterns.items(), key=lambda x: x[1], reverse=True)
         return [pattern for pattern, count in sorted_patterns[:5]]
 
+    def record_core_loop_test_failure(self, module_name: str) -> None:
+        """
+        Record a core loop test failure for a specific module.
+        Tracks failure frequency and consecutive failures per module.
+        After 3 consecutive failures on the same module, flag it for complexity reduction.
+        """
+        now = datetime.now()
+        self._module_failure_counts[module_name] += 1
+        self._failure_history[module_name].append(now)
+        
+        # Update consecutive failure tracking
+        self._module_consecutive_failures[module_name] += 1
+        
+        # Check if we need to flag for complexity reduction
+        if self._module_consecutive_failures[module_name] >= 3:
+            self._flagged_modules.add(module_name)
+            logger.warning(f"Module '{module_name}' has {self._module_consecutive_failures[module_name]} "
+                          f"consecutive core loop test failures. Flagged for complexity reduction.")
+        
+        logger.debug(f"Recorded core loop test failure for module: {module_name} "
+                    f"(total: {self._module_failure_counts[module_name]}, "
+                    f"consecutive: {self._module_consecutive_failures[module_name]})")
+
+    def reset_consecutive_failures(self, module_name: str) -> None:
+        """
+        Reset consecutive failure count for a module when it passes a test.
+        """
+        if module_name in self._module_consecutive_failures:
+            self._module_consecutive_failures[module_name] = 0
+            logger.debug(f"Reset consecutive failures for module: {module_name}")
+
+    def get_module_failure_frequency(self, module_name: str) -> int:
+        """
+        Get the total failure frequency for a specific module.
+        """
+        return self._module_failure_counts.get(module_name, 0)
+
+    def get_consecutive_failures(self, module_name: str) -> int:
+        """
+        Get the number of consecutive failures for a specific module.
+        """
+        return self._module_consecutive_failures.get(module_name, 0)
+
+    def get_flagged_modules(self) -> Set[str]:
+        """
+        Get the set of modules flagged for complexity reduction.
+        """
+        return self._flagged_modules.copy()
+
+    def get_core_loop_test_failure_report(self) -> Dict:
+        """
+        Generate a diagnostic report with suggested simplifications for flagged modules.
+        """
+        report = {
+            "flagged_modules": [],
+            "failure_summary": {},
+            "suggested_simplifications": []
+        }
+        
+        # Build failure summary for all modules with failures
+        for module, count in self._module_failure_counts.items():
+            consecutive = self._module_consecutive_failures.get(module, 0)
+            report["failure_summary"][module] = {
+                "total_failures": count,
+                "consecutive_failures": consecutive,
+                "is_flagged": module in self._flagged_modules
+            }
+        
+        # Generate suggestions for flagged modules
+        for module in sorted(self._flagged_modules):
+            report["flagged_modules"].append({
+                "module": module,
+                "total_failures": self._module_failure_counts[module],
+                "consecutive_failures": self._module_consecutive_failures[module],
+                "suggested_simplifications": self._generate_simplification_suggestions(module)
+            })
+            
+            # Add to overall suggestions
+            suggestions = self._generate_simplification_suggestions(module)
+            for suggestion in suggestions:
+                report["suggested_simplifications"].append({
+                    "module": module,
+                    "suggestion": suggestion
+                })
+        
+        return report
+
+    def _generate_simplification_suggestions(self, module_name: str) -> List[str]:
+        """
+        Generate specific simplification suggestions for a flagged module.
+        """
+        suggestions = []
+        
+        # Check failure patterns
+        total_failures = self._module_failure_counts.get(module_name, 0)
+        consecutive = self._module_consecutive_failures.get(module_name, 0)
+        
+        if total_failures >= 10:
+            suggestions.append(f"Module '{module_name}' has {total_failures} total failures. "
+                              "Consider breaking it into smaller, more focused modules.")
+        
+        if consecutive >= 5:
+            suggestions.append(f"Module '{module_name}' has {consecutive} consecutive failures. "
+                              "Review the module's logic flow and consider simplifying conditional branches.")
+        
+        if consecutive >= 3:
+            suggestions.append(f"Module '{module_name}' has {consecutive} consecutive failures. "
+                              "Consider extracting complex logic into helper functions or sub-modules.")
+        
+        # Check if module appears in hotspot pairs
+        for pair_key in self._pair_failures:
+            if module_name in pair_key:
+                other_module = pair_key[0] if pair_key[1] == module_name else pair_key[1]
+                pair_failures = sum(len(times) for times in self._pair_failures[pair_key].values())
+                if pair_failures >= 3:
+                    suggestions.append(f"Module '{module_name}' frequently fails with '{other_module}' "
+                                      f"({pair_failures} failures). Consider reducing coupling between these modules.")
+        
+        if not suggestions:
+            suggestions.append(f"Module '{module_name}' has {consecutive} consecutive failures. "
+                              "Review the module for potential complexity issues and consider simplification.")
+        
+        return suggestions
+
 
 class DependencyFailureTracker:
     """
@@ -493,6 +623,16 @@ class DependencyFailureTracker:
         stagnation = self._hotspot_miner.detect_ecological_stagnation()
         if stagnation:
             issues.append(f"High priority: {stagnation['description']}")
+
+        # Add core loop test failure insights
+        core_loop_report = self._hotspot_miner.get_core_loop_test_failure_report()
+        if core_loop_report["flagged_modules"]:
+            for flagged in core_loop_report["flagged_modules"]:
+                issues.append(f"Core loop test failure: Module '{flagged['module']}' flagged for complexity reduction "
+                             f"({flagged['consecutive_failures']} consecutive failures, "
+                             f"{flagged['total_failures']} total failures)")
+                for suggestion in flagged["suggested_simplifications"]:
+                    issues.append(f"  - Suggestion: {suggestion}")
 
         return issues
 

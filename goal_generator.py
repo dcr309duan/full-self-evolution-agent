@@ -13,6 +13,7 @@ After each reflection cycle, this module:
 9. Integrates feasibility estimator to check goal viability before generation.
 10. Analyzes accumulated knowledge base to autonomously generate new sub-goals.
 11. Meta-insight analyzer that parses knowledge for key insights and converts to concrete goals.
+12. Generates 'complexity reduction' goals when triggered by rollback events.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -62,6 +63,7 @@ class Goal:
     failure_type: Optional[FailureType] = None  # Track failure type for retry
     original_goal: Optional[str] = None  # Reference to original goal for alternatives
     rationale: Optional[str] = None  # Rationale for autonomous goal generation
+    target_module: Optional[str] = None  # Module targeted by this goal
 
     def success_rate(self) -> float:
         total = self.success_count + self.failure_count
@@ -676,6 +678,7 @@ class GoalGenerator:
     Supports retry_generation mode for self-healing loops.
     Includes autonomous goal generation from knowledge base analysis.
     Includes meta-insight analyzer for extracting architectural insights.
+    Includes complexity reduction goal generation triggered by rollback events.
     """
 
     def __init__(self, parser: Optional[ReflectionParser] = None, feasibility_check: bool = True):
@@ -693,6 +696,7 @@ class GoalGenerator:
         self.knowledge_base = KnowledgeBase()  # Initialize knowledge base
         self.autonomous_analyzer = AutonomousGoalAnalyzer(self.knowledge_base)  # Initialize analyzer
         self.meta_insight_analyzer = MetaInsightAnalyzer(self.knowledge_base)  # Initialize meta-insight analyzer
+        self.rollback_events: List[Dict[str, Any]] = []  # Track rollback events for complexity reduction
         self.logger = logging.getLogger(__name__)
         
         # Core files list for priority scoring
@@ -768,113 +772,140 @@ class GoalGenerator:
         # Run meta-insight analysis and merge with gap analysis
         self._run_meta_insight_analysis(parsed.get("key_gaps", []))
         
+        # Check for rollback events and generate complexity reduction goals
+        self._check_rollback_events(reflection_text)
+        
         summary = self._generate_summary(parsed)
         self._record_feedback(parsed, summary)
         return summary
 
-    def _run_meta_insight_analysis(self, key_gaps: List[str]) -> None:
+    def _check_rollback_events(self, reflection_text: str) -> None:
         """
-        Run meta-insight analysis and merge with gap analysis to produce final goals.
+        Check reflection text for rollback events and generate complexity reduction goals.
         
         Args:
-            key_gaps: List of key gaps from reflection parsing
+            reflection_text: The reflection text to analyze
         """
-        # Analyze knowledge base for insights
-        insights = self.meta_insight_analyzer.analyze()
+        # Keywords indicating a rollback event
+        rollback_keywords = [
+            "rollback", "revert", "undo", "backout", "back out",
+            "failed change", "breaking change", "regression",
+            "reverted", "rolled back", "undone"
+        ]
         
-        if not insights and not key_gaps:
-            return
-        
-        # Merge insights with gap analysis to get top 3 goals
-        merged_goals = self.meta_insight_analyzer.merge_with_gap_analysis(insights, key_gaps)
-        
-        # Add merged goals to the goals list, replacing existing meta-insight goals
-        self.goals = [g for g in self.goals if g.source not in ["meta_insight", "gap_analysis"]]
-        
-        for goal in merged_goals:
-            # Perform feasibility check
-            if self.feasibility_check:
-                feasibility_result = self.feasibility_estimator.estimate(goal.description, self.current_assessment)
-                
-                if feasibility_result == FeasibilityResult.BLOCK:
-                    self.logger.info(f"Feasibility check blocked meta-insight goal: '{goal.description}'")
-                    self.blocked_goals.append({
-                        "description": goal.description,
-                        "reason": "Feasibility check blocked meta-insight goal",
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    continue
-                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                    goal.description = self._simplify_goal(goal.description)
-                    self.logger.info(f"Feasibility check adjusted meta-insight goal complexity: '{goal.description}'")
-            
-            self.goals.append(goal)
-            self.logger.info(f"Added meta-insight goal: '{goal.description}' (priority: {goal.priority})")
-        
-        # Re-sort goals by priority
-        self.goals.sort(key=lambda g: g.priority)
-
-    def _add_reflection_to_knowledge_base(self, reflection_text: str) -> None:
-        """Parse reflection text and add relevant entries to knowledge base."""
-        # Simple parsing: look for keywords indicating failures, successes, or reflections
         reflection_lower = reflection_text.lower()
         
-        # Check for failure indicators
-        failure_indicators = ["failed", "struggled", "couldn't", "didn't work", "error", "bug", "issue", "problem"]
-        for indicator in failure_indicators:
-            if indicator in reflection_lower:
-                # Extract the context around the failure indicator
-                idx = reflection_lower.find(indicator)
-                start = max(0, idx - 50)
-                end = min(len(reflection_text), idx + 50)
-                context = reflection_text[start:end].strip()
-                self.knowledge_base.add_failure_pattern(context, impact_score=0.6)
+        # Check if any rollback keywords are present
+        has_rollback = any(keyword in reflection_lower for keyword in rollback_keywords)
+        
+        if not has_rollback:
+            return
+        
+        # Extract the module that caused the failure
+        # Look for file names or module names in the reflection text
+        module_patterns = [
+            r'\b(\w+\.py)\b',  # Python files
+            r'\bmodule\s+(\w+)\b',  # Module references
+            r'\b(\w+_engine)\b',  # Engine modules
+            r'\b(\w+_orchestrator)\b',  # Orchestrator modules
+        ]
+        
+        import re
+        failed_module = None
+        
+        for pattern in module_patterns:
+            matches = re.findall(pattern, reflection_lower)
+            if matches:
+                # Use the first match as the failed module
+                failed_module = matches[0]
                 break
         
-        # Check for success indicators
-        success_indicators = ["succeeded", "completed", "achieved", "solved", "fixed", "resolved", "worked"]
-        for indicator in success_indicators:
-            if indicator in reflection_lower:
-                idx = reflection_lower.find(indicator)
-                start = max(0, idx - 50)
-                end = min(len(reflection_text), idx + 50)
-                context = reflection_text[start:end].strip()
-                self.knowledge_base.add_successful_strategy(context, impact_score=0.7)
-                break
+        if not failed_module:
+            # Default to generic module if none found
+            failed_module = "unknown_module"
         
-        # Check for self-reflection indicators
-        reflection_indicators = ["realized", "learned", "understood", "noticed", "observed", "felt", "thought"]
-        for indicator in reflection_indicators:
-            if indicator in reflection_lower:
-                idx = reflection_lower.find(indicator)
-                start = max(0, idx - 50)
-                end = min(len(reflection_text), idx + 50)
-                context = reflection_text[start:end].strip()
-                self.knowledge_base.add_self_reflection(context, alignment_score=0.6)
-                break
+        # Record the rollback event
+        rollback_event = {
+            "timestamp": datetime.now().isoformat(),
+            "module": failed_module,
+            "reflection_text": reflection_text,
+            "processed": False
+        }
+        self.rollback_events.append(rollback_event)
+        
+        # Generate complexity reduction goal
+        complexity_goal = self._generate_complexity_reduction_goal(failed_module)
+        
+        if complexity_goal:
+            # Add the goal with high priority
+            self.goals.insert(0, complexity_goal)  # Insert at beginning for highest priority
+            self.logger.info(f"Generated complexity reduction goal for module '{failed_module}' with high priority")
+            
+            # Mark rollback event as processed
+            rollback_event["processed"] = True
 
-    def _generate_autonomous_goals(self, max_goals: int = 3) -> None:
+    def _generate_complexity_reduction_goal(self, module_name: str) -> Optional[Goal]:
         """
-        Generate autonomous goals from knowledge base analysis.
-        Adds generated goals to the regular goals list.
-        """
-        generated_goals = self.autonomous_analyzer.analyze_and_generate_goals(max_goals=max_goals)
+        Generate a complexity reduction goal for a specific module.
         
-        for goal in generated_goals:
-            # Check if similar goal already exists
-            if not any(g.description.lower() == goal.description.lower() for g in self.goals):
-                # Perform feasibility check
-                if self.feasibility_check:
-                    feasibility_result = self.feasibility_estimator.estimate(goal.description, self.current_assessment)
-                    
-                    if feasibility_result == FeasibilityResult.BLOCK:
-                        self.logger.info(f"Feasibility check blocked autonomous goal: '{goal.description}'")
-                        self.blocked_goals.append({
-                            "description": goal.description,
-                            "reason": "Feasibility check blocked autonomous goal",
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        continue
-                    elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                        goal.description = self._simplify_goal(goal.description)
-                        self.logger
+        Args:
+            module_name: The name of the module that caused the failure
+            
+        Returns:
+            Goal object with high priority, or None if generation fails
+        """
+        # Generate goal description based on module name
+        if module_name.endswith('.py'):
+            module_display = module_name
+        else:
+            module_display = f"{module_name}.py"
+        
+        # Create goal description
+        goal_description = f"Reduce LOC in {module_display} by removing dead code"
+        
+        # Create the goal with high priority (priority 1 = highest)
+        goal = Goal(
+            description=goal_description,
+            priority=1,  # High priority
+            source="complexity_reduction",
+            last_selected=datetime.now(),
+            rationale=f"Rollback event detected involving module '{module_name}'. Reducing complexity to prevent future failures.",
+            target_module=module_name
+        )
+        
+        # Perform feasibility check if enabled
+        if self.feasibility_check:
+            feasibility_result = self.feasibility_estimator.estimate(goal_description, self.current_assessment)
+            
+            if feasibility_result == FeasibilityResult.BLOCK:
+                self.logger.info(f"Feasibility check blocked complexity reduction goal: '{goal_description}'")
+                self.blocked_goals.append({
+                    "description": goal_description,
+                    "reason": "Feasibility check blocked complexity reduction goal",
+                    "timestamp": datetime.now().isoformat()
+                })
+                return None
+            elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                goal.description = self._simplify_goal(goal_description)
+                self.logger.info(f"Feasibility check adjusted complexity reduction goal: '{goal.description}'")
+        
+        return goal
+
+    def _simplify_goal(self, goal_description: str) -> str:
+        """
+        Simplify a goal description to make it more feasible.
+        
+        Args:
+            goal_description: The original goal description
+            
+        Returns:
+            Simplified goal description
+        """
+        # Remove complexity indicators
+        complexity_indicators = [
+            "all", "everything", "complete", "full", "entire",
+            "multiple", "several", "many", "various", "numerous",
+            "large", "massive", "extensive", "comprehensive"
+        ]
+        
+       

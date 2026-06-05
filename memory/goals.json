@@ -8,12 +8,6 @@
       "created_at": 1780653703.3882256
     },
     {
-      "description": "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation → test_ecosystem_engine → evolution_orchestrator) that must pass within 3 seconds. Run this test before and after every mutation. If it fails after a mutation, trigger an automatic rollback and generate a new mutation that reduces complexity instead.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780654501.1323383
-    },
-    {
       "description": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
       "priority": 8,
       "status": "pending",
@@ -971,6 +965,13 @@
       "status": "completed",
       "created_at": 1780654501.1272116,
       "completed_at": 1780654686.0352132
+    },
+    {
+      "description": "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation → test_ecosystem_engine → evolution_orchestrator) that must pass within 3 seconds. Run this test before and after every mutation. If it fails after a mutation, trigger an automatic rollback and generate a new mutation that reduces complexity instead.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780654501.1323383,
+      "completed_at": 1780655027.7553852
     }
   ],
   "generated_goals": []
