@@ -444,3 +444,188 @@ class SelfModelBuilder:
             json.dump(graph_data, f, indent=2, ensure_ascii=False)
 
         logger.debug(f"Knowledge graph serialized to {self.output_path}")
+
+    def map_failure_pattern_to_component(self, pattern: str) -> List[Dict[str, Any]]:
+        """Identify which components are most likely causing a given failure pattern
+        using the self-model's dependency graph.
+        
+        Args:
+            pattern: A string describing the failure pattern (e.g., "import error",
+                    "attribute error", "type mismatch", "circular dependency")
+        
+        Returns:
+            A list of dictionaries, each containing:
+                - "component": str (the component/module name)
+                - "confidence": float (0.0 to 1.0, how likely this component is the cause)
+                - "reason": str (explanation of why this component is suspected)
+                - "related_interfaces": list[str] (interfaces involved in the pattern)
+        """
+        logger.info(f"Mapping failure pattern '{pattern}' to components...")
+        
+        # Normalize the pattern for matching
+        pattern_lower = pattern.lower()
+        
+        # Get the dependency graph data
+        graph_data = self.get_dependency_graph()
+        nodes = graph_data.get("nodes", [])
+        edges = graph_data.get("edges", [])
+        interface_usage = graph_data.get("interface_usage_map", {})
+        critical_interfaces = graph_data.get("critical_interfaces", [])
+        
+        # Build a map of node IDs to node data for quick lookup
+        node_map = {}
+        for node in nodes:
+            node_map[node.get("id")] = node
+        
+        # Build a map of which nodes depend on which (source -> targets)
+        dependency_map = {}
+        for edge in edges:
+            edge_type = edge.get("type", "")
+            source = edge.get("source")
+            target = edge.get("target")
+            
+            if edge_type in ("depends_on", "imports", "uses"):
+                if source not in dependency_map:
+                    dependency_map[source] = []
+                dependency_map[source].append(target)
+        
+        # Initialize results
+        results = []
+        
+        # Analyze based on pattern type
+        if "import" in pattern_lower or "module" in pattern_lower:
+            # Import-related failures: check for missing or broken imports
+            for node in nodes:
+                node_id = node.get("id")
+                node_name = node.get("name", "")
+                node_type = node.get("type", "")
+                
+                # Check if this node is imported by others
+                imported_by = []
+                for edge in edges:
+                    if edge.get("type") == "imports" and edge.get("target") == node_id:
+                        imported_by.append(edge.get("source"))
+                
+                if imported_by:
+                    # This module is imported by others - could be the source of import errors
+                    confidence = min(0.7, 0.3 + 0.1 * len(imported_by))
+                    results.append({
+                        "component": node_name,
+                        "confidence": confidence,
+                        "reason": f"Module '{node_name}' is imported by {len(imported_by)} other modules. "
+                                  f"An import error in this module would affect all dependents.",
+                        "related_interfaces": [f"{node.get('module', '')}:{node_name}" 
+                                              for node in [node] if node.get('module')]
+                    })
+        
+        elif "attribute" in pattern_lower or "method" in pattern_lower or "missing" in pattern_lower:
+            # Attribute/method missing errors: check interfaces that are heavily used
+            for interface_key, users in interface_usage.items():
+                if len(users) > 0:
+                    module_name, interface_name = interface_key.split(":", 1)
+                    confidence = min(0.8, 0.2 + 0.15 * len(users))
+                    results.append({
+                        "component": module_name,
+                        "confidence": confidence,
+                        "reason": f"Interface '{interface_name}' in module '{module_name}' is used by "
+                                  f"{len(users)} other modules. Missing or changed attributes here "
+                                  f"would cause attribute errors in dependents.",
+                        "related_interfaces": [interface_key]
+                    })
+        
+        elif "type" in pattern_lower or "mismatch" in pattern_lower:
+            # Type mismatch errors: check interfaces with complex signatures
+            for ci in critical_interfaces:
+                if ci.get("signature"):
+                    module_name = ci.get("module", "")
+                    interface_name = ci.get("interface_name", "")
+                    depended_by = ci.get("depended_by", [])
+                    
+                    if len(depended_by) > 0:
+                        confidence = min(0.75, 0.25 + 0.1 * len(depended_by))
+                        results.append({
+                            "component": module_name,
+                            "confidence": confidence,
+                            "reason": f"Interface '{interface_name}' in module '{module_name}' has a "
+                                      f"defined signature and is depended upon by {len(depended_by)} "
+                                      f"other modules. Type mismatches in this interface would "
+                                      f"propagate to all dependents.",
+                            "related_interfaces": [f"{module_name}:{interface_name}"]
+                        })
+        
+        elif "circular" in pattern_lower or "cycle" in pattern_lower:
+            # Circular dependency: find cycles in the dependency graph
+            # Simple cycle detection using DFS
+            visited = set()
+            path = []
+            
+            def dfs(node_id, path_set):
+                if node_id in path_set:
+                    # Found a cycle
+                    cycle_start = path.index(node_id)
+                    cycle = path[cycle_start:]
+                    return cycle
+                if node_id in visited:
+                    return None
+                
+                visited.add(node_id)
+                path.append(node_id)
+                path_set.add(node_id)
+                
+                for neighbor in dependency_map.get(node_id, []):
+                    result = dfs(neighbor, path_set)
+                    if result:
+                        return result
+                
+                path.pop()
+                path_set.remove(node_id)
+                return None
+            
+            for node in nodes:
+                node_id = node.get("id")
+                if node_id not in visited:
+                    cycle = dfs(node_id, set())
+                    if cycle:
+                        for node_id_in_cycle in cycle:
+                            node_data = node_map.get(node_id_in_cycle, {})
+                            results.append({
+                                "component": node_data.get("name", node_id_in_cycle),
+                                "confidence": 0.9,
+                                "reason": f"Component is part of a circular dependency chain: "
+                                          f"{' -> '.join([node_map.get(n, {}).get('name', n) for n in cycle])}",
+                                "related_interfaces": [f"{node_data.get('module', '')}:{node_data.get('name', '')}" 
+                                                      for node_data in [node_data] if node_data.get('module')]
+                            })
+        
+        else:
+            # Generic pattern: look for highly connected components
+            for node in nodes:
+                node_id = node.get("id")
+                node_name = node.get("name", "")
+                
+                # Count incoming and outgoing edges
+                incoming = sum(1 for edge in edges if edge.get("target") == node_id)
+                outgoing = sum(1 for edge in edges if edge.get("source") == node_id)
+                
+                # Components with high connectivity are more likely to cause failures
+                total_connections = incoming + outgoing
+                if total_connections > 2:
+                    confidence = min(0.6, 0.1 + 0.1 * total_connections)
+                    results.append({
+                        "component": node_name,
+                        "confidence": confidence,
+                        "reason": f"Component has {total_connections} connections in the dependency graph "
+                                  f"({incoming} incoming, {outgoing} outgoing). Highly connected components "
+                                  f"are more likely to be the source of failures.",
+                        "related_interfaces": [f"{node.get('module', '')}:{node_name}" 
+                                              for node in [node] if node.get('module')]
+                    })
+        
+        # Sort results by confidence (highest first)
+        results.sort(key=lambda x: x["confidence"], reverse=True)
+        
+        # Limit to top 10 results to avoid overwhelming output
+        results = results[:10]
+        
+        logger.info(f"Found {len(results)} potential components for failure pattern '{pattern}'")
+        return results
