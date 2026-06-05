@@ -71,6 +71,12 @@ class MutationEngine:
             }
         }
 
+        # Strategy adaptation interface
+        self.strategy_adaptation_interface = {
+            'reduce_mutation_rate': self.reduce_mutation_rate,
+            'switch_to_single_gene_mutation': self.switch_to_single_gene_mutation
+        }
+
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
         total = sum(self.objective_weights.values())
@@ -139,6 +145,49 @@ class MutationEngine:
         
         print(f"Error: Either new_params or replacement_strategy must be provided")
         return False
+
+    def reduce_mutation_rate(self, component: str, factor: float) -> bool:
+        """
+        Reduce the mutation rate for a specific component by a given factor.
+        
+        Args:
+            component: Name of the component/strategy to modify (e.g., 'refactor_architecture')
+            factor: Factor to reduce the mutation rate by (0 < factor <= 1)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if component not in self.strategy_configs:
+            print(f"Error: Unknown component '{component}'. Available components: {list(self.strategy_configs.keys())}")
+            return False
+        
+        if not isinstance(factor, (int, float)) or factor <= 0 or factor > 1:
+            print(f"Error: factor must be a float between 0 and 1, got {factor}")
+            return False
+        
+        current_rate = self.strategy_configs[component]['mutation_rate']
+        new_rate = current_rate * factor
+        self.strategy_configs[component]['mutation_rate'] = new_rate
+        print(f"Mutation rate for '{component}' reduced from {current_rate} to {new_rate} (factor: {factor})")
+        return True
+
+    def switch_to_single_gene_mutation(self, component: str) -> bool:
+        """
+        Switch a component to single gene mutation mode by setting crossover_method to 'single_point'.
+        
+        Args:
+            component: Name of the component/strategy to modify (e.g., 'refactor_architecture')
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if component not in self.strategy_configs:
+            print(f"Error: Unknown component '{component}'. Available components: {list(self.strategy_configs.keys())}")
+            return False
+        
+        self.strategy_configs[component]['crossover_method'] = 'single_point'
+        print(f"Component '{component}' switched to single gene mutation mode")
+        return True
 
     def mutate(self, source_code: str) -> str:
         """

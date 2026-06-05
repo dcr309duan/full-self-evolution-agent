@@ -2,10 +2,28 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a mutation engine hardening module that validates AST-level correctness of all generated mutations before applying them, using a combination of syntax checks, type inference, and a sandboxed execution test for trivial cases (e.g., no syntax errors, no undefined variable references). This directly addresses the root cause of repeated failures in the self-modification pipeline.",
+      "priority": 10,
+      "status": "pending",
+      "created_at": 1780629627.2785068
+    },
+    {
+      "description": "Build an integration test suite that runs the full self-modification pipeline (goal_generator -> mutation engine -> AST rewriter -> test runner -> failure analyzer) on a controlled, non-critical module (e.g., a dummy utility function) after each evolution cycle, and reports pass/fail status with error traces to the reflection system. This prevents brittle integrations from silently degrading the system.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780629627.2801762
+    },
+    {
       "description": "Implement a meta-mutation mechanism that periodically rewrites core meta-modules (e.g., reflection parser, meta-evaluation loop, orchestrator) based on aggregated performance statistics and insights, enabling second-order evolution of the evolution loop itself.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780628993.7021782
+    },
+    {
+      "description": "Create a rollback mechanism for core modules that automatically reverts the last mutation if the integration test suite fails, and logs the failure as a high-priority insight for the goal generator. This adds a safety net to the evolution loop, allowing the agent to recover from unstable changes without manual intervention.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780629627.2822556
     },
     {
       "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",

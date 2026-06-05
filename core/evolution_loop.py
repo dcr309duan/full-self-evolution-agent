@@ -293,25 +293,33 @@ def initialize():
     return state
 
 
+_lock_fd = None
+
 def acquire_lock():
-    """Acquire process lock to prevent duplicate instances."""
+    """Acquire exclusive process lock using OS-level flock."""
+    import fcntl
+    global _lock_fd
     lock_file = os.path.join(PROJECT_ROOT, ".evolution.lock")
-    if os.path.exists(lock_file):
-        try:
-            with open(lock_file) as f:
-                old_pid = int(f.read().strip())
-            if os.path.exists(f"/proc/{old_pid}"):
-                print(f"[Self-Evolution Agent] Another instance running (PID {old_pid}). Exiting.")
-                sys.exit(1)
-        except (ValueError, OSError):
-            pass
-    with open(lock_file, 'w') as f:
-        f.write(str(os.getpid()))
-    return lock_file
+    _lock_fd = open(lock_file, 'w')
+    try:
+        fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_fd.write(str(os.getpid()))
+        _lock_fd.flush()
+    except (IOError, OSError):
+        print(f"[Self-Evolution Agent] Another instance is already running. Exiting.")
+        sys.exit(1)
 
 
 def release_lock():
     """Release process lock."""
+    import fcntl
+    global _lock_fd
+    if _lock_fd:
+        try:
+            fcntl.flock(_lock_fd, fcntl.LOCK_UN)
+            _lock_fd.close()
+        except (IOError, OSError):
+            pass
     lock_file = os.path.join(PROJECT_ROOT, ".evolution.lock")
     try:
         os.remove(lock_file)
