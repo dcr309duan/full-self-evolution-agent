@@ -8,10 +8,22 @@
       "created_at": 1780650487.258728
     },
     {
+      "description": "Build an atomic multi-module mutation orchestrator that, given a goal requiring changes to 3+ modules (e.g., stagnation recovery), executes all mutations simultaneously in a sandbox, runs a conflict-detection algorithm (checking for overlapping function definitions, shared state dependencies, or incompatible interface changes), and either applies the full set with automatic rollback on failure or rejects the mutation set with a detailed conflict report. This enables coordinated shifts that single-module mutations cannot achieve.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780651550.8315756
+    },
+    {
       "description": "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end-to-end test suite. If the test fails, revert the change and log the failure pattern. This prevents regressions from accumulating and provides immediate feedback on integration robustness.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780650487.261601
+    },
+    {
+      "description": "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub repositories related to 'self-evolving systems' or 'meta-learning' (using a pre-approved list), extracts one novel design pattern per repo via a simple keyword and structure analysis, and generates a goal to integrate that pattern into the system (e.g., 'Add a reward-shaping module based on pattern X'). This introduces external insights to break out of self-referential optimization loops.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780651550.8343124
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -874,6 +886,13 @@
       "status": "completed",
       "created_at": 1780649848.7555447,
       "completed_at": 1780651487.0585701
+    },
+    {
+      "description": "Implement a meta-goal generator that, after every 10 evolution cycles, analyzes the distribution of goal types (incremental vs. radical) and the success/failure ratio of mutations. If the proportion of radical goals (e.g., architecture changes, module removals) falls below 20% or if the mutation success rate has plateaued for 5+ cycles, the generator forcibly injects a goal from a curated list of 'disruptive actions' (e.g., remove the most-used module, set a contradictory objective, or randomly corrupt a module). This breaks the local optimum of incrementalism and forces architectural exploration.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780651550.8286965,
+      "completed_at": 1780651760.2972105
     }
   ],
   "generated_goals": []

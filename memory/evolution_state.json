@@ -1,9 +1,8 @@
 {
-  "cycle_count": 141,
-  "current_generation": 112,
-  "last_evolution_time": 1780651260.5320237,
+  "cycle_count": 142,
+  "current_generation": 113,
+  "last_evolution_time": 1780651523.2463517,
   "capabilities": [
-    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
     "Create a 'goal feasibility pre-check' step that, before a goal enters the active queue, uses the exi",
     "Implement a sandboxed mutation executor that runs all mutations in a temporary git branch or copy of",
     "Build a failure pattern miner that records the cause of every failed mutation (e.g., missing import,",
@@ -52,15 +51,10 @@
     "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a slidi",
     "Extract the mutation engine and test runner into separate sandboxed processes with a stable message-",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
-    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr"
+    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
+    "Implement a meta-goal generator that, after every 10 evolution cycles, analyzes the distribution of "
   ],
   "history": [
-    {
-      "cycle": 39,
-      "goal": "Integrate the failure analysis module with the goal generator so that repeated failures trigger a redesign of the failing component (e.g., modifying the mutation strategy or dependency graph) rather than just a retry, enabling proactive prevention of recurring issues.",
-      "success": true,
-      "timestamp": 1780629569.8232512
-    },
     {
       "cycle": 41,
       "goal": "Implement a mutation engine hardening module that validates AST-level correctness of all generated mutations before applying them, using a combination of syntax checks, type inference, and a sandboxed execution test for trivial cases (e.g., no syntax errors, no undefined variable references). This directly addresses the root cause of repeated failures in the self-modification pipeline.",
@@ -654,6 +648,12 @@
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "success": true,
       "timestamp": 1780651487.0722642
+    },
+    {
+      "cycle": 142,
+      "goal": "Implement a meta-goal generator that, after every 10 evolution cycles, analyzes the distribution of goal types (incremental vs. radical) and the success/failure ratio of mutations. If the proportion of radical goals (e.g., architecture changes, module removals) falls below 20% or if the mutation success rate has plateaued for 5+ cycles, the generator forcibly injects a goal from a curated list of 'disruptive actions' (e.g., remove the most-used module, set a contradictory objective, or randomly corrupt a module). This breaks the local optimum of incrementalism and forces architectural exploration.",
+      "success": true,
+      "timestamp": 1780651760.390905
     }
   ],
   "status": "evolving"

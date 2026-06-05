@@ -5,6 +5,7 @@ continuous evolution loop that scores, selects, mutates, tests, and evaluates ea
 Includes a goal_selection mechanism that maintains a priority queue of evolution goals.
 Integrates reflection parsing to close the feedback loop between mutation outcomes and strategy selection.
 Includes a 'fitness landscape mutation' phase that runs every 3 cycles to generate new tests targeting weak areas.
+Includes meta_goal_generator integration that analyzes statistics every 10 cycles and injects disruptive goals.
 """
 
 import time
@@ -23,6 +24,7 @@ from testing_framework import TestingFramework
 from failure_analysis import FailureAnalysis
 from meta_evaluation import MetaEvaluation
 from reflection_parser import ReflectionParser  # New import for reflection parsing
+from meta_goal_generator import MetaGoalGenerator  # Import for meta goal generation
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ STATE_FILE = "orchestrator_state.json"  # File to persist orchestrator state
 LOG_FILE = "evolution_log.json"  # File to log evolution cycles
 REFLECTION_LOG_FILE = "reflection_log.json"  # File to log reflection data
 FITNESS_LANDSCAPE_INTERVAL = 3  # Number of cycles between fitness landscape mutation phases
+META_GOAL_INTERVAL = 10  # Number of cycles between meta goal generator analyses
 
 
 class EvolutionOrchestrator:
@@ -50,6 +53,7 @@ class EvolutionOrchestrator:
         self.failure_analysis = FailureAnalysis(self.config.get("failure_analysis", {}))
         self.meta_evaluation = MetaEvaluation(self.config.get("meta_evaluation", {}))
         self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))  # New subsystem
+        self.meta_goal_generator = MetaGoalGenerator(self.config.get("meta_goal_generator", {}))  # Meta goal generator
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -72,7 +76,7 @@ class EvolutionOrchestrator:
         # Control flag
         self.running = False
 
-        # Cycle counter for fitness landscape mutation
+        # Cycle counter for fitness landscape mutation and meta goal generation
         self.cycle_count = 0
 
         # Mapping of subsystem names to their source file paths
@@ -784,6 +788,71 @@ class EvolutionOrchestrator:
         except Exception as e:
             logger.exception("Error during fitness landscape mutation phase: %s", e)
 
+    def _run_meta_goal_analysis(self):
+        """Run meta goal generator analysis and inject disruptive goals if returned.
+        
+        This method is called every META_GOAL_INTERVAL cycles. It collects current statistics,
+        calls meta_goal_generator.analyze(), and if a disruptive goal is returned, injects it
+        into the goal queue with high priority, bypassing normal feasibility checks.
+        """
+        logger.info("Running meta goal generator analysis (cycle %d)", self.cycle_count)
+        
+        try:
+            # Collect current statistics for analysis
+            current_stats = {
+                "cycle_count": self.cycle_count,
+                "subsystem_scores": self.subsystem_scores.copy(),
+                "consecutive_failures": self.consecutive_failures.copy(),
+                "goal_queue_size": len(self.goal_queue),
+                "evolution_history": self.evolution_history[-10:] if self.evolution_history else [],
+                "timestamp": time.time()
+            }
+            
+            # Call meta_goal_generator.analyze() with current statistics
+            disruptive_goal = self.meta_goal_generator.analyze(current_stats)
+            
+            if disruptive_goal is not None:
+                # Validate the disruptive goal structure
+                if isinstance(disruptive_goal, dict) and "description" in disruptive_goal and "subsystem" in disruptive_goal:
+                    goal_description = disruptive_goal["description"]
+                    target_subsystem = disruptive_goal["subsystem"]
+                    
+                    # Use high priority (0 is highest) to ensure it gets processed quickly
+                    priority = 0
+                    
+                    # Inject the disruptive goal into the goal queue with high priority
+                    # Bypass normal goal feasibility checks to guarantee exploration
+                    self.add_goal(priority, goal_description, target_subsystem)
+                    
+                    logger.info("Injected disruptive goal '%s' for subsystem '%s' with priority %d",
+                              goal_description, target_subsystem, priority)
+                    
+                    # Log the meta goal injection
+                    log_entry = {
+                        "timestamp": time.time(),
+                        "phase": "meta_goal_analysis",
+                        "disruptive_goal": disruptive_goal,
+                        "priority": priority,
+                        "current_stats_summary": {
+                            "avg_score": sum(self.subsystem_scores.values()) / len(self.subsystem_scores) if self.subsystem_scores else 0,
+                            "total_failures": sum(self.consecutive_failures.values()),
+                            "goal_queue_size": len(self.goal_queue)
+                        }
+                    }
+                    
+                    try:
+                        with open("meta_goal_log.json", 'a') as f:
+                            f.write(json.dumps(log_entry) + '\n')
+                    except Exception as e:
+                        logger.error("Failed to log meta goal injection: %s", e)
+                else:
+                    logger.warning("Invalid disruptive goal structure returned: %s", disruptive_goal)
+            else:
+                logger.debug("No disruptive goal returned from meta goal generator")
+                
+        except Exception as e:
+            logger.exception("Error during meta goal generator analysis: %s", e)
+
     def evolution_cycle(self):
         """Execute one complete evolution cycle."""
         logger.info("Starting evolution cycle...")
@@ -795,71 +864,4 @@ class EvolutionOrchestrator:
         old_scores = self.subsystem_scores.copy()
 
         # 1) Score each subsystem
-        self.score_subsystems()
-
-        # Check if it's time for fitness landscape mutation
-        if self.cycle_count % FITNESS_LANDSCAPE_INTERVAL == 0:
-            self._run_fitness_landscape_mutation()
-
-        # 2) Identify the subsystem to evolve using goal selection mechanism
-        selected = self.select_subsystem_to_evolve()
-
-        # Determine the strategy used
-        strategy = "goal_based" if self.get_highest_priority_goal() else "score_based"
-
-        # If a goal was used, pop it from the queue
-        highest_goal = self.get_highest_priority_goal()
-        if highest_goal and self.map_goal_to_subsystem(highest_goal) == selected:
-            self.pop_highest_priority_goal()
-            logger.info("Popped goal '%s' from queue after selecting subsystem '%s'", 
-                       highest_goal[2], selected)
-
-        # 3) Read that subsystem's source code from disk
-        source_code = self.read_subsystem_source_code(selected)
-        if source_code is None:
-            logger.error("Failed to read source code for '%s'. Skipping evolution.", selected)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        # 4) Run sandboxed mutation with testing
-        mutated_code, sandbox_test_passed, failure_report_path = self._run_sandboxed_mutation(
-            selected, source_code, strategy
-        )
-
-        if mutated_code is None:
-            logger.error("Sandboxed mutation failed for subsystem '%s'. Evolution failed.", selected)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
-
-        # 5) Check if sandbox test passed before promoting
-        if not sandbox_test_passed:
-            logger.warning("Sandbox tests failed for subsystem '%s'. Recording failure and not promoting.", selected)
-            
-            # Record the failure report path in the goal's metadata
-            if highest_goal:
-                # Update the goal metadata with failure information
-                goal_metadata = {
-                    "failure_report_path": failure_report_path,
-                    "failure_timestamp": time.time(),
-                    "consecutive_failures": self.consecutive_failures.get(selected, 0) + 1
-                }
-                # Store in goal queue metadata (we'll use a separate dict for simplicity)
-                if not hasattr(self, '_goal_metadata'):
-                    self._goal_metadata = {}
-                self._goal_metadata[highest_goal[2]] = goal_metadata
-            
-            # Update scores and log failure
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            
-            # 6) Optionally retry with a different mutation strategy if the same goal fails 3+ times via sandbox
-            consecutive_failures = self.consecutive_failures.get(selected, 0)
-            if consecutive_failures >= FAILURE_THRESHOLD:
-                logger.warning("Goal for subsystem '%s' has failed %d times. Attempting retry with different strategy.", 
-                             selected, consecutive_failures)
-                
-               
+        self.score_subs

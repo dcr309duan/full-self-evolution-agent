@@ -12,6 +12,7 @@ import ast
 import shutil
 import tempfile
 import difflib
+from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -58,6 +59,11 @@ mutation_provenance = []
 
 # Test-driven mutation mode flag - when True, mutations must pass a generated test
 TEST_DRIVEN_MUTATION_ENABLED = False
+
+# Success rate tracking
+_mutation_outcomes = deque(maxlen=20)
+_last_success_rate = None
+_plateau_counter = 0
 
 # Load configuration from system_config.json
 config_path = os.path.join(PROJECT_ROOT, "system_config.json")
@@ -491,9 +497,51 @@ def dry_run_mutation(func_a, func_b, operator="crossover", goal_context=None):
     }
 
 
+def record_mutation_outcome(success):
+    """Record a mutation outcome (success/failure) in the rolling window."""
+    global _mutation_outcomes, _last_success_rate, _plateau_counter
+    
+    old_rate = get_success_rate()
+    _mutation_outcomes.append(success)
+    new_rate = get_success_rate()
+    
+    # Check if success rate changed by more than 5%
+    if old_rate is not None and new_rate is not None:
+        if abs(new_rate - old_rate) > 0.05:
+            _plateau_counter = 0
+    
+    _last_success_rate = new_rate
+
+
+def get_success_rate():
+    """Get the current success rate from the rolling window.
+    
+    Returns:
+        float: Success rate as a value between 0.0 and 1.0, or None if no outcomes recorded
+    """
+    if not _mutation_outcomes:
+        return None
+    return sum(_mutation_outcomes) / len(_mutation_outcomes)
+
+
+def is_plateaued(threshold_cycles=5):
+    """Check if the mutation process has plateaued.
+    
+    A plateau is detected when the success rate hasn't changed by more than 5%
+    for the specified number of cycles.
+    
+    Args:
+        threshold_cycles: Number of cycles without significant change to consider plateaued
+        
+    Returns:
+        bool: True if plateaued, False otherwise
+    """
+    return _plateau_counter >= threshold_cycles
+
+
 def run_mutation_cycle(num_mutations=3, goal_context=None):
     """Run a complete mutation cycle."""
-    global meta_bias
+    global meta_bias, _plateau_counter
     
     pool = get_function_pool()
     if len(pool) < 2:
@@ -624,8 +672,10 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                     
                     save_successful_mutation(func_name, new_code)
                     record_success(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Created {func_name}, passed generated test")
+                    record_mutation_outcome(True)
                 else:
                     record_failure(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Failed generated test: {test_result.get('reason', 'unknown')}")
+                    record_mutation_outcome(False)
                 
                 continue
             
@@ -650,6 +700,7 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                             "simulated": True
                         }
                         results.append(mutation_record)
+                        record_mutation_outcome(False)
                         continue
                 except Exception as e:
                     # If simulation fails, fall through to normal testing
@@ -684,9 +735,13 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
                 
                 save_successful_mutation(func_name, new_code)
                 record_success(f"mutation:{operator}({func_a['name']},{func_b['name']})", f"Created {func_name}, score={test_result['score']}")
+                record_mutation_outcome(True)
+            else:
+                record_mutation_outcome(False)
             
         except Exception as e:
             results.append({"error": str(e), "operator": operator})
+            record_mutation_outcome(False)
     
     log_mutations(results)
     
