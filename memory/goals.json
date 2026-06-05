@@ -2,11 +2,16 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
-      "priority": 8,
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
       "status": "pending",
-      "created_at": 1780638152.1299891,
-      "consecutive_failures": 1
+      "created_at": 1780643294.663356
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780643294.6655066
     },
     {
       "description": "Implement a plasticity-stability scheduler that dynamically adjusts the mutation rate and goal acceptance threshold based on recent success rate: after 3 consecutive failures, reduce mutation rate by 20% and raise threshold by 10%; after 3 consecutive successes, reverse the adjustments. Log all adjustments to a dedicated meta-parameter history file.",
@@ -621,6 +626,14 @@
       "status": "completed",
       "created_at": 1780642590.4259186,
       "completed_at": 1780643105.8320482
+    },
+    {
+      "description": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780638152.1299891,
+      "consecutive_failures": 1,
+      "completed_at": 1780643287.1344528
     }
   ],
   "generated_goals": []

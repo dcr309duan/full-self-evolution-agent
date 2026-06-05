@@ -49,6 +49,7 @@ class GoalManager:
         self.structural_diffs: List[StructuralDiff] = []
         self.codebase_path = codebase_path or Path.cwd()
         self._codebase_snapshot: Dict[str, str] = {}
+        self.fitness_history: List[Dict] = []  # Time series of fitness scores
 
     def add_goal(self, goal_id: str, description: str, goal_type: Optional[GoalType] = None) -> Goal:
         """
@@ -110,6 +111,23 @@ class GoalManager:
             if goal.id == goal_id:
                 return goal.sandbox_test_results
         return None
+
+    def record_fitness_score(self, score: float, metadata: Optional[Dict] = None) -> None:
+        """
+        Record a fitness score from external evaluation.
+        Stores the score as a time series entry in fitness_history.
+        
+        Args:
+            score: The fitness score value (typically 0.0 to 1.0)
+            metadata: Optional dictionary with additional context (e.g., test suite name, goal_id)
+        """
+        entry = {
+            "timestamp": time.time(),
+            "score": score,
+            "metadata": metadata or {}
+        }
+        self.fitness_history.append(entry)
+        logger.info(f"Recorded fitness score: {score} (metadata: {metadata})")
 
     def complete_goal(self, goal_id: str) -> Optional[StructuralDiff]:
         """
@@ -238,7 +256,8 @@ class GoalManager:
             "curiosity_completed": curiosity_completed,
             "structural_diffs": len(self.structural_diffs),
             "pending_goals": total - completed,
-            "total_sandbox_failures": total_sandbox_failures
+            "total_sandbox_failures": total_sandbox_failures,
+            "fitness_history_entries": len(self.fitness_history)
         }
 
     def clear_completed_goals(self) -> int:
@@ -254,6 +273,7 @@ class GoalManager:
         self.completed_goals.clear()
         self.structural_diffs.clear()
         self._codebase_snapshot.clear()
+        self.fitness_history.clear()
         if hasattr(self, '_previous_imports'):
             del self._previous_imports
         logger.info("Goal manager reset")

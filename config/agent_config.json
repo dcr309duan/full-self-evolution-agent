@@ -3,5 +3,12 @@
   "sandbox_temp_base": "/tmp/evo_sandbox/",
   "sandbox_max_retries": 3,
   "sandbox_test_timeout": 120,
-  "sandbox_promote_on_all_pass": true
+  "sandbox_promote_on_all_pass": true,
+  "meta_evaluator": {
+    "enabled": true,
+    "evaluation_interval": 10,
+    "fitness_threshold": 0.1,
+    "pruning_enabled": true,
+    "pruning_backup_dir": "logs/pruning_backups/"
+  }
 }

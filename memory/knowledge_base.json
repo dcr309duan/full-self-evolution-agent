@@ -1,51 +1,6 @@
 {
   "insights": [
     {
-      "content": "[研究] Meta-learning for adaptive task decomposition and prioritization: Meta-learning for adaptive task decomposition and prioritization is an emerging area that combines h",
-      "timestamp": 1780636838.9187999,
-      "cycle": 77
-    },
-    {
-      "content": "Successfully modified evolution_engine/capability_fitness_tracker.py to: Create CapabilityFitnessTracker class that: (1) maintains a registry of all capabilities with unique IDs, (2) tracks which downstream tasks/goals each capability is used by via a dependency graph, (3) computes fitness score = count of downstream uses, (4) provides method to get capabilities below threshold, (5) supports configurable threshold (default=2) and cycles_before_deprecation (default=10), (6) logs deprecation events with timestamp and reason",
-      "timestamp": 1780636900.3200872,
-      "cycle": 78
-    },
-    {
-      "content": "Successfully modified evolution_engine/goal_generator.py to: Add instrumentation to goal_generator to: (1) when generating a new goal, record which capabilities are required to achieve it, (2) pass this dependency info to CapabilityFitnessTracker via a method like register_goal_capability_usage(goal_id, capability_ids), (3) before generating goals, check if any capabilities are marked for deprecation and exclude them from consideration",
-      "timestamp": 1780636921.6852858,
-      "cycle": 78
-    },
-    {
-      "content": "Successfully modified evolution_engine/capability_dashboard.py to: Create a dashboard module that: (1) reads fitness scores from CapabilityFitnessTracker, (2) generates a formatted report showing capability name, fitness score, deprecation status, and cycles since last use, (3) outputs as structured JSON for API consumption, (4) includes summary statistics (total capabilities, avg fitness, number deprecated, number at risk)",
-      "timestamp": 1780636930.7373123,
-      "cycle": 78
-    },
-    {
-      "content": "Successfully modified tests/test_capability_fitness.py to: Create comprehensive test suite: (1) test that new capabilities start with fitness=0, (2) test that registering downstream uses increments fitness, (3) test that capabilities below threshold are flagged after correct number of cycles, (4) test that deprecation removes capability from active set, (5) test that dashboard output contains all required fields, (6) test configurable threshold and cycles_before_deprecation, (7) test that re-registering a deprecated capability re-activates it",
-      "timestamp": 1780636993.4430687,
-      "cycle": 78
-    },
-    {
-      "content": "Successfully modified evolution_engine/reflection_parser.py to: Add a 'capability_fitness' section to the structured reflection output that: (1) reports current fitness scores for top 5 and bottom 5 capabilities, (2) notes any deprecation events since last reflection, (3) suggests capabilities that could be merged or consolidated based on overlapping downstream usage patterns",
-      "timestamp": 1780637027.6411097,
-      "cycle": 78
-    },
-    {
-      "content": "Self-reflection: The biggest bottleneck is not missing capabilities but the lack of a unified, self-correcting feedback loop that operates with minimal latency. I have been adding tools to manage complexity (schema al",
-      "timestamp": 1780637077.6185615,
-      "cycle": 79
-    },
-    {
-      "content": "Successfully modified evolution_engine/self_healing_retry.py to: Create a new SelfHealingRetry module that: (1) wraps mutation execution with retry logic, (2) tracks failure count per mutation attempt, (3) implements strategy switching (smaller scope, different module, different mutation type), (4) escalates after 3 failures, (5) integrates with existing rollback mechanism",
-      "timestamp": 1780637103.6146188,
-      "cycle": 79
-    },
-    {
-      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate SelfHealingRetry into the orchestrator: (1) import and instantiate the retry handler, (2) replace direct mutation calls with retry wrapper, (3) add escalation callback for manual intervention, (4) update orchestrator state machine to handle retry states",
-      "timestamp": 1780637152.768885,
-      "cycle": 79
-    },
-    {
       "content": "Successfully modified tests/test_self_healing_retry.py to: Create comprehensive test suite: (1) test successful mutation on first try, (2) test retry with different strategy after failure, (3) test escalation after 3 failures, (4) test rollback on each failure, (5) test failure logging format, (6) test strategy switching logic",
       "timestamp": 1780637174.7731411,
       "cycle": 79
@@ -999,6 +954,51 @@
       "content": "Successfully modified logs/failures/.gitkeep to: Create the failure reports directory structure so the SandboxManager can write structured failure reports (JSON files with timestamp, mutation diff, test output, error types, affected modules).",
       "timestamp": 1780643105.8084147,
       "cycle": 104
+    },
+    {
+      "content": "Successfully modified core/meta_cognitive_evaluator.py to: Create a new module that implements the meta-cognitive evaluator. It should: (1) maintain a log of fitness scores per cycle (initialized from external fitness function if available, else 0), (2) track capability count changes, (3) every 10 cycles compute the ratio of fitness improvement to new capabilities added, (4) if ratio < 0.1, flag low-impact modules for pruning by analyzing which capabilities have lowest usage/fitness contribution, (5) provide a method to get pruning candidates list.",
+      "timestamp": 1780643167.5493033,
+      "cycle": 105
+    },
+    {
+      "content": "Successfully modified config/agent_config.json to: Add configuration section for meta-cognitive evaluator: 'meta_evaluator': { 'enabled': true, 'evaluation_interval': 10, 'fitness_threshold': 0.1, 'pruning_enabled': true, 'pruning_backup_dir': 'logs/pruning_backups/' }",
+      "timestamp": 1780643217.251394,
+      "cycle": 105
+    },
+    {
+      "content": "Successfully modified core/capability_manager.py to: Add a method to track capability usage frequency and last active cycle. This data will feed into the evaluator to determine which capabilities are low-impact. Add fields: 'usage_count', 'last_active_cycle', 'fitness_contribution' to each capability record.",
+      "timestamp": 1780643225.2146428,
+      "cycle": 105
+    },
+    {
+      "content": "Successfully modified core/goal_manager.py to: Add a method to record fitness scores from external evaluation (if available). The evaluator will call this after each external test suite run. Store fitness history as a time series in a new field 'fitness_history' in the system state.",
+      "timestamp": 1780643244.2786934,
+      "cycle": 105
+    },
+    {
+      "content": "Successfully modified tests/test_meta_cognitive_evaluator.py to: Create unit tests for the meta-cognitive evaluator: (1) test that it correctly computes fitness/capability ratio, (2) test that it triggers pruning when ratio < 0.1, (3) test that it correctly identifies low-impact modules based on usage frequency, (4) test that it does not trigger pruning when ratio >= 0.1, (5) test integration with orchestrator's cycle counter.",
+      "timestamp": 1780643263.109932,
+      "cycle": 105
+    },
+    {
+      "content": "Successfully modified core/pruning_module.py to: Enhance the existing triage and pruning module (if exists) or create a new pruning routine that: (1) takes a list of low-impact module names from the evaluator, (2) backs up those modules to logs/pruning_backups/, (3) removes them from active codebase, (4) updates capability registry, (5) logs the pruning action with reason and impact analysis.",
+      "timestamp": 1780643276.6054325,
+      "cycle": 105
+    },
+    {
+      "content": "Successfully modified core/system_state.py to: Add fields to system state: 'fitness_history' (list of {cycle, fitness_score}), 'capability_count_history' (list of {cycle, count}), 'pruning_history' (list of pruned modules with timestamps). Ensure these are serialized/deserialized for persistence.",
+      "timestamp": 1780643287.1088948,
+      "cycle": 105
+    },
+    {
+      "content": "[研究] Self-Healing Code Generation: Automated repair of truncated or malformed code modifications: Self-healing code generation focuses on automatically detecting and repairing truncation or malforma",
+      "timestamp": 1780643308.4397008,
+      "cycle": 105
+    },
+    {
+      "content": "[研究] Adaptive Context-Aware Mutation: Learning from failure patterns to prioritize and refine mutation strategies: Adaptive context-aware mutation is an emerging area in evolutionary computation and software testing",
+      "timestamp": 1780643323.791451,
+      "cycle": 105
     }
   ],
   "learned_patterns": [],
@@ -1347,6 +1347,11 @@
       "approach": "modify tests/test_integration_evolution_loop.py: Add a new test case 'test_sandbox_isolates_state' that: (1) creates a temporary sandbox, (2) applies a known-good mutation, (3) verifies the real system files are unchanged, (4) verifies the sandbox files contain the mutation, (5) runs a simple assertion that the sandbox can be cleaned up without affecting the real system.",
       "reason": "Safety check failed",
       "timestamp": 1780643100.1743248
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Integrate the meta-cognitive evaluator into the main evolution loop. After each mutation cycle, if cycle % 10 == 0, call the evaluator's analyze method. If pruning is triggered, pause new mutations and call a pruning routine that removes flagged low-impact modules (with rollback capability). Add configuration hooks for evaluator parameters (evaluation_interval=10, fitness_threshold=0.1).",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 884)",
+      "timestamp": 1780643214.016534
     }
   ],
   "successful_strategies": [
@@ -4439,6 +4444,61 @@
       "strategy": "Add a 'recursive sandbox' mechanism that, before applying any mutation to the core evolution engine, clones the current agent state (files, goals, history, meta-parameters) into a temporary directory, applies the mutation there, runs the integration test harness, and only promotes the mutation to the real system if all tests pass. If tests fail, the sandbox is discarded and a detailed failure report is stored.",
       "outcome": "5/7 steps succeeded",
       "timestamp": 1780643105.823188
+    },
+    {
+      "strategy": "modify core/meta_cognitive_evaluator.py: Create a new module that implements the meta-cognitive evaluator. It should: (1) maintain a log of fitness scores per cycle (initialized from external fitness function if available, else 0), (2) track capability count changes, (3) every 10 cycles compute the ratio of fitness improvement to new capabilities added, (4) if ratio < 0.1, flag low-impact modules for pruning by analyzing which capabilities have lowest usage/fitness contribution, (5) provide a method to get pruning candidates list.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643167.5341284
+    },
+    {
+      "strategy": "modify config/agent_config.json: Add configuration section for meta-cognitive evaluator: 'meta_evaluator': { 'enabled': true, 'evaluation_interval': 10, 'fitness_threshold': 0.1, 'pruning_enabled': true, 'pruning_backup_dir': 'logs/pruning_backups/' }",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643217.2354145
+    },
+    {
+      "strategy": "modify core/capability_manager.py: Add a method to track capability usage frequency and last active cycle. This data will feed into the evaluator to determine which capabilities are low-impact. Add fields: 'usage_count', 'last_active_cycle', 'fitness_contribution' to each capability record.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643225.2004747
+    },
+    {
+      "strategy": "modify core/goal_manager.py: Add a method to record fitness scores from external evaluation (if available). The evaluator will call this after each external test suite run. Store fitness history as a time series in a new field 'fitness_history' in the system state.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643244.2564418
+    },
+    {
+      "strategy": "modify tests/test_meta_cognitive_evaluator.py: Create unit tests for the meta-cognitive evaluator: (1) test that it correctly computes fitness/capability ratio, (2) test that it triggers pruning when ratio < 0.1, (3) test that it correctly identifies low-impact modules based on usage frequency, (4) test that it does not trigger pruning when ratio >= 0.1, (5) test integration with orchestrator's cycle counter.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643263.0871027
+    },
+    {
+      "strategy": "modify core/pruning_module.py: Enhance the existing triage and pruning module (if exists) or create a new pruning routine that: (1) takes a list of low-impact module names from the evaluator, (2) backs up those modules to logs/pruning_backups/, (3) removes them from active codebase, (4) updates capability registry, (5) logs the pruning action with reason and impact analysis.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643276.589059
+    },
+    {
+      "strategy": "modify core/system_state.py: Add fields to system state: 'fitness_history' (list of {cycle, fitness_score}), 'capability_count_history' (list of {cycle, count}), 'pruning_history' (list of pruned modules with timestamps). Ensure these are serialized/deserialized for persistence.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643287.0929828
+    },
+    {
+      "strategy": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
+      "outcome": "7/8 steps succeeded",
+      "timestamp": 1780643287.1242185
+    },
+    {
+      "strategy": "mutation:crossover(retry_is_prime,quicksorted_prime_factors)",
+      "outcome": "Created retry_prime_factorization, score=0.4",
+      "timestamp": 1780643289.7216628
+    },
+    {
+      "strategy": "mutation:mutate(retry_fibonacci_prime_check,retry)",
+      "outcome": "Created retry_fibonacci_prime_search, score=0.6",
+      "timestamp": 1780643292.21641
+    },
+    {
+      "strategy": "mutation:hybrid(retry_prime_fibonacci,retry_prime_factorization)",
+      "outcome": "Created retry_prime_factors_of_fibonacci, score=0.6",
+      "timestamp": 1780643294.6499467
     }
   ],
   "capabilities_developed": []

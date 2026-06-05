@@ -1087,5 +1087,99 @@
       ]
     },
     "timestamp": 1780641477.8052306
+  },
+  {
+    "topic": "Self-Healing Code Generation: Automated repair of truncated or malformed code modifications",
+    "data": {
+      "state_of_art": "Self-healing code generation focuses on automatically detecting and repairing truncation or malformation in code modifications, often caused by LLM output limits, syntax errors, or incomplete refactoring. State-of-the-art approaches combine neural program repair (NPR) with symbolic methods, leveraging large language models (LLMs) fine-tuned on repair tasks, grammar-aware beam search, and iterative refinement loops. Tools like GitHub Copilot's 'fix' feature and OpenAI's Codex with self-correction prompts represent current practice, while research explores using formal verification to guide repairs.",
+      "key_techniques": [
+        "Neural Program Repair (NPR) with transformers (e.g., CodeBERT, GraphCodeBERT) fine-tuned on bug-fix datasets",
+        "Grammar-constrained decoding (e.g., SynCode, PCFG-based beam search) to ensure syntactically valid outputs",
+        "Iterative self-correction: LLM generates code, then re-prompts with error messages or partial execution traces",
+        "Symbolic repair using abstract syntax tree (AST) diffing and patch generation (e.g., GenProg, Prophet)",
+        "Hybrid approaches combining static analysis (type checkers, linters) with neural models for targeted fixes",
+        "Test-driven repair: generating patches that pass a suite of unit tests (e.g., TBar, RewardRepair)"
+      ],
+      "implementation_strategies": [
+        "Use a two-stage pipeline: first detect truncation/malformation via syntax checking or length heuristics, then apply a repair model (e.g., fine-tuned CodeLlama) with constrained decoding",
+        "Integrate a grammar-aware tokenizer that prevents invalid sequences during generation (e.g., using Lark or ANTLR for parsing)",
+        "Implement a feedback loop: run generated code through a linter (e.g., ESLint for JS, PyLint for Python), parse errors, and feed them back into the LLM as prompts",
+        "Leverage partial execution: execute code up to the truncation point and use runtime errors to guide repair",
+        "Use a 'repair by deletion' strategy: if a modification is malformed, revert to the original code and re-apply changes incrementally with validation",
+        "Build a cache of common repair patterns (e.g., missing closing brackets, incomplete function calls) for fast rule-based fixes before neural inference"
+      ],
+      "pitfalls": [
+        "Over-repair: fixing code that is actually correct but flagged by overly strict linters or incomplete test suites",
+        "Repair loops that never converge: iterative self-correction can oscillate between malformed states or degrade quality",
+        "Ignoring semantic correctness: syntax repair alone may produce code that is valid but logically wrong",
+        "High latency: grammar-constrained decoding and multiple LLM calls can be too slow for real-time use",
+        "Data leakage: using bug-fix datasets that include the same malformed patterns as training data can lead to overfitting",
+        "Context window limits: truncation itself may be caused by context overflow, making repair harder if the full context is lost"
+      ],
+      "unconventional": [
+        "Use adversarial training: generate intentionally truncated/malformed code and train a discriminator to detect and repair them",
+        "Apply differential evolution: treat code as a genetic program and evolve repairs using crossover/mutation on AST nodes",
+        "Leverage program synthesis from examples: given the intended behavior (via tests or specs), synthesize a correct version from scratch and diff it with the malformed code",
+        "Use a 'code DNA' representation: encode code as a sequence of edit operations (like a diff patch) and repair the edit sequence instead of the code itself",
+        "Employ a multi-agent system: one agent generates code, another detects truncation, a third suggests repairs via debate, and a fourth validates with formal methods",
+        "Incorporate probabilistic programming: model code as a probabilistic grammar and use Bayesian inference to sample the most likely complete version given partial observations"
+      ]
+    },
+    "timestamp": 1780643308.4503326
+  },
+  {
+    "topic": "Adaptive Context-Aware Mutation: Learning from failure patterns to prioritize and refine mutation strategies",
+    "data": {
+      "state_of_art": "Adaptive context-aware mutation is an emerging area in evolutionary computation and software testing, where mutation strategies are dynamically adjusted based on historical failure patterns and contextual information. Current state-of-the-art approaches include: (1) Reinforcement learning-based mutation selection, where an agent learns to choose mutation operators based on past success/failure feedback; (2) Bayesian optimization for mutation rate tuning, which models the relationship between mutation parameters and solution quality; (3) Graph neural networks that encode program structure to predict effective mutation points; (4) Meta-learning frameworks that transfer knowledge across related tasks to accelerate mutation strategy adaptation; (5) Online learning algorithms that update mutation probabilities in real-time using bandit-style feedback. These methods are applied in genetic programming, fuzz testing, and automated program repair, with recent advances integrating large language models to generate context-aware mutations.",
+      "key_techniques": [
+        "Reinforcement learning for mutation operator selection (e.g., Q-learning, policy gradients)",
+        "Bayesian optimization for adaptive mutation rate control",
+        "Graph neural networks for structural context encoding",
+        "Multi-armed bandit algorithms for online strategy adaptation",
+        "Meta-learning (MAML, Reptile) for few-shot mutation strategy transfer",
+        "Attention mechanisms to weight mutation importance based on failure patterns",
+        "Surrogate models to predict mutation impact before execution",
+        "Contrastive learning to distinguish effective vs. ineffective mutations",
+        "Evolutionary strategies with covariance matrix adaptation (CMA-ES) for continuous mutation parameters",
+        "Adversarial mutation generation using generative adversarial networks"
+      ],
+      "implementation_strategies": [
+        "Start with a lightweight bandit-based approach (e.g., Thompson sampling) to dynamically select mutation operators based on recent success rates, then gradually incorporate context features.",
+        "Use a sliding window of recent failures to compute failure pattern embeddings (e.g., via autoencoders) and feed them into a mutation policy network.",
+        "Implement a two-level architecture: a global meta-controller that learns mutation strategies across tasks, and a local controller that adapts per-instance.",
+        "Leverage program dependency graphs or abstract syntax trees as context input for graph neural networks to predict mutation efficacy.",
+        "Combine online learning with periodic offline retraining using accumulated failure logs to refine mutation strategies.",
+        "Use Bayesian optimization with Gaussian processes to tune mutation rates and operator probabilities, updating the surrogate model after each generation.",
+        "Employ curriculum learning: start with simple mutations and gradually introduce complex ones as failure patterns become more nuanced.",
+        "Implement a feedback loop that logs mutation outcomes (success/failure, improvement magnitude) and uses them to update a priority queue of mutation strategies.",
+        "Integrate with existing fuzzing or genetic programming frameworks (e.g., LibFuzzer, DEAP) by adding a context-aware mutation module as a plugin.",
+        "Use transfer learning: pre-train a mutation policy on a diverse set of problems, then fine-tune on the target domain with few-shot learning."
+      ],
+      "pitfalls": [
+        "Overfitting to specific failure patterns, leading to poor generalization across different problem instances or domains.",
+        "Computational overhead of context extraction (e.g., building dependency graphs) that outweighs mutation benefits.",
+        "Catastrophic forgetting in online learning when failure patterns shift abruptly.",
+        "Reward sparsity: many mutations fail, making it hard to learn effective strategies without careful reward shaping.",
+        "Ignoring exploration: too much exploitation of known successful mutations can miss novel, more effective strategies.",
+        "Context misalignment: using irrelevant or noisy context features that degrade mutation quality.",
+        "Cold start problem: initial lack of failure data leads to random or suboptimal mutation choices.",
+        "Instability in reinforcement learning due to non-stationary environments (mutation effects change as the solution evolves).",
+        "Scalability issues when context is high-dimensional (e.g., entire program ASTs).",
+        "Neglecting diversity: focusing only on failure patterns may reduce population diversity and cause premature convergence."
+      ],
+      "unconventional": [
+        "Use evolutionary game theory to model mutation strategies as competing species, where failure patterns define ecological niches.",
+        "Apply quantum-inspired mutation operators that exploit superposition to test multiple mutations simultaneously.",
+        "Leverage chaos theory: treat mutation as a perturbation in a dynamical system and use Lyapunov exponents to guide adaptation.",
+        "Implement a 'mutation zoo' with self-organizing maps that cluster failure patterns and assign specialized mutation strategies to each cluster.",
+        "Use neuromodulation in neural networks: simulate biological neuromodulators (e.g., dopamine) to adjust mutation rates based on surprise or novelty of failures.",
+        "Adopt a 'red team/blue team' adversarial setup: one agent generates mutations to cause failures, another learns to avoid them.",
+        "Incorporate counterfactual reasoning: simulate 'what if' scenarios to estimate the impact of alternative mutations before applying them.",
+        "Use topological data analysis (persistent homology) on failure pattern spaces to identify mutation strategies that target topological features.",
+        "Apply swarm intelligence: have multiple mutation agents with different strategies that share failure pattern information via stigmergy.",
+        "Explore 'mutation by analogy': use large language models to generate mutations inspired by similar failure patterns from unrelated domains."
+      ]
+    },
+    "timestamp": 1780643323.8017747
   }
 ]
