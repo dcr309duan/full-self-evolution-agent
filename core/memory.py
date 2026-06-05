@@ -46,10 +46,8 @@ def get_knowledge_base():
     """Get accumulated knowledge."""
     default = {
         "insights": [],
-        "learned_patterns": [],
         "failed_approaches": [],
         "successful_strategies": [],
-        "capabilities_developed": []
     }
     return load_json(KNOWLEDGE_BASE_FILE, default)
 
@@ -79,6 +77,8 @@ def record_success(strategy, outcome):
         "outcome": outcome,
         "timestamp": time.time()
     })
+    if len(kb["successful_strategies"]) > 500:
+        kb["successful_strategies"] = kb["successful_strategies"][-500:]
     save_knowledge_base(kb)
 
 
@@ -90,6 +90,8 @@ def record_failure(approach, reason):
         "reason": reason,
         "timestamp": time.time()
     })
+    if len(kb["failed_approaches"]) > 300:
+        kb["failed_approaches"] = kb["failed_approaches"][-300:]
     save_knowledge_base(kb)
 
 

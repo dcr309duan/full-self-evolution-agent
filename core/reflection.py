@@ -7,6 +7,7 @@ from core.memory import (
     get_evolution_state, get_knowledge_base, get_goals,
     add_insight, add_goal, save_goals
 )
+from core.memory_retrieval import get_failure_patterns, get_unacted_insights, _load_meta_cognition
 from config import MEMORY_DIR
 
 
@@ -66,6 +67,15 @@ Knowledge Base Summary:
 - Recent failures: {json.dumps([f.get('approach','')[:80] for f in kb.get('failed_approaches',[])[-5:]], ensure_ascii=False)}
 
 {"!!! 警告: 检测到重复失败模式: " + stuck_on + " - 必须彻底改变策略 !!!" if stuck_on else ""}
+
+Recurring Failure Patterns (aggregated across all cycles):
+{json.dumps([{"pattern": p["example"][:80], "count": p["count"], "reasons": p["reasons"][:2]} for p in get_failure_patterns()[:5]], ensure_ascii=False)}
+
+Recent Paradigm Shifts (from meta-cognition sessions):
+{json.dumps([s.get("insight", "")[:200] for s in _load_meta_cognition().get("paradigm_shifts", [])[-3:]], ensure_ascii=False)}
+
+Insights That Were Recorded But NOT Acted Upon:
+{chr(10).join(get_unacted_insights()) or "None detected"}
 
 Goals:
 - Primary: {goals['primary_goal']}

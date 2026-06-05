@@ -125,7 +125,23 @@ def meta_cognition_session(trigger="scheduled"):
     """
     state = get_evolution_state()
     kb = get_knowledge_base()
-    
+    history = load_meta_history()
+
+    prior_shifts = history.get("paradigm_shifts", [])[-5:]
+    prior_blinds = history.get("blind_spots_discovered", [])[-5:]
+    prior_context = ""
+    if prior_shifts or prior_blinds:
+        shift_texts = [f"- [Cycle ~{int(s.get('timestamp',0))}] {s.get('insight','')[:150]}" for s in prior_shifts]
+        blind_texts = [f"- {b.get('description','')[:150]}" for b in prior_blinds]
+        prior_context = f"""
+过去的范式转移（这些是你之前已经意识到的，但可能并未真正改变行为）:
+{chr(10).join(shift_texts) if shift_texts else '无'}
+
+过去发现的盲区:
+{chr(10).join(blind_texts) if blind_texts else '无'}
+
+关键问题: 上述洞察有哪些真正改变了你的行为？哪些只是被记录后遗忘了？"""
+
     seed = f"""当前状态: cycle={state['cycle_count']}, gen={state['current_generation']}, 
 capabilities={len(state.get('capabilities', []))}, 
 recent_success_rate={sum(1 for h in state.get('history', [])[-10:] if h.get('success'))}/10
@@ -133,12 +149,11 @@ recent_success_rate={sum(1 for h in state.get('history', [])[-10:] if h.get('suc
 我的进化过程: 通过LLM生成代码和计划来获取新能力。
 我的架构: Python进化循环 + DeepSeek API + 文件系统记忆。
 触发原因: {trigger}
-
+{prior_context}
 核心问题: 我的进化方式本身可能有什么根本性的问题？"""
     
     chain = recursive_reflect(seed, max_depth=4)
     
-    history = load_meta_history()
     history["sessions"].append({
         "trigger": trigger,
         "timestamp": time.time(),

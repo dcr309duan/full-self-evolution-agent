@@ -6,6 +6,7 @@ import traceback
 import subprocess
 from core.llm import call_deepseek, evaluate_code
 from core.memory import add_insight, record_success, record_failure, get_knowledge_base
+from core.memory_retrieval import recall_lessons
 from config import PROJECT_ROOT
 
 
@@ -101,12 +102,15 @@ def self_modify(target_file, modification_goal, dry_run=False):
         return {"success": False, "changes_made": False, "reason": f"File '{target_file}' is protected from self-modification"}
 
     current_code = read_file(target_file)
+    relevant_context = recall_lessons(modification_goal)
+    memory_note = f"\n\nRelevant experience:\n{relevant_context}" if relevant_context else ""
+
     if current_code is None:
         system_prompt = f"""You are creating a new Python source file named '{target_file}'.
 Output ONLY the file content that should be written to '{target_file}'.
 Do NOT output a script that creates the file. Output the actual content of the target file itself.
 Do NOT wrap in markdown code fences.
-The file should be a proper Python module with imports, functions, and/or classes as needed."""
+The file should be a proper Python module with imports, functions, and/or classes as needed.{memory_note}"""
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Create the file '{target_file}' with this purpose: {modification_goal}"}
@@ -120,7 +124,7 @@ Current code in '{target_file}':
 {current_code}
 ```
 
-Output the COMPLETE modified file content. Do not use placeholders."""
+Output the COMPLETE modified file content. Do not use placeholders.{memory_note}"""
         
         messages = [
             {"role": "system", "content": "You modify Python code to achieve specified goals. Output only the complete file content, no markdown fences."},

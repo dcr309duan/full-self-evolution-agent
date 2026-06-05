@@ -19,6 +19,7 @@ from core.reporter import write_report, generate_timeline
 from core.meta_cognition import meta_cognition_session, question_everything
 from core.mutation_engine import run_mutation_cycle
 from core.knowledge_acquisition import autonomous_research_cycle
+from core.memory_retrieval import recall_lessons
 
 
 def log_cycle(cycle_num, message):
@@ -92,8 +93,7 @@ def execute_goal(goal, state):
     goal_desc = goal["description"]
     log_cycle(state["cycle_count"], f"Executing goal: {goal_desc}")
     
-    kb = get_knowledge_base()
-    knowledge_summary = json.dumps(kb.get("insights", [])[-5:])
+    knowledge_summary = recall_lessons(goal_desc)
     
     plan = generate_plan(
         goal_desc,

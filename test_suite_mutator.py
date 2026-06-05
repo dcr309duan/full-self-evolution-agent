@@ -1,0 +1,468 @@
+"""test_suite_mutator.py
+
+A self-modifying module for mutating test cases to generate new variants.
+Supports parameterization of inputs, edge case injection, scenario combination,
+and introduction of failure modes. Tracks mutation effectiveness and can
+rewrite its own mutation strategies based on learning signals.
+"""
+
+import inspect
+import random
+import copy
+import ast
+import types
+import sys
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from collections import defaultdict, Counter
+from dataclasses import dataclass, field
+import itertools
+
+# ---------------------------------------------------------------------------
+# Data structures for mutation tracking
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MutationRecord:
+    """Record of a single mutation application."""
+    mutation_id: str
+    mutation_type: str
+    original_test: str
+    mutated_test: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    learning_signal: float = 0.0  # e.g., coverage increase, bug detection rate
+    times_applied: int = 0
+    times_useful: int = 0
+
+    @property
+    def effectiveness(self) -> float:
+        """Ratio of useful applications to total applications."""
+        if self.times_applied == 0:
+            return 0.0
+        return self.times_useful / self.times_applied
+
+
+class MutationTracker:
+    """Tracks mutation records and computes learning signals."""
+
+    def __init__(self):
+        self.records: Dict[str, MutationRecord] = {}
+        self.history: List[MutationRecord] = []
+
+    def register_mutation(self, mutation_type: str, original: str, mutated: str,
+                          params: Dict[str, Any] = None) -> str:
+        """Register a new mutation and return its ID."""
+        mutation_id = f"{mutation_type}_{len(self.history)}_{random.randint(0, 10000)}"
+        record = MutationRecord(
+            mutation_id=mutation_id,
+            mutation_type=mutation_type,
+            original_test=original,
+            mutated_test=mutated,
+            parameters=params or {}
+        )
+        self.records[mutation_id] = record
+        self.history.append(record)
+        return mutation_id
+
+    def record_application(self, mutation_id: str, useful: bool):
+        """Update usage statistics for a mutation."""
+        if mutation_id in self.records:
+            self.records[mutation_id].times_applied += 1
+            if useful:
+                self.records[mutation_id].times_useful += 1
+
+    def set_learning_signal(self, mutation_id: str, signal: float):
+        """Set the learning signal for a mutation."""
+        if mutation_id in self.records:
+            self.records[mutation_id].learning_signal = signal
+
+    def get_best_mutations(self, top_n: int = 5) -> List[MutationRecord]:
+        """Return the top N mutations by effectiveness."""
+        sorted_records = sorted(
+            self.records.values(),
+            key=lambda r: (r.effectiveness, r.learning_signal),
+            reverse=True
+        )
+        return sorted_records[:top_n]
+
+    def get_mutation_stats(self) -> Dict[str, Any]:
+        """Return aggregate statistics."""
+        if not self.records:
+            return {}
+        total = len(self.records)
+        useful = sum(1 for r in self.records.values() if r.times_useful > 0)
+        avg_effectiveness = sum(r.effectiveness for r in self.records.values()) / total
+        return {
+            "total_mutations": total,
+            "useful_mutations": useful,
+            "avg_effectiveness": avg_effectiveness,
+            "best_mutation": self.get_best_mutations(1)[0] if self.records else None
+        }
+
+
+# ---------------------------------------------------------------------------
+# Mutation strategies (can be self-modified)
+# ---------------------------------------------------------------------------
+
+class MutationStrategy:
+    """Base class for mutation strategies."""
+
+    def __init__(self, name: str, mutator: 'TestSuiteMutator'):
+        self.name = name
+        self.mutator = mutator
+
+    def mutate(self, test_code: str) -> str:
+        """Apply mutation to test code. Override in subclasses."""
+        raise NotImplementedError
+
+    def __repr__(self):
+        return f"MutationStrategy({self.name})"
+
+
+class ParameterizeInputs(MutationStrategy):
+    """Replace hardcoded inputs with parameterized versions."""
+
+    def __init__(self, mutator: 'TestSuiteMutator'):
+        super().__init__("parameterize_inputs", mutator)
+
+    def mutate(self, test_code: str) -> str:
+        # Simple heuristic: find function calls with literal arguments and replace
+        # with parameterized versions.
+        lines = test_code.split('\n')
+        mutated_lines = []
+        for line in lines:
+            # Look for patterns like func(5) or func("hello")
+            if '(' in line and ')' in line and 'def ' not in line and 'assert' not in line:
+                # Replace literal arguments with parameterized versions
+                # This is a simplified version; real implementation would use AST
+                import re
+                # Replace integer literals
+                line = re.sub(r'\((\d+)\)', r'(param_\1)', line)
+                # Replace string literals
+                line = re.sub(r'\("([^"]+)"\)', r'("param_\1")', line)
+            mutated_lines.append(line)
+        return '\n'.join(mutated_lines)
+
+
+class AddEdgeCases(MutationStrategy):
+    """Add edge case test scenarios."""
+
+    EDGE_CASES = [
+        ("empty_input", "assert func('') == expected_empty"),
+        ("zero_input", "assert func(0) == expected_zero"),
+        ("negative_input", "assert func(-1) == expected_negative"),
+        ("large_input", "assert func(10**6) == expected_large"),
+        ("none_input", "assert func(None) == expected_none"),
+        ("boundary_input", "assert func(sys.maxsize) == expected_boundary"),
+    ]
+
+    def __init__(self, mutator: 'TestSuiteMutator'):
+        super().__init__("add_edge_cases", mutator)
+
+    def mutate(self, test_code: str) -> str:
+        # Add edge case assertions after the last assertion in the test
+        lines = test_code.split('\n')
+        # Find the last assert line
+        last_assert_idx = -1
+        for i, line in enumerate(lines):
+            if line.strip().startswith('assert'):
+                last_assert_idx = i
+
+        if last_assert_idx >= 0:
+            # Insert edge cases after the last assert
+            edge_case = random.choice(self.EDGE_CASES)
+            indent = '    '  # Assume 4-space indent
+            edge_line = f"{indent}# Edge case: {edge_case[0]}\n{indent}{edge_case[1]}"
+            lines.insert(last_assert_idx + 1, edge_line)
+            return '\n'.join(lines)
+        return test_code
+
+
+class CombineScenarios(MutationStrategy):
+    """Combine multiple test scenarios into one."""
+
+    def __init__(self, mutator: 'TestSuiteMutator'):
+        super().__init__("combine_scenarios", mutator)
+
+    def mutate(self, test_code: str) -> str:
+        # Combine multiple assert statements into a single test with multiple scenarios
+        lines = test_code.split('\n')
+        assert_lines = [i for i, line in enumerate(lines) if line.strip().startswith('assert')]
+        if len(assert_lines) < 2:
+            return test_code
+
+        # Pick two assert lines to combine
+        idx1, idx2 = random.sample(assert_lines, 2)
+        # Create a combined scenario
+        combined = f"# Combined scenario\nfor input_val in [input1, input2]:\n    assert func(input_val) == expected"
+        # Replace the two assert lines with the combined version
+        # This is a simplified approach
+        lines[idx1] = combined
+        lines[idx2] = f"    # (combined from line {idx2})"
+        return '\n'.join(lines)
+
+
+class IntroduceFailureModes(MutationStrategy):
+    """Introduce new failure modes by modifying assertions."""
+
+    FAILURE_MODES = [
+        ("off_by_one", lambda x: f"assert func({x}) == expected_{x} + 1"),
+        ("type_error", lambda x: f"assert func('{x}') == expected_string"),
+        ("negation", lambda x: f"assert not func({x}) == expected_{x}"),
+        ("boundary_flip", lambda x: f"assert func({x}) < expected_{x}"),
+    ]
+
+    def __init__(self, mutator: 'TestSuiteMutator'):
+        super().__init__("introduce_failure_modes", mutator)
+
+    def mutate(self, test_code: str) -> str:
+        lines = test_code.split('\n')
+        for i, line in enumerate(lines):
+            if line.strip().startswith('assert') and 'func(' in line:
+                # Extract the argument
+                import re
+                match = re.search(r'func\(([^)]+)\)', line)
+                if match:
+                    arg = match.group(1)
+                    failure_mode = random.choice(self.FAILURE_MODES)
+                    new_assert = failure_mode[1](arg)
+                    lines[i] = f"    # Failure mode: {failure_mode[0]}\n    {new_assert}"
+                    break
+        return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Self-modification engine
+# ---------------------------------------------------------------------------
+
+class SelfModificationEngine:
+    """Allows the module to rewrite its own mutation strategies."""
+
+    def __init__(self, mutator: 'TestSuiteMutator'):
+        self.mutator = mutator
+        self.source_file = __file__ if '__file__' in globals() else 'test_suite_mutator.py'
+
+    def add_strategy(self, strategy_code: str, strategy_name: str = None):
+        """Add a new mutation strategy dynamically."""
+        # Parse the strategy code
+        try:
+            tree = ast.parse(strategy_code)
+            # Find class definitions
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    strategy_name = node.name
+                    break
+            if not strategy_name:
+                raise ValueError("No class found in strategy code")
+            # Compile and execute the new class
+            compiled = compile(tree, '<string>', 'exec')
+            local_scope = {}
+            exec(compiled, globals(), local_scope)
+            # Instantiate and register
+            new_class = local_scope.get(strategy_name)
+            if new_class and issubclass(new_class, MutationStrategy):
+                instance = new_class(self.mutator)
+                self.mutator.strategies[strategy_name] = instance
+                return instance
+        except Exception as e:
+            raise RuntimeError(f"Failed to add strategy: {e}")
+
+    def remove_strategy(self, strategy_name: str):
+        """Remove a mutation strategy."""
+        if strategy_name in self.mutator.strategies:
+            del self.mutator.strategies[strategy_name]
+
+    def modify_strategy(self, strategy_name: str, new_code: str):
+        """Replace an existing strategy with new code."""
+        self.remove_strategy(strategy_name)
+        return self.add_strategy(new_code)
+
+    def get_strategy_source(self, strategy_name: str) -> str:
+        """Get the source code of a strategy."""
+        strategy = self.mutator.strategies.get(strategy_name)
+        if strategy:
+            return inspect.getsource(strategy.__class__)
+        return ""
+
+    def rewrite_self(self, new_strategies: Dict[str, str]):
+        """Rewrite the module file with new strategies."""
+        # Read current source
+        with open(self.source_file, 'r') as f:
+            source = f.read()
+
+        # Find the mutation strategies section and replace
+        # This is a simplified approach; real implementation would use AST
+        for name, code in new_strategies.items():
+            # Find the class definition and replace
+            import re
+            pattern = rf"class {name}\(MutationStrategy\):.*?(?=\nclass |\n#|\Z)"
+            replacement = code.strip()
+            source = re.sub(pattern, replacement, source, flags=re.DOTALL)
+
+        # Write back
+        with open(self.source_file, 'w') as f:
+            f.write(source)
+
+        # Reload the module
+        import importlib
+        importlib.reload(sys.modules[__name__])
+
+
+# ---------------------------------------------------------------------------
+# Main mutator class
+# ---------------------------------------------------------------------------
+
+class TestSuiteMutator:
+    """Main class for mutating test suites."""
+
+    def __init__(self):
+        self.tracker = MutationTracker()
+        self.self_mod = SelfModificationEngine(self)
+        self.strategies: Dict[str, MutationStrategy] = {
+            "parameterize_inputs": ParameterizeInputs(self),
+            "add_edge_cases": AddEdgeCases(self),
+            "combine_scenarios": CombineScenarios(self),
+            "introduce_failure_modes": IntroduceFailureModes(self),
+        }
+        self.mutation_history: List[Tuple[str, str, str]] = []  # (original, mutated, strategy)
+
+    def mutate(self, test_code: str, strategy_name: str = None) -> str:
+        """Apply a mutation to test code."""
+        if strategy_name:
+            strategy = self.strategies.get(strategy_name)
+            if not strategy:
+                raise ValueError(f"Unknown strategy: {strategy_name}")
+        else:
+            # Pick a random strategy
+            strategy = random.choice(list(self.strategies.values()))
+
+        mutated = strategy.mutate(test_code)
+        mutation_id = self.tracker.register_mutation(
+            strategy.name, test_code, mutated
+        )
+        self.mutation_history.append((test_code, mutated, strategy.name))
+        return mutated
+
+    def mutate_multiple(self, test_cases: List[str], num_mutations: int = 5) -> List[str]:
+        """Generate multiple mutated versions of test cases."""
+        results = []
+        for _ in range(num_mutations):
+            test = random.choice(test_cases)
+            mutated = self.mutate(test)
+            results.append(mutated)
+        return results
+
+    def evaluate_mutation(self, mutation_id: str, test_results: Dict[str, bool]) -> float:
+        """Evaluate a mutation based on test results and compute learning signal."""
+        record = self.tracker.records.get(mutation_id)
+        if not record:
+            return 0.0
+
+        # Compute learning signal based on:
+        # - How many new failures were detected
+        # - How much coverage increased
+        # - Diversity of inputs
+        signal = 0.0
+        if test_results:
+            failures = sum(1 for v in test_results.values() if not v)
+            signal = failures / len(test_results)
+
+        self.tracker.set_learning_signal(mutation_id, signal)
+        return signal
+
+    def get_best_strategies(self, top_n: int = 2) -> List[str]:
+        """Return the names of the best performing strategies."""
+        best_mutations = self.tracker.get_best_mutations(top_n)
+        strategy_counts = Counter(r.mutation_type for r in best_mutations)
+        return [s for s, _ in strategy_counts.most_common(top_n)]
+
+    def adapt_strategies(self):
+        """Adapt mutation strategies based on learning signals."""
+        best = self.get_best_strategies(2)
+        # Strengthen best strategies by modifying their behavior
+        for strategy_name in best:
+            strategy = self.strategies.get(strategy_name)
+            if strategy:
+                # Example adaptation: increase aggressiveness
+                if hasattr(strategy, 'EDGE_CASES'):
+                    # Add more edge cases
+                    new_edge = ("random_edge", "assert func(random.random()) == expected_random")
+                    if new_edge not in strategy.EDGE_CASES:
+                        strategy.EDGE_CASES.append(new_edge)
+
+    def generate_report(self) -> Dict[str, Any]:
+        """Generate a report of mutation activities."""
+        stats = self.tracker.get_mutation_stats()
+        return {
+            "statistics": stats,
+            "best_strategies": self.get_best_strategies(),
+            "total_mutations_applied": len(self.mutation_history),
+            "active_strategies": list(self.strategies.keys()),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Utility functions for external use
+# ---------------------------------------------------------------------------
+
+def create_mutator() -> TestSuiteMutator:
+    """Factory function to create a configured mutator."""
+    return TestSuiteMutator()
+
+
+def mutate_test_file(filepath: str, output_path: str = None, num_mutations: int = 10):
+    """Mutate all test cases in a file and write to output."""
+    mutator = create_mutator()
+    with open(filepath, 'r') as f:
+        content = f.read()
+
+    # Split into individual test functions (simple heuristic)
+    test_cases = []
+    current_test = []
+    for line in content.split('\n'):
+        if line.strip().startswith('def test_'):
+            if current_test:
+                test_cases.append('\n'.join(current_test))
+            current_test = [line]
+        else:
+            current_test.append(line)
+    if current_test:
+        test_cases.append('\n'.join(current_test))
+
+    # Mutate
+    mutated_tests = mutator.mutate_multiple(test_cases, num_mutations)
+
+    # Write output
+    output = output_path or filepath.replace('.py', '_mutated.py')
+    with open(output, 'w') as f:
+        f.write("# Auto-generated mutated test cases\n")
+        f.write(f"# Original source: {filepath}\n\n")
+        for test in mutated_tests:
+            f.write(test + '\n\n')
+
+    return mutator.generate_report()
+
+
+# ---------------------------------------------------------------------------
+# Self-test / demo
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    # Demo the mutator
+    sample_test = """
+def test_addition():
+    assert add(2, 3) == 5
+    assert add(-1, 1) == 0
+    assert add(0, 0) == 0
+"""
+
+    mutator = create_mutator()
+    print("Original test:")
+    print(sample_test)
+    print("\nMutated versions:")
+    for i in range(3):
+        mutated = mutator.mutate(sample_test)
+        print(f"\n--- Mutation {i+1} ---")
+        print(mutated)
+
+    print("\nReport:")
+    print(mutator.generate_report())

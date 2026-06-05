@@ -6,7 +6,12 @@ class GoalDependencyGraph:
     """
     A directed acyclic graph (DAG) of goals and their dependencies.
     Maintains adjacency lists using sets for O(1) lookups.
+    Supports multiple node types including regular goals and benchmark creation goals.
     """
+
+    # Node type constants
+    GOAL = "GOAL"
+    BENCHMARK_CREATION = "BENCHMARK_CREATION"
 
     def __init__(self):
         # adjacency list: goal -> set of prerequisites (dependencies)
@@ -15,11 +20,19 @@ class GoalDependencyGraph:
         self._dependents: Dict[str, Set[str]] = defaultdict(set)
         # set of goals that have been marked as met
         self._met: Set[str] = set()
+        # node type mapping: node_name -> type string
+        self._node_types: Dict[str, str] = {}
 
-    def add_goal(self, name: str, dependencies: Optional[List[str]] = None) -> None:
+    def add_goal(self, name: str, dependencies: Optional[List[str]] = None, 
+                 node_type: str = GOAL) -> None:
         """
         Add a goal with its dependencies (prerequisites).
         If the goal already exists, its dependencies are updated.
+        
+        Args:
+            name: The name of the goal/node
+            dependencies: List of prerequisite node names
+            node_type: Type of node (GOAL or BENCHMARK_CREATION)
         """
         if dependencies is None:
             dependencies = []
@@ -41,6 +54,9 @@ class GoalDependencyGraph:
         # Ensure the goal is in the dependents dict even if no one depends on it yet
         if name not in self._dependents:
             self._dependents[name] = set()
+
+        # Set node type
+        self._node_types[name] = node_type
 
     def remove_goal(self, name: str) -> None:
         """
@@ -66,6 +82,7 @@ class GoalDependencyGraph:
         if name in self._dependents:
             del self._dependents[name]
         self._met.discard(name)
+        self._node_types.pop(name, None)
 
     def get_dependents(self, name: str) -> Set[str]:
         """
@@ -99,6 +116,13 @@ class GoalDependencyGraph:
         """
         self._met.discard(name)
 
+    def get_node_type(self, name: str) -> Optional[str]:
+        """
+        Get the type of a node (GOAL or BENCHMARK_CREATION).
+        Returns None if the node doesn't exist.
+        """
+        return self._node_types.get(name)
+
     def get_blocked_goals(self) -> Set[str]:
         """
         Get all goals that have unmet prerequisites.
@@ -122,13 +146,20 @@ class GoalDependencyGraph:
                     ready.add(goal)
         return ready
 
+    def get_goals_by_type(self, node_type: str) -> Set[str]:
+        """
+        Get all nodes of a specific type.
+        """
+        return {name for name, ntype in self._node_types.items() if ntype == node_type}
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Serialize the graph to a dictionary.
         """
         return {
             "prerequisites": {k: list(v) for k, v in self._prerequisites.items()},
-            "met": list(self._met)
+            "met": list(self._met),
+            "node_types": dict(self._node_types)
         }
 
     @classmethod
@@ -137,8 +168,10 @@ class GoalDependencyGraph:
         Deserialize a graph from a dictionary.
         """
         graph = cls()
+        node_types = data.get("node_types", {})
         for goal, prereqs in data.get("prerequisites", {}).items():
-            graph.add_goal(goal, prereqs)
+            node_type = node_types.get(goal, cls.GOAL)
+            graph.add_goal(goal, prereqs, node_type)
         for goal in data.get("met", []):
             graph.mark_met(goal)
         return graph
