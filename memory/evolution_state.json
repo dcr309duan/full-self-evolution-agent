@@ -1,9 +1,8 @@
 {
   "cycle_count": 130,
-  "current_generation": 100,
+  "current_generation": 101,
   "last_evolution_time": 1780648560.4855072,
   "capabilities": [
-    "Create a 'capability fitness function' that measures the number of downstream tasks each capability ",
     "Implement the self-healing retry mechanism for the evolution orchestrator: when a mutation fails val",
     "Create a self-contained integration smoke test that runs the full evolution loop (goal selection → m",
     "Build a lightweight 'mutation simulation' module that, given a proposed mutation, clones the affecte",
@@ -52,15 +51,10 @@
     "Create a minimal end-to-end integration test that runs with a trivial mutation (e.g., adding a comme",
     "Create a 'test-first evolution' workflow: before any mutation can be accepted into the knowledge bas",
     "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflect",
-    "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabiliti"
+    "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabiliti",
+    "Create a 'core mutation sandbox' that intercepts all mutations targeting files in the evolution core"
   ],
   "history": [
-    {
-      "cycle": 24,
-      "goal": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
-      "success": true,
-      "timestamp": 1780626370.5922837
-    },
     {
       "cycle": 25,
       "goal": "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the failure type (syntax, semantic, test timeout, assertion error) into a structured failure history. After each failure, the selector probabilistically chooses from a pool of 3 mutation strategies (random AST splicing, template-based replacement, LLM-guided rewrite) with probabilities updated via a simple bandit algorithm (e.g., epsilon-greedy) favoring strategies that have produced successful mutations in the past 10 attempts. This directly couples failure analysis with adaptive mutation, breaking the cycle of repeated failures.",
@@ -654,6 +648,12 @@
       "goal": "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabilities for novelty and usage scores; drop the bottom 30% and re-implement only the essential ones with improved design. This directly counters the identified tendency to prioritize quantity over quality.",
       "success": true,
       "timestamp": 1780648522.9602718
+    },
+    {
+      "cycle": 130,
+      "goal": "Create a 'core mutation sandbox' that intercepts all mutations targeting files in the evolution core (e.g., evolution_orchestrator.py, goal_generator.py). For each attempted mutation, first generate a dependency impact report listing all modules that depend on the target file; then, only apply the mutation if the number of affected dependencies is less than 3, otherwise reject and log a suggestion for a safer alternative mutation. This directly resolves the core file modification bottleneck and fragile interdependencies identified in the reflection.",
+      "success": true,
+      "timestamp": 1780648828.5918021
     }
   ],
   "status": "evolving"
