@@ -4,6 +4,8 @@ Implements a ReflectionParser class that extracts structured fields from raw ref
 using regex patterns and lightweight NLP heuristics. Extended to analyze multi-file refactoring
 outcomes with fields for files_affected, dependency_changes, and refactoring_success_rate.
 Also tags each reflection entry with actionable insights and outputs structured summary.
+Now includes integration_test_status field to capture pass/fail status and error traces from
+the integration test suite.
 """
 
 import re
@@ -102,6 +104,16 @@ DEFAULT_PATTERNS = {
         r"(?:unclear|ambiguous|uncertain|not\s+understood|not\s+known)",
         r"(?:require\s+(?:research|investigation|exploration|analysis))",
         r"(?:missing\s+(?:context|background|details|specification))",
+    ],
+    "integration_test_status": [
+        r"(?:integration\s+test\s+(?:status|result|outcome))\s*[:=]?\s*(pass|fail|passed|failed|success|error|skipped|incomplete)",
+        r"(?:integration\s+tests?\s+(?:passed|failed|succeeded|errored|skipped|completed))",
+        r"(?:test\s+suite\s+(?:status|result|outcome))\s*[:=]?\s*(pass|fail|passed|failed|success|error|skipped|incomplete)",
+        r"(?:all\s+(?:integration\s+)?tests?\s+(?:passed|failed|succeeded|errored))",
+        r"(?:(\d+)\s+(?:passed|failed|skipped|errored)\s+out\s+of\s+(\d+)\s+(?:integration\s+)?tests?)",
+        r"(?:error\s+trace|traceback|stack\s+trace)\s*[:=]?\s*(.+)",
+        r"(?:failure\s+message|error\s+message)\s*[:=]?\s*(.+)",
+        r"(?:integration\s+test\s+(?:error|failure|exception))\s*[:=]?\s*(.+)",
     ],
 }
 
@@ -294,6 +306,55 @@ class ReflectionParser:
         # Extract refactoring success rate
         success_matches = self.extract_field(text, "refactoring_success_rate")
         results["refactoring_success_rate"] = success_matches
+        
+        return results
+
+    def parse_integration_test_status(self, text: str) -> Dict[str, List[Tuple[str, float]]]:
+        """
+        Extract structured insights from integration test results.
+
+        Args:
+            text: Raw reflection text describing integration test outcomes.
+
+        Returns:
+            Dictionary with keys: integration_test_status, error_traces.
+            Each value is a list of (matched_text, confidence) tuples.
+        """
+        if not text or not isinstance(text, str):
+            return {
+                "integration_test_status": [],
+                "error_traces": []
+            }
+
+        results = {}
+        
+        # Extract integration test status
+        status_matches = self.extract_field(text, "integration_test_status")
+        results["integration_test_status"] = status_matches
+        
+        # Extract error traces separately (more specific patterns)
+        error_trace_patterns = [
+            r"(?:error\s+trace|traceback|stack\s+trace)\s*[:=]?\s*(.+)",
+            r"(?:failure\s+message|error\s+message)\s*[:=]?\s*(.+)",
+            r"(?:integration\s+test\s+(?:error|failure|exception))\s*[:=]?\s*(.+)",
+        ]
+        error_traces = []
+        for pattern_str in error_trace_patterns:
+            pattern = re.compile(pattern_str, re.IGNORECASE)
+            for match in pattern.finditer(text):
+                matched_text = match.group(0).strip()
+                words = matched_text.split()
+                specificity = len(matched_text) / 100.0 + len(words) / 20.0
+                confidence = min(1.0, 0.5 + specificity * 0.1)
+                error_traces.append((matched_text, round(confidence, 2)))
+        
+        # Remove duplicates
+        seen = {}
+        for trace_text, trace_conf in error_traces:
+            key = trace_text.lower()
+            if key not in seen or trace_conf > seen[key][1]:
+                seen[key] = (trace_text, trace_conf)
+        results["error_traces"] = list(seen.values())
         
         return results
 
@@ -606,3 +667,16 @@ if __name__ == "__main__":
         goal_type = parser.extract_goal_type_from_reflection(text)
         print(f"Text: '{text}'")
         print(f"  -> Goal type: {goal_type}\n")
+
+    # Test parse_integration_test_status
+    print("\n=== Integration Test Status Analysis ===")
+    integration_test_text = (
+        "Integration test status: failed. "
+        "Error trace: AssertionError at test_endpoint.py line 42. "
+        "Failure message: Expected status 200 but got 500."
+    )
+    integration_test_result = parser.parse_integration_test_status(integration_test_text)
+    for field, matches in integration_test_result.items():
+        print(f"\n{field}:")
+        for text, conf in matches:
+            print(f"  - '{text}' (confidence: {conf})")

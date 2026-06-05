@@ -4,6 +4,7 @@ Integrates the proactive_redesign_orchestrator into the main evolution loop.
 Before executing retry logic for a failed goal, checks if failure analysis
 suggests a redesign is needed. If so, executes the redesign goal first,
 then retries the original goal with the modified component.
+Also integrates integration_test_suite execution after successful mutations.
 """
 
 import logging
@@ -14,12 +15,13 @@ from goal_manager import GoalManager
 from failure_analyzer import FailureAnalyzer
 from component_registry import ComponentRegistry
 from execution_engine import ExecutionEngine
+from integration_test_suite import IntegrationTestSuite
 
 logger = logging.getLogger(__name__)
 
 
 class UnifiedEvolutionLoopOrchestrator:
-    """Orchestrates the evolution loop with integrated proactive redesign."""
+    """Orchestrates the evolution loop with integrated proactive redesign and integration testing."""
 
     def __init__(
         self,
@@ -28,6 +30,7 @@ class UnifiedEvolutionLoopOrchestrator:
         component_registry: ComponentRegistry,
         execution_engine: ExecutionEngine,
         redesign_orchestrator: ProactiveRedesignOrchestrator,
+        integration_test_suite: IntegrationTestSuite,
         max_retries: int = 3,
     ):
         self.goal_manager = goal_manager
@@ -35,12 +38,14 @@ class UnifiedEvolutionLoopOrchestrator:
         self.component_registry = component_registry
         self.execution_engine = execution_engine
         self.redesign_orchestrator = redesign_orchestrator
+        self.integration_test_suite = integration_test_suite
         self.max_retries = max_retries
         self._loop_active = False
         self.validation_failure_count = 0
+        self.degraded_cycles = 0
 
     def run_evolution_loop(self) -> None:
-        """Main evolution loop that integrates redesign when needed."""
+        """Main evolution loop that integrates redesign and integration testing when needed."""
         self._loop_active = True
         while self._loop_active:
             goal = self.goal_manager.get_next_goal()
@@ -62,6 +67,17 @@ class UnifiedEvolutionLoopOrchestrator:
 
             if result.get("success", False):
                 logger.info(f"Goal {goal_id} succeeded on attempt {attempt}")
+                
+                # After successful mutation and test run, execute integration tests
+                if self._is_mutation_goal(goal):
+                    integration_success = self._run_integration_tests(goal_id)
+                    if not integration_success:
+                        logger.warning(f"Integration tests failed after successful mutation for goal {goal_id}")
+                        self.degraded_cycles += 1
+                        logger.info(f"Degraded cycles count incremented to {self.degraded_cycles}")
+                        self.goal_manager.mark_goal_completed(goal_id, status="degraded")
+                        return
+                
                 self.goal_manager.mark_goal_completed(goal_id)
                 return
 
@@ -87,6 +103,50 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _is_mutation_goal(self, goal: Dict[str, Any]) -> bool:
+        """Check if the goal involves a mutation operation."""
+        goal_type = goal.get("type", "")
+        return goal_type == "mutation" or "mutation" in goal.get("operation", "")
+
+    def _run_integration_tests(self, goal_id: str) -> bool:
+        """Run integration tests on the dummy module and return success status."""
+        try:
+            logger.info(f"Running integration tests after successful mutation for goal {goal_id}")
+            test_results = self.integration_test_suite.run_tests()
+            
+            if test_results.get("success", False):
+                logger.info(f"Integration tests passed for goal {goal_id}")
+                return True
+            else:
+                # Log failure with full trace to reflection system
+                failure_details = test_results.get("failures", [])
+                for failure in failure_details:
+                    logger.error(f"Integration test failure for goal {goal_id}: {failure.get('test_name', 'unknown')}")
+                    logger.error(f"Failure trace: {failure.get('traceback', 'No traceback available')}")
+                    # Log to reflection system
+                    self._log_to_reflection_system(goal_id, failure)
+                return False
+                
+        except Exception as e:
+            logger.exception(f"Error running integration tests for goal {goal_id}: {e}")
+            self._log_to_reflection_system(goal_id, {"error": str(e), "traceback": logging.traceback.format_exc()})
+            return False
+
+    def _log_to_reflection_system(self, goal_id: str, failure_info: Dict[str, Any]) -> None:
+        """Log integration test failure to the reflection system."""
+        try:
+            reflection_entry = {
+                "type": "integration_test_failure",
+                "goal_id": goal_id,
+                "failure_info": failure_info,
+                "cycle_status": "degraded"
+            }
+            # Assuming there's a reflection system logger or storage
+            logger.info(f"Reflection system entry: {reflection_entry}")
+            # In a real implementation, this would write to a reflection database or log
+        except Exception as e:
+            logger.error(f"Failed to log to reflection system: {e}")
 
     def _is_validation_failure(self, result: Dict[str, Any]) -> bool:
         """Check if the failure was due to validation rejection."""
@@ -200,4 +260,5 @@ class UnifiedEvolutionLoopOrchestrator:
             "goals_failed": self.goal_manager.get_failed_goal_count(),
             "components": self.component_registry.get_component_count(),
             "validation_failure_count": self.validation_failure_count,
+            "degraded_cycles": self.degraded_cycles,
         }
