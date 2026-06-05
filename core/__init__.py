@@ -8,6 +8,9 @@ from .capability_bankruptcy import (
     __all__
 )
 
+from .nash_detector import NashEquilibriumDetector, detect_nash_equilibrium, NashDetectorConfig
+from .coordinated_mutation_engine import CoordinatedMutationEngine, MutationConfig, MutationResult
+
 __all__ = [
     'audit_and_prune',
     'get_bankruptcy_stats',
@@ -15,4 +18,10 @@ __all__ = [
     'BankruptcyResult',
     'CapabilityScore',
     'PruningAction',
+    'NashEquilibriumDetector',
+    'detect_nash_equilibrium',
+    'NashDetectorConfig',
+    'CoordinatedMutationEngine',
+    'MutationConfig',
+    'MutationResult',
 ]

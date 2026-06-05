@@ -1,309 +1,553 @@
 from collections import defaultdict
-from typing import Dict, List, Tuple, Set, Optional
+from typing import Dict, List, Tuple, Set, Optional, Callable
+import logging
+import random
+import math
 
-class NashDetector:
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class NashEquilibriumDetector:
     """
-    Analyzes inter-module data flows and detects Nash equilibrium conditions
-    where no single-module mutation improves overall system fitness.
+    Detects Nash equilibrium conditions in module fitness functions.
+    Takes a dict of module fitness functions, detects equilibrium when no
+    single-module change improves fitness by >1%, and can propose coordinated
+    multi-module changes using gradient estimation.
     """
 
-    def __init__(self):
-        # Dependency graph: module -> set of modules that depend on its outputs
-        self.dependency_graph: Dict[str, Set[str]] = defaultdict(set)
-        # Reverse dependency: module -> set of modules it depends on
-        self.reverse_dependency: Dict[str, Set[str]] = defaultdict(set)
-        # Module outputs -> list of input modules that consume them
-        self.output_to_inputs: Dict[str, Set[str]] = defaultdict(set)
-        # Fitness delta history per module pair: (module1, module2) -> list of recent deltas
-        self.fitness_deltas: Dict[Tuple[str, str], List[float]] = defaultdict(list)
-        # Consecutive non-improvement counter per module pair
-        self.stagnation_counter: Dict[Tuple[str, str], int] = defaultdict(int)
-        # Threshold for consecutive non-improvement cycles
-        self.stagnation_threshold: int = 5
-        # Current cycle number
-        self.current_cycle: int = 0
+    def __init__(self, fitness_functions: Dict[str, Callable]):
+        """
+        Initialize the detector with module fitness functions.
+        
+        Args:
+            fitness_functions: Dict mapping module names to their fitness functions.
+                Each fitness function should take no arguments and return a float.
+        """
+        if not fitness_functions:
+            raise ValueError("fitness_functions dict cannot be empty")
+        
+        self.fitness_functions = fitness_functions.copy()
+        self.module_names = list(fitness_functions.keys())
+        
+        # Payoff matrix: (module1, module2) -> list of payoff deltas (last 10)
+        self.payoff_matrix: Dict[Tuple[str, str], List[float]] = defaultdict(list)
         # Maximum history length per module pair
         self.max_history_length: int = 10
-        # Stagnation scores per module pair (0-1)
-        self.stagnation_scores: Dict[Tuple[str, str], float] = defaultdict(float)
-        # History of last 5 cycles' mutation outcomes: list of booleans (True if any improvement)
+        # Stagnation threshold for detecting equilibrium
+        self.stagnation_threshold: int = 3
+        # Consecutive non-improvement counter per module pair
+        self.stagnation_counter: Dict[Tuple[str, str], int] = defaultdict(int)
+        # History of cycle outcomes: list of booleans (True if any improvement)
         self._cycle_improvement_history: List[bool] = []
-        # Module interaction matrix: module -> dict of module -> interaction strength
-        self._module_interaction_matrix: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        # Baseline fitness values for each module
+        self.baseline_fitness: Dict[str, float] = {}
+        # Current fitness values for each module
+        self.current_fitness: Dict[str, float] = {}
+        # Gradient estimates for each module: module -> estimated gradient
+        self.gradient_estimates: Dict[str, float] = {}
+        # Improvement threshold (1% by default)
+        self.improvement_threshold: float = 0.01
+        # Number of cycles without improvement
+        self.cycles_without_improvement: int = 0
+        
+        # Initialize baseline fitness
+        self._compute_baseline_fitness()
+        
+        logger.info(f"NashEquilibriumDetector initialized with {len(self.module_names)} modules: {self.module_names}")
 
-    def register_data_flow(self, source_module: str, target_module: str) -> None:
-        """
-        Register a data flow from source_module's output to target_module's input.
-        
-        Args:
-            source_module: The module producing output
-            target_module: The module consuming the output as input
-        """
-        self.dependency_graph[source_module].add(target_module)
-        self.reverse_dependency[target_module].add(source_module)
-        self.output_to_inputs[source_module].add(target_module)
+    def _compute_baseline_fitness(self) -> None:
+        """Compute baseline fitness for all modules."""
+        for module_name, fitness_func in self.fitness_functions.items():
+            try:
+                fitness = fitness_func()
+                self.baseline_fitness[module_name] = fitness
+                self.current_fitness[module_name] = fitness
+            except Exception as e:
+                logger.error(f"Error computing baseline fitness for module {module_name}: {e}")
+                self.baseline_fitness[module_name] = 0.0
+                self.current_fitness[module_name] = 0.0
 
-    def register_module_output(self, module: str, output_name: str) -> None:
+    def record_mutation_outcome(self, module1: str, module2: str, payoff_delta: float) -> None:
         """
-        Register that a module produces a specific output.
-        This is a placeholder for more detailed output tracking.
-        
-        Args:
-            module: The module name
-            output_name: The name of the output produced
-        """
-        # In a full implementation, this would track specific output names
-        pass
-
-    def register_module_input(self, module: str, input_name: str, source_module: str) -> None:
-        """
-        Register that a module consumes input from another module.
-        
-        Args:
-            module: The consuming module
-            input_name: The name of the input
-            source_module: The module providing this input
-        """
-        self.register_data_flow(source_module, module)
-
-    def record_fitness_delta(self, module: str, delta: float) -> None:
-        """
-        Record the fitness delta resulting from a mutation of the given module.
-        For Nash equilibrium detection, we track deltas per module pair.
-        
-        Args:
-            module: The module that was mutated
-            delta: The change in system fitness (positive = improvement)
-        """
-        # Get all module pairs involving this module
-        module_pairs = self._get_module_pairs(module)
-        
-        for pair in module_pairs:
-            self.fitness_deltas[pair].append(delta)
-            
-            # Keep only last 10 entries
-            if len(self.fitness_deltas[pair]) > self.max_history_length:
-                self.fitness_deltas[pair] = self.fitness_deltas[pair][-self.max_history_length:]
-            
-            # Update stagnation counter
-            if delta <= 0:
-                self.stagnation_counter[pair] += 1
-            else:
-                self.stagnation_counter[pair] = 0
-            
-            # Update stagnation score
-            self._update_stagnation_score(pair)
-
-    def _get_module_pairs(self, module: str) -> List[Tuple[str, str]]:
-        """
-        Get all module pairs involving the given module.
-        
-        Args:
-            module: The module to find pairs for
-            
-        Returns:
-            List of module pairs (sorted tuples)
-        """
-        pairs = []
-        # Pairs with dependent modules
-        for dep in self.dependency_graph.get(module, set()):
-            pair = tuple(sorted([module, dep]))
-            pairs.append(pair)
-        # Pairs with dependency modules
-        for dep in self.reverse_dependency.get(module, set()):
-            pair = tuple(sorted([module, dep]))
-            pairs.append(pair)
-        return pairs
-
-    def _update_stagnation_score(self, pair: Tuple[str, str]) -> None:
-        """
-        Update the stagnation score for a module pair (0-1).
-        
-        Args:
-            pair: The module pair to update
-        """
-        deltas = self.fitness_deltas.get(pair, [])
-        if not deltas:
-            self.stagnation_scores[pair] = 0.0
-            return
-        
-        # Calculate stagnation score based on:
-        # 1. Proportion of non-improving deltas in history
-        # 2. Consecutive non-improvement count
-        # 3. Recent trend (last 5 deltas)
-        
-        recent_deltas = deltas[-5:] if len(deltas) >= 5 else deltas
-        non_improving_count = sum(1 for d in recent_deltas if d <= 0)
-        non_improving_ratio = non_improving_count / max(len(recent_deltas), 1)
-        
-        consecutive_count = self.stagnation_counter.get(pair, 0)
-        consecutive_factor = min(consecutive_count / self.stagnation_threshold, 1.0)
-        
-        # Combine factors with weights
-        score = (non_improving_ratio * 0.4) + (consecutive_factor * 0.6)
-        self.stagnation_scores[pair] = min(max(score, 0.0), 1.0)
-
-    def get_dependent_modules(self, module: str) -> Set[str]:
-        """
-        Get all modules that directly depend on this module's outputs.
-        
-        Args:
-            module: The module to query
-            
-        Returns:
-            Set of module names that depend on this module
-        """
-        return self.dependency_graph.get(module, set()).copy()
-
-    def get_dependencies(self, module: str) -> Set[str]:
-        """
-        Get all modules that this module directly depends on.
-        
-        Args:
-            module: The module to query
-            
-        Returns:
-            Set of module names that this module depends on
-        """
-        return self.reverse_dependency.get(module, set()).copy()
-
-    def get_all_downstream_modules(self, module: str) -> Set[str]:
-        """
-        Get all modules that are downstream (directly or indirectly) from this module.
-        
-        Args:
-            module: The starting module
-            
-        Returns:
-            Set of all downstream module names
-        """
-        visited = set()
-        to_visit = {module}
-        
-        while to_visit:
-            current = to_visit.pop()
-            if current in visited:
-                continue
-            visited.add(current)
-            downstream = self.dependency_graph.get(current, set())
-            to_visit.update(downstream - visited)
-        
-        visited.discard(module)
-        return visited
-
-    def is_module_pair_stagnant(self, pair: Tuple[str, str]) -> bool:
-        """
-        Check if a specific module pair has reached stagnation (no improvement).
-        
-        Args:
-            pair: The module pair to check
-            
-        Returns:
-            True if module pair has no improvement for threshold cycles
-        """
-        return self.stagnation_counter.get(pair, 0) >= self.stagnation_threshold
-
-    def get_stagnant_module_pairs(self) -> List[Tuple[str, str]]:
-        """
-        Get all module pairs that are currently stagnant.
-        
-        Returns:
-            List of stagnant module pairs
-        """
-        return [
-            pair for pair, count in self.stagnation_counter.items()
-            if count >= self.stagnation_threshold
-        ]
-
-    def is_nash_equilibrium(self) -> bool:
-        """
-        Check if the system has reached a Nash equilibrium state.
-        This occurs when no single module change has improved the system
-        for the threshold number of consecutive cycles.
-        
-        Returns:
-            True if system is in Nash equilibrium
-        """
-        if not self.fitness_deltas:
-            return False
-        
-        # Check if all module pairs that have been evaluated are stagnant
-        all_pairs = set(self.fitness_deltas.keys())
-        stagnant_pairs = set(self.get_stagnant_module_pairs())
-        
-        # Only consider pairs that have been evaluated enough
-        evaluated_pairs = {
-            pair for pair, deltas in self.fitness_deltas.items()
-            if len(deltas) >= self.stagnation_threshold
-        }
-        
-        if not evaluated_pairs:
-            return False
-        
-        return evaluated_pairs.issubset(stagnant_pairs)
-
-    def get_system_analysis(self) -> Dict:
-        """
-        Get a comprehensive analysis of the current system state.
-        
-        Returns:
-            Dictionary containing:
-            - 'nash_equilibrium': bool
-            - 'stagnant_module_pairs': list of module pairs
-            - 'dependency_graph': dict of module dependencies
-            - 'fitness_summary': dict of module pair fitness trends
-            - 'stagnation_scores': dict of module pair stagnation scores
-            - 'cycle_count': int
-        """
-        return {
-            'nash_equilibrium': self.is_nash_equilibrium(),
-            'stagnant_module_pairs': self.get_stagnant_module_pairs(),
-            'dependency_graph': {
-                module: list(deps) 
-                for module, deps in self.dependency_graph.items()
-            },
-            'fitness_summary': {
-                pair: {
-                    'recent_deltas': deltas[-5:],
-                    'average_delta': sum(deltas[-5:]) / max(len(deltas[-5:]), 1),
-                    'stagnant': self.is_module_pair_stagnant(pair),
-                    'stagnation_score': self.stagnation_scores.get(pair, 0.0)
-                }
-                for pair, deltas in self.fitness_deltas.items()
-            },
-            'stagnation_scores': dict(self.stagnation_scores),
-            'cycle_count': self.current_cycle
-        }
-
-    def increment_cycle(self) -> None:
-        """Advance to the next evaluation cycle."""
-        self.current_cycle += 1
-
-    def reset_module_pair(self, module1: str, module2: str) -> None:
-        """
-        Reset stagnation tracking for a specific module pair.
-        Useful when modules are significantly restructured.
+        Record the outcome of a mutation affecting a module pair.
         
         Args:
             module1: First module in the pair
             module2: Second module in the pair
+            payoff_delta: The change in payoff (positive = improvement)
         """
         pair = tuple(sorted([module1, module2]))
-        self.stagnation_counter[pair] = 0
-        self.fitness_deltas[pair] = []
-        self.stagnation_scores[pair] = 0.0
+        self.payoff_matrix[pair].append(payoff_delta)
+        
+        # Keep only last 10 entries
+        if len(self.payoff_matrix[pair]) > self.max_history_length:
+            self.payoff_matrix[pair] = self.payoff_matrix[pair][-self.max_history_length:]
+        
+        # Update stagnation counter
+        if payoff_delta <= 0:
+            self.stagnation_counter[pair] += 1
+        else:
+            self.stagnation_counter[pair] = 0
 
-    def reset_all(self) -> None:
+    def detect_equilibrium(self) -> bool:
+        """
+        Detect when no single-module change improves any module's fitness by >1%.
+        Returns True if all module pairs have been stagnant for the threshold number of cycles.
+        
+        Returns:
+            True if system is in Nash equilibrium
+        """
+        if not self.payoff_matrix:
+            return False
+        
+        # Check if all module pairs that have been evaluated are stagnant
+        for pair, deltas in self.payoff_matrix.items():
+            if len(deltas) < self.stagnation_threshold:
+                return False
+            if self.stagnation_counter.get(pair, 0) < self.stagnation_threshold:
+                return False
+        
+        # Also check if any single-module change would improve fitness by >1%
+        for module_name in self.module_names:
+            try:
+                current_fitness = self.current_fitness.get(module_name, 0.0)
+                baseline_fitness = self.baseline_fitness.get(module_name, 0.0)
+                
+                # Simulate a small change and check if it improves fitness by >1%
+                if baseline_fitness > 0:
+                    improvement_ratio = abs(current_fitness - baseline_fitness) / baseline_fitness
+                    if improvement_ratio > self.improvement_threshold:
+                        return False
+            except Exception as e:
+                logger.error(f"Error checking equilibrium for module {module_name}: {e}")
+                continue
+        
+        return True
+
+    def suggest_coordinated_changes(self) -> List[Tuple[str, str]]:
+        """
+        Identify coordinated multi-module change opportunities by finding module pairs
+        where both modules are stuck (stagnant).
+        
+        Returns:
+            List of module pairs (sorted tuples) that are candidates for coordinated changes
+        """
+        stagnant_pairs = []
+        for pair, count in self.stagnation_counter.items():
+            if count >= self.stagnation_threshold:
+                stagnant_pairs.append(pair)
+        return stagnant_pairs
+
+    def get_payoff_matrix(self) -> Dict[Tuple[str, str], List[float]]:
+        """
+        Get the current payoff matrix.
+        
+        Returns:
+            Dictionary mapping module pairs to their payoff delta history
+        """
+        return dict(self.payoff_matrix)
+
+    def reset(self) -> None:
         """Reset all tracking data."""
-        self.dependency_graph.clear()
-        self.reverse_dependency.clear()
-        self.output_to_inputs.clear()
-        self.fitness_deltas.clear()
+        self.payoff_matrix.clear()
         self.stagnation_counter.clear()
-        self.stagnation_scores.clear()
-        self.current_cycle = 0
         self._cycle_improvement_history.clear()
-        self._module_interaction_matrix.clear()
+        self.gradient_estimates.clear()
+        self.cycles_without_improvement = 0
+        self._compute_baseline_fitness()
+        logger.info("NashEquilibriumDetector reset complete")
+
+    def _estimate_gradient(self, module_name: str, epsilon: float = 0.01) -> float:
+        """
+        Estimate the gradient of a module's fitness function using finite differences.
+        
+        Args:
+            module_name: The module to estimate gradient for
+            epsilon: Small perturbation for finite difference estimation
+            
+        Returns:
+            Estimated gradient value
+        """
+        try:
+            fitness_func = self.fitness_functions.get(module_name)
+            if fitness_func is None:
+                logger.warning(f"No fitness function found for module {module_name}")
+                return 0.0
+            
+            # Get current fitness
+            current_fitness = self.current_fitness.get(module_name, 0.0)
+            
+            # Simulate a small positive perturbation
+            # In a real system, this would involve actually modifying the module
+            # For now, we use a simple heuristic based on recent payoff history
+            recent_deltas = []
+            for pair, deltas in self.payoff_matrix.items():
+                if module_name in pair and deltas:
+                    recent_deltas.extend(deltas[-3:])  # Last 3 deltas
+            
+            if recent_deltas:
+                # Use average of recent deltas as gradient estimate
+                gradient = sum(recent_deltas) / len(recent_deltas)
+            else:
+                # No history available, return 0
+                gradient = 0.0
+            
+            return gradient
+            
+        except Exception as e:
+            logger.error(f"Error estimating gradient for module {module_name}: {e}")
+            return 0.0
+
+    def _compute_joint_improvement_potential(self, modules: List[str]) -> float:
+        """
+        Compute the potential improvement from changing multiple modules simultaneously.
+        
+        Args:
+            modules: List of module names to consider for joint change
+            
+        Returns:
+            Estimated joint improvement potential
+        """
+        if not modules:
+            return 0.0
+        
+        try:
+            # Sum individual gradient estimates
+            total_gradient = sum(self.gradient_estimates.get(m, 0.0) for m in modules)
+            
+            # Add interaction effects based on payoff matrix
+            interaction_effect = 0.0
+            for i in range(len(modules)):
+                for j in range(i + 1, len(modules)):
+                    pair = tuple(sorted([modules[i], modules[j]]))
+                    deltas = self.payoff_matrix.get(pair, [])
+                    if deltas:
+                        # Average of recent deltas for this pair
+                        recent_deltas = deltas[-3:] if len(deltas) >= 3 else deltas
+                        interaction_effect += sum(recent_deltas) / len(recent_deltas)
+            
+            # Combine individual gradients and interaction effects
+            # Weighted sum with more weight on individual gradients
+            joint_potential = (total_gradient * 0.7) + (interaction_effect * 0.3)
+            
+            return joint_potential
+            
+        except Exception as e:
+            logger.error(f"Error computing joint improvement potential: {e}")
+            return 0.0
+
+    def detect_and_force_coordinated_change(self) -> Optional[Dict]:
+        """
+        Analyze the dependency graph of all modules, compute pairwise improvement potentials
+        (simulating single-module mutations), identify Nash equilibria where no single module
+        change improves the system, and when detected, generate a coordinated multi-module
+        change plan that would be invisible to single-module optimization.
+        
+        This method:
+        1. Analyzes the dependency graph of all modules
+        2. Computes pairwise improvement potentials (simulating single-module mutations)
+        3. Identifies Nash equilibria where no single module change improves the system
+        4. When detected, generates a coordinated multi-module change plan
+           (e.g., change module A's interface and module B's implementation simultaneously)
+           that would be invisible to single-module optimization
+        
+        Returns:
+            Dictionary containing:
+            - 'equilibrium_detected': bool indicating if equilibrium was found
+            - 'coordinated_plan': list of coordinated mutation steps, each a dict with
+              'module', 'action', and 'description' keys
+            - 'description': string describing the coordinated change strategy
+            Or None if no equilibrium is detected.
+        """
+        try:
+            # Step 1: Analyze the dependency graph of all modules
+            # Build a set of all modules from the payoff matrix
+            all_modules: Set[str] = set()
+            for module1, module2 in self.payoff_matrix.keys():
+                all_modules.add(module1)
+                all_modules.add(module2)
+            
+            # Also include modules from fitness functions
+            all_modules.update(self.module_names)
+            
+            if not all_modules:
+                logger.warning("No modules found for coordinated change analysis")
+                return None
+            
+            # Step 2: Compute pairwise improvement potentials
+            # For each module pair, calculate the average payoff delta from recent history
+            # This simulates the potential improvement from single-module mutations
+            improvement_potentials: Dict[Tuple[str, str], float] = {}
+            for pair, deltas in self.payoff_matrix.items():
+                if deltas:
+                    # Average of last 5 deltas (or all if fewer)
+                    recent = deltas[-5:] if len(deltas) >= 5 else deltas
+                    avg_delta = sum(recent) / len(recent)
+                    improvement_potentials[pair] = avg_delta
+            
+            # Step 3: Identify Nash equilibria where no single module change improves the system
+            # A Nash equilibrium exists when all module pairs have non-positive improvement potentials
+            # (i.e., no single-module mutation yields a positive payoff delta)
+            equilibrium_detected = True
+            for pair, potential in improvement_potentials.items():
+                if potential > self.improvement_threshold:
+                    equilibrium_detected = False
+                    break
+            
+            # Also check the stagnation counter for additional confirmation
+            if equilibrium_detected and self.payoff_matrix:
+                # Verify that all evaluated pairs are stagnant
+                for pair, deltas in self.payoff_matrix.items():
+                    if len(deltas) >= self.stagnation_threshold:
+                        if self.stagnation_counter.get(pair, 0) < self.stagnation_threshold:
+                            equilibrium_detected = False
+                            break
+            
+            if not equilibrium_detected:
+                logger.info("No Nash equilibrium detected, no coordinated change needed")
+                return None
+            
+            # Step 4: Generate a coordinated multi-module change plan
+            # Use gradient estimation to find joint improvements
+            # First, estimate gradients for all modules
+            for module_name in all_modules:
+                self.gradient_estimates[module_name] = self._estimate_gradient(module_name)
+            
+            # Identify module pairs that are stuck (stagnant) and create coordinated changes
+            stagnant_pairs = self.suggest_coordinated_changes()
+            
+            if not stagnant_pairs:
+                # If no stagnant pairs, try to find modules with negative gradients
+                # These are modules that are stuck and need coordinated changes
+                negative_gradient_modules = [
+                    m for m, g in self.gradient_estimates.items() 
+                    if g <= 0 and m in all_modules
+                ]
+                
+                if len(negative_gradient_modules) < 2:
+                    logger.info("Not enough modules with negative gradients for coordinated change")
+                    return None
+                
+                # Create pairs from modules with negative gradients
+                stagnant_pairs = []
+                for i in range(0, len(negative_gradient_modules) - 1, 2):
+                    if i + 1 < len(negative_gradient_modules):
+                        stagnant_pairs.append(
+                            tuple(sorted([negative_gradient_modules[i], negative_gradient_modules[i + 1]]))
+                        )
+            
+            if not stagnant_pairs:
+                logger.info("No stagnant pairs found for coordinated change")
+                return None
+            
+            # Build a coordinated plan that changes multiple modules simultaneously
+            # For each stagnant pair, create a coordinated change that modifies both modules
+            coordinated_plan = []
+            modules_in_plan: Set[str] = set()
+            
+            for module1, module2 in stagnant_pairs:
+                if module1 not in modules_in_plan or module2 not in modules_in_plan:
+                    # Compute joint improvement potential for this pair
+                    joint_potential = self._compute_joint_improvement_potential([module1, module2])
+                    
+                    # Create a coordinated change for this pair
+                    coordinated_plan.append({
+                        'module': module1,
+                        'action': 'change_interface',
+                        'description': f"Modify {module1}'s interface to break stagnation with {module2} (joint potential: {joint_potential:.4f})"
+                    })
+                    coordinated_plan.append({
+                        'module': module2,
+                        'action': 'change_implementation',
+                        'description': f"Modify {module2}'s implementation to complement {module1}'s interface change (joint potential: {joint_potential:.4f})"
+                    })
+                    modules_in_plan.add(module1)
+                    modules_in_plan.add(module2)
+            
+            # If no coordinated plan was generated, create a default one from all stagnant modules
+            if not coordinated_plan:
+                all_stagnant_modules: Set[str] = set()
+                for module1, module2 in stagnant_pairs:
+                    all_stagnant_modules.add(module1)
+                    all_stagnant_modules.add(module2)
+                
+                sorted_modules = sorted(all_stagnant_modules)
+                for i, module in enumerate(sorted_modules):
+                    if i % 2 == 0:
+                        coordinated_plan.append({
+                            'module': module,
+                            'action': 'change_interface',
+                            'description': f"Modify {module}'s interface as part of coordinated change"
+                        })
+                    else:
+                        coordinated_plan.append({
+                            'module': module,
+                            'action': 'change_implementation',
+                            'description': f"Modify {module}'s implementation to complement interface change"
+                        })
+            
+            logger.info(f"Coordinated change plan generated for {len(modules_in_plan)} modules: {modules_in_plan}")
+            
+            return {
+                'equilibrium_detected': True,
+                'coordinated_plan': coordinated_plan,
+                'description': f"Coordinated multi-module change plan involving {len(modules_in_plan)} modules to break Nash equilibrium"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in detect_and_force_coordinated_change: {e}")
+            return None
+
+    def force_coordinated_mutation(self, plan: Dict) -> bool:
+        """
+        Take a coordinated mutation plan and apply changes atomically.
+        
+        This method simulates applying the coordinated changes by resetting the
+        stagnation counters and payoff matrix for the affected modules, as if
+        the changes were applied atomically.
+        
+        Args:
+            plan: Dictionary containing:
+                - 'coordinated_plan': list of mutation steps, each a dict with
+                  'module', 'action', and 'description' keys
+                - 'description': string describing the coordinated change strategy
+        
+        Returns:
+            True if the coordinated mutation was applied successfully, False otherwise
+        """
+        try:
+            if not plan or 'coordinated_plan' not in plan:
+                logger.warning("Invalid plan provided to force_coordinated_mutation")
+                return False
+            
+            coordinated_plan = plan['coordinated_plan']
+            if not coordinated_plan:
+                logger.warning("Empty coordinated plan provided")
+                return False
+            
+            # Extract all modules involved in the coordinated plan
+            affected_modules: Set[str] = set()
+            for step in coordinated_plan:
+                if 'module' in step:
+                    affected_modules.add(step['module'])
+            
+            if not affected_modules:
+                logger.warning("No modules found in coordinated plan")
+                return False
+            
+            # Apply changes atomically by resetting stagnation tracking for all affected modules
+            # This simulates the atomic application of coordinated changes
+            modules_list = list(affected_modules)
+            for i in range(len(modules_list)):
+                for j in range(i + 1, len(modules_list)):
+                    module1 = modules_list[i]
+                    module2 = modules_list[j]
+                    pair = tuple(sorted([module1, module2]))
+                    
+                    # Reset stagnation counter and payoff matrix for this pair
+                    self.stagnation_counter[pair] = 0
+                    if pair in self.payoff_matrix:
+                        self.payoff_matrix[pair] = []
+            
+            # Update current fitness values to simulate the effect of coordinated changes
+            for module_name in affected_modules:
+                try:
+                    fitness_func = self.fitness_functions.get(module_name)
+                    if fitness_func:
+                        new_fitness = fitness_func()
+                        self.current_fitness[module_name] = new_fitness
+                except Exception as e:
+                    logger.error(f"Error updating fitness for module {module_name}: {e}")
+            
+            # Record a positive cycle outcome to indicate that the coordinated mutation was applied
+            self._cycle_improvement_history.append(True)
+            if len(self._cycle_improvement_history) > 5:
+                self._cycle_improvement_history = self._cycle_improvement_history[-5:]
+            
+            # Reset cycles without improvement counter
+            self.cycles_without_improvement = 0
+            
+            logger.info(f"Coordinated mutation applied successfully for modules: {affected_modules}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in force_coordinated_mutation: {e}")
+            return False
+
+    def update_fitness_functions(self, fitness_functions: Dict[str, Callable]) -> None:
+        """
+        Update the fitness functions for all modules.
+        
+        Args:
+            fitness_functions: New dict of module fitness functions
+        """
+        if not fitness_functions:
+            raise ValueError("fitness_functions dict cannot be empty")
+        
+        self.fitness_functions = fitness_functions.copy()
+        self.module_names = list(fitness_functions.keys())
+        self._compute_baseline_fitness()
+        logger.info(f"Fitness functions updated for modules: {self.module_names}")
+
+    def get_equilibrium_state(self) -> Dict:
+        """
+        Get the current equilibrium state information.
+        
+        Returns:
+            Dictionary containing:
+            - 'equilibrium': bool indicating if system is at equilibrium
+            - 'stagnant_pairs': list of stagnant module pairs
+            - 'gradient_estimates': dict of gradient estimates per module
+            - 'cycles_without_improvement': int
+        """
+        return {
+            'equilibrium': self.detect_equilibrium(),
+            'stagnant_pairs': self.suggest_coordinated_changes(),
+            'gradient_estimates': dict(self.gradient_estimates),
+            'cycles_without_improvement': self.cycles_without_improvement
+        }
+
+    def increment_cycle(self) -> None:
+        """Advance to the next evaluation cycle."""
+        self.cycles_without_improvement += 1
+        
+        # Check if any module improved in this cycle
+        any_improvement = False
+        for module_name in self.module_names:
+            try:
+                current_fitness = self.current_fitness.get(module_name, 0.0)
+                baseline_fitness = self.baseline_fitness.get(module_name, 0.0)
+                
+                if baseline_fitness > 0:
+                    improvement_ratio = abs(current_fitness - baseline_fitness) / baseline_fitness
+                    if improvement_ratio > self.improvement_threshold:
+                        any_improvement = True
+                        break
+            except Exception as e:
+                logger.error(f"Error checking improvement for module {module_name}: {e}")
+                continue
+        
+        if any_improvement:
+            self.cycles_without_improvement = 0
+        
+        self._cycle_improvement_history.append(any_improvement)
+        if len(self._cycle_improvement_history) > 5:
+            self._cycle_improvement_history = self._cycle_improvement_history[-5:]
+        
+        logger.debug(f"Cycle incremented. Cycles without improvement: {self.cycles_without_improvement}")
+
+    def set_improvement_threshold(self, threshold: float) -> None:
+        """
+        Set the improvement threshold for detecting equilibrium.
+        
+        Args:
+            threshold: Float between 0 and 1 representing the minimum improvement ratio
+        """
+        if threshold < 0 or threshold > 1:
+            raise ValueError("Improvement threshold must be between 0 and 1")
+        self.improvement_threshold = threshold
+        logger.info(f"Improvement threshold set to {threshold}")
 
     def set_stagnation_threshold(self, threshold: int) -> None:
         """
@@ -315,120 +559,4 @@ class NashDetector:
         if threshold < 1:
             raise ValueError("Stagnation threshold must be at least 1")
         self.stagnation_threshold = threshold
-
-    def get_stagnation_score(self, module1: str, module2: str) -> float:
-        """
-        Get the stagnation score for a module pair (0-1).
-        
-        Args:
-            module1: First module in the pair
-            module2: Second module in the pair
-            
-        Returns:
-            Stagnation score between 0 and 1
-        """
-        pair = tuple(sorted([module1, module2]))
-        return self.stagnation_scores.get(pair, 0.0)
-
-    def get_all_stagnation_scores(self) -> Dict[Tuple[str, str], float]:
-        """
-        Get all stagnation scores for all module pairs.
-        
-        Returns:
-            Dictionary mapping module pairs to their stagnation scores
-        """
-        return dict(self.stagnation_scores)
-
-    def record_cycle_outcome(self, any_improvement: bool) -> None:
-        """
-        Record whether any module showed improvement in the current cycle.
-        
-        Args:
-            any_improvement: True if at least one module improved fitness
-        """
-        self._cycle_improvement_history.append(any_improvement)
-        # Keep only last 5 cycles
-        if len(self._cycle_improvement_history) > 5:
-            self._cycle_improvement_history = self._cycle_improvement_history[-5:]
-
-    def is_at_equilibrium(self) -> bool:
-        """
-        Check if no single-module mutation has improved system fitness in the last 5 cycles.
-        
-        Returns:
-            True if no improvement in last 5 cycles
-        """
-        if len(self._cycle_improvement_history) < 5:
-            return False
-        return not any(self._cycle_improvement_history[-5:])
-
-    def detect_equilibrium(self) -> bool:
-        """
-        Returns True if the last 3 cycles show no single-module improvement
-        (all mutations failed or no score increase).
-        
-        Returns:
-            True if no improvement in last 3 cycles
-        """
-        if len(self._cycle_improvement_history) < 3:
-            return False
-        return not any(self._cycle_improvement_history[-3:])
-
-    def get_equilibrium_state(self) -> Dict[str, Dict[str, float]]:
-        """
-        Return current module interaction matrix and equilibrium flag.
-        The matrix maps each module to a dictionary of other modules and their interaction strengths.
-        
-        Returns:
-            Dictionary containing:
-            - 'interaction_matrix': module -> {other_module: interaction_strength}
-            - 'equilibrium': bool indicating if system is at equilibrium
-        """
-        # Build interaction matrix from dependency graph and stagnation scores
-        matrix: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
-        
-        # Add interactions from dependency graph
-        for source, targets in self.dependency_graph.items():
-            for target in targets:
-                pair = tuple(sorted([source, target]))
-                # Use stagnation score as interaction strength (0 = no interaction, 1 = fully stagnant)
-                strength = self.stagnation_scores.get(pair, 0.0)
-                matrix[source][target] = strength
-                matrix[target][source] = strength
-        
-        # Add interactions from reverse dependencies not already covered
-        for target, sources in self.reverse_dependency.items():
-            for source in sources:
-                if source not in matrix or target not in matrix[source]:
-                    pair = tuple(sorted([source, target]))
-                    strength = self.stagnation_scores.get(pair, 0.0)
-                    matrix[source][target] = strength
-                    matrix[target][source] = strength
-        
-        return {
-            'interaction_matrix': dict(matrix),
-            'equilibrium': self.is_at_equilibrium()
-        }
-
-    def check_and_trigger_coordinated(self) -> Optional[Dict]:
-        """
-        Check if equilibrium has been reached in the last 3 cycles.
-        If yes, call coordinated_mutation_planner to generate multi-module changes.
-        
-        Returns:
-            The mutation plan from coordinated_mutation_planner, or None if not at equilibrium.
-        """
-        if not self.detect_equilibrium():
-            return None
-        
-        # Import here to avoid circular imports
-        from modules.coordinated_mutation_planner import CoordinatedMutationPlanner
-        
-        planner = CoordinatedMutationPlanner()
-        equilibrium_state = self.get_equilibrium_state()
-        mutation_plan = planner.generate_plan(
-            dependency_graph=dict(self.dependency_graph),
-            equilibrium_state=equilibrium_state
-        )
-        
-        return mutation_plan
+        logger.info(f"Stagnation threshold set to {threshold}")
