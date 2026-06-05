@@ -1,49 +1,5 @@
 [
   {
-    "topic": "Self-supervised schema learning from runtime traces",
-    "data": {
-      "state_of_art": "Self-supervised schema learning from runtime traces is an emerging field that leverages the rich, unstructured data generated during program execution to infer structural schemas (e.g., database schemas, API contracts, or dataflow graphs) without explicit labels. Current state-of-the-art approaches combine deep learning with graph neural networks (GNNs) to capture temporal and structural patterns in traces, often using contrastive learning or masked autoencoding to learn representations. Techniques like Trace2Schema and SchemaNet use attention mechanisms to align trace sequences with schema elements, while others employ variational autoencoders (VAEs) to model latent schema structures. The field is moving toward online, incremental learning to adapt to evolving systems.",
-      "key_techniques": [
-        "Contrastive learning on trace embeddings to distinguish schema-relevant patterns from noise",
-        "Graph neural networks (GNNs) for modeling dependencies between trace events (e.g., call graphs, data flow)",
-        "Masked trace modeling (inspired by BERT) to predict missing schema elements",
-        "Variational autoencoders (VAEs) for learning probabilistic schema representations",
-        "Temporal pattern mining with sequence-to-sequence models (e.g., LSTM, Transformers)",
-        "Self-supervised clustering (e.g., DeepCluster) to group similar trace segments into schema candidates",
-        "Attention-based alignment between traces and inferred schema templates",
-        "Online learning with replay buffers for incremental schema discovery"
-      ],
-      "implementation_strategies": [
-        "Start with a lightweight trace collector (e.g., OpenTelemetry or custom instrumentation) to capture structured logs, call stacks, and data dependencies",
-        "Preprocess traces into fixed-length sequences or graphs, normalizing timestamps and removing redundant events",
-        "Implement a contrastive learning framework (e.g., SimCLR or MoCo) using positive pairs from the same trace context and negative pairs from different traces",
-        "Use a GNN encoder (e.g., GraphSAGE) to learn node embeddings for trace events, then apply a decoder to reconstruct schema elements",
-        "For incremental learning, maintain a memory buffer of representative traces and use elastic weight consolidation to avoid catastrophic forgetting",
-        "Validate inferred schemas against known ground truth (e.g., database DDL or API specs) using precision/recall metrics",
-        "Leverage existing libraries: PyTorch Geometric for GNNs, Hugging Face Transformers for sequence models, and scikit-learn for clustering"
-      ],
-      "pitfalls": [
-        "Overfitting to trace noise (e.g., transient errors, logging inconsistencies) instead of true schema patterns",
-        "Assuming traces are stationary; real-world systems evolve, requiring online adaptation",
-        "Ignoring temporal ordering: traces are sequences, and order matters for schema inference (e.g., transaction boundaries)",
-        "Using overly complex models that don't generalize to unseen trace patterns",
-        "Neglecting to handle missing or incomplete traces (e.g., due to sampling or system failures)",
-        "Confusing correlation with causation: frequent co-occurrence of events doesn't imply schema relationship",
-        "Underestimating computational cost: processing high-volume traces requires efficient data pipelines (e.g., streaming, batching)"
-      ],
-      "unconventional": [
-        "Apply self-supervised learning on trace spectrograms (time-frequency representations) using vision transformer architectures to capture periodic schema patterns",
-        "Use reinforcement learning to actively probe the system with queries, generating informative traces that accelerate schema discovery",
-        "Leverage generative adversarial networks (GANs) to synthesize plausible trace variants, then use the discriminator to identify schema invariants",
-        "Combine with symbolic reasoning (e.g., inductive logic programming) to extract formal schema rules from learned embeddings",
-        "Explore hyperdimensional computing (HDC) for fast, energy-efficient schema learning from binary trace encodings",
-        "Use graph contrastive learning with topological data analysis (persistent homology) to discover schema hierarchies",
-        "Implement a 'trace grammar' approach: treat traces as sentences and learn a probabilistic context-free grammar (PCFG) that generates valid schemas"
-      ]
-    },
-    "timestamp": 1780631948.5626125
-  },
-  {
     "topic": "Autonomous code repair via causal inference on failure logs",
     "data": {
       "state_of_art": "Current state-of-the-art approaches combine large language models (LLMs) for code understanding with causal reasoning to identify root causes of failures. Techniques like causal program slicing, counterfactual reasoning over execution traces, and structural causal models (SCMs) of program behavior are emerging. Tools such as BugLab, CausalRepair, and AutoCodeRover use LLMs to generate candidate patches, then validate them via causal effect estimation on failure logs. The field is moving from correlation-based bug localization (e.g., spectrum-based fault localization) to causal inference that distinguishes spurious from real causes.",
@@ -2244,5 +2200,60 @@
       ]
     },
     "timestamp": 1780669439.5625427
+  },
+  {
+    "topic": "Self-Healing Test Generation via Reinforcement Learning from Test Failures",
+    "data": {
+      "state_of_art": "The current state of the art in self-healing test generation via reinforcement learning (RL) from test failures focuses on integrating RL agents with automated test frameworks to dynamically adapt test cases in response to software changes. Key approaches include using RL to select and mutate test inputs based on failure signals, employing deep Q-networks (DQN) or policy gradient methods to optimize test coverage and fault detection, and leveraging feedback loops where test failures serve as reward signals. Recent work also explores combining RL with symbolic execution and fuzzing for more robust self-healing, and using transfer learning to generalize across similar software components.",
+      "key_techniques": [
+        "RL-based test case mutation: Using RL to decide which mutations (e.g., input changes, parameter variations) to apply to failing tests to make them pass or reveal new faults.",
+        "Reward shaping from failure analysis: Designing reward functions that penalize false positives and reward detection of real faults, often using crash traces or assertion violations.",
+        "Deep reinforcement learning for test prioritization: Applying DQN or A3C to order test cases such that failures are encountered earlier, enabling faster healing cycles.",
+        "Self-healing via adversarial RL: Treating test generation as a two-player game where the RL agent generates tests and a 'healer' adapts them to bypass non-critical failures.",
+        "Integration with continuous integration (CI) pipelines: Using RL to learn from historical test failures in CI logs to proactively adjust tests before code changes.",
+        "Multi-agent RL for distributed testing: Multiple RL agents collaborating to heal tests across different modules, sharing failure information.",
+        "Meta-learning for few-shot healing: Training an RL model to quickly adapt to new failure patterns with minimal examples using MAML or Reptile.",
+        "Reinforcement learning from human feedback (RLHF): Incorporating developer annotations on test failures to refine reward models.",
+        "Coverage-guided RL: Using code coverage as an additional reward signal to ensure healed tests still explore diverse paths.",
+        "Hybrid approaches: Combining RL with traditional symbolic execution or search-based testing for more systematic healing."
+      ],
+      "implementation_strategies": [
+        "Start with a simple RL environment: Define a test suite as a state space (e.g., test inputs, execution outcomes) and actions as mutations (e.g., change input value, add/remove assertion). Use a simulator to train initially.",
+        "Use off-policy RL (e.g., DQN) for sample efficiency: Since test executions are expensive, use experience replay and prioritize transitions from failures.",
+        "Design a reward function that balances healing and exploration: Reward making a failing test pass (e.g., +10), penalize breaking a passing test (-5), and give small positive rewards for increasing coverage or detecting new faults.",
+        "Integrate with existing test frameworks: Build a wrapper around pytest or JUnit to capture test results and inject RL actions via a plugin.",
+        "Implement a failure classifier: Use a lightweight ML model (e.g., logistic regression) to categorize failure types (e.g., assertion error vs. timeout) and use this as part of the state.",
+        "Use curriculum learning: Start with simple test healing tasks (e.g., fixing a single input) and gradually increase complexity (e.g., multi-step mutations).",
+        "Leverage CI logs: Pre-train the RL agent on historical test failure data to learn common failure patterns before deployment.",
+        "Monitor for overfitting: Regularly validate healed tests against a held-out set of new code changes to ensure generalization.",
+        "Implement a safety mechanism: Keep original test versions in version control and only deploy healed tests after passing a regression suite.",
+        "Use distributed RL for scalability: Run multiple RL agents in parallel on different test modules, sharing experiences via a central replay buffer."
+      ],
+      "pitfalls": [
+        "Reward hacking: The RL agent may learn to make tests trivially pass (e.g., by removing all assertions) rather than genuinely healing them. Mitigate by including coverage or semantic similarity rewards.",
+        "Overfitting to specific failures: The agent may memorize failure patterns from training data and fail to generalize to new code changes. Use diverse training scenarios and regular retraining.",
+        "High computational cost: RL training requires many test executions, which can be slow for large test suites. Use simulators or cached results to accelerate.",
+        "Non-stationary environment: Software code changes over time, making the RL agent's learned policy obsolete. Implement online learning with periodic fine-tuning.",
+        "False positives in failure detection: The agent may misinterpret flaky tests as failures, leading to unnecessary healing. Incorporate flaky test detection or use majority voting across runs.",
+        "Lack of interpretability: RL decisions for test mutations can be opaque, making debugging difficult. Use attention mechanisms or explainable AI techniques.",
+        "Insufficient reward signal: If failures are rare, the RL agent may struggle to learn. Use reward shaping with auxiliary objectives (e.g., coverage) or imitation learning from developer fixes.",
+        "Scalability issues: Applying RL to thousands of tests can be impractical. Use hierarchical RL or cluster tests by similarity.",
+        "Security risks: Maliciously crafted inputs from RL could exploit system vulnerabilities. Sanitize generated inputs and run in sandboxed environments.",
+        "Maintenance burden: The RL system itself requires ongoing tuning and monitoring, adding to developer workload. Automate hyperparameter tuning and anomaly detection."
+      ],
+      "unconventional": [
+        "Use inverse reinforcement learning (IRL) to infer developer intent from past test fixes, then use that as a reward model for healing.",
+        "Apply generative adversarial networks (GANs): Train a generator to produce healed tests and a discriminator to distinguish them from human-written tests, improving realism.",
+        "Leverage curiosity-driven exploration: Instead of just reacting to failures, have the RL agent explore test spaces that are 'novel' according to a prediction error model, discovering latent failures.",
+        "Use graph neural networks (GNNs) to represent test-code dependencies: Encode the software dependency graph as part of the RL state to make more context-aware mutations.",
+        "Implement a 'test doctor' meta-agent: An RL agent that not only heals tests but also diagnoses root causes of failures by generating minimal reproducing test cases.",
+        "Combine RL with evolutionary computation: Use genetic algorithms to evolve test populations, with RL selecting which individuals to mutate or crossover based on failure history.",
+        "Use RL to dynamically adjust test oracles: Instead of fixing assertions, learn to predict expected outputs from code changes using a neural network, and update oracles accordingly.",
+        "Apply multi-objective RL: Optimize for multiple goals simultaneously (e.g., healing speed, coverage, minimal changes) using Pareto-optimal approaches like MO-DQN.",
+        "Incorporate human-in-the-loop via active learning: The RL agent asks developers for feedback on ambiguous failures, reducing the need for large labeled datasets.",
+        "Use RL for test suite reduction: Train an agent to select a minimal subset of tests that still detect failures, healing the rest by removing redundancy."
+      ]
+    },
+    "timestamp": 1780671489.057346
   }
 ]

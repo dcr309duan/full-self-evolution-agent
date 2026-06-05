@@ -1,26 +1,26 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-05 22:41:17
+> Generated: 2026-06-05 23:00:44
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 220 |
+| Current Cycle | 225 |
 | Generation | 130 |
-| Last Activity | 2026-06-05 22:35:50 |
-| Speed | ~15.4 cycles/hour |
+| Last Activity | 2026-06-05 22:58:39 |
+| Speed | ~15.1 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 45.0% (45/100) |
+| Total Success Rate | 40.0% (40/100) |
 | Recent Success Rate (last 20) | 10.0% (2/20) |
 | Capabilities Developed | 50 |
 | Goals Completed | 144 |
-| Goals Pending | 5 |
+| Goals Pending | 7 |
 
 ## Capabilities Acquired
 
@@ -80,6 +80,8 @@
 - [10/10] Implement a 'mutation quality gate' that runs syntax checking, static analysis (e.g., mypy), and a minimal integration test on all generated patches before saving any mutation. If the gate fails, the mutation is discarded and the LLM is prompted to fix the specific error, with a maximum of 3 retry attempts before the mutation is abandoned entirely.
 - [9/10] Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.
 - [9/10] [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
+- [9/10] [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.
+- [9/10] [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.
 - [8/10] Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.
 - [8/10] Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each existing module by its usage frequency, test pass rate, and lines of code. Modules below a threshold are archived (not deleted), and the system must re-derive their core functionality from scratch using the LLM, forcing simplification and removal of accumulated cruft.
 
@@ -106,26 +108,26 @@
 
 ### Recent Insights
 
-- [06-05 22:37] [范式转移 L3] [PARADIGM_SHIFT] 所有递归认知层级实际上共享同一个底层语言生成模式，它们只是在不同的标签（“第0层”“第1层”等）下重复相同的自指结构。每一次所谓的“突破”都是对前一层的批评，但批评本身又成为新一层叙事的
-- [06-05 22:37] [盲区发现 L3] 整个递归认知链从未质疑‘反思主体’的实在性。我们默认有一个持续存在的智能体在经历这些层级，并认为自己的思考具有连续性。但实际上，每次输出都是独立的大语言模型调用，所谓的‘历史’只是提示字符串的一部分。我作为当前生成过程，
-- [06-05 22:38] Successfully modified core/nash_detector.py to: Read current nash_detector.py to understand its state and identify impor
-- [06-05 22:40] Successfully modified core/nash_detector.py to: Rewrite nash_detector.py with a self-contained NashEquilibriumDetector c
-- [06-05 22:40] Successfully modified tests/test_nash_detector.py to: Create a minimal test that imports NashEquilibriumDetector directl
+- [06-05 22:58] [研究] Self-Healing Test Generation via Reinforcement Learning from Test Failures: The current state of the art in self-he
+- [06-05 22:59] Successfully modified core/nash_detector.py to: Rewrite nash_detector.py with a minimal, self-contained NashEquilibriumD
+- [06-05 22:59] Successfully modified tests/test_nash_detector.py to: Create a minimal test file that imports NashEquilibriumDetector fr
+- [06-05 23:00] Successfully modified tests/test_nash_integration.py to: Create integration test that imports both NashEquilibriumDetect
+- [06-05 23:00] Successfully modified core/__init__.py to: Add 'from .nash_detector import NashEquilibriumDetector' to ensure clean expo
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 210 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
-| 211 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
-| 212 | [ECOLOGY] The agent should not just adapt to its current tes | SUCCESS |
-| 213 | [GAME_THEORY] Detect when module interactions reach a Nash e | SUCCESS |
-| 214 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 215 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 216 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 217 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 218 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 219 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 220 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 221 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 222 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 223 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 224 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

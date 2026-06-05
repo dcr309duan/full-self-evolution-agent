@@ -44,7 +44,8 @@ class ModuleRegistry:
                 'description': metadata.get('description', ''),
                 'version': metadata.get('version', '0.1.0'),
                 'loaded': False,
-                'path': None
+                'path': None,
+                'interaction_data': metadata.get('interaction_data', {})
             }
             logger.debug(f"Registered module: {module_name}")
         else:
@@ -233,6 +234,32 @@ class ModuleRegistry:
         """
         return dict(self._modules)
     
+    def get_interaction_data(self, module_name: str) -> Dict[str, Any]:
+        """Get interaction data for a registered module.
+        
+        Args:
+            module_name: Name of the module
+            
+        Returns:
+            Dictionary of interaction data for the module
+        """
+        if module_name in self._modules:
+            return self._modules[module_name].get('interaction_data', {})
+        return {}
+    
+    def update_interaction_data(self, module_name: str, interaction_data: Dict[str, Any]) -> None:
+        """Update interaction data for a registered module.
+        
+        Args:
+            module_name: Name of the module
+            interaction_data: Dictionary of interaction data to update
+        """
+        if module_name in self._modules:
+            if 'interaction_data' not in self._modules[module_name]:
+                self._modules[module_name]['interaction_data'] = {}
+            self._modules[module_name]['interaction_data'].update(interaction_data)
+            logger.debug(f"Updated interaction data for module: {module_name}")
+    
     def clear(self) -> None:
         """Clear the registry (for testing or reset)."""
         self._modules.clear()
@@ -304,3 +331,27 @@ def discover_modules(package_path: Optional[str] = None) -> List[str]:
     """
     registry = get_registry()
     return registry.discover_modules(package_path)
+
+
+def get_module_interaction_data(module_name: str) -> Dict[str, Any]:
+    """Convenience function to get interaction data for a module.
+    
+    Args:
+        module_name: Name of the module
+        
+    Returns:
+        Dictionary of interaction data for the module
+    """
+    registry = get_registry()
+    return registry.get_interaction_data(module_name)
+
+
+def update_module_interaction_data(module_name: str, interaction_data: Dict[str, Any]) -> None:
+    """Convenience function to update interaction data for a module.
+    
+    Args:
+        module_name: Name of the module
+        interaction_data: Dictionary of interaction data to update
+    """
+    registry = get_registry()
+    registry.update_interaction_data(module_name, interaction_data)
