@@ -11,6 +11,15 @@ HARDCODED_GOALS = [
     "add a key 'last_goal' with a string description",
     "set complexity to 1.0 if below 0.8"
 ]
+ESSENTIAL_MODULES = [
+    "reflect",
+    "generate_goal",
+    "mutate",
+    "test",
+    "accept",
+    "sandbox_validate",
+    "self_healing_recovery"
+]
 
 def reflect(state):
     """Analyze the state dictionary and return a summary."""
@@ -79,6 +88,86 @@ def sandbox_validate(state):
     except Exception as e:
         return False, f"Sandbox validation error: {str(e)}"
 
+def self_healing_recovery(state):
+    """Recover state to a valid baseline if corruption is detected."""
+    try:
+        # Check if state is valid JSON
+        json.dumps(state)
+    except (TypeError, ValueError):
+        print("State corruption detected. Recovering to initial state.")
+        return INITIAL_STATE.copy()
+    
+    # Check for required keys
+    required_keys = {"version", "goals_achieved", "complexity"}
+    if not required_keys.issubset(state.keys()):
+        print("Missing required keys. Recovering to initial state.")
+        return INITIAL_STATE.copy()
+    
+    # Check for invalid values
+    if not isinstance(state.get("version"), int) or state["version"] < 1:
+        print("Invalid version. Recovering to initial state.")
+        return INITIAL_STATE.copy()
+    
+    if not isinstance(state.get("goals_achieved"), int) or state["goals_achieved"] < 0:
+        print("Invalid goals_achieved. Recovering to initial state.")
+        return INITIAL_STATE.copy()
+    
+    if not isinstance(state.get("complexity"), (int, float)) or state["complexity"] < 0:
+        print("Invalid complexity. Recovering to initial state.")
+        return INITIAL_STATE.copy()
+    
+    # State is valid, return as is
+    return state
+
+def initialize_recovery_module():
+    """Initialize the recovery module during bootstrap."""
+    print("Initializing self-healing recovery module...")
+    # Verify essential modules are available
+    for module in ESSENTIAL_MODULES:
+        if module not in globals():
+            print(f"Warning: Essential module '{module}' not found during recovery initialization")
+    
+    # Test recovery function
+    test_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    recovered = self_healing_recovery(test_state)
+    if recovered == test_state:
+        print("Recovery module initialized successfully.")
+        return True
+    else:
+        print("Recovery module initialization failed.")
+        return False
+
+def test_recovery_integration():
+    """Test recovery functionality in minimal core integration test."""
+    print("\n--- Recovery Integration Test ---")
+    
+    # Test 1: Valid state should pass through
+    valid_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+    result = self_healing_recovery(valid_state)
+    assert result == valid_state, "Test 1 failed: Valid state should remain unchanged"
+    print("Test 1 passed: Valid state remains unchanged")
+    
+    # Test 2: Corrupted state should recover to initial
+    corrupted_state = {"version": "invalid", "goals_achieved": -1, "complexity": "bad"}
+    result = self_healing_recovery(corrupted_state)
+    assert result == INITIAL_STATE, "Test 2 failed: Corrupted state should recover to initial"
+    print("Test 2 passed: Corrupted state recovers to initial")
+    
+    # Test 3: Missing keys should recover
+    missing_keys_state = {"version": 1}
+    result = self_healing_recovery(missing_keys_state)
+    assert result == INITIAL_STATE, "Test 3 failed: Missing keys should trigger recovery"
+    print("Test 3 passed: Missing keys trigger recovery")
+    
+    # Test 4: Non-serializable state should recover
+    non_serializable_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5, "bad": set()}
+    result = self_healing_recovery(non_serializable_state)
+    assert result == INITIAL_STATE, "Test 4 failed: Non-serializable state should recover"
+    print("Test 4 passed: Non-serializable state recovers")
+    
+    print("All recovery integration tests passed!\n")
+    return True
+
 def migrate_to_main():
     """Generate migration report and equivalent code for evolution_orchestrator.py's main loop."""
     # Read the working logic from this module
@@ -88,7 +177,8 @@ def migrate_to_main():
         "mutate": mutate.__code__.co_code,
         "test": test.__code__.co_code,
         "accept": accept.__code__.co_code,
-        "sandbox_validate": sandbox_validate.__code__.co_code
+        "sandbox_validate": sandbox_validate.__code__.co_code,
+        "self_healing_recovery": self_healing_recovery.__code__.co_code
     }
     
     # Generate equivalent code for evolution_orchestrator.py's main loop
@@ -107,6 +197,15 @@ def evolution_main_loop():
         "increment goals_achieved by 1",
         "add a key 'last_goal' with a string description",
         "set complexity to 1.0 if below 0.8"
+    ]
+    ESSENTIAL_MODULES = [
+        "reflect",
+        "generate_goal",
+        "mutate",
+        "test",
+        "accept",
+        "sandbox_validate",
+        "self_healing_recovery"
     ]
     
     def reflect(state):
@@ -158,6 +257,32 @@ def evolution_main_loop():
         except Exception as e:
             return False, f"Sandbox validation error: {str(e)}"
     
+    def self_healing_recovery(state):
+        try:
+            json.dumps(state)
+        except (TypeError, ValueError):
+            print("State corruption detected. Recovering to initial state.")
+            return INITIAL_STATE.copy()
+        
+        required_keys = {"version", "goals_achieved", "complexity"}
+        if not required_keys.issubset(state.keys()):
+            print("Missing required keys. Recovering to initial state.")
+            return INITIAL_STATE.copy()
+        
+        if not isinstance(state.get("version"), int) or state["version"] < 1:
+            print("Invalid version. Recovering to initial state.")
+            return INITIAL_STATE.copy()
+        
+        if not isinstance(state.get("goals_achieved"), int) or state["goals_achieved"] < 0:
+            print("Invalid goals_achieved. Recovering to initial state.")
+            return INITIAL_STATE.copy()
+        
+        if not isinstance(state.get("complexity"), (int, float)) or state["complexity"] < 0:
+            print("Invalid complexity. Recovering to initial state.")
+            return INITIAL_STATE.copy()
+        
+        return state
+    
     def load_or_initialize_state():
         if os.path.exists(STATE_FILE):
             with open(STATE_FILE, "r") as f:
@@ -166,9 +291,27 @@ def evolution_main_loop():
             accept(INITIAL_STATE)
             return INITIAL_STATE.copy()
     
+    def initialize_recovery_module():
+        print("Initializing self-healing recovery module...")
+        for module in ESSENTIAL_MODULES:
+            if module not in globals():
+                print(f"Warning: Essential module '{module}' not found during recovery initialization")
+        
+        test_state = {"version": 1, "goals_achieved": 0, "complexity": 0.5}
+        recovered = self_healing_recovery(test_state)
+        if recovered == test_state:
+            print("Recovery module initialized successfully.")
+            return True
+        else:
+            print("Recovery module initialization failed.")
+            return False
+    
     state = load_or_initialize_state()
     print("Initial state:", state)
     print()
+    
+    # Initialize recovery module
+    initialize_recovery_module()
     
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -180,6 +323,12 @@ def evolution_main_loop():
         
         mutated_state = mutate(state, goal)
         print("Mutated state:", mutated_state)
+        
+        # Apply recovery before validation
+        recovered_state = self_healing_recovery(mutated_state)
+        if recovered_state != mutated_state:
+            print("Recovery applied to mutated state")
+            mutated_state = recovered_state
         
         is_valid, message = sandbox_validate(mutated_state)
         if is_valid:
@@ -211,7 +360,9 @@ def evolution_main_loop():
             "Initial state provides baseline for evolution experiments",
             "Cycle-based iteration allows controlled progression",
             "Error handling in sandbox prevents corrupted state acceptance",
-            "Deep copy pattern ensures original state preservation during mutation"
+            "Deep copy pattern ensures original state preservation during mutation",
+            "Self-healing recovery provides automatic state corruption detection and recovery",
+            "Recovery module initialization ensures core capabilities are available"
         ],
         "working_logic_bytecode": working_logic,
         "equivalent_main_loop": main_loop_code,
@@ -220,7 +371,9 @@ def evolution_main_loop():
             "Maintain same goal structure for consistency",
             "Use deep copy pattern for state mutation safety",
             "Implement reflection for monitoring state evolution",
-            "Consider extending goal set for more complex behaviors"
+            "Consider extending goal set for more complex behaviors",
+            "Always initialize recovery module during bootstrap",
+            "Apply self-healing recovery before sandbox validation"
         ]
     }
     
@@ -240,6 +393,9 @@ def main():
     state = load_or_initialize_state()
     print("Initial state:", state)
     print()
+    
+    # Initialize recovery module during bootstrap
+    initialize_recovery_module()
 
     for cycle in range(1, 4):
         print(f"--- Cycle {cycle} ---")
@@ -254,6 +410,12 @@ def main():
         # Mutate
         mutated_state = mutate(state, goal)
         print("Mutated state:", mutated_state)
+
+        # Apply self-healing recovery before validation
+        recovered_state = self_healing_recovery(mutated_state)
+        if recovered_state != mutated_state:
+            print("Recovery applied to mutated state")
+            mutated_state = recovered_state
 
         # Sandbox validation
         is_valid, message = sandbox_validate(mutated_state)
@@ -270,6 +432,9 @@ def main():
         print()
 
     print("Final state:", state)
+    
+    # Run recovery integration test
+    test_recovery_integration()
     
     # After successful sandbox validation, run migration
     print("\n--- Migration Phase ---")

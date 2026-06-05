@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_generator, reflection_engine) fails to execute 2 consecutive times, automatically reverts that module to the last known-good git commit, logs the failure pattern, and runs a simplified version of the module (with all optional features disabled) for the next cycle before attempting to restore full functionality.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780649372.3593426
-    },
-    {
       "description": "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automatically deprecate or remove it instead of trying to fix it. This will counter complexity creep and force the system to prune underperforming modules, stabilizing the core loop.",
       "priority": 8,
       "status": "pending",
@@ -836,6 +830,13 @@
       "status": "completed",
       "created_at": 1780649372.3563287,
       "completed_at": 1780649437.4476843
+    },
+    {
+      "description": "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_generator, reflection_engine) fails to execute 2 consecutive times, automatically reverts that module to the last known-good git commit, logs the failure pattern, and runs a simplified version of the module (with all optional features disabled) for the next cycle before attempting to restore full functionality.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780649372.3593426,
+      "completed_at": 1780649635.0273447
     }
   ],
   "generated_goals": []

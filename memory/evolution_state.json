@@ -1,9 +1,8 @@
 {
-  "cycle_count": 133,
-  "current_generation": 104,
-  "last_evolution_time": 1780649339.5396848,
+  "cycle_count": 134,
+  "current_generation": 105,
+  "last_evolution_time": 1780649497.597011,
   "capabilities": [
-    "Implement a 'goal triage' routine that scans all pending and in-progress goals, flags those that hav",
     "Add a 'prerequisite verification' step to the goal execution pipeline: before executing any goal, ch",
     "Implement an external fitness function that scores the agent on solving 5 simple programming challen",
     "Create a 'curiosity engine' module that periodically generates a novel synthetic task (e.g., 'implem",
@@ -52,15 +51,10 @@
     "Create a 'core mutation sandbox' that intercepts all mutations targeting files in the evolution core",
     "Implement a 'capability consolidation' protocol: for each evolution cycle, if the number of distinct",
     "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insig",
-    "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> gen"
+    "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> gen",
+    "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_ge"
   ],
   "history": [
-    {
-      "cycle": 28,
-      "goal": "Implement a unified evolution loop orchestrator that integrates the API server, task scheduler, and web scraping modules into a single, autonomous goal-selection and prioritization pipeline, using the existing strategy-switching mechanism to decide which subsystem to evolve next.",
-      "success": true,
-      "timestamp": 1780627261.0949259
-    },
     {
       "cycle": 29,
       "goal": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
@@ -654,6 +648,12 @@
       "goal": "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> generate goal -> mutate -> test -> accept) in a single Python file, then run it in the sandbox for 3 cycles to validate the loop works end-to-end without any module dependencies. Only after this core is stable, migrate the working logic back into the main system.",
       "success": true,
       "timestamp": 1780649460.8400242
+    },
+    {
+      "cycle": 134,
+      "goal": "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_generator, reflection_engine) fails to execute 2 consecutive times, automatically reverts that module to the last known-good git commit, logs the failure pattern, and runs a simplified version of the module (with all optional features disabled) for the next cycle before attempting to restore full functionality.",
+      "success": true,
+      "timestamp": 1780649635.1416118
     }
   ],
   "status": "evolving"

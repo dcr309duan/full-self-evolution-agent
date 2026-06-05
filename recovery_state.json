@@ -1,0 +1,25 @@
+{
+  "failure_counts": {
+    "module_manager": 0,
+    "task_executor": 0,
+    "data_sync": 0,
+    "config_loader": 0,
+    "error_handler": 0
+  },
+  "last_known_good_commits": {
+    "module_manager": null,
+    "task_executor": null,
+    "data_sync": null,
+    "config_loader": null,
+    "error_handler": null
+  },
+  "failure_patterns": [],
+  "simplified_mode": {
+    "module_manager": false,
+    "task_executor": false,
+    "data_sync": false,
+    "config_loader": false,
+    "error_handler": false
+  },
+  "last_restore_attempt": {}
+}

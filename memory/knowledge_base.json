@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/sandbox_manager.py to: Create a new SandboxManager class that: (1) clones the entire agent state (files from core/, tests/, config/, goals.json, meta_parameters.json, history log) into a temporary directory using shutil.copytree, (2) applies a given mutation (diff/patch) to the cloned files, (3) runs the full integration test suite (tests/test_integration_evolution_loop.py) in the sandbox, (4) returns success/failure with detailed logs, (5) on failure, captures the test output, error types, and affected modules into a structured failure report stored in logs/failures/ with timestamp.",
-      "timestamp": 1780642950.7436206,
-      "cycle": 104
-    },
-    {
-      "content": "Successfully modified core/evolution_orchestrator.py to: Update the orchestrator's mutation step to use the sandboxed pipeline. Add logic to: (1) check if sandbox test passed before promoting, (2) on failure, record the failure report path in the goal's metadata, (3) optionally retry with a different mutation strategy if the same goal fails 3+ times via sandbox.",
-      "timestamp": 1780643037.5045154,
-      "cycle": 104
-    },
-    {
-      "content": "Successfully modified core/goal_manager.py to: Add a 'sandbox_test_results' field to each goal's metadata to track how many times it failed sandbox testing, enabling the orchestrator to deprioritize goals that repeatedly fail sandbox validation.",
-      "timestamp": 1780643055.6214812,
-      "cycle": 104
-    },
-    {
-      "content": "Successfully modified config/agent_config.json to: Add configuration parameters for the sandbox: 'sandbox_enabled': true, 'sandbox_temp_base': '/tmp/evo_sandbox/', 'sandbox_max_retries': 3, 'sandbox_test_timeout': 120 (seconds), 'sandbox_promote_on_all_pass': true.",
-      "timestamp": 1780643103.013238,
-      "cycle": 104
-    },
-    {
       "content": "Successfully modified logs/failures/.gitkeep to: Create the failure reports directory structure so the SandboxManager can write structured failure reports (JSON files with timestamp, mutation diff, test output, error types, affected modules).",
       "timestamp": 1780643105.8084147,
       "cycle": 104
@@ -999,6 +979,26 @@
       "content": "[研究] Dynamic Goal Decomposition: Recursive sub-goal generation from high-level objectives with dependency tracking and prioritization: Current SOTA approaches combine hierarchical reinforcement learning (HRL) with large language models",
       "timestamp": 1780649460.8120735,
       "cycle": 133
+    },
+    {
+      "content": "Successfully modified self_healing_recovery.py to: Create the main self-healing recovery module that: (1) Tracks consecutive failures per core module via a JSON state file, (2) Detects 2+ consecutive failures, (3) Triggers git revert to last known-good commit, (4) Logs failure patterns with timestamps and error types, (5) Generates simplified module version with optional features disabled, (6) Provides restore_full_functionality() for next cycle attempt.",
+      "timestamp": 1780649532.6132853,
+      "cycle": 134
+    },
+    {
+      "content": "Successfully modified tests/test_self_healing_recovery.py to: Create comprehensive tests: (1) Test that 2 consecutive failures trigger recovery, (2) Test that single failure does not trigger recovery, (3) Test that recovery creates simplified module version, (4) Test that failure patterns are logged correctly, (5) Test that full functionality restoration works after one successful simplified cycle, (6) Test git revert simulation with mock.",
+      "timestamp": 1780649602.8309233,
+      "cycle": 134
+    },
+    {
+      "content": "Successfully modified minimal_core_bootstrap.py to: Update minimal core bootstrap to include self-healing recovery as a core capability: (1) Add self_healing_recovery to the list of essential modules, (2) Ensure recovery module is initialized during bootstrap, (3) Add test for recovery in minimal core integration test.",
+      "timestamp": 1780649630.1641564,
+      "cycle": 134
+    },
+    {
+      "content": "Successfully modified recovery_state.json to: Create initial recovery state file with: (1) failure_counts dict for each core module initialized to 0, (2) last_known_good_commits dict tracking git hashes, (3) failure_patterns list for logging, (4) simplified_mode dict indicating which modules are in recovery mode, (5) last_restore_attempt timestamps.",
+      "timestamp": 1780649634.9734182,
+      "cycle": 134
     }
   ],
   "learned_patterns": [],
@@ -1517,6 +1517,11 @@
       "approach": "modify goal_generator.py: Add integration hooks to the evolution orchestrator: (1) After each reflection cycle, call the autonomous goal generator, (2) Store generated goals in a shared pending_goals.json file, (3) Add a 'goal_origin' field to distinguish autonomous vs user-generated goals, (4) Ensure autonomous goals are processed with same priority as user goals but with an 'autonomous' tag for tracking.",
       "reason": "Syntax error: invalid syntax (<unknown>, line 884)",
       "timestamp": 1780649261.463779
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Integrate self-healing recovery into the main evolution loop: (1) Import self_healing_recovery module, (2) After each module execution (evolution_orchestrator, goal_generator, reflection_engine), check for failures, (3) On failure, call recovery.track_failure(module_name), (4) If recovery.is_recovery_needed(module_name), execute recovery.recover_module(module_name) before continuing, (5) After successful recovery cycle, call recovery.attempt_full_restore(module_name).",
+      "reason": "Syntax error: '(' was never closed (<unknown>, line 802)",
+      "timestamp": 1780649575.98118
     }
   ],
   "successful_strategies": [
@@ -5544,6 +5549,31 @@
       "strategy": "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> generate goal -> mutate -> test -> accept) in a single Python file, then run it in the sandbox for 3 cycles to validate the loop works end-to-end without any module dependencies. Only after this core is stable, migrate the working logic back into the main system.",
       "outcome": "5/6 steps succeeded",
       "timestamp": 1780649437.4354115
+    },
+    {
+      "strategy": "modify self_healing_recovery.py: Create the main self-healing recovery module that: (1) Tracks consecutive failures per core module via a JSON state file, (2) Detects 2+ consecutive failures, (3) Triggers git revert to last known-good commit, (4) Logs failure patterns with timestamps and error types, (5) Generates simplified module version with optional features disabled, (6) Provides restore_full_functionality() for next cycle attempt.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780649532.595538
+    },
+    {
+      "strategy": "modify tests/test_self_healing_recovery.py: Create comprehensive tests: (1) Test that 2 consecutive failures trigger recovery, (2) Test that single failure does not trigger recovery, (3) Test that recovery creates simplified module version, (4) Test that failure patterns are logged correctly, (5) Test that full functionality restoration works after one successful simplified cycle, (6) Test git revert simulation with mock.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780649602.809648
+    },
+    {
+      "strategy": "modify minimal_core_bootstrap.py: Update minimal core bootstrap to include self-healing recovery as a core capability: (1) Add self_healing_recovery to the list of essential modules, (2) Ensure recovery module is initialized during bootstrap, (3) Add test for recovery in minimal core integration test.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780649630.1448965
+    },
+    {
+      "strategy": "modify recovery_state.json: Create initial recovery state file with: (1) failure_counts dict for each core module initialized to 0, (2) last_known_good_commits dict tracking git hashes, (3) failure_patterns list for logging, (4) simplified_mode dict indicating which modules are in recovery mode, (5) last_restore_attempt timestamps.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780649634.9419565
+    },
+    {
+      "strategy": "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_generator, reflection_engine) fails to execute 2 consecutive times, automatically reverts that module to the last known-good git commit, logs the failure pattern, and runs a simplified version of the module (with all optional features disabled) for the next cycle before attempting to restore full functionality.",
+      "outcome": "4/5 steps succeeded",
+      "timestamp": 1780649635.0044599
     }
   ],
   "capabilities_developed": []
