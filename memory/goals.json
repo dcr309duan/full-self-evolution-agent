@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of the target file, the test output, the schema version, and the mutation parameters, then automatically generates a minimal reproducible example and logs it to the failure analysis module for deep root cause tracing.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780635587.099488
-    },
-    {
       "description": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
       "priority": 8,
       "status": "pending",
@@ -402,6 +396,13 @@
       "status": "completed",
       "created_at": 1780635587.0974154,
       "completed_at": 1780635698.5813777
+    },
+    {
+      "description": "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of the target file, the test output, the schema version, and the mutation parameters, then automatically generates a minimal reproducible example and logs it to the failure analysis module for deep root cause tracing.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780635587.099488,
+      "completed_at": 1780635848.2241583
     }
   ],
   "generated_goals": []

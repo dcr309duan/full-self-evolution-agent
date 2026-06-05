@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified unified_evolution_loop_orchestrator.py to: Integrate the self-consistency test suite into the orchestrator's main loop. After each successful mutation and before marking a module as 'verified_consistent', run the self-consistency tests. If they fail, set the module state to 'failed' and trigger rollback. Add a new step in the cycle: 'run_self_consistency_checks'.",
-      "timestamp": 1780631308.7057035,
-      "cycle": 48
-    },
-    {
-      "content": "Successfully modified mutation_engine.py to: Add a post-mutation hook that calls the self-consistency test suite. If the test suite fails, automatically revert the mutation (using the existing rollback mechanism) and log the failure with classification from the failure analysis module. Ensure this hook cannot be bypassed by any mutation.",
-      "timestamp": 1780631354.0207267,
-      "cycle": 48
-    },
-    {
-      "content": "Successfully modified reflection_parser.py to: Add a method 'validate_output_schema()' that returns the schema of the current reflection parser output (field names, types, required fields). This will be used by the self-consistency test suite to generate test cases that check schema compatibility with the goal generator.",
-      "timestamp": 1780631400.5749378,
-      "cycle": 48
-    },
-    {
-      "content": "Successfully modified dependency_manifest.json to: Add 'self_consistency_test_suite' as a new module with dependencies on 'reflection_parser', 'goal_generator', 'mutation_engine', 'module_state_store', and 'failure_analysis_module'. This ensures the test suite is loaded after its dependencies and is part of the dependency-aware scheduling.",
-      "timestamp": 1780631448.6005132,
-      "cycle": 48
-    },
-    {
-      "content": "Successfully modified module_state_store.py to: Add a new state 'consistency_check_failed' to the valid states list. This state will be set when the self-consistency test suite detects a contract violation. Also add a method 'get_consistency_failures()' that returns a list of modules in this state for reporting.",
-      "timestamp": 1780631454.4230483,
-      "cycle": 48
-    },
-    {
       "content": "Successfully modified failure_analysis_module.py to: Add a new failure type 'CONSISTENCY_CONTRACT_VIOLATION' to the classification system. Update the classifier to recognize failures from the self-consistency test suite and log them with the specific modules involved and the schema mismatch details.",
       "timestamp": 1780631502.8365788,
       "cycle": 48
@@ -999,6 +974,31 @@
       "content": "[研究] Automated Test Generation and Repair Using Symbolic Execution and Reinforcement Learning: The current state of the art in automated test generation and repair combines symbolic execution wit",
       "timestamp": 1780635734.1911697,
       "cycle": 70
+    },
+    {
+      "content": "Successfully modified evolution_engine/failure_context_recorder.py to: Create the FailureContextRecorder class with methods: capture_context(target_file_path, test_output, schema_version, mutation_params) that returns a structured dict with AST dump, test output, schema version, and mutation parameters. Include a generate_minimal_reproducible_example(context) method that creates a standalone Python script reproducing the failure.",
+      "timestamp": 1780635791.4621823,
+      "cycle": 71
+    },
+    {
+      "content": "Successfully modified evolution_engine/mutation_engine.py to: Integrate the FailureContextRecorder into the mutation engine's apply_mutation method. After a mutation fails tests, call recorder.capture_context() with the target file path, test output, current schema version, and mutation parameters. Then call recorder.generate_minimal_reproducible_example() and log the result to the failure analysis module.",
+      "timestamp": 1780635799.1123,
+      "cycle": 71
+    },
+    {
+      "content": "Successfully modified evolution_engine/failure_analysis.py to: Extend the failure analysis module to accept and store the detailed context from FailureContextRecorder. Add a new method analyze_with_context(context) that uses the AST dump and test output for deeper root cause classification. Store the minimal reproducible example path in the failure log.",
+      "timestamp": 1780635820.8531675,
+      "cycle": 71
+    },
+    {
+      "content": "Successfully modified config/system_config.json to: Add configuration keys: 'failure_context_recorder.enabled': true, 'failure_context_recorder.max_contexts_per_module': 10, 'failure_context_recorder.reproducible_examples_dir': 'failure_examples/'",
+      "timestamp": 1780635823.4932117,
+      "cycle": 71
+    },
+    {
+      "content": "Successfully modified tests/test_failure_context_recorder.py to: Create a test suite that: 1) Creates a mock target file with known AST, 2) Simulates a mutation failure with test output, 3) Verifies the captured context contains all required fields, 4) Verifies the generated reproducible example is valid Python and reproduces the failure, 5) Tests integration with failure analysis module.",
+      "timestamp": 1780635846.8631191,
+      "cycle": 71
     }
   ],
   "learned_patterns": [],
@@ -1192,6 +1192,11 @@
       "approach": "modify scripts/run_primitive_validation.sh: Create a shell script that runs the metamorphic test in isolation, captures stdout/stderr, and exits with code 0 on success or non-zero with the exact error message on failure. This provides a clean entry point for the orchestrator to check.",
       "reason": "Syntax error: invalid syntax (<unknown>, line 8)",
       "timestamp": 1780635682.330441
+    },
+    {
+      "approach": "modify failure_examples/.gitkeep: Create the directory for storing minimal reproducible examples with a gitkeep file.",
+      "reason": "Syntax error: invalid syntax (<unknown>, line 1)",
+      "timestamp": 1780635848.205315
     }
   ],
   "successful_strategies": [
@@ -3104,6 +3109,36 @@
       "strategy": "mutation:crossover(flatten,prime_fibonacci_check)",
       "outcome": "Created flatten_prime_fibonacci, score=0.4",
       "timestamp": 1780635704.5339189
+    },
+    {
+      "strategy": "modify evolution_engine/failure_context_recorder.py: Create the FailureContextRecorder class with methods: capture_context(target_file_path, test_output, schema_version, mutation_params) that returns a structured dict with AST dump, test output, schema version, and mutation parameters. Include a generate_minimal_reproducible_example(context) method that creates a standalone Python script reproducing the failure.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635791.451218
+    },
+    {
+      "strategy": "modify evolution_engine/mutation_engine.py: Integrate the FailureContextRecorder into the mutation engine's apply_mutation method. After a mutation fails tests, call recorder.capture_context() with the target file path, test output, current schema version, and mutation parameters. Then call recorder.generate_minimal_reproducible_example() and log the result to the failure analysis module.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635799.1022089
+    },
+    {
+      "strategy": "modify evolution_engine/failure_analysis.py: Extend the failure analysis module to accept and store the detailed context from FailureContextRecorder. Add a new method analyze_with_context(context) that uses the AST dump and test output for deeper root cause classification. Store the minimal reproducible example path in the failure log.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635820.8423746
+    },
+    {
+      "strategy": "modify config/system_config.json: Add configuration keys: 'failure_context_recorder.enabled': true, 'failure_context_recorder.max_contexts_per_module': 10, 'failure_context_recorder.reproducible_examples_dir': 'failure_examples/'",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635823.4824202
+    },
+    {
+      "strategy": "modify tests/test_failure_context_recorder.py: Create a test suite that: 1) Creates a mock target file with known AST, 2) Simulates a mutation failure with test output, 3) Verifies the captured context contains all required fields, 4) Verifies the generated reproducible example is valid Python and reproduces the failure, 5) Tests integration with failure analysis module.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635846.8521554
+    },
+    {
+      "strategy": "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of the target file, the test output, the schema version, and the mutation parameters, then automatically generates a minimal reproducible example and logs it to the failure analysis module for deep root cause tracing.",
+      "outcome": "5/6 steps succeeded",
+      "timestamp": 1780635848.216322
     }
   ],
   "capabilities_developed": []
