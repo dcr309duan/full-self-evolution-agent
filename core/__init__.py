@@ -15,6 +15,12 @@ from .nash_detector_and_forcer import (
     ForcingResult
 )
 
+from .nash_integration import (
+    NashIntegration,
+    NashIntegrationConfig,
+    IntegrationResult
+)
+
 def __getattr__(name):
     if name in ('NashEquilibriumDetector', 'detect_nash_equilibrium', 'NashDetectorConfig'):
         import importlib
@@ -38,6 +44,8 @@ def __getattr__(name):
         return getattr(mod, name)
     if name in ('NashDetectorAndForcer', 'NashDetectorAndForcerConfig', 'DetectionResult', 'ForcingResult'):
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    if name in ('NashIntegration', 'NashIntegrationConfig', 'IntegrationResult'):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from .coordinated_mutation_engine import CoordinatedMutationEngine, MutationConfig, MutationResult
@@ -45,6 +53,7 @@ from .coordinated_change_executor import CoordinatedChangeExecutor, ChangeExecut
 from .ecology_engine import EcologyEngine
 from . import nash_detector
 from . import multi_module_forcer
+from . import nash_integration
 
 __all__ = [
     'audit_and_prune',
@@ -72,4 +81,8 @@ __all__ = [
     'NashDetectorAndForcerConfig',
     'DetectionResult',
     'ForcingResult',
+    'NashIntegration',
+    'NashIntegrationConfig',
+    'IntegrationResult',
+    'nash_integration',
 ]

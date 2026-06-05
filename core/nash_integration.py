@@ -1,16 +1,257 @@
 """
 core/nash_integration.py
 
-Lightweight integration module bridging nash_detector with the evolution orchestrator.
-Provides helper functions for coordinated multi-module mutation planning.
+Integration layer connecting the Nash detector to the evolution orchestrator.
+Provides hooks for mutation cycle registration, equilibrium state queries,
+and methods to trigger multi-module mutations.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 import logging
 
 from core.nash_detector import NashDetector, NashEquilibriumState
 
 logger = logging.getLogger(__name__)
+
+
+class NashIntegrationLayer:
+    """
+    Integration layer that connects the Nash detector to the evolution orchestrator.
+    Manages hooks, equilibrium queries, and multi-module mutation triggers.
+    """
+
+    def __init__(self, detector: NashDetector):
+        """
+        Initialize the integration layer with a Nash detector instance.
+
+        Args:
+            detector: Initialized NashDetector instance.
+        """
+        self.detector = detector
+        self._pre_mutation_hooks: List[Callable] = []
+        self._post_mutation_hooks: List[Callable] = []
+        self._equilibrium_query_hooks: List[Callable] = []
+        self._module_pool: Dict[str, Any] = {}
+        self._orchestrator: Any = None
+
+    def register_orchestrator(self, orchestrator: Any) -> None:
+        """
+        Register the evolution orchestrator with this integration layer.
+
+        Args:
+            orchestrator: The evolution orchestrator instance.
+        """
+        self._orchestrator = orchestrator
+        logger.info("Orchestrator registered with Nash integration layer")
+
+    def register_module_pool(self, module_pool: Dict[str, Any]) -> None:
+        """
+        Register the module pool for interaction analysis.
+
+        Args:
+            module_pool: Dictionary mapping module names to their current state/interface.
+        """
+        self._module_pool = module_pool
+        logger.info("Module pool registered with Nash integration layer")
+
+    def register_pre_mutation_hook(self, hook: Callable) -> None:
+        """
+        Register a hook to be called before each mutation cycle.
+
+        Args:
+            hook: Callable that takes no arguments and returns None.
+        """
+        self._pre_mutation_hooks.append(hook)
+        logger.debug("Pre-mutation hook registered")
+
+    def register_post_mutation_hook(self, hook: Callable) -> None:
+        """
+        Register a hook to be called after each mutation cycle.
+
+        Args:
+            hook: Callable that takes no arguments and returns None.
+        """
+        self._post_mutation_hooks.append(hook)
+        logger.debug("Post-mutation hook registered")
+
+    def register_equilibrium_query_hook(self, hook: Callable) -> None:
+        """
+        Register a hook for querying equilibrium states.
+
+        Args:
+            hook: Callable that takes no arguments and returns List[NashEquilibriumState].
+        """
+        self._equilibrium_query_hooks.append(hook)
+        logger.debug("Equilibrium query hook registered")
+
+    def execute_pre_mutation_hooks(self) -> None:
+        """
+        Execute all registered pre-mutation hooks.
+        """
+        for hook in self._pre_mutation_hooks:
+            try:
+                hook()
+            except Exception as e:
+                logger.exception("Error executing pre-mutation hook: %s", e)
+
+    def execute_post_mutation_hooks(self) -> None:
+        """
+        Execute all registered post-mutation hooks.
+        """
+        for hook in self._post_mutation_hooks:
+            try:
+                hook()
+            except Exception as e:
+                logger.exception("Error executing post-mutation hook: %s", e)
+
+    def query_equilibrium_states(self) -> List[NashEquilibriumState]:
+        """
+        Query current equilibrium states from all registered hooks and the detector.
+
+        Returns:
+            List of detected Nash equilibrium states.
+        """
+        all_states: List[NashEquilibriumState] = []
+
+        # Query from hooks
+        for hook in self._equilibrium_query_hooks:
+            try:
+                states = hook()
+                if states:
+                    all_states.extend(states)
+            except Exception as e:
+                logger.exception("Error querying equilibrium from hook: %s", e)
+
+        # Query from detector directly
+        if self._module_pool:
+            try:
+                detector_states = self.detector.detect_equilibria(self._module_pool)
+                all_states.extend(detector_states)
+            except Exception as e:
+                logger.exception("Error querying equilibrium from detector: %s", e)
+
+        return all_states
+
+    def trigger_multi_module_mutation(
+        self,
+        modules: List[str],
+        strategy: str,
+        expected_gain: float,
+        risk_level: str = "medium",
+    ) -> bool:
+        """
+        Trigger a coordinated multi-module mutation.
+
+        Args:
+            modules: List of module names to mutate together.
+            strategy: Description of the coordinated change.
+            expected_gain: Estimated fitness improvement.
+            risk_level: 'low', 'medium', or 'high'.
+
+        Returns:
+            True if the mutation was applied successfully.
+        """
+        if len(modules) < 2:
+            logger.warning("Multi-module mutation requires at least 2 modules, got %d", len(modules))
+            return False
+
+        try:
+            # Execute pre-mutation hooks
+            self.execute_pre_mutation_hooks()
+
+            # Apply coordinated change via detector
+            success = self.detector.force_coordinated_change(
+                modules=modules,
+                strategy=strategy,
+                expected_gain=expected_gain,
+            )
+
+            if success:
+                logger.info(
+                    "Successfully triggered multi-module mutation for modules %s",
+                    modules,
+                )
+            else:
+                logger.error(
+                    "Failed to trigger multi-module mutation for modules %s",
+                    modules,
+                )
+
+            # Execute post-mutation hooks
+            self.execute_post_mutation_hooks()
+
+            return success
+
+        except Exception as e:
+            logger.exception(
+                "Error triggering multi-module mutation for modules %s: %s",
+                modules,
+                e,
+            )
+            return False
+
+    def get_coordinated_mutation_plans(
+        self,
+        min_coordination_gain: float = 0.05,
+        max_modules_per_plan: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate coordinated mutation plans based on current equilibrium states.
+
+        Args:
+            min_coordination_gain: Minimum expected fitness gain to justify coordination.
+            max_modules_per_plan: Maximum number of modules to include in a single plan.
+
+        Returns:
+            List of mutation plans.
+        """
+        return plan_coordinated_mutations(
+            detector=self.detector,
+            module_pool=self._module_pool,
+            min_coordination_gain=min_coordination_gain,
+            max_modules_per_plan=max_modules_per_plan,
+        )
+
+    def apply_coordinated_plans(
+        self,
+        plans: List[Dict[str, Any]],
+        mutation_engine: Any,
+    ) -> List[Dict[str, Any]]:
+        """
+        Apply a list of coordinated mutation plans.
+
+        Args:
+            plans: List of mutation plans.
+            mutation_engine: The mutation engine instance.
+
+        Returns:
+            List of applied mutation plans with results.
+        """
+        return apply_coordinated_mutations(
+            detector=self.detector,
+            mutation_engine=mutation_engine,
+            equilibrium_states=self.query_equilibrium_states(),
+            module_pool=self._module_pool,
+        )
+
+    def get_coordination_candidates(
+        self,
+        min_interaction_strength: float = 0.3,
+    ) -> List[Tuple[str, str, float]]:
+        """
+        Identify pairs of modules that are strong candidates for coordinated mutation.
+
+        Args:
+            min_interaction_strength: Minimum interaction strength to consider.
+
+        Returns:
+            List of tuples (module_a, module_b, interaction_strength).
+        """
+        return get_coordination_candidates(
+            detector=self.detector,
+            module_pool=self._module_pool,
+            min_interaction_strength=min_interaction_strength,
+        )
 
 
 def collect_module_interaction_data(

@@ -121,6 +121,14 @@ class NashEquilibriumDetector:
 
         return True, candidates
 
+    def is_stuck(self):
+        """
+        Returns a boolean flag indicating whether the system is stuck in a Nash equilibrium.
+        This is a convenience method that returns True if detect_nash returns True.
+        """
+        nash_detected, _ = self.detect_nash()
+        return nash_detected
+
     def reset(self):
         """Clear all history and reset the detector."""
         self.history = {}
@@ -139,3 +147,11 @@ def detect_nash(data_file="nash_data.json"):
     """
     detector = NashEquilibriumDetector(data_file=data_file)
     return detector.detect_nash()
+
+def is_stuck(data_file="nash_data.json"):
+    """
+    Convenience function that returns a boolean 'stuck' flag.
+    Returns True if the system is in a Nash equilibrium (stuck).
+    """
+    detector = NashEquilibriumDetector(data_file=data_file)
+    return detector.is_stuck()
