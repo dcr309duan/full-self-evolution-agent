@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement automated rollback and conflict resolution for overlapping module edits: when two mutations modify the same code region, detect the conflict, attempt a three-way merge using the last stable snapshot, and if merge fails, revert both changes and log the conflict for manual review.",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780643996.5195127
-    },
-    {
       "description": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
       "priority": 7,
       "status": "pending",
@@ -678,6 +672,13 @@
       "status": "completed",
       "created_at": 1780644832.413181,
       "completed_at": 1780645280.5354
+    },
+    {
+      "description": "Implement automated rollback and conflict resolution for overlapping module edits: when two mutations modify the same code region, detect the conflict, attempt a three-way merge using the last stable snapshot, and if merge fails, revert both changes and log the conflict for manual review.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780643996.5195127,
+      "completed_at": 1780645533.4263718
     }
   ],
   "generated_goals": []
