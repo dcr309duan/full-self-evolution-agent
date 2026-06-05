@@ -6,6 +6,7 @@ Includes a goal_selection mechanism that maintains a priority queue of evolution
 Integrates reflection parsing to close the feedback loop between mutation outcomes and strategy selection.
 Includes a 'fitness landscape mutation' phase that runs every 3 cycles to generate new tests targeting weak areas.
 Includes meta_goal_generator integration that analyzes statistics every 10 cycles and injects disruptive goals.
+Includes a 50-cycle trigger that reads orchestrator state to find clean integration points for targeted evolution.
 """
 
 import time
@@ -36,6 +37,7 @@ LOG_FILE = "evolution_log.json"  # File to log evolution cycles
 REFLECTION_LOG_FILE = "reflection_log.json"  # File to log reflection data
 FITNESS_LANDSCAPE_INTERVAL = 3  # Number of cycles between fitness landscape mutation phases
 META_GOAL_INTERVAL = 10  # Number of cycles between meta goal generator analyses
+FIFTY_CYCLE_TRIGGER_INTERVAL = 50  # Number of cycles between 50-cycle trigger analyses
 
 
 class EvolutionOrchestrator:
@@ -854,12 +856,4 @@ class EvolutionOrchestrator:
         except Exception as e:
             logger.exception("Error during meta goal generator analysis: %s", e)
 
-    def evolution_cycle(self):
-        """Execute one complete evolution cycle."""
-        logger.info("Starting evolution cycle...")
-        
-        # Increment cycle counter
-        self.cycle_count += 1
-
-        # Save old scores for logging
-        old
+   

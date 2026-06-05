@@ -1,7 +1,7 @@
 {
-  "cycle_count": 170,
+  "cycle_count": 175,
   "current_generation": 130,
-  "last_evolution_time": 1780657911.676674,
+  "last_evolution_time": 1780659022.777386,
   "capabilities": [
     "Implement a Capability Consolidation Engine that runs every 5 cycles: scans all modules, scores each",
     "Build a real-time system health dashboard that correlates failures, performance metrics, and depende",
@@ -55,36 +55,6 @@
     "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements"
   ],
   "history": [
-    {
-      "cycle": 69,
-      "goal": "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote pipeline with at least three distinct data flow scenarios, including one that simulates a format mismatch to verify the schema alignment layer catches it, and integrate it into the testing framework to run before each generation.",
-      "success": true,
-      "timestamp": 1780635535.3734288
-    },
-    {
-      "cycle": 70,
-      "goal": "Build a minimal 'new file creation' metamorphic test: write a script that creates a new Python file with a single function from scratch, runs the mutation→test→promote pipeline on it, and verifies success. If it fails, log the exact error and abort any higher-level integration goals until this primitive case passes.",
-      "success": true,
-      "timestamp": 1780635738.3765464
-    },
-    {
-      "cycle": 71,
-      "goal": "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of the target file, the test output, the schema version, and the mutation parameters, then automatically generates a minimal reproducible example and logs it to the failure analysis module for deep root cause tracing.",
-      "success": true,
-      "timestamp": 1780635848.2324624
-    },
-    {
-      "cycle": 72,
-      "goal": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
-      "success": true,
-      "timestamp": 1780635988.8550549
-    },
-    {
-      "cycle": 73,
-      "goal": "Build a minimal end-to-end integration test that validates the core evolution loop (reflection → goal generation → mutation → test → promotion). The test must run in a sandboxed environment, use a mock mutation engine, and fail with a clear diagnostic if any step breaks. Ensure it passes reliably before any new features are added.",
-      "success": true,
-      "timestamp": 1780636155.5719202
-    },
     {
       "cycle": 74,
       "goal": "Implement a triage and pruning module that scans all existing code modules, categorizes them as 'functional', 'broken', or 'redundant' based on execution tests and dependency overlap, and automatically removes or archives modules classified as broken or redundant after 3 consecutive failed execution attempts. The module must output a pruning report log.",
@@ -654,6 +624,36 @@
       "goal": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
       "success": false,
       "timestamp": 1780657881.674471
+    },
+    {
+      "cycle": 170,
+      "goal": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
+      "success": false,
+      "timestamp": 1780658205.880264
+    },
+    {
+      "cycle": 171,
+      "goal": "Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each existing module by its usage frequency, test pass rate, and lines of code. Modules below a threshold are archived (not deleted), and the system must re-derive their core functionality from scratch using the LLM, forcing simplification and removal of accumulated cruft.",
+      "success": false,
+      "timestamp": 1780658378.4871757
+    },
+    {
+      "cycle": 172,
+      "goal": "Build a 'capability bankruptcy' module that runs every 50 cycles: it scores each existing module by its usage frequency, test pass rate, and lines of code. Modules below a threshold are archived (not deleted), and the system must re-derive their core functionality from scratch using the LLM, forcing simplification and removal of accumulated cruft.",
+      "success": false,
+      "timestamp": 1780658629.3732045
+    },
+    {
+      "cycle": 173,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": false,
+      "timestamp": 1780658824.9766393
+    },
+    {
+      "cycle": 174,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": false,
+      "timestamp": 1780658992.775219
     }
   ],
   "status": "evolving"

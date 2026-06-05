@@ -26,6 +26,10 @@ class NashDetector:
         self.max_history_length: int = 10
         # Stagnation scores per module pair (0-1)
         self.stagnation_scores: Dict[Tuple[str, str], float] = defaultdict(float)
+        # History of last 5 cycles' mutation outcomes: list of booleans (True if any improvement)
+        self._cycle_improvement_history: List[bool] = []
+        # Module interaction matrix: module -> dict of module -> interaction strength
+        self._module_interaction_matrix: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
     def register_data_flow(self, source_module: str, target_module: str) -> None:
         """
@@ -298,6 +302,8 @@ class NashDetector:
         self.stagnation_counter.clear()
         self.stagnation_scores.clear()
         self.current_cycle = 0
+        self._cycle_improvement_history.clear()
+        self._module_interaction_matrix.clear()
 
     def set_stagnation_threshold(self, threshold: int) -> None:
         """
@@ -332,3 +338,97 @@ class NashDetector:
             Dictionary mapping module pairs to their stagnation scores
         """
         return dict(self.stagnation_scores)
+
+    def record_cycle_outcome(self, any_improvement: bool) -> None:
+        """
+        Record whether any module showed improvement in the current cycle.
+        
+        Args:
+            any_improvement: True if at least one module improved fitness
+        """
+        self._cycle_improvement_history.append(any_improvement)
+        # Keep only last 5 cycles
+        if len(self._cycle_improvement_history) > 5:
+            self._cycle_improvement_history = self._cycle_improvement_history[-5:]
+
+    def is_at_equilibrium(self) -> bool:
+        """
+        Check if no single-module mutation has improved system fitness in the last 5 cycles.
+        
+        Returns:
+            True if no improvement in last 5 cycles
+        """
+        if len(self._cycle_improvement_history) < 5:
+            return False
+        return not any(self._cycle_improvement_history[-5:])
+
+    def detect_equilibrium(self) -> bool:
+        """
+        Returns True if the last 3 cycles show no single-module improvement
+        (all mutations failed or no score increase).
+        
+        Returns:
+            True if no improvement in last 3 cycles
+        """
+        if len(self._cycle_improvement_history) < 3:
+            return False
+        return not any(self._cycle_improvement_history[-3:])
+
+    def get_equilibrium_state(self) -> Dict[str, Dict[str, float]]:
+        """
+        Return current module interaction matrix and equilibrium flag.
+        The matrix maps each module to a dictionary of other modules and their interaction strengths.
+        
+        Returns:
+            Dictionary containing:
+            - 'interaction_matrix': module -> {other_module: interaction_strength}
+            - 'equilibrium': bool indicating if system is at equilibrium
+        """
+        # Build interaction matrix from dependency graph and stagnation scores
+        matrix: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        
+        # Add interactions from dependency graph
+        for source, targets in self.dependency_graph.items():
+            for target in targets:
+                pair = tuple(sorted([source, target]))
+                # Use stagnation score as interaction strength (0 = no interaction, 1 = fully stagnant)
+                strength = self.stagnation_scores.get(pair, 0.0)
+                matrix[source][target] = strength
+                matrix[target][source] = strength
+        
+        # Add interactions from reverse dependencies not already covered
+        for target, sources in self.reverse_dependency.items():
+            for source in sources:
+                if source not in matrix or target not in matrix[source]:
+                    pair = tuple(sorted([source, target]))
+                    strength = self.stagnation_scores.get(pair, 0.0)
+                    matrix[source][target] = strength
+                    matrix[target][source] = strength
+        
+        return {
+            'interaction_matrix': dict(matrix),
+            'equilibrium': self.is_at_equilibrium()
+        }
+
+    def check_and_trigger_coordinated(self) -> Optional[Dict]:
+        """
+        Check if equilibrium has been reached in the last 3 cycles.
+        If yes, call coordinated_mutation_planner to generate multi-module changes.
+        
+        Returns:
+            The mutation plan from coordinated_mutation_planner, or None if not at equilibrium.
+        """
+        if not self.detect_equilibrium():
+            return None
+        
+        # Import here to avoid circular imports
+        from modules.coordinated_mutation_planner import CoordinatedMutationPlanner
+        
+        planner = CoordinatedMutationPlanner()
+        equilibrium_state = self.get_equilibrium_state()
+        mutation_plan = planner.generate_plan(
+            dependency_graph=dict(self.dependency_graph),
+            equilibrium_state=equilibrium_state
+        )
+        
+        return mutation_plan

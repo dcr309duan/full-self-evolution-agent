@@ -216,5 +216,101 @@ class TestNashEquilibriumIntegration(unittest.TestCase):
         self.assertFalse(self.planner.coordinated_phase_completed,
                         "Coordinated phase should no longer be active")
 
+    def test_coordinated_mutation_improves_fitness_by_at_least_5_percent(self):
+        """Test that coordinated mutation phase triggers and improves overall system fitness by at least 5%."""
+        # Create a scenario with 3 interdependent modules stuck in a local optimum
+        # Module 1: Optimizer - high fitness but constrained
+        module_a = MagicMock()
+        module_a.name = "optimizer_a"
+        module_a.fitness = 0.80
+        module_a.mutation_options = ["learning_rate_adjust", "batch_size_change", "regularization_tune"]
+
+        # Module 2: DataProcessor - moderate fitness, interacts negatively with module 1
+        module_b = MagicMock()
+        module_b.name = "data_processor_b"
+        module_b.fitness = 0.75
+        module_b.mutation_options = ["normalization_change", "augmentation_add", "sampling_strategy"]
+
+        # Module 3: FeatureExtractor - low fitness, interacts negatively with both
+        module_c = MagicMock()
+        module_c.name = "feature_extractor_c"
+        module_c.fitness = 0.70
+        module_c.mutation_options = ["kernel_size_change", "activation_change", "layer_depth_adjust"]
+
+        # Create strong negative interactions to create a local optimum
+        # Each module's fitness drops significantly when any other module changes
+        strong_interaction_matrix = {
+            ("optimizer_a", "data_processor_b"): -0.20,
+            ("data_processor_b", "optimizer_a"): -0.18,
+            ("data_processor_b", "feature_extractor_c"): -0.22,
+            ("feature_extractor_c", "data_processor_b"): -0.15,
+            ("feature_extractor_c", "optimizer_a"): -0.25,
+            ("optimizer_a", "feature_extractor_c"): -0.12,
+        }
+
+        modules = [module_a, module_b, module_c]
+
+        # Create detector with strong interaction matrix
+        detector = NashEquilibriumDetector(interaction_matrix=strong_interaction_matrix)
+        planner = CoordinatedMutationPlanner()
+        mutation_engine = MutationEngine()
+        fitness_evaluator = FitnessEvaluator()
+
+        # Configure fitness evaluator to respect interaction constraints
+        def evaluate_fitness_with_constraints(module, context=None):
+            base_fitness = module.fitness
+            if context:
+                for other_module in context:
+                    key = (module.name, other_module.name)
+                    if key in strong_interaction_matrix:
+                        base_fitness += strong_interaction_matrix[key]
+            return max(0.0, min(1.0, base_fitness))
+
+        fitness_evaluator.evaluate.side_effect = evaluate_fitness_with_constraints
+
+        # Record initial total fitness
+        initial_total_fitness = sum(m.fitness for m in modules)
+        
+        # Verify we are in a local optimum (no single module can improve)
+        is_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
+        self.assertTrue(is_equilibrium, "System should be in Nash equilibrium (local optimum)")
+
+        # Generate coordinated mutation bundle
+        bundle = planner.generate_bundle(modules, strong_interaction_matrix)
+        self.assertIsNotNone(bundle, "Coordinated mutation bundle should be generated")
+
+        # Apply coordinated mutation
+        mutation_engine.apply_bundle(bundle)
+
+        # Verify coordinated mutation phase triggered
+        self.assertTrue(planner.coordinated_phase_completed,
+                       "Coordinated mutation phase should be triggered")
+
+        # Calculate final total fitness
+        final_total_fitness = sum(m.fitness for m in modules)
+
+        # Verify improvement of at least 5%
+        improvement_percentage = ((final_total_fitness - initial_total_fitness) / initial_total_fitness) * 100
+        self.assertGreaterEqual(
+            improvement_percentage,
+            5.0,
+            f"Coordinated mutation should improve overall system fitness by at least 5%. "
+            f"Initial: {initial_total_fitness:.2f}, Final: {final_total_fitness:.2f}, "
+            f"Improvement: {improvement_percentage:.2f}%"
+        )
+
+        # Verify equilibrium is broken
+        is_still_equilibrium = detector.check_equilibrium(modules, fitness_evaluator)
+        self.assertFalse(is_still_equilibrium,
+                        "Coordinated mutation should break the local optimum")
+
+        # Verify each module's fitness improved
+        for module in modules:
+            self.assertGreater(
+                module.fitness,
+                0.0,
+                f"Module {module.name} should have positive fitness after coordinated mutation"
+            )
+
 if __name__ == '__main__':
     unittest.main()

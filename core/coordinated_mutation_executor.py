@@ -58,11 +58,12 @@ class CoordinatedMutationExecutor:
     8. Maintain a rollback snapshot of original files
     """
 
-    def __init__(self, project_root: str = "."):
+    def __init__(self, project_root: str = ".", max_total_lines_changed: int = 200):
         self.project_root = Path(project_root).resolve()
         self.sandbox_dir: Optional[Path] = None
         self.rollback_snapshots: Dict[str, Optional[str]] = {}
         self._sandbox_created = False
+        self.max_total_lines_changed = max_total_lines_changed
 
     def _resolve_file_path(self, relative_path: str) -> Path:
         """Resolve a relative file path to an absolute path within the project root."""
@@ -231,6 +232,48 @@ class CoordinatedMutationExecutor:
         except Exception:
             return False
 
+    def _check_file_exists(self, file_path: str) -> bool:
+        """Check if a file exists at the given path."""
+        return self._resolve_file_path(file_path).exists()
+
+    def _check_file_writable(self, file_path: str) -> bool:
+        """Check if a file is writable."""
+        actual_path = self._resolve_file_path(file_path)
+        if actual_path.exists():
+            return os.access(actual_path, os.W_OK)
+        else:
+            # File doesn't exist yet, check if parent directory is writable
+            return os.access(actual_path.parent, os.W_OK)
+
+    def _calculate_total_lines_changed(self, changes: List[FileChange]) -> int:
+        """Calculate the total number of lines changed across all files."""
+        total_lines = 0
+        for change in changes:
+            total_lines += len(change.new_content.splitlines())
+        return total_lines
+
+    def _pre_execution_safety_checks(self, plan: CoordinatedMutationPlan) -> Optional[str]:
+        """
+        Perform safety checks before executing the plan.
+        Returns an error message if checks fail, None otherwise.
+        """
+        # Check that all target files exist
+        for change in plan.changes:
+            if not self._check_file_exists(change.file_path):
+                return f"Target file does not exist: {change.file_path}"
+
+        # Check that all target files are writable
+        for change in plan.changes:
+            if not self._check_file_writable(change.file_path):
+                return f"Target file is not writable: {change.file_path}"
+
+        # Check complexity threshold
+        total_lines_changed = self._calculate_total_lines_changed(plan.changes)
+        if total_lines_changed > self.max_total_lines_changed:
+            return f"Total lines changed ({total_lines_changed}) exceeds maximum allowed ({self.max_total_lines_changed})"
+
+        return None
+
     def execute(self, plan: CoordinatedMutationPlan) -> ExecutionResult:
         """
         Execute a coordinated mutation plan atomically.
@@ -245,6 +288,12 @@ class CoordinatedMutationExecutor:
 
         if not plan.changes:
             result.success = True
+            return result
+
+        # Pre-execution safety checks
+        safety_error = self._pre_execution_safety_checks(plan)
+        if safety_error:
+            result.error_message = f"Safety check failed: {safety_error}"
             return result
 
         affected_files = [change.file_path for change in plan.changes]

@@ -1,7 +1,8 @@
 import pytest
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch, call, MagicMock
 from datetime import datetime
 from typing import Dict, List, Any
+from pathlib import Path
 
 from src.capability_bankruptcy import (
     BankruptcyProtocol,
@@ -759,3 +760,156 @@ class TestCapabilityBankruptcy:
         assert result.summary['total_archived'] == 0
         assert result.summary['total_reimplemented'] == 0
         assert result.summary['total_active'] == 0
+
+    def test_scoring_function_with_mock_module_data(self, bankruptcy_protocol, mock_knowledge_base):
+        """Test that scoring function works correctly with mock module data."""
+        # Arrange
+        capabilities = {}
+        
+        # Create mock modules with specific attributes
+        module_a = Capability(
+            id="module_a",
+            name="Module A",
+            score=CapabilityScore(value=0, confidence=0.0),
+            status=CapabilityStatus.ACTIVE,
+            essential=False,
+            last_used=datetime(2024, 11, 1),
+            usage_count=100,
+            test_pass_rate=0.95,
+            lines_of_code=500
+        )
+        capabilities[module_a.id] = module_a
+        
+        module_b = Capability(
+            id="module_b",
+            name="Module B",
+            score=CapabilityScore(value=0, confidence=0.0),
+            status=CapabilityStatus.ACTIVE,
+            essential=False,
+            last_used=datetime(2024, 6, 1),
+            usage_count=50,
+            test_pass_rate=0.80,
+            lines_of_code=300
+        )
+        capabilities[module_b.id] = module_b
+        
+        module_c = Capability(
+            id="module_c",
+            name="Module C",
+            score=CapabilityScore(value=0, confidence=0.0),
+            status=CapabilityStatus.ACTIVE,
+            essential=False,
+            last_used=datetime(2024, 1, 1),
+            usage_count=10,
+            test_pass_rate=0.60,
+            lines_of_code=100
+        )
+        capabilities[module_c.id] = module_c
+        
+        bankruptcy_protocol.capabilities = capabilities
+        
+        # Act
+        scores = bankruptcy_protocol.score_capabilities()
+        
+        # Assert
+        # Module A should have highest score due to high usage, test pass rate, and LOC
+        assert scores["module_a"] > scores["module_b"]
+        assert scores["module_a"] > scores["module_c"]
+        
+        # Module C should have lowest score
+        assert scores["module_c"] < scores["module_b"]
+        assert scores["module_c"] < scores["module_a"]
+        
+        # Scores should be between 0 and 100
+        for score in scores.values():
+            assert 0 <= score <= 100
+
+    def test_archival_moves_files_and_creates_archive_directory(
+        self, bankruptcy_protocol, sample_capabilities, mock_knowledge_base, tmp_path
+    ):
+        """Test that archiving moves files and creates archive directory."""
+        # Arrange
+        bankruptcy_protocol.capabilities = sample_capabilities
+        archive_dir = tmp_path / "archive"
+        bankruptcy_protocol.archive_dir = archive_dir
+        
+        # Create mock files for capabilities
+        for cap_id, cap in sample_capabilities.items():
+            cap_file = tmp_path / f"{cap_id}.py"
+            cap_file.write_text(f"# {cap.name} module")
+            cap.file_path = str(cap_file)
+        
+        # Act
+        result = bankruptcy_protocol.execute_bankruptcy()
+        
+        # Assert
+        # Archive directory should exist
+        assert archive_dir.exists()
+        assert archive_dir.is_dir()
+        
+        # Files for archived capabilities should be moved to archive directory
+        for cap in result.archived_capabilities:
+            archived_file = archive_dir / f"{cap.id}.py"
+            assert archived_file.exists()
+            original_file = tmp_path / f"{cap.id}.py"
+            assert not original_file.exists()
+        
+        # Files for non-archived capabilities should remain in original location
+        for cap in result.active_capabilities:
+            original_file = tmp_path / f"{cap.id}.py"
+            assert original_file.exists()
+
+    def test_re_derivation_calls_llm_with_correct_prompt(
+        self, bankruptcy_protocol, sample_capabilities, mock_knowledge_base
+    ):
+        """Test that re-derivation calls LLM with correct prompt."""
+        # Arrange
+        bankruptcy_protocol.capabilities = sample_capabilities
+        
+        # Mock the LLM call
+        with patch.object(bankruptcy_protocol, 'call_llm_for_rederivation') as mock_llm:
+            mock_llm.return_value = "Improved implementation"
+            
+            # Act
+            result = bankruptcy_protocol.execute_bankruptcy()
+            
+            # Assert
+            # LLM should be called for each re-implemented capability
+            for cap in result.reimplemented_capabilities:
+                # Check that LLM was called with correct prompt
+                mock_llm.assert_any_call(
+                    capability=cap,
+                    prompt_type="rederivation",
+                    context={
+                        "capability_id": cap.id,
+                        "capability_name": cap.name,
+                        "current_score": cap.score.value,
+                        "improvement_goal": "Improve design and functionality"
+                    }
+                )
+            
+            # LLM should not be called for archived or active capabilities
+            for cap in result.archived_capabilities:
+                with pytest.raises(AssertionError):
+                    mock_llm.assert_any_call(
+                        capability=cap,
+                        prompt_type="rederivation",
+                        context=pytest.approx.ANY
+                    )
+            
+            for cap in result.active_capabilities:
+                with pytest.raises(AssertionError):
+                    mock_llm.assert_any_call(
+                        capability=cap,
+                        prompt_type="rederivation",
+                        context=pytest.approx.ANY
+                    )
+
+    def test_modules_above_threshold_not_archived(
+        self, bankruptcy_protocol, mock_knowledge_base
+    ):
+        """Test that modules above threshold are not archived."""
+        # Arrange
+        capabilities = {}
+        
+        # Create modules with

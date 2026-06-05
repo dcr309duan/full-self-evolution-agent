@@ -86,6 +86,15 @@ class CoordinatedMutationPlanner:
         self._historical_success: Dict[str, float] = defaultdict(lambda: 0.5)
         # Track success rates for similar mutation patterns
         self._pattern_success: Dict[str, Tuple[int, int]] = defaultdict(lambda: (0, 0))
+        # Core bootstrap files that should never be modified
+        self._core_bootstrap_files = {
+            "core/evolution_orchestrator.py",
+            "core/evolution_engine.py",
+            "core/nash_detector.py",
+            "core/coordinated_mutation_executor.py",
+            "core/simplicity_cap_enforcer.py",
+            "modules/coordinated_mutation_planner.py"
+        }
 
     # -----------------------------------------------------------------------
     # Public API
@@ -136,6 +145,55 @@ class CoordinatedMutationPlanner:
         # Weighted centrality: direct connections count more
         centrality = (len(neighbors) + 0.5 * len(second_order)) / total_modules
         return min(centrality, 1.0)
+
+    def generate_plan(self, dependency_graph: Dict[str, List[str]], 
+                      equilibrium_state: Dict[str, Any]) -> List[str]:
+        """Generate a list of coordinated mutations (3-5 files) designed to escape the Nash equilibrium.
+        
+        Args:
+            dependency_graph: Dependency relationships between modules.
+            equilibrium_state: Current state of modules in equilibrium.
+            
+        Returns:
+            List of file paths to mutate, validated to not touch core bootstrap files.
+        """
+        # Identify modules that are part of the equilibrium and have dependencies
+        candidate_modules = []
+        for module_id, deps in dependency_graph.items():
+            if module_id in equilibrium_state and deps:
+                candidate_modules.append(module_id)
+        
+        if not candidate_modules:
+            return []
+        
+        # Sort by number of dependencies (most connected first)
+        candidate_modules.sort(key=lambda m: len(dependency_graph.get(m, [])), reverse=True)
+        
+        # Select 3-5 modules, avoiding core bootstrap files
+        selected_files = []
+        for module_id in candidate_modules:
+            file_path = f"modules/{module_id}.py"
+            if file_path not in self._core_bootstrap_files:
+                selected_files.append(file_path)
+                if len(selected_files) >= 5:
+                    break
+        
+        # Ensure at least 3 files
+        if len(selected_files) < 3:
+            # Add more modules if available
+            for module_id in candidate_modules:
+                file_path = f"modules/{module_id}.py"
+                if file_path not in self._core_bootstrap_files and file_path not in selected_files:
+                    selected_files.append(file_path)
+                    if len(selected_files) >= 3:
+                        break
+        
+        # Validate that no core bootstrap files are included
+        for file_path in selected_files:
+            if file_path in self._core_bootstrap_files:
+                selected_files.remove(file_path)
+        
+        return selected_files[:5]
 
     def generate_coordinated_plans(self,
                                    module_states: Dict[str, Any],
@@ -286,6 +344,10 @@ class CoordinatedMutationPlanner:
         """Generate a mutation with exact file-level changes specified."""
         # Determine the file path for this module
         file_path = f"modules/{module_id}.py"
+        
+        # Check if this is a core bootstrap file
+        if file_path in self._core_bootstrap_files:
+            return None
         
         # Generate file changes based on module state and type
         file_changes = {}

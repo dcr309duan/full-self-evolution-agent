@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "equilibrium_window": 3,
+  "min_coordinated_mutations": 2,
+  "max_coordinated_mutations": 5,
+  "safety_timeout_cycles": 2
+}
