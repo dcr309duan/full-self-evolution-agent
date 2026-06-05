@@ -2,6 +2,18 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a 'minimal core' end-to-end integration test that validates the entire evolution loop (reflection → goal selection → mutation → test → promotion) without manual intervention. This test must run every cycle and block new features if it fails, ensuring foundational stability before adding capabilities.",
+      "priority": 10,
+      "status": "pending",
+      "created_at": 1780647894.4651642
+    },
+    {
+      "description": "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabilities for novelty and usage scores; drop the bottom 30% and re-implement only the essential ones with improved design. This directly counters the identified tendency to prioritize quantity over quality.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780647894.4601812
+    },
+    {
       "description": "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insight, then autonomously produces 3 new goals each cycle without external input. The generator should prioritize goals that target core architecture changes (recursive self-modification) over peripheral additions, using a simple heuristic: assign higher priority to goals that modify existing core modules vs. creating new utility modules.",
       "priority": 8,
       "status": "pending",
@@ -775,6 +787,13 @@
       "status": "completed",
       "created_at": 1780647346.3957415,
       "completed_at": 1780647805.6775293
+    },
+    {
+      "description": "Create a 'test-first evolution' workflow: before any mutation can be accepted into the knowledge base, require a pre-written failing test that proves the new capability would be an improvement. Implement the mutation only to make that test pass. This enforces a strong feedback loop that penalizes instability.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780647894.4626188,
+      "completed_at": 1780648127.5654154
     }
   ],
   "generated_goals": []

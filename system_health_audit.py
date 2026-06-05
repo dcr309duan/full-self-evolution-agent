@@ -9,6 +9,7 @@ Also tracks sandboxed mutation metrics: number of sandboxed mutations attempted,
 number that passed tests, number that failed tests, number that required rollback.
 Also tracks sleep cycle cleanup impact: number of modules deleted, number of functions consolidated,
 total LOC freed, and timestamp of last sleep cycle.
+Also includes capability audit to flag capabilities accepted without test-first verification.
 """
 
 import time
@@ -31,7 +32,7 @@ class SystemHealthAudit:
     Tracks and reports meta-cognitive health metrics for an evolving system.
     Includes conflict resolution metrics, atomic write failure metrics,
     auto-generated fix effectiveness metrics, sandboxed mutation metrics,
-    and sleep cycle cleanup impact metrics.
+    sleep cycle cleanup impact metrics, and capability audit metrics.
     """
 
     def __init__(self, mutation_rate: float = DEFAULT_MUTATION_RATE,
@@ -72,6 +73,10 @@ class SystemHealthAudit:
             'total_loc_freed': 0,
             'last_sleep_cycle_timestamp': None
         }
+
+        # Capability audit tracking
+        self.capability_log: deque = deque(maxlen=1000)  # Store all capabilities
+        self.capabilities_without_tests: Dict[str, Dict] = {}  # Capabilities accepted without test-first verification
 
     def record_adjustment(self, parameter_name: str, old_value: float, new_value: float) -> None:
         """Record a parameter adjustment with timestamp."""
@@ -202,6 +207,38 @@ class SystemHealthAudit:
         self.sleep_cycle_cleanup_impact['functions_consolidated'] += functions_consolidated
         self.sleep_cycle_cleanup_impact['total_loc_freed'] += loc_freed
         self.sleep_cycle_cleanup_impact['last_sleep_cycle_timestamp'] = time.time()
+
+    def record_capability(self, capability_name: str, accepted: bool, test_first_verified: bool = False) -> None:
+        """
+        Record a capability and whether it was accepted with test-first verification.
+        
+        Args:
+            capability_name: Name of the capability
+            accepted: Whether the capability was accepted
+            test_first_verified: Whether the capability was verified with test-first approach
+        """
+        capability_entry = {
+            'capability': capability_name,
+            'accepted': accepted,
+            'test_first_verified': test_first_verified,
+            'cycle': self.cycle_count,
+            'timestamp': time.time()
+        }
+        self.capability_log.append(capability_entry)
+        
+        # Track capabilities accepted without test-first verification
+        if accepted and not test_first_verified:
+            self.capabilities_without_tests[capability_name] = capability_entry
+
+    def audit_capabilities_without_tests(self) -> List[Dict]:
+        """
+        Audit all capabilities in the knowledge base and flag any that were accepted
+        without a corresponding test-first verification.
+        
+        Returns:
+            List of capability entries that were accepted without test-first verification
+        """
+        return list(self.capabilities_without_tests.values())
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter."""
@@ -483,7 +520,7 @@ class SystemHealthAudit:
         Generate a comprehensive health report with all meta-cognitive metrics
         including conflict resolution metrics, atomic write failure metrics,
         auto-generated fix effectiveness metrics, sandboxed mutation metrics,
-        and sleep cycle cleanup impact metrics.
+        sleep cycle cleanup impact metrics, and capability audit metrics.
         """
         conflict_count = self.get_conflict_count_last_30()
         resolution_rate = self.get_conflict_resolution_success_rate()
@@ -500,6 +537,9 @@ class SystemHealthAudit:
         
         sandboxed_metrics = self.get_sandboxed_mutation_metrics()
         sleep_cycle_impact = self.get_sleep_cycle_cleanup_impact()
+        
+        # Capability audit
+        capabilities_without_tests = self.audit_capabilities_without_tests()
         
         report = {
             'mutation_rate': self.mutation_rate,
@@ -534,7 +574,10 @@ class SystemHealthAudit:
             'sandboxed_mutations_failed': sandboxed_metrics['sandboxed_mutations_failed'],
             'sandboxed_mutations_rollback': sandboxed_metrics['sandboxed_mutations_rollback'],
             # Sleep cycle cleanup impact metrics
-            'sleep_cycle_cleanup_impact': sleep_cycle_impact
+            'sleep_cycle_cleanup_impact': sleep_cycle_impact,
+            # Capability audit metrics
+            'capabilities_accepted_without_tests': capabilities_without_tests,
+            'capabilities_without_tests_count': len(capabilities_without_tests)
         }
         return report
 
@@ -595,6 +638,11 @@ if __name__ == "__main__":
                 functions_consolidated=i // 5,
                 loc_freed=i * 10
             )
+        # Simulate some capability recordings
+        if i % 4 == 0:
+            auditor.record_capability(f'capability_{i}', accepted=True, test_first_verified=(i % 3 == 0))
+        if i % 7 == 0:
+            auditor.record_capability(f'legacy_capability_{i}', accepted=True, test_first_verified=False)
     
     # Generate and print report
     report = auditor.generate_health_report()
