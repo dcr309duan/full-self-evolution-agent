@@ -248,7 +248,7 @@ function updateDashboard(data) {
 
     const insightsList = document.getElementById('insights-list');
     insightsList.innerHTML = data.insights.slice().reverse().map(i =>
-        '<div class="insight-item"><span class="insight-time">' + formatTime(i.timestamp) + '</span> ' + i.content.substring(0,150) + '</div>'
+        '<div class="insight-item"><span class="insight-time">' + formatTime(i.timestamp) + '</span> ' + (i.content||'') + '</div>'
     ).join('') || '<div style="color:#8b949e">暂无洞察</div>';
 
     const chartArea = document.getElementById('chart-area');
