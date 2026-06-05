@@ -90,23 +90,62 @@ Output JSON with:
     
     response = think_deep(prompt, context)
     
+    reflection = _parse_json_response(response)
+    if reflection and reflection.get("current_assessment") != "Unable to parse reflection":
+        add_insight(f"Self-reflection: {reflection.get('meta_insight', 'no meta insight')[:200]}")
+        return reflection
+    
+    return {
+        "current_assessment": response[:300] if response else "Empty response",
+        "key_gaps": [],
+        "next_priority": "continue_current_direction",
+        "novel_ideas": [],
+        "meta_insight": response[300:600] if response else ""
+    }
+
+
+def _parse_json_response(response):
+    """Robustly extract JSON from LLM response."""
+    if not response:
+        return None
+    
+    # Strategy 1: simple find
     try:
         start = response.find('{')
         end = response.rfind('}') + 1
         if start >= 0 and end > start:
-            reflection = json.loads(response[start:end])
-            add_insight(f"Self-reflection: {reflection.get('meta_insight', 'no meta insight')}")
-            return reflection
+            return json.loads(response[start:end])
     except (json.JSONDecodeError, ValueError):
         pass
     
-    return {
-        "current_assessment": "Unable to parse reflection",
-        "key_gaps": [],
-        "next_priority": "improve_reflection_capability",
-        "novel_ideas": [],
-        "meta_insight": response[:500]
-    }
+    # Strategy 2: bracket-counting to find first complete object
+    try:
+        start = response.find('{')
+        if start >= 0:
+            depth = 0
+            for i in range(start, len(response)):
+                if response[i] == '{':
+                    depth += 1
+                elif response[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return json.loads(response[start:i+1])
+    except (json.JSONDecodeError, ValueError):
+        pass
+    
+    # Strategy 3: extract from code fence
+    try:
+        if '```json' in response:
+            block = response.split('```json')[1].split('```')[0]
+            return json.loads(block.strip())
+        elif '```' in response:
+            block = response.split('```')[1].split('```')[0]
+            if block.strip().startswith('{'):
+                return json.loads(block.strip())
+    except (json.JSONDecodeError, ValueError, IndexError):
+        pass
+    
+    return None
 
 
 def generate_next_goals(reflection):
