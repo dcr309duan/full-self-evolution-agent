@@ -17,7 +17,8 @@
       "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
       "priority": 8,
       "status": "pending",
-      "created_at": 1780654501.1373088
+      "created_at": 1780654501.1373088,
+      "consecutive_failures": 1
     }
   ],
   "completed_goals": [

@@ -6,6 +6,7 @@ from modules.failure_pattern_learner import FailurePatternLearner
 from modules.mutation_engine import MutationEngine
 from modules.ecology_engine import EcologyEngine
 from modules.test_runner import TestRunner
+from modules.goal_impact_prioritizer import GoalImpactPrioritizer
 
 logger = logging.getLogger(__name__)
 
@@ -13,16 +14,20 @@ class Orchestrator:
     """Integrates failure pattern learning and ecology engine into the evolution loop."""
 
     def __init__(self, mutation_engine: MutationEngine, failure_learner: FailurePatternLearner, 
-                 ecology_engine: EcologyEngine, test_runner: TestRunner):
+                 ecology_engine: EcologyEngine, test_runner: TestRunner,
+                 goal_prioritizer: GoalImpactPrioritizer = None):
         self.mutation_engine = mutation_engine
         self.failure_learner = failure_learner
         self.ecology_engine = ecology_engine
         self.test_runner = test_runner
+        self.goal_prioritizer = goal_prioritizer or GoalImpactPrioritizer()
         self.cycle_count = 0
         self.adjustment_interval = 5
         self.ecology_interval = 10
         self.injected_tests = set()
         self.injection_log = []
+        self.archived_goals = set()
+        self.prioritization_log = []
 
     def _init_git_repo(self) -> None:
         """Initialize git repository if not already exists."""
@@ -80,35 +85,105 @@ class Orchestrator:
             logger.error(f"Git rollback failed: {e.stderr}")
             raise
 
+    def _select_goal_for_mutation(self, mutation_attempts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Select the highest-scoring mutable goal using the prioritizer."""
+        # Filter out archived goals
+        mutable_attempts = [a for a in mutation_attempts if a.get("goal_id") not in self.archived_goals]
+        
+        if not mutable_attempts:
+            logger.warning("No mutable goals available after filtering archived goals")
+            return None
+        
+        # Score each mutable goal using the prioritizer
+        scored_goals = []
+        for attempt in mutable_attempts:
+            goal_id = attempt.get("goal_id", "unknown")
+            score = self.goal_prioritizer.score_goal(goal_id, attempt)
+            scored_goals.append((score, attempt))
+        
+        # Sort by score descending
+        scored_goals.sort(key=lambda x: x[0], reverse=True)
+        
+        # Pick the highest-scoring goal with score > 0.7
+        selected_goal = None
+        for score, attempt in scored_goals:
+            if score > 0.7:
+                selected_goal = attempt
+                break
+        
+        if selected_goal is None:
+            logger.warning("No goal with score > 0.7 found among mutable goals")
+            return None
+        
+        # Log prioritization decision
+        prioritization_record = {
+            "selected_goal_id": selected_goal.get("goal_id", "unknown"),
+            "score": score,
+            "total_candidates": len(scored_goals),
+            "archived_count": len(self.archived_goals),
+            "cycle": self.cycle_count
+        }
+        self.prioritization_log.append(prioritization_record)
+        logger.info(f"Prioritization decision: {prioritization_record}")
+        
+        return selected_goal
+
+    def _archive_goals(self) -> None:
+        """Archive goals that have been processed or are no longer relevant."""
+        # Archive goals that have been mutated in this cycle
+        for attempt in self.mutation_engine.get_recent_mutations():
+            goal_id = attempt.get("goal_id")
+            if goal_id:
+                self.archived_goals.add(goal_id)
+                logger.debug(f"Archived goal: {goal_id}")
+        
+        logger.info(f"Archived {len(self.mutation_engine.get_recent_mutations())} goals in cycle {self.cycle_count}")
+
     def run_evolution_cycle(self, mutation_attempts: List[Dict[str, Any]]) -> None:
         """Execute one evolution cycle with failure tracking, weight adjustment, and ecology pressure."""
         # Initialize git repo at start
         self._init_git_repo()
         
-        for attempt in mutation_attempts:
-            goal_id = attempt.get("goal_id", f"cycle_{self.cycle_count}")
+        # Select the best goal for mutation using prioritizer
+        selected_goal = self._select_goal_for_mutation(mutation_attempts)
+        
+        if selected_goal is None:
+            logger.warning("No suitable goal selected for mutation, skipping cycle")
+            self.cycle_count += 1
+            if self.cycle_count % self.adjustment_interval == 0:
+                self._adjust_operator_weights()
+            if self.cycle_count % self.ecology_interval == 0:
+                self._apply_ecology_pressure()
+            return
+        
+        goal_id = selected_goal.get("goal_id", f"cycle_{self.cycle_count}")
+        
+        try:
+            # Create pre-mutation commit
+            self._create_pre_mutation_commit(goal_id)
             
-            try:
-                # Create pre-mutation commit
-                self._create_pre_mutation_commit(goal_id)
-                
-                # Perform mutation
-                success = self._perform_mutation(attempt)
-                
-                if success:
-                    # Create success commit
-                    self._create_success_commit(goal_id)
-                else:
-                    # Rollback on failure
-                    self.git_rollback()
-                    self._handle_mutation_failure(attempt)
-                    
-            except Exception as e:
-                # Rollback on any exception
+            # Perform mutation
+            success = self._perform_mutation(selected_goal)
+            
+            if success:
+                # Create success commit
+                self._create_success_commit(goal_id)
+            else:
+                # Rollback on failure
                 self.git_rollback()
-                self._handle_mutation_failure(attempt, error=str(e))
+                self._handle_mutation_failure(selected_goal)
+                
+        except Exception as e:
+            # Rollback on any exception
+            self.git_rollback()
+            self._handle_mutation_failure(selected_goal, error=str(e))
 
         self.cycle_count += 1
+        
+        # Trigger archival every 5 cycles
+        if self.cycle_count % 5 == 0:
+            self._archive_goals()
+        
         if self.cycle_count % self.adjustment_interval == 0:
             self._adjust_operator_weights()
         
@@ -202,4 +277,21 @@ class Orchestrator:
             "unique_tests": len(self.injected_tests),
             "source_distribution": source_counts,
             "last_injection_cycle": self.injection_log[-1]["cycle"] if self.injection_log else None
+        }
+
+    def get_prioritization_statistics(self) -> Dict[str, Any]:
+        """Return statistics about goal prioritization decisions."""
+        if not self.prioritization_log:
+            return {
+                "total_decisions": 0,
+                "average_score": 0.0,
+                "total_archived": len(self.archived_goals)
+            }
+        
+        scores = [r["score"] for r in self.prioritization_log]
+        return {
+            "total_decisions": len(self.prioritization_log),
+            "average_score": sum(scores) / len(scores),
+            "total_archived": len(self.archived_goals),
+            "last_decision": self.prioritization_log[-1]
         }

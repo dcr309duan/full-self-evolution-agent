@@ -50,6 +50,7 @@ class CapabilityBenchmarker:
         self._results: Dict[str, BenchmarkResult] = {}
         self._num_test_cycles = num_test_cycles
         self._test_function: Optional[Callable] = None
+        self._historical_data: Dict[str, Dict] = {}
 
     def register_capability(self, name: str, enabled: bool = True,
                             state: CapabilityState = CapabilityState.STABLE,
@@ -229,3 +230,130 @@ class CapabilityBenchmarker:
                 "disabled_success_rate": result.disabled_success_rate if result else None,
             }
         return summary
+
+    def estimate_goal_impact(self, goal: str) -> Tuple[float, float, int, int]:
+        """Estimate the impact of a goal based on historical data or defaults.
+
+        Args:
+            goal: The goal description to estimate impact for.
+
+        Returns:
+            A tuple containing:
+                - estimated_test_pass_rate (float): 0.0-1.0
+                - simplicity_score (float): 0.0-1.0
+                - lines_added (int): Estimated lines of code to add
+                - new_deps (int): Estimated number of new dependencies
+        """
+        # Check if we have historical data for this goal
+        if goal in self._historical_data:
+            data = self._historical_data[goal]
+            return (
+                data.get("test_pass_rate", 0.5),
+                data.get("simplicity_score", 0.5),
+                data.get("lines_added", 10),
+                data.get("new_deps", 0)
+            )
+
+        # Check for similar goals based on keywords
+        goal_lower = goal.lower()
+        for hist_goal, data in self._historical_data.items():
+            if any(keyword in goal_lower for keyword in hist_goal.lower().split()):
+                return (
+                    data.get("test_pass_rate", 0.5),
+                    data.get("simplicity_score", 0.5),
+                    data.get("lines_added", 10),
+                    data.get("new_deps", 0)
+                )
+
+        # Return defaults based on goal characteristics
+        if "test" in goal_lower or "testing" in goal_lower:
+            return (0.7, 0.6, 15, 1)
+        elif "refactor" in goal_lower or "clean" in goal_lower:
+            return (0.8, 0.8, 5, 0)
+        elif "feature" in goal_lower or "add" in goal_lower:
+            return (0.5, 0.4, 30, 2)
+        elif "fix" in goal_lower or "bug" in goal_lower:
+            return (0.6, 0.7, 10, 0)
+        elif "optimize" in goal_lower or "performance" in goal_lower:
+            return (0.4, 0.3, 20, 1)
+        elif "document" in goal_lower or "doc" in goal_lower:
+            return (0.9, 0.9, 50, 0)
+        elif "config" in goal_lower or "configuration" in goal_lower:
+            return (0.7, 0.5, 10, 1)
+        elif "security" in goal_lower or "secure" in goal_lower:
+            return (0.8, 0.6, 25, 2)
+        elif "dependency" in goal_lower or "deps" in goal_lower:
+            return (0.6, 0.4, 5, 3)
+        elif "api" in goal_lower or "endpoint" in goal_lower:
+            return (0.5, 0.5, 20, 1)
+        elif "database" in goal_lower or "db" in goal_lower:
+            return (0.6, 0.5, 15, 1)
+        elif "ui" in goal_lower or "interface" in goal_lower:
+            return (0.4, 0.3, 40, 2)
+        elif "log" in goal_lower or "logging" in goal_lower:
+            return (0.8, 0.7, 10, 0)
+        elif "error" in goal_lower or "exception" in goal_lower:
+            return (0.7, 0.6, 8, 0)
+        elif "validation" in goal_lower or "validate" in goal_lower:
+            return (0.8, 0.7, 12, 0)
+        elif "migration" in goal_lower or "migrate" in goal_lower:
+            return (0.5, 0.4, 50, 3)
+        elif "upgrade" in goal_lower or "update" in goal_lower:
+            return (0.6, 0.5, 20, 1)
+        elif "integration" in goal_lower or "integrate" in goal_lower:
+            return (0.4, 0.3, 35, 2)
+        elif "monitor" in goal_lower or "monitoring" in goal_lower:
+            return (0.7, 0.6, 15, 1)
+        elif "backup" in goal_lower or "recovery" in goal_lower:
+            return (0.8, 0.7, 20, 1)
+        elif "deploy" in goal_lower or "deployment" in goal_lower:
+            return (0.6, 0.5, 10, 1)
+        elif "test" in goal_lower:
+            return (0.7, 0.6, 15, 1)
+        else:
+            # Default conservative estimates
+            return (0.5, 0.5, 10, 0)
+
+    def update_historical_data(self, goal: str, test_pass_rate: float,
+                               simplicity_score: float, lines_added: int,
+                               new_deps: int) -> None:
+        """Update historical data for a goal after it has been implemented.
+
+        Args:
+            goal: The goal description.
+            test_pass_rate: Actual test pass rate achieved (0.0-1.0).
+            simplicity_score: Actual simplicity score (0.0-1.0).
+            lines_added: Actual lines of code added.
+            new_deps: Actual number of new dependencies.
+        """
+        self._historical_data[goal] = {
+            "test_pass_rate": test_pass_rate,
+            "simplicity_score": simplicity_score,
+            "lines_added": lines_added,
+            "new_deps": new_deps
+        }
+        logger.info(f"Updated historical data for goal: {goal}")
+
+    def get_historical_data(self, goal: str) -> Optional[Dict]:
+        """Get historical data for a specific goal.
+
+        Args:
+            goal: The goal description to look up.
+
+        Returns:
+            Dictionary with historical data if available, None otherwise.
+        """
+        return self._historical_data.get(goal)
+
+    def get_all_historical_data(self) -> Dict[str, Dict]:
+        """Get all historical data.
+
+        Returns:
+            Dictionary mapping goal descriptions to their historical data.
+        """
+        return dict(self._historical_data)
+
+    def clear_historical_data(self) -> None:
+        """Clear all historical data."""
+        self._historical_data.clear()
+        logger.info("Cleared all historical data")

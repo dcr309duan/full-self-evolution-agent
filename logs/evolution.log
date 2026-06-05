@@ -2387,3 +2387,19 @@ SyntaxError: invalid syntax
 [2026-06-05 18:23:55] Cycle 155: Mutations: 3, successes: 2
 [2026-06-05 18:24:02] Cycle 155: === Cycle Complete ===
 
+[2026-06-05 18:24:31] Cycle 156: === Starting Evolution Cycle ===
+[2026-06-05 18:24:31] Cycle 156: Phase 2: Goal selection and execution
+[2026-06-05 18:24:31] Cycle 156: Selected goal: Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.
+[2026-06-05 18:24:31] Cycle 156: Executing goal: Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.
+[2026-06-05 18:24:40] Cycle 156:   Step: create -> modules/goal_impact_prioritizer.py: Create the core prioritizer module with: (1) score_goal() function computing (test_pass_rate * simplicity_score) / (lines_added + new_deps + 1) with defaults for missing data, (2) classify_goal() returning 'mutable', 'pending', or 'archive' based on thresholds 0.7 and 0.3, (3) archive_goal() that moves goal to an archive list and removes from pending, (4) prioritize_goals() that sorts pending goals by score descending. Include comprehensive docstring and error handling.
+[2026-06-05 18:24:57] Cycle 156:   Step: modify -> core/goal_generator.py: Add import for GoalImpactPrioritizer. After generating new goals, call prioritize_goals() to score and sort them. Add a method archive_low_impact_goals() that moves goals with score < 0.3 to an archived_goals list. Ensure no syntax errors by carefully closing all parentheses and brackets.
+[2026-06-05 18:25:42] Cycle 156:   Step: modify -> modules/orchestrator.py: Integrate the prioritizer into the mutation selection step: before selecting a goal to mutate, filter out archived goals, then pick the highest-scoring mutable goal (score > 0.7). Add a cycle counter to trigger archival every 5 cycles. Log the prioritization decisions.
+[2026-06-05 18:26:05] Cycle 156:   Step: modify -> core/capability_benchmarker.py: Add a method estimate_goal_impact(goal) that returns estimated test_pass_rate (0.0-1.0), simplicity_score (0.0-1.0), lines_added, and new_deps based on historical data or defaults. This feeds into the prioritizer's scoring.
+[2026-06-05 18:26:29] Cycle 156:   Step: create -> tests/test_goal_impact_prioritizer.py: Create unit tests: (1) test score calculation with known inputs, (2) test classification thresholds, (3) test archival of low-scoring goals, (4) test prioritization ordering, (5) test empty goal list handling.
+[2026-06-05 18:26:49] Cycle 156: IMPORT FAIL: capability_benchmarker.py -> ModuleNotFoundError: No module named 'capability_benchmarker'
+[2026-06-05 18:26:49] Cycle 156: IMPORT FAIL: goal_impact_prioritizer.py -> ModuleNotFoundError: No module named 'goal_impact_prioritizer'
+[2026-06-05 18:26:49] Cycle 156: IMPORT FAIL: orchestrator.py -> ImportError: cannot import name 'FailureAnalysis' from 'failure_analysis' (/root/full-self-evolution-agent/failure_analysis.py)
+[2026-06-05 18:26:50] Cycle 156: IMPORT FAIL: test_goal_impact_prioritizer.py -> ModuleNotFoundError: No module named 'test_goal_impact_prioritizer'
+[2026-06-05 18:26:50] Cycle 156: Goal REVERTED (import verification failed): Code generated but 4 file(s) failed import: capability_benchmarker.py, goal_impact_prioritizer.py, orchestrator.py
+[2026-06-05 18:26:50] Cycle 156: === Cycle Complete ===
+
