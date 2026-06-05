@@ -11,6 +11,7 @@ import time
 import ast
 import shutil
 import tempfile
+import difflib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -40,6 +41,9 @@ PROBLEM_SUITE = [
 # Configuration flag for simulation mode
 simulation_mode = True
 
+# Dry run mode flag - when True, simulate mutations without writing to disk
+dry_run_mode = False
+
 # Meta-bias parameter for mutation weighting
 meta_bias = None
 
@@ -59,6 +63,7 @@ try:
         config = json.load(f)
         META_MUTATION_ENABLED = config.get("META_MUTATION_ENABLED", False)
         sandbox_mode = config.get("sandbox_mode", False)
+        dry_run_mode = config.get("dry_run_mode", False)
 except (FileNotFoundError, json.JSONDecodeError):
     pass
 
@@ -305,6 +310,79 @@ def simulate_mutation(module_path, old_ast, new_ast):
         }
 
 
+def dry_run_mutation(func_a, func_b, operator="crossover", goal_context=None):
+    """Simulate a mutation in dry run mode without writing to disk.
+    
+    Args:
+        func_a: First parent function dict
+        func_b: Second parent function dict
+        operator: Mutation operator to use
+        goal_context: Optional goal context for tracking
+        
+    Returns:
+        dict with keys:
+            - valid: bool indicating if mutation is valid
+            - diff: Unified diff string showing proposed changes
+            - syntax_valid: bool indicating if generated code has valid syntax
+            - code: The proposed new code
+            - score: Float score from simulation tests
+            - reason: String explanation
+    """
+    try:
+        new_code = mutate(func_a, func_b, operator, goal_context=goal_context)
+    except Exception as e:
+        return {
+            "valid": False,
+            "diff": "",
+            "syntax_valid": False,
+            "code": "",
+            "score": 0,
+            "reason": f"Mutation generation failed: {str(e)}"
+        }
+    
+    # Validate syntax of generated code
+    syntax_valid = True
+    syntax_error = None
+    try:
+        ast.parse(new_code)
+    except SyntaxError as e:
+        syntax_valid = False
+        syntax_error = str(e)
+    
+    if not syntax_valid:
+        return {
+            "valid": False,
+            "diff": "",
+            "syntax_valid": False,
+            "code": new_code,
+            "score": 0,
+            "reason": f"Syntax error in generated code: {syntax_error}"
+        }
+    
+    # Generate diff against parent code (use func_a as baseline)
+    parent_code = func_a["code"]
+    diff_lines = difflib.unified_diff(
+        parent_code.splitlines(keepends=True),
+        new_code.splitlines(keepends=True),
+        fromfile=f"parent_{func_a['name']}",
+        tofile=f"mutation_{operator}_{func_a['name']}_{func_b['name']}",
+        lineterm=''
+    )
+    diff = ''.join(diff_lines)
+    
+    # Run simulation tests
+    test_result = test_mutation(new_code)
+    
+    return {
+        "valid": test_result["valid"],
+        "diff": diff,
+        "syntax_valid": True,
+        "code": new_code,
+        "score": test_result.get("score", 0),
+        "reason": test_result.get("reason", "OK")
+    }
+
+
 def run_mutation_cycle(num_mutations=3, goal_context=None):
     """Run a complete mutation cycle."""
     global meta_bias
@@ -338,6 +416,24 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
     for i in range(num_mutations):
         func_a, func_b = random.sample(pool, 2)
         operator = random.choice(operators)
+        
+        # Handle dry run mode
+        if dry_run_mode:
+            dry_result = dry_run_mutation(func_a, func_b, operator, goal_context=goal_context)
+            results.append({
+                "parent_a": func_a["name"],
+                "parent_b": func_b["name"],
+                "operator": operator,
+                "dry_run": True,
+                "valid": dry_result["valid"],
+                "diff": dry_result["diff"],
+                "syntax_valid": dry_result["syntax_valid"],
+                "code": dry_result["code"],
+                "score": dry_result["score"],
+                "reason": dry_result["reason"],
+                "timestamp": time.time()
+            })
+            continue
         
         # Clone files if sandbox mode is enabled
         if sandbox_mode:
@@ -414,6 +510,10 @@ def run_mutation_cycle(num_mutations=3, goal_context=None):
 
 def save_successful_mutation(name, code):
     """Save a successful mutation to the pool using atomic writes."""
+    # Skip saving in dry run mode
+    if dry_run_mode:
+        return
+    
     path = os.path.join(MEMORY_DIR, "successful_mutations.json")
     fs = get_fs()
     
@@ -438,6 +538,10 @@ def save_successful_mutation(name, code):
 
 def log_mutations(results):
     """Log mutation results using atomic writes."""
+    # Skip logging in dry run mode
+    if dry_run_mode:
+        return
+    
     path = os.path.join(MEMORY_DIR, "mutation_log.json")
     fs = get_fs()
     

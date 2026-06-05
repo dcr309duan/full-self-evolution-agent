@@ -1,46 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified evolution_engine/schema_registry.py to: Create a schema registry that defines canonical JSON schemas for all inter-module data contracts: goal_generator output, mutation_engine input/output, test_runner input/output, reflection_parser input/output. Each schema includes field names, types, required/optional status, and version number.",
-      "timestamp": 1780636522.56745,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified evolution_engine/schema_alignment_checker.py to: Implement SchemaAlignmentChecker class with: 1) validate_data(module_name, data) - checks data against canonical schema, returns list of mismatches (missing fields, type mismatches, extra fields), 2) generate_migration_patch(module_name, mismatches) - creates a patch that transforms old data format to new format, 3) auto_apply_patch(module_name, data) - applies migration patch to data in-place, 4) register_module(module_name, schema) - adds new module schemas dynamically.",
-      "timestamp": 1780636537.7524924,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate schema alignment checker into the orchestrator: 1) add 'run_schema_validation' step before each evolution cycle, 2) validate goal_generator output before passing to mutation_engine, 3) validate mutation_engine output before passing to test_runner, 4) validate test_runner output before passing to reflection_parser, 5) if mismatches detected, auto-generate and apply migration patches, 6) log all schema validations and migrations.",
-      "timestamp": 1780636578.924211,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified tests/test_schema_alignment.py to: Create comprehensive test suite for schema alignment checker: 1) test that valid data passes validation, 2) test that missing fields are detected, 3) test that type mismatches are detected, 4) test that extra fields are detected, 5) test migration patch generation for missing fields, 6) test migration patch application transforms data correctly, 7) test integration with orchestrator validates before evolution cycles.",
-      "timestamp": 1780636624.7644217,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified evolution_engine/reflection_parser.py to: Update reflection_parser to include schema_version field in its output, and add a method to self-validate its output against the canonical reflection schema before returning.",
-      "timestamp": 1780636646.9508853,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified evolution_engine/goal_generator.py to: Update goal_generator to include schema_version field in its output, and add a method to self-validate its output against the canonical goal schema before returning.",
-      "timestamp": 1780636657.8431551,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified evolution_engine/mutation_engine.py to: Update mutation_engine to include schema_version field in its output, and add a method to self-validate its output against the canonical mutation schema before returning.",
-      "timestamp": 1780636666.9035547,
-      "cycle": 76
-    },
-    {
-      "content": "Successfully modified evolution_engine/failure_pattern_detector.py to: Create a new FailurePatternDetector class that: (1) maintains a persistent log of failures keyed by (error_type, module_name), (2) tracks cycle timestamps for each failure occurrence, (3) detects when the same (error_type, module_name) pair appears in 3 consecutive cycles, (4) generates a 'debugging' goal with priority HIGH and description referencing the failure pattern, (5) exposes methods: log_failure(error_type, module_name, cycle_number), get_recurring_patterns(), generate_debugging_goal(pattern).",
-      "timestamp": 1780636721.653426,
-      "cycle": 77
-    },
-    {
       "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate FailurePatternDetector into the orchestrator: (1) import and instantiate FailurePatternDetector at module level, (2) after each test run in the evolution loop, call detector.log_failure() for each failed test with extracted error type and module, (3) after logging, call detector.get_recurring_patterns() to check for 3-consecutive-cycle patterns, (4) if patterns found, call detector.generate_debugging_goal() and insert the returned goal into the pending_goals list (before the next goal_generator invocation), (5) log the auto-insertion event.",
       "timestamp": 1780636760.0462346,
       "cycle": 77
@@ -999,6 +959,46 @@
       "content": "Successfully modified core/goal_selector.py to: Add 'meta_optimization' goal type that, when meta-parameter evolution detects stagnation (no fitness improvement for 5 consecutive cycles), generates a goal to explore parameter space more aggressively (e.g., temporarily increase mutation rate to 0.3)",
       "timestamp": 1780642533.2432837,
       "cycle": 102
+    },
+    {
+      "content": "Self-reflection: The evolution process has reached a plateau where adding more capabilities no longer yields proportional improvement; instead, integration and hardening are the bottleneck. This mirrors a classic loca",
+      "timestamp": 1780642587.132893,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified tests/test_integration_evolution_loop.py to: Create the main integration test harness that: (1) Sets up a sandboxed temporary directory with a copy of all core modules, (2) Imports and initializes the evolution orchestrator, (3) Executes exactly 5 evolution cycles with forced sequential execution, (4) Captures detailed logs for each step (reflection, goal generation, mutation, test, promotion), (5) Reports pass/fail status per cycle and per step, (6) Is idempotent (cleans up sandbox on start and end), (7) Can be run via `python -m pytest tests/test_integration_evolution_loop.py -v`",
+      "timestamp": 1780642625.353253,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified tests/test_evolution_loop_runner.py to: Create a Python entry point that: (1) Parses command-line arguments (--cycles, --verbose, --output-dir), (2) Calls the integration test harness programmatically, (3) Generates a structured JSON report with per-cycle and per-step results, (4) Returns exit code based on overall pass/fail",
+      "timestamp": 1780642642.2657952,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified core/mutation_engine.py to: Add a 'dry_run' mode that: (1) Simulates mutation application without writing to disk, (2) Returns the proposed changes as a diff, (3) Validates syntax of generated code, (4) Does not trigger actual file modification",
+      "timestamp": 1780642753.936447,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified tests/test_integration_evolution_loop.py to: Add idempotency verification: (1) Run the full 5-cycle test twice, (2) Compare the final state of the sandbox after each run, (3) Assert they are identical, (4) Verify no files leak outside the sandbox",
+      "timestamp": 1780642782.0045865,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified tests/test_integration_evolution_loop.py to: Add a '--quick' mode that runs only 1 cycle with forced failures to test failure logging: (1) Inject a deliberate syntax error in a mutation, (2) Verify the failure is caught and logged, (3) Verify the sandbox is cleaned up, (4) Verify the error message contains the expected details",
+      "timestamp": 1780642811.765244,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified tests/test_integration_evolution_loop.py to: Add performance instrumentation: (1) Time each step of each cycle, (2) Log total execution time, (3) Warn if any step exceeds 30 seconds, (4) Record memory usage before and after the test",
+      "timestamp": 1780642844.8292396,
+      "cycle": 103
+    },
+    {
+      "content": "Successfully modified tests/test_integration_evolution_loop.py to: Add comprehensive assertions: (1) After each cycle, verify the self-model was updated, (2) Verify goal queue changed appropriately, (3) Verify no duplicate goals, (4) Verify the system state is consistent (no dangling references)",
+      "timestamp": 1780642881.8554,
+      "cycle": 103
     }
   ],
   "learned_patterns": [],
@@ -1322,6 +1322,21 @@
       "approach": "modify core/evolution_orchestrator.py: Integrate MetaParameterEvolution into the main loop: (1) After each mutation cycle, record current parameters and fitness delta to the tracker, (2) Every 10 cycles, call trigger() to adjust parameters, (3) Log parameter changes and their effects to the accumulated knowledge system",
       "reason": "Syntax error: expected an indented block after 'elif' statement on line 858 (<unknown>, line 859)",
       "timestamp": 1780642456.4844847
+    },
+    {
+      "approach": "modify tests/test_evolution_loop_runner.sh: Create a shell script that: (1) Sets PYTHONPATH to include project root, (2) Creates a temporary workspace, (3) Runs the integration test with verbose output and JUnit XML report, (4) Cleans up on exit, (5) Returns exit code 0 on all 5 cycles passing, non-zero otherwise",
+      "reason": "Syntax error: invalid syntax (<unknown>, line 2)",
+      "timestamp": 1780642629.7818868
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Add a 'sandboxed_execution' mode that: (1) Accepts a temporary directory path, (2) Copies all core modules to the sandbox, (3) Runs evolution cycles within the sandbox using relative imports, (4) Returns structured results dict with per-step logs, (5) Does not modify the original codebase",
+      "reason": "Safety check failed",
+      "timestamp": 1780642691.8910358
+    },
+    {
+      "approach": "modify tests/test_integration_evolution_loop.py: Implement detailed failure logging: (1) For each step, capture stdout/stderr, (2) Record exception tracebacks, (3) Log the state of the self-model before and after each cycle, (4) Record which files were modified by mutations, (5) Store all logs in a structured format (JSON) for post-mortem analysis",
+      "reason": "Safety check failed",
+      "timestamp": 1780642720.249015
     }
   ],
   "successful_strategies": [
@@ -4344,6 +4359,46 @@
       "strategy": "Build a 'meta-parameter evolution' module that tracks the performance impact of key evolution engine parameters (mutation rate, goal selection weights, reflection depth) over the last 20 generations, and uses a simple hill-climbing algorithm to adjust these parameters once per 10 cycles to maximize fitness improvement rate.",
       "outcome": "4/5 steps succeeded",
       "timestamp": 1780642533.2647707
+    },
+    {
+      "strategy": "modify tests/test_integration_evolution_loop.py: Create the main integration test harness that: (1) Sets up a sandboxed temporary directory with a copy of all core modules, (2) Imports and initializes the evolution orchestrator, (3) Executes exactly 5 evolution cycles with forced sequential execution, (4) Captures detailed logs for each step (reflection, goal generation, mutation, test, promotion), (5) Reports pass/fail status per cycle and per step, (6) Is idempotent (cleans up sandbox on start and end), (7) Can be run via `python -m pytest tests/test_integration_evolution_loop.py -v`",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642625.3365297
+    },
+    {
+      "strategy": "modify tests/test_evolution_loop_runner.py: Create a Python entry point that: (1) Parses command-line arguments (--cycles, --verbose, --output-dir), (2) Calls the integration test harness programmatically, (3) Generates a structured JSON report with per-cycle and per-step results, (4) Returns exit code based on overall pass/fail",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642642.2517374
+    },
+    {
+      "strategy": "modify core/mutation_engine.py: Add a 'dry_run' mode that: (1) Simulates mutation application without writing to disk, (2) Returns the proposed changes as a diff, (3) Validates syntax of generated code, (4) Does not trigger actual file modification",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642753.9220862
+    },
+    {
+      "strategy": "modify tests/test_integration_evolution_loop.py: Add idempotency verification: (1) Run the full 5-cycle test twice, (2) Compare the final state of the sandbox after each run, (3) Assert they are identical, (4) Verify no files leak outside the sandbox",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642781.9904122
+    },
+    {
+      "strategy": "modify tests/test_integration_evolution_loop.py: Add a '--quick' mode that runs only 1 cycle with forced failures to test failure logging: (1) Inject a deliberate syntax error in a mutation, (2) Verify the failure is caught and logged, (3) Verify the sandbox is cleaned up, (4) Verify the error message contains the expected details",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642811.739546
+    },
+    {
+      "strategy": "modify tests/test_integration_evolution_loop.py: Add performance instrumentation: (1) Time each step of each cycle, (2) Log total execution time, (3) Warn if any step exceeds 30 seconds, (4) Record memory usage before and after the test",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642844.8080788
+    },
+    {
+      "strategy": "modify tests/test_integration_evolution_loop.py: Add comprehensive assertions: (1) After each cycle, verify the self-model was updated, (2) Verify goal queue changed appropriately, (3) Verify no duplicate goals, (4) Verify the system state is consistent (no dangling references)",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642881.8394153
+    },
+    {
+      "strategy": "Build an end-to-end integration test harness that executes the full evolution loop (reflection → goal generation → mutation → test → promotion) in a sandboxed environment, runs 5 consecutive cycles, and reports pass/fail status along with detailed failure logs for each step. This test must be self-contained, idempotent, and executable from a single command.",
+      "outcome": "7/10 steps succeeded",
+      "timestamp": 1780642881.8704214
     }
   ],
   "capabilities_developed": []
