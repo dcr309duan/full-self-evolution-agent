@@ -88,11 +88,18 @@ Output ONLY the Python code, no markdown fences."""
     return call_deepseek(messages, temperature=0.4, max_tokens=4096)
 
 
+PROTECTED_FILES = {"main.py", "core/evolution_loop.py", "core/self_modify.py", "core/dashboard.py"}
+
+
 def self_modify(target_file, modification_goal, dry_run=False):
     """Modify a file in the project to achieve a goal.
     
     Returns dict with keys: success, changes_made, reason
     """
+    normalized = target_file.lstrip("./")
+    if normalized in PROTECTED_FILES:
+        return {"success": False, "changes_made": False, "reason": f"File '{target_file}' is protected from self-modification"}
+
     current_code = read_file(target_file)
     if current_code is None:
         system_prompt = f"""You are creating a new Python source file named '{target_file}'.
