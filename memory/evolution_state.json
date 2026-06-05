@@ -1,9 +1,8 @@
 {
-  "cycle_count": 121,
-  "current_generation": 92,
-  "last_evolution_time": 1780646823.5870879,
+  "cycle_count": 122,
+  "current_generation": 93,
+  "last_evolution_time": 1780647013.7780306,
   "capabilities": [
-    "Build a minimal 'new file creation' metamorphic test: write a script that creates a new Python file ",
     "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of t",
     "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries ",
     "Build a minimal end-to-end integration test that validates the core evolution loop (reflection → goa",
@@ -52,15 +51,10 @@
     "Build a recursive sandbox module that clones the core evolution loop components (evolution_orchestra",
     "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintena",
     "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to s",
-    "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine,"
+    "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine,",
+    "Build a failure-pattern learner that collects the last 50 mutation failures, extracts common error t"
   ],
   "history": [
-    {
-      "cycle": 15,
-      "goal": "Build an API server to expose agent capabilities externally",
-      "success": false,
-      "timestamp": 1780625236.5323384
-    },
     {
       "cycle": 16,
       "goal": "Build an AST-based code rewriter with automatic rollback: implement a function that can safely modify the agent's own Python source files (e.g., evolution loop, evaluator) using the `ast` module, and integrate it with the existing testing framework so that any modification that causes test failures is automatically reverted. This addresses the root cause of failed mutation tasks and enables safe self-modification.",
@@ -654,6 +648,12 @@
       "goal": "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine, and goal generator into an isolated subprocess, applies a single targeted mutation to the orchestrator's decision logic, runs the full test suite, and either promotes or discards the change based on pass/fail results. Log the outcome and any errors for analysis.",
       "success": true,
       "timestamp": 1780646977.3764725
+    },
+    {
+      "cycle": 122,
+      "goal": "Build a failure-pattern learner that collects the last 50 mutation failures, extracts common error types (e.g., import errors, type mismatches, infinite loops), and adjusts mutation operators accordingly—e.g., disabling operators that caused repeated failures or reducing their probability by 50%. Persist the operator success rates and the adjusted operator weights.",
+      "success": true,
+      "timestamp": 1780647113.5423656
     }
   ],
   "status": "evolving"

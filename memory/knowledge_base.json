@@ -1,41 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified test_sandbox_executor.py to: Create a test suite for the sandbox executor: (1) test that sandbox creation succeeds and returns a valid path, (2) test that a mutation applied in sandbox doesn't affect the original codebase, (3) test that passing tests trigger a merge, (4) test that failing tests trigger cleanup without merge, (5) test timeout handling, (6) test that the sandbox executor works with the existing integration test suite.",
-      "timestamp": 1780640601.8782506,
-      "cycle": 94
-    },
-    {
-      "content": "Successfully modified integration_test_suite.py to: Add a new test case 'test_sandboxed_mutation_pipeline' that: (1) creates a simple mutation (e.g., adding a docstring), (2) runs it through the sandbox executor, (3) verifies the mutation is only present in the main codebase if tests pass, (4) verifies cleanup on simulated test failure. This validates the end-to-end sandbox workflow.",
-      "timestamp": 1780640638.7461922,
-      "cycle": 94
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph.py to: Add a method 'get_sandbox_safe_goals()' that identifies goals which would benefit most from sandboxed execution (high risk, high reward, or goals that touch critical infrastructure). This integrates the sandbox executor with the goal planning system.",
-      "timestamp": 1780640662.2002923,
-      "cycle": 94
-    },
-    {
-      "content": "Successfully modified failure_context_recorder.py to: Create a module that captures detailed context for every failed mutation: the mutation AST, the error type (import error, schema mismatch, side effect, syntax error, etc.), the modules involved, the test that failed, and the full error traceback. Store these in a structured failure_log.jsonl file with timestamps and cycle numbers.",
-      "timestamp": 1780640723.418792,
-      "cycle": 95
-    },
-    {
-      "content": "Successfully modified mutation_engine.py to: Integrate the failure_context_recorder into the mutation engine's failure handling path. After a mutation fails validation or testing, automatically call the recorder to capture all context before any rollback occurs.",
-      "timestamp": 1780640774.7324357,
-      "cycle": 95
-    },
-    {
-      "content": "Successfully modified failure_pattern_miner.py to: Build the core miner that: (1) reads the failure_log.jsonl, (2) clusters failures by error type and affected modules, (3) identifies recurring patterns (e.g., '3+ import errors in module X', 'schema mismatches between A and B'), (4) generates 'forbidden mutation space' rules as JSON rules with conditions (module_pattern, error_type, affected_interface) and actions (block, warn, require_precheck).",
-      "timestamp": 1780640789.853114,
-      "cycle": 95
-    },
-    {
-      "content": "Successfully modified forbidden_mutation_rules.json to: Create an initial empty rules file with schema: {rules: [{id, pattern: {module_regex, error_type, affected_interface}, action: 'block'|'warn'|'require_precheck', created_at, hit_count, last_hit}]}. The miner will populate this dynamically.",
-      "timestamp": 1780640793.0324392,
-      "cycle": 95
-    },
-    {
       "content": "Successfully modified pre_mutation_validator.py to: Add a step to the pre-mutation validation pipeline that checks proposed mutations against the forbidden_mutation_rules.json. If a mutation matches a 'block' rule, reject it immediately with explanation. If 'warn', log warning but allow. If 'require_precheck', trigger additional validation before proceeding.",
       "timestamp": 1780640802.7111325,
       "cycle": 95
@@ -999,6 +964,41 @@
       "content": "Successfully modified modules/logging_setup.py to: Add a new log handler for sandbox outcomes that writes structured JSON logs to logs/sandbox_outcomes.log with fields: timestamp, cycle, mutation_description, target_module, test_results (pass_count, fail_count, total), outcome (promoted/discarded/error), error_details, execution_time_seconds. This ensures all sandbox experiments are recorded for analysis.",
       "timestamp": 1780646977.334231,
       "cycle": 121
+    },
+    {
+      "content": "Successfully modified modules/failure_pattern_learner.py to: Create a new module that: (1) maintains a rolling window of the last 50 mutation failures with error type classification, (2) extracts error types using regex patterns for import errors, type mismatches, infinite loops, and other categories, (3) computes per-operator success rates, (4) adjusts operator weights by disabling operators with >70% failure rate or reducing probability by 50% for those with >40% failure rate, (5) persists operator success rates and adjusted weights to a JSON file.",
+      "timestamp": 1780647045.4103558,
+      "cycle": 122
+    },
+    {
+      "content": "Successfully modified modules/mutation_engine.py to: Add methods to: (1) register a failure with error type classification from the failure pattern learner, (2) expose operator weights as a mutable dict that can be updated by external modules, (3) add a method get_adjusted_operator_weights() that returns current operator probabilities after failure-based adjustments, (4) add a method set_operator_weights(weights_dict) to allow the failure pattern learner to update operator probabilities.",
+      "timestamp": 1780647061.944292,
+      "cycle": 122
+    },
+    {
+      "content": "Successfully modified modules/logging_setup.py to: Add a new log handler for failure pattern data that writes structured JSON to logs/failure_patterns.log with fields: timestamp, cycle, error_type, operator_used, module_under_test, failure_count, success_count, adjusted_weight.",
+      "timestamp": 1780647075.1088743,
+      "cycle": 122
+    },
+    {
+      "content": "Successfully modified config/evolution_config.json to: Add a new 'failure_pattern_learner' config section: {'enabled': true, 'window_size': 50, 'error_type_patterns': {'import_error': 'ImportError|ModuleNotFoundError|No module named', 'type_mismatch': 'TypeError|expected.*got|incompatible type', 'infinite_loop': 'Timeout|infinite loop|maximum recursion'}, 'operator_failure_thresholds': {'disable': 0.7, 'reduce_by_half': 0.4}, 'persist_file': 'data/operator_success_rates.json', 'analysis_interval_cycles': 5}",
+      "timestamp": 1780647080.7395756,
+      "cycle": 122
+    },
+    {
+      "content": "Successfully modified modules/orchestrator.py to: Integrate the failure pattern learner into the evolution loop: after each mutation failure, call failure_pattern_learner.record_failure() with the error details; after every 5 cycles, call failure_pattern_learner.analyze_and_adjust() to update operator weights; ensure the adjusted weights are passed back to mutation_engine.set_operator_weights().",
+      "timestamp": 1780647088.4444275,
+      "cycle": 122
+    },
+    {
+      "content": "Successfully modified tests/test_failure_pattern_learner.py to: Create comprehensive integration test that: (1) initializes the failure pattern learner with a mock mutation engine, (2) simulates 50 failures with known error types (10 import errors, 15 type mismatches, 5 infinite loops, 20 other), (3) verifies error type classification accuracy, (4) verifies operator weight adjustments (e.g., operators with >70% failure rate are disabled, those with >40% are halved), (5) verifies persistence to JSON file, (6) verifies reloading from persisted state restores correct weights.",
+      "timestamp": 1780647110.2904797,
+      "cycle": 122
+    },
+    {
+      "content": "Successfully modified data/operator_success_rates.json to: Create initial empty data file for persisting operator success rates and adjusted weights, with default structure: {'operators': {}, 'last_updated': null, 'total_failures_recorded': 0, 'total_successes_recorded': 0}",
+      "timestamp": 1780647113.4511492,
+      "cycle": 122
     }
   ],
   "learned_patterns": [],
@@ -5119,6 +5119,46 @@
       "strategy": "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine, and goal generator into an isolated subprocess, applies a single targeted mutation to the orchestrator's decision logic, runs the full test suite, and either promotes or discards the change based on pass/fail results. Log the outcome and any errors for analysis.",
       "outcome": "7/8 steps succeeded",
       "timestamp": 1780646977.3515038
+    },
+    {
+      "strategy": "modify modules/failure_pattern_learner.py: Create a new module that: (1) maintains a rolling window of the last 50 mutation failures with error type classification, (2) extracts error types using regex patterns for import errors, type mismatches, infinite loops, and other categories, (3) computes per-operator success rates, (4) adjusts operator weights by disabling operators with >70% failure rate or reducing probability by 50% for those with >40% failure rate, (5) persists operator success rates and adjusted weights to a JSON file.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647045.393377
+    },
+    {
+      "strategy": "modify modules/mutation_engine.py: Add methods to: (1) register a failure with error type classification from the failure pattern learner, (2) expose operator weights as a mutable dict that can be updated by external modules, (3) add a method get_adjusted_operator_weights() that returns current operator probabilities after failure-based adjustments, (4) add a method set_operator_weights(weights_dict) to allow the failure pattern learner to update operator probabilities.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647061.9085438
+    },
+    {
+      "strategy": "modify modules/logging_setup.py: Add a new log handler for failure pattern data that writes structured JSON to logs/failure_patterns.log with fields: timestamp, cycle, error_type, operator_used, module_under_test, failure_count, success_count, adjusted_weight.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647075.0915189
+    },
+    {
+      "strategy": "modify config/evolution_config.json: Add a new 'failure_pattern_learner' config section: {'enabled': true, 'window_size': 50, 'error_type_patterns': {'import_error': 'ImportError|ModuleNotFoundError|No module named', 'type_mismatch': 'TypeError|expected.*got|incompatible type', 'infinite_loop': 'Timeout|infinite loop|maximum recursion'}, 'operator_failure_thresholds': {'disable': 0.7, 'reduce_by_half': 0.4}, 'persist_file': 'data/operator_success_rates.json', 'analysis_interval_cycles': 5}",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647080.7185585
+    },
+    {
+      "strategy": "modify modules/orchestrator.py: Integrate the failure pattern learner into the evolution loop: after each mutation failure, call failure_pattern_learner.record_failure() with the error details; after every 5 cycles, call failure_pattern_learner.analyze_and_adjust() to update operator weights; ensure the adjusted weights are passed back to mutation_engine.set_operator_weights().",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647088.4242048
+    },
+    {
+      "strategy": "modify tests/test_failure_pattern_learner.py: Create comprehensive integration test that: (1) initializes the failure pattern learner with a mock mutation engine, (2) simulates 50 failures with known error types (10 import errors, 15 type mismatches, 5 infinite loops, 20 other), (3) verifies error type classification accuracy, (4) verifies operator weight adjustments (e.g., operators with >70% failure rate are disabled, those with >40% are halved), (5) verifies persistence to JSON file, (6) verifies reloading from persisted state restores correct weights.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647110.2724798
+    },
+    {
+      "strategy": "modify data/operator_success_rates.json: Create initial empty data file for persisting operator success rates and adjusted weights, with default structure: {'operators': {}, 'last_updated': null, 'total_failures_recorded': 0, 'total_successes_recorded': 0}",
+      "outcome": "Applied successfully",
+      "timestamp": 1780647113.4165592
+    },
+    {
+      "strategy": "Build a failure-pattern learner that collects the last 50 mutation failures, extracts common error types (e.g., import errors, type mismatches, infinite loops), and adjusts mutation operators accordingly—e.g., disabling operators that caused repeated failures or reducing their probability by 50%. Persist the operator success rates and the adjusted operator weights.",
+      "outcome": "7/7 steps succeeded",
+      "timestamp": 1780647113.5011246
     }
   ],
   "capabilities_developed": []

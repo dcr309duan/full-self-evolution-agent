@@ -35,6 +35,11 @@ class MutationEngine:
         ]
         self.max_history_size = max_history_size
         self.mutation_history: List[MutationRecord] = []
+        self._operator_weights: Dict[str, float] = {
+            mutation_type: 1.0 / len(self.allowed_mutation_types)
+            for mutation_type in self.allowed_mutation_types
+        }
+        self._failure_records: List[Dict[str, Any]] = []
         
     def record_mutation(self, mutation_type: str, target: str, details: Optional[Dict[str, Any]] = None) -> None:
         """
@@ -58,6 +63,68 @@ class MutationEngine:
         if len(self.mutation_history) > self.max_history_size:
             self.mutation_history = self.mutation_history[-self.max_history_size:]
     
+    def register_failure(self, mutation_type: str, error_type: str, details: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Register a failure with error type classification from the failure pattern learner.
+        
+        Args:
+            mutation_type: The type of mutation that caused the failure
+            error_type: The classified error type (e.g., 'syntax_error', 'runtime_error', 'logic_error')
+            details: Optional additional details about the failure
+        """
+        failure_record = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'mutation_type': mutation_type,
+            'error_type': error_type,
+            'details': details or {}
+        }
+        self._failure_records.append(failure_record)
+    
+    @property
+    def operator_weights(self) -> Dict[str, float]:
+        """
+        Get the current operator weights as a mutable dict.
+        
+        Returns:
+            Dict mapping mutation types to their current weights
+        """
+        return self._operator_weights
+    
+    @operator_weights.setter
+    def operator_weights(self, weights: Dict[str, float]) -> None:
+        """
+        Set the operator weights directly.
+        
+        Args:
+            weights: Dict mapping mutation types to their weights
+        """
+        self._operator_weights = weights
+    
+    def get_adjusted_operator_weights(self) -> Dict[str, float]:
+        """
+        Returns current operator probabilities after failure-based adjustments.
+        
+        Returns:
+            Dict mapping mutation types to their adjusted probabilities (normalized to sum to 1.0)
+        """
+        if not self._operator_weights:
+            return {}
+        
+        total_weight = sum(self._operator_weights.values())
+        if total_weight == 0:
+            return {key: 0.0 for key in self._operator_weights}
+        
+        return {key: value / total_weight for key, value in self._operator_weights.items()}
+    
+    def set_operator_weights(self, weights_dict: Dict[str, float]) -> None:
+        """
+        Allows the failure pattern learner to update operator probabilities.
+        
+        Args:
+            weights_dict: Dict mapping mutation types to their new weights
+        """
+        self._operator_weights = weights_dict
+    
     def get_serialized_state(self) -> Dict[str, Any]:
         """
         Returns a JSON-serializable dict of the mutation engine's current configuration.
@@ -71,7 +138,9 @@ class MutationEngine:
             'max_history_size': self.max_history_size,
             'mutation_history': [
                 asdict(record) for record in self.mutation_history
-            ]
+            ],
+            'operator_weights': self._operator_weights.copy(),
+            'failure_records': self._failure_records.copy()
         }
     
     @classmethod
@@ -139,6 +208,14 @@ class MutationEngine:
                 details=record_data.get('details', {})
             )
             engine.mutation_history.append(record)
+        
+        # Restore operator weights if present
+        if 'operator_weights' in state:
+            engine._operator_weights = state['operator_weights']
+        
+        # Restore failure records if present
+        if 'failure_records' in state:
+            engine._failure_records = state['failure_records']
         
         # Trim history if it exceeds max size (safety check)
         if len(engine.mutation_history) > engine.max_history_size:
