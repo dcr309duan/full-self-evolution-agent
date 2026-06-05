@@ -1,7 +1,8 @@
 """reflection_parser.py
 
 Implements a ReflectionParser class that extracts structured fields from raw reflection text
-using regex patterns and lightweight NLP heuristics.
+using regex patterns and lightweight NLP heuristics. Extended to analyze multi-file refactoring
+outcomes with fields for files_affected, dependency_changes, and refactoring_success_rate.
 """
 
 import re
@@ -57,6 +58,30 @@ DEFAULT_PATTERNS = {
         r"(?:type|category|kind)\s+(?:of\s+)?(?:goal|objective|target)\s*[:=]?\s*([\w\s]+)",
         r"(?:API\s+server|mutation\s+engine|data\s+pipeline|model\s+training|deployment|testing|optimization)",
         r"(?:build|create|develop|implement|design)\s+(?:an?\s+)?(?:API\s+server|mutation\s+engine|data\s+pipeline|model|system|application)",
+    ],
+    "files_affected": [
+        r"(?:files?\s+(?:affected|changed|modified|touched|impacted))\s*[:=]?\s*([\w./\\\-]+(?:\s*,\s*[\w./\\\-]+)*)",
+        r"(?:affected\s+files?\s*[:=]?\s*([\w./\\\-]+(?:\s*,\s*[\w./\\\-]+)*))",
+        r"(?:changed\s+files?\s*[:=]?\s*([\w./\\\-]+(?:\s*,\s*[\w./\\\-]+)*))",
+        r"(?:modified\s+files?\s*[:=]?\s*([\w./\\\-]+(?:\s*,\s*[\w./\\\-]+)*))",
+        r"(?:files?\s+involved\s*[:=]?\s*([\w./\\\-]+(?:\s*,\s*[\w./\\\-]+)*))",
+        r"(?:multi.?file\s+(?:refactor|change|update)\s+involving\s+([\w./\\\-]+(?:\s*,\s*[\w./\\\-]+)*))",
+    ],
+    "dependency_changes": [
+        r"(?:dependency\s+(?:change|update|modification|alteration))\s*[:=]?\s*(.+)",
+        r"(?:changed?\s+(?:dependencies?|imports?|requires?))\s*[:=]?\s*(.+)",
+        r"(?:new\s+(?:dependency|import|requirement))\s*[:=]?\s*(.+)",
+        r"(?:removed\s+(?:dependency|import|requirement))\s*[:=]?\s*(.+)",
+        r"(?:updated\s+(?:dependency|import|requirement))\s*[:=]?\s*(.+)",
+        r"(?:dependency\s+(?:graph|tree|chain)\s+(?:change|update))\s*[:=]?\s*(.+)",
+    ],
+    "refactoring_success_rate": [
+        r"(?:success\s+rate|success\s+ratio|success\s+percentage)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?",
+        r"(?:refactoring\s+(?:success|completion|effectiveness))\s*(?:rate|ratio|percentage)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?",
+        r"(?:(\d+(?:\.\d+)?)\s*%\s+(?:success|completion|effectiveness))",
+        r"(?:successfully\s+(?:refactored|completed|applied))\s+(\d+(?:\.\d+)?)\s*%",
+        r"(?:(\d+(?:\.\d+)?)\s+out\s+of\s+\d+\s+(?:files|changes|refactorings))\s+(?:succeeded|passed|completed)",
+        r"(?:success\s+rate\s+(?:is|was|at)\s+(\d+(?:\.\d+)?)\s*%?)",
     ],
 }
 
@@ -218,6 +243,40 @@ class ReflectionParser:
         
         return results
 
+    def parse_refactoring_outcome(self, text: str) -> Dict[str, List[Tuple[str, float]]]:
+        """
+        Extract structured insights from multi-file refactoring outcomes.
+
+        Args:
+            text: Raw reflection text describing refactoring outcomes.
+
+        Returns:
+            Dictionary with keys: files_affected, dependency_changes, refactoring_success_rate.
+            Each value is a list of (extracted_text, confidence) tuples.
+        """
+        if not text or not isinstance(text, str):
+            return {
+                "files_affected": [],
+                "dependency_changes": [],
+                "refactoring_success_rate": []
+            }
+
+        results = {}
+        
+        # Extract files affected
+        files_matches = self.extract_field(text, "files_affected")
+        results["files_affected"] = files_matches
+        
+        # Extract dependency changes
+        dependency_matches = self.extract_field(text, "dependency_changes")
+        results["dependency_changes"] = dependency_matches
+        
+        # Extract refactoring success rate
+        success_matches = self.extract_field(text, "refactoring_success_rate")
+        results["refactoring_success_rate"] = success_matches
+        
+        return results
+
     def extract_goal_type_from_reflection(self, reflection_text: str) -> Optional[str]:
         """
         Parse the reflection output to identify the goal type (e.g., 'API server', 'mutation engine').
@@ -301,6 +360,19 @@ if __name__ == "__main__":
     )
     failure_context = parser.parse_failure_context(failure_text)
     for field, matches in failure_context.items():
+        print(f"\n{field}:")
+        for text, conf in matches:
+            print(f"  - '{text}' (confidence: {conf})")
+
+    # Test parse_refactoring_outcome
+    print("\n=== Refactoring Outcome Analysis ===")
+    refactoring_text = (
+        "Multi-file refactoring completed. Files affected: main.py, utils.py, config.py. "
+        "Dependency changes: added new import for logging module. "
+        "Refactoring success rate: 85%."
+    )
+    refactoring_outcome = parser.parse_refactoring_outcome(refactoring_text)
+    for field, matches in refactoring_outcome.items():
         print(f"\n{field}:")
         for text, conf in matches:
             print(f"  - '{text}' (confidence: {conf})")

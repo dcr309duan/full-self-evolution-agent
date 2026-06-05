@@ -2,13 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Develop multi-file code analysis and refactoring capability",
-      "priority": 7,
-      "status": "pending",
-      "created_at": 1780623346.3650715,
-      "consecutive_failures": 0
-    },
-    {
       "description": "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e.g., natural language interaction, file system manipulation, or data analysis) into the task queue, even when no explicit goal exists, using a simple random selector over a small set of domain templates.",
       "priority": 7,
       "status": "pending",
@@ -172,6 +165,14 @@
       "status": "completed",
       "created_at": 1780627782.4670973,
       "completed_at": 1780628659.7215927
+    },
+    {
+      "description": "Develop multi-file code analysis and refactoring capability",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780623346.3650715,
+      "consecutive_failures": 0,
+      "completed_at": 1780628965.6692204
     }
   ],
   "generated_goals": []
