@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a dependency-aware planning system that parses the current goal graph, identifies unmet prerequisites (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unresolved. Integrate this with the orchestrator to prevent wasted cycles on disconnected implementations and to schedule changes in safe topological order.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780633098.652707
-    },
-    {
       "description": "Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and generates a fundamentally different approach (e.g., if AST rewriting fails, try a wrapper-based strategy instead). Include a failure pattern classifier that logs the root cause and adjusts the mutation strategy selector to avoid repeating the same mistake.",
       "priority": 8,
       "status": "pending",
@@ -298,6 +292,13 @@
       "status": "completed",
       "created_at": 1780633098.6509945,
       "completed_at": 1780633217.1082225
+    },
+    {
+      "description": "Build a dependency-aware planning system that parses the current goal graph, identifies unmet prerequisites (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unresolved. Integrate this with the orchestrator to prevent wasted cycles on disconnected implementations and to schedule changes in safe topological order.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780633098.652707,
+      "completed_at": 1780633356.1858726
     }
   ],
   "generated_goals": []
