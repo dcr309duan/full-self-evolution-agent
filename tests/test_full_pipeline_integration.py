@@ -335,3 +335,154 @@ def test_mutation_to_test_link(setup_test_environment):
         assert "total" in test_results, "Test results missing total count"
     except Exception as e:
         pytest.fail(f"P1 BUG: Test runner failed to consume mutation output: {e}")
+
+
+def test_test_to_reflection_link():
+    """Test that the reflection parser correctly processes known test results.
+    
+    Feeds known test results (pass/fail counts, error messages) to the reflection parser
+    and verifies it produces a valid assessment dict with 'current_assessment', 'key_gaps',
+    and 'next_priority' keys. Detects if reflection parser fails to parse (P1 bug).
+    """
+    reflection_parser = ReflectionParser()
+    
+    # Define known test results with various scenarios
+    test_cases = [
+        {
+            "name": "all_tests_passed",
+            "input": {
+                "passed": 10,
+                "failed": 0,
+                "total": 10,
+                "errors": [],
+                "details": [
+                    {"name": "test_add", "status": "passed"},
+                    {"name": "test_multiply", "status": "passed"}
+                ]
+            },
+            "expected_assessment": "good"
+        },
+        {
+            "name": "some_tests_failed",
+            "input": {
+                "passed": 7,
+                "failed": 3,
+                "total": 10,
+                "errors": [
+                    {"test": "test_failing", "message": "AssertionError: Expected 5 but got 4"}
+                ],
+                "details": [
+                    {"name": "test_add", "status": "passed"},
+                    {"name": "test_failing", "status": "failed", "message": "AssertionError: Expected 5 but got 4"}
+                ]
+            },
+            "expected_assessment": "needs_improvement"
+        },
+        {
+            "name": "all_tests_failed",
+            "input": {
+                "passed": 0,
+                "failed": 5,
+                "total": 5,
+                "errors": [
+                    {"test": "test_add", "message": "AssertionError: Expected 5 but got 4"},
+                    {"test": "test_multiply", "message": "AssertionError: Expected 6 but got 7"}
+                ],
+                "details": [
+                    {"name": "test_add", "status": "failed", "message": "AssertionError: Expected 5 but got 4"},
+                    {"name": "test_multiply", "status": "failed", "message": "AssertionError: Expected 6 but got 7"}
+                ]
+            },
+            "expected_assessment": "poor"
+        },
+        {
+            "name": "mixed_results_with_errors",
+            "input": {
+                "passed": 5,
+                "failed": 2,
+                "total": 7,
+                "errors": [
+                    {"test": "test_edge_case", "message": "TypeError: unsupported operand type(s)"}
+                ],
+                "details": [
+                    {"name": "test_basic", "status": "passed"},
+                    {"name": "test_edge_case", "status": "failed", "message": "TypeError: unsupported operand type(s)"}
+                ]
+            },
+            "expected_assessment": "needs_improvement"
+        }
+    ]
+    
+    for test_case in test_cases:
+        try:
+            # Feed known test results to the reflection parser
+            reflection_output = reflection_parser.parse(test_case["input"])
+            
+            # P1 bug detection: reflection parser returned None
+            assert reflection_output is not None, (
+                f"P1 BUG: Reflection parser returned None for test case '{test_case['name']}'"
+            )
+            
+            # Verify the output is a dict
+            assert isinstance(reflection_output, dict), (
+                f"P1 BUG: Reflection output should be a dict for test case '{test_case['name']}', "
+                f"got {type(reflection_output)}"
+            )
+            
+            # Verify required keys exist
+            assert "current_assessment" in reflection_output, (
+                f"P1 BUG: Reflection output missing 'current_assessment' key for test case '{test_case['name']}'"
+            )
+            assert "key_gaps" in reflection_output, (
+                f"P1 BUG: Reflection output missing 'key_gaps' key for test case '{test_case['name']}'"
+            )
+            assert "next_priority" in reflection_output, (
+                f"P1 BUG: Reflection output missing 'next_priority' key for test case '{test_case['name']}'"
+            )
+            
+            # Verify types of the required fields
+            assert isinstance(reflection_output["current_assessment"], str), (
+                f"P1 BUG: 'current_assessment' should be a string for test case '{test_case['name']}', "
+                f"got {type(reflection_output['current_assessment'])}"
+            )
+            assert isinstance(reflection_output["key_gaps"], list), (
+                f"P1 BUG: 'key_gaps' should be a list for test case '{test_case['name']}', "
+                f"got {type(reflection_output['key_gaps'])}"
+            )
+            assert isinstance(reflection_output["next_priority"], str), (
+                f"P1 BUG: 'next_priority' should be a string for test case '{test_case['name']}', "
+                f"got {type(reflection_output['next_priority'])}"
+            )
+            
+            # Verify the assessment is reasonable based on test results
+            if test_case["input"]["failed"] == 0:
+                assert reflection_output["current_assessment"] in ["good", "excellent", "perfect"], (
+                    f"P1 BUG: Expected positive assessment for all passing tests in '{test_case['name']}', "
+                    f"got '{reflection_output['current_assessment']}'"
+                )
+            elif test_case["input"]["failed"] > test_case["input"]["passed"]:
+                assert reflection_output["current_assessment"] in ["poor", "bad", "critical"], (
+                    f"P1 BUG: Expected negative assessment for mostly failing tests in '{test_case['name']}', "
+                    f"got '{reflection_output['current_assessment']}'"
+                )
+            
+            # Verify key_gaps contains meaningful entries when there are failures
+            if test_case["input"]["failed"] > 0:
+                assert len(reflection_output["key_gaps"]) > 0, (
+                    f"P1 BUG: 'key_gaps' should not be empty when there are failures in '{test_case['name']}'"
+                )
+                for gap in reflection_output["key_gaps"]:
+                    assert isinstance(gap, str), (
+                        f"P1 BUG: Each key_gap should be a string in '{test_case['name']}', "
+                        f"got {type(gap)}"
+                    )
+            
+            # Verify next_priority is a non-empty string
+            assert len(reflection_output["next_priority"]) > 0, (
+                f"P1 BUG: 'next_priority' should not be empty for test case '{test_case['name']}'"
+            )
+            
+        except AssertionError:
+            raise
+        except Exception as e:
+            pytest.fail(f"P1 BUG: Reflection parser failed to parse for test case '{test_case['name']}': {e}")

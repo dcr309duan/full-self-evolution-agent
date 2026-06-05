@@ -488,3 +488,6 @@ ModuleNotFoundError: No module named 'core.evolution_orchestrator'
 [2026-06-05 11:04:29] Cycle 35: Phase 2.7: 自主研究 - 探索新知识
 [2026-06-05 11:04:38] Cycle 36:   Step: modify -> tests/test_full_pipeline_integration.py: Add test method 'test_test_to_reflection_link' that feeds known test results (pass/fail counts, error messages) to the reflection parser and verifies it produces a valid assessment dict with 'current_assessment', 'key_gaps', and 'next_priority' keys. Should detect if reflection parser fails to parse (P1 bug).
 [2026-06-05 11:05:09] Cycle 35: 研究完成: 2 个主题
+[2026-06-05 11:05:13] Cycle 36:   Step: modify -> tests/test_full_pipeline_integration.py: Add test method 'test_reflection_to_strategy_link' that feeds reflection output to the strategy selector and verifies it returns a valid strategy name (e.g., 'mutate', 'retry', 'switch'). Should detect if strategy selector returns None or invalid strategy (P2 bug).
+[2026-06-05 11:05:13] Cycle 35: === Cycle Complete ===
+
