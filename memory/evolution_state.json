@@ -1,9 +1,8 @@
 {
-  "cycle_count": 132,
-  "current_generation": 103,
-  "last_evolution_time": 1780649009.2721074,
+  "cycle_count": 133,
+  "current_generation": 104,
+  "last_evolution_time": 1780649339.5396848,
   "capabilities": [
-    "Build a lightweight 'mutation simulation' module that, given a proposed mutation, clones the affecte",
     "Implement a 'goal triage' routine that scans all pending and in-progress goals, flags those that hav",
     "Add a 'prerequisite verification' step to the goal execution pipeline: before executing any goal, ch",
     "Implement an external fitness function that scores the agent on solving 5 simple programming challen",
@@ -52,15 +51,10 @@
     "Implement a 'capability bankruptcy' protocol: every 10 cycles, automatically evaluate all capabiliti",
     "Create a 'core mutation sandbox' that intercepts all mutations targeting files in the evolution core",
     "Implement a 'capability consolidation' protocol: for each evolution cycle, if the number of distinct",
-    "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insig"
+    "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insig",
+    "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> gen"
   ],
   "history": [
-    {
-      "cycle": 27,
-      "goal": "Implement a 'strategy switch' mechanism in the mutation engine: when the engine logs its 4th consecutive failure (including the 3 existing ones), it automatically shifts from random crossover mutation to a grammar-guided mutation approach. Specifically, define 3 template-based mutation patterns (e.g., 'wrap function body in try-except', 'add logging call at function entry', 'replace constant with parameter') sourced from the 34 successful strategies in the knowledge base. Apply these templates instead of random AST splicing. If this also fails, the engine should log a detailed report and pause mutation activity until the failure analysis module produces a new recommended strategy.",
-      "success": true,
-      "timestamp": 1780626902.235259
-    },
     {
       "cycle": 28,
       "goal": "Implement a unified evolution loop orchestrator that integrates the API server, task scheduler, and web scraping modules into a single, autonomous goal-selection and prioritization pipeline, using the existing strategy-switching mechanism to decide which subsystem to evolve next.",
@@ -654,6 +648,12 @@
       "goal": "Create a self-sustaining goal generator that analyzes the current set of key gaps and the meta-insight, then autonomously produces 3 new goals each cycle without external input. The generator should prioritize goals that target core architecture changes (recursive self-modification) over peripheral additions, using a simple heuristic: assign higher priority to goals that modify existing core modules vs. creating new utility modules.",
       "success": true,
       "timestamp": 1780649302.6202514
+    },
+    {
+      "cycle": 133,
+      "goal": "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> generate goal -> mutate -> test -> accept) in a single Python file, then run it in the sandbox for 3 cycles to validate the loop works end-to-end without any module dependencies. Only after this core is stable, migrate the working logic back into the main system.",
+      "success": true,
+      "timestamp": 1780649460.8400242
     }
   ],
   "status": "evolving"

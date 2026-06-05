@@ -2,6 +2,12 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a 'self-healing recovery mode' that, when any core module (evolution_orchestrator, goal_generator, reflection_engine) fails to execute 2 consecutive times, automatically reverts that module to the last known-good git commit, logs the failure pattern, and runs a simplified version of the module (with all optional features disabled) for the next cycle before attempting to restore full functionality.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780649372.3593426
+    },
+    {
       "description": "Implement a 'failure-driven simplification' rule: if a module causes 3+ consecutive failures, automatically deprecate or remove it instead of trying to fix it. This will counter complexity creep and force the system to prune underperforming modules, stabilizing the core loop.",
       "priority": 8,
       "status": "pending",
@@ -12,6 +18,12 @@
       "priority": 8,
       "status": "pending",
       "created_at": 1780648591.915511
+    },
+    {
+      "description": "Create a 'dead module detector' that scans all modules for usage count over the last 20 cycles, and any module with <2 uses is automatically flagged for deprecation. The system must then attempt to remove the module in the next mutation cycle, running the sandbox tests to verify no functionality is broken by its removal.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780649372.3644664
     },
     {
       "description": "Create an adaptive meta-parameter scheduler that monitors the success rate of mutations over a sliding window of 10 cycles. If success rate drops below 30%, reduce mutation rate by 20% and increase goal acceptance threshold by 10%; if success rate exceeds 70%, increase mutation rate by 10% and decrease threshold by 5%. Persist the current parameters and their history for analysis.",
@@ -817,6 +829,13 @@
       "status": "completed",
       "created_at": 1780646845.4872355,
       "completed_at": 1780649302.5597053
+    },
+    {
+      "description": "Build a 'minimal core' bootstrap script that implements the essential evolution loop (reflect -> generate goal -> mutate -> test -> accept) in a single Python file, then run it in the sandbox for 3 cycles to validate the loop works end-to-end without any module dependencies. Only after this core is stable, migrate the working logic back into the main system.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780649372.3563287,
+      "completed_at": 1780649437.4476843
     }
   ],
   "generated_goals": []
