@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', or 'infrastructure_hardening'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', or 'cluster_resolution'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -48,6 +48,7 @@ class SimulationMetrics:
     coverage: float = 0.0  # 0.0 to 1.0, how much of the module is covered
     fs_abstraction_retry_rate: float = 0.0  # 0.0 to 1.0, retry rate for fs_abstraction
     permission_failure_spike: bool = False  # Whether permission failures have spiked
+    failure_cluster: bool = False  # Whether a persistent failure cluster is detected
 
 
 # Global registries for goals and knowledge
@@ -151,6 +152,33 @@ def generate_goals(
                     "Generated infrastructure hardening goal for %s (permission failure spike detected)",
                     metrics.module
                 )
+
+        # Generate cluster resolution goals if a persistent failure cluster is detected
+        if metrics.failure_cluster:
+            # Determine the root cause based on available metrics
+            if metrics.permission_failure_spike:
+                root_cause = "permission handling"
+                fix_description = f"Fix permission handling in {metrics.module}"
+            elif metrics.fs_abstraction_retry_rate > retry_rate_threshold:
+                root_cause = "retry logic"
+                fix_description = f"Add retry logic to {metrics.module}"
+            else:
+                root_cause = "unknown failure pattern"
+                fix_description = f"Investigate and fix persistent failure cluster in {metrics.module}"
+            
+            goal = Goal(
+                description=fix_description,
+                priority=GoalPriority.CRITICAL,
+                module=metrics.module,
+                goal_type="cluster_resolution",
+                source="fitness",
+                tags=["cluster_resolution", "root_cause", root_cause]
+            )
+            goals.append(goal)
+            logger.info(
+                "Generated cluster resolution goal for %s (failure cluster detected, root cause: %s)",
+                metrics.module, root_cause
+            )
 
     # Sort goals by priority (CRITICAL first, then HIGH, MEDIUM, LOW)
     # Within same priority, curiosity goals come before routine goals
@@ -260,7 +288,8 @@ def generate_goals_from_report(
                 "has_unexpected_side_effects": False,
                 "coverage": 0.8,
                 "fs_abstraction_retry_rate": 0.0,
-                "permission_failure_spike": False
+                "permission_failure_spike": False,
+                "failure_cluster": False
             },
             ...
         ]
@@ -287,7 +316,8 @@ def generate_goals_from_report(
             ),
             coverage=module_data.get("coverage", 0.0),
             fs_abstraction_retry_rate=module_data.get("fs_abstraction_retry_rate", 0.0),
-            permission_failure_spike=module_data.get("permission_failure_spike", False)
+            permission_failure_spike=module_data.get("permission_failure_spike", False),
+            failure_cluster=module_data.get("failure_cluster", False)
         )
         metrics_list.append(metrics)
 
@@ -451,6 +481,48 @@ def generate_sub_goals(
             implement_goal.dependencies.append(diagnose_goal.description)
             test_goal.dependencies.append(implement_goal.description)
             sub_goals = [diagnose_goal, implement_goal, test_goal]
+    elif parent_goal.goal_type == "cluster_resolution":
+        # Break cluster resolution into smaller steps
+        analyze_goal = Goal(
+            description=f"Analyze failure cluster in {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="cluster_resolution",
+            source=parent_goal.source
+        )
+        fix_goal = Goal(
+            description=f"Implement root cause fix for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="cluster_resolution",
+            source=parent_goal.source
+        )
+        verify_goal = Goal(
+            description=f"Verify cluster resolution for {parent_goal.module}",
+            priority=parent_goal.priority,
+            module=parent_goal.module,
+            goal_type="cluster_resolution",
+            source=parent_goal.source
+        )
+        
+        if decomposition_strategy == "sequential":
+            # Linear chain: analyze -> fix -> verify
+            fix_goal.dependencies.append(analyze_goal.description)
+            verify_goal.dependencies.append(fix_goal.description)
+            sub_goals = [analyze_goal, fix_goal, verify_goal]
+        elif decomposition_strategy == "parallel":
+            # No dependencies between sub-goals
+            sub_goals = [analyze_goal, fix_goal, verify_goal]
+        elif decomposition_strategy == "dependency-based":
+            # Dependency-based: analyze is independent, fix depends on analyze, verify depends on fix
+            fix_goal.dependencies.append(analyze_goal.description)
+            verify_goal.dependencies.append(fix_goal.description)
+            sub_goals = [analyze_goal, fix_goal, verify_goal]
+        else:
+            # Default to sequential for unknown strategies
+            fix_goal.dependencies.append(analyze_goal.description)
+            verify_goal.dependencies.append(fix_goal.description)
+            sub_goals = [analyze_goal, fix_goal, verify_goal]
     else:
         # Generic breakdown for unknown goal types
         research_goal = Goal(
@@ -589,6 +661,11 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
         hardening_key = f"hardening:{goal.module}:{goal.description}"
         knowledge_base[hardening_key] = f"Improved: {lesson}"
     
+    # If this was a cluster resolution goal, store the resolution
+    if "cluster_resolution" in goal.tags:
+        cluster_key = f"cluster:{goal.module}:{goal.description}"
+        knowledge_base[cluster_key] = f"Resolved: {lesson}"
+    
     logger.info(
         "Archived goal '%s' with lesson: %s",
         goal.description, lesson
@@ -624,6 +701,13 @@ if __name__ == "__main__":
             coverage=0.7,
             fs_abstraction_retry_rate=0.45,
             permission_failure_spike=True
+        ),
+        SimulationMetrics(
+            module="module_d",
+            accuracy=0.5,
+            has_unexpected_side_effects=False,
+            coverage=0.4,
+            failure_cluster=True
         ),
     ]
 

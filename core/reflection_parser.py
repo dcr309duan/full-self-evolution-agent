@@ -287,6 +287,23 @@ class FsAbstractionStats(BaseModel):
     )
 
 
+class FailureClusterStats(BaseModel):
+    """Schema for failure cluster statistics."""
+    active_clusters: int = Field(
+        default=0,
+        ge=0,
+        description="Number of currently active failure clusters."
+    )
+    top_error_types: List[str] = Field(
+        default_factory=list,
+        description="List of top error types by frequency in active clusters."
+    )
+    auto_fix_triggered: bool = Field(
+        default=False,
+        description="Whether any auto-fix was triggered in this reflection cycle."
+    )
+
+
 class SchemaAlignmentLayer:
     """
     Schema alignment layer that integrates simulation result fields
@@ -298,6 +315,7 @@ class SchemaAlignmentLayer:
         self.simulation_fields = SimulationResult.schema()
         self.goal_triage_fields = GoalTriageResults.schema()
         self.fs_abstraction_fields = FsAbstractionStats.schema()
+        self.failure_cluster_fields = FailureClusterStats.schema()
 
     def align_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -387,12 +405,21 @@ class SchemaAlignmentLayer:
                         "average_write_latency": self.fs_abstraction_fields["properties"]["average_write_latency"]
                     },
                     "description": "Filesystem abstraction usage statistics for infrastructure health monitoring."
+                },
+                "failure_cluster_stats": {
+                    "type": "object",
+                    "properties": {
+                        "active_clusters": self.failure_cluster_fields["properties"]["active_clusters"],
+                        "top_error_types": self.failure_cluster_fields["properties"]["top_error_types"],
+                        "auto_fix_triggered": self.failure_cluster_fields["properties"]["auto_fix_triggered"]
+                    },
+                    "description": "Failure cluster statistics for monitoring state awareness."
                 }
             }
         )
         # Ensure required fields are present
         required = aligned.get("required", [])
-        for field in ["simulation_prediction", "simulation_confidence", "goal_triage_results", "fs_abstraction_stats"]:
+        for field in ["simulation_prediction", "simulation_confidence", "goal_triage_results", "fs_abstraction_stats", "failure_cluster_stats"]:
             if field not in required:
                 required.append(field)
         aligned["required"] = required
@@ -442,3 +469,18 @@ class SchemaAlignmentLayer:
             ValidationError: If data does not conform to the schema.
         """
         return FsAbstractionStats(**data)
+
+    def validate_failure_cluster_data(self, data: Dict[str, Any]) -> FailureClusterStats:
+        """
+        Validate and return a FailureClusterStats instance from raw data.
+
+        Args:
+            data: Dictionary containing failure cluster statistics.
+
+        Returns:
+            FailureClusterStats instance if validation passes.
+
+        Raises:
+            ValidationError: If data does not conform to the schema.
+        """
+        return FailureClusterStats(**data)

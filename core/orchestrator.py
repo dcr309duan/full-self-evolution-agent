@@ -5,6 +5,8 @@ import sys
 import os
 import json
 from typing import Dict, Any, List
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 # Assuming these modules exist in the 'core' package
 from core.goal_selector import select_goal
@@ -80,6 +82,126 @@ CURIOSITY_INTERVAL = 5  # Configurable interval for curiosity engine activation
 
 # File system abstraction instance
 fs_abstraction = FileSystemAbstraction()
+
+# Failure cluster analyzer configuration
+FAILURE_CLUSTER_CONFIG = {
+    "threshold": 3,  # Number of failures in same module to trigger fix
+    "time_window_minutes": 10,  # Time window to consider failures
+    "cluster_file": "core/failure_clusters.json"  # Persistent storage file
+}
+
+# Failure cluster data structure
+failure_clusters: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+
+def load_failure_clusters() -> Dict[str, List[Dict[str, Any]]]:
+    """Load failure clusters from persistent storage."""
+    cluster_file = Path(FAILURE_CLUSTER_CONFIG["cluster_file"])
+    if cluster_file.exists():
+        try:
+            with open(cluster_file, 'r') as f:
+                return defaultdict(list, json.load(f))
+        except (json.JSONDecodeError, IOError):
+            return defaultdict(list)
+    return defaultdict(list)
+
+def save_failure_clusters(clusters: Dict[str, List[Dict[str, Any]]]) -> None:
+    """Save failure clusters to persistent storage."""
+    cluster_file = Path(FAILURE_CLUSTER_CONFIG["cluster_file"])
+    cluster_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(cluster_file, 'w') as f:
+            json.dump(dict(clusters), f, indent=2)
+    except IOError as e:
+        print(f"Warning: Could not save failure clusters: {e}")
+
+def update_failure_cluster(module_name: str, failure_info: Dict[str, Any]) -> None:
+    """Update failure cluster data with new failure information."""
+    global failure_clusters
+    
+    # Load existing clusters
+    failure_clusters = load_failure_clusters()
+    
+    # Add new failure entry with timestamp
+    failure_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "failure_info": failure_info,
+        "cycle_number": cycle_counter
+    }
+    
+    failure_clusters[module_name].append(failure_entry)
+    
+    # Clean up old entries outside the time window
+    time_window = timedelta(minutes=FAILURE_CLUSTER_CONFIG["time_window_minutes"])
+    cutoff_time = datetime.now() - time_window
+    
+    failure_clusters[module_name] = [
+        entry for entry in failure_clusters[module_name]
+        if datetime.fromisoformat(entry["timestamp"]) > cutoff_time
+    ]
+    
+    # Save updated clusters
+    save_failure_clusters(failure_clusters)
+
+def check_cluster_threshold(module_name: str) -> bool:
+    """Check if a module has exceeded the failure threshold."""
+    global failure_clusters
+    
+    failure_clusters = load_failure_clusters()
+    
+    if module_name not in failure_clusters:
+        return False
+    
+    # Count failures within the time window
+    time_window = timedelta(minutes=FAILURE_CLUSTER_CONFIG["time_window_minutes"])
+    cutoff_time = datetime.now() - time_window
+    
+    recent_failures = [
+        entry for entry in failure_clusters[module_name]
+        if datetime.fromisoformat(entry["timestamp"]) > cutoff_time
+    ]
+    
+    return len(recent_failures) >= FAILURE_CLUSTER_CONFIG["threshold"]
+
+def trigger_environment_fix(module_name: str) -> Dict[str, Any]:
+    """Trigger environment-level fix for a module that exceeded failure threshold."""
+    fix_result = {
+        "module": module_name,
+        "fixes_applied": [],
+        "success": True
+    }
+    
+    try:
+        # Run health check on filesystem abstraction
+        health_check_result = fs_abstraction.health_check()
+        if not health_check_result.get("healthy", True):
+            fs_abstraction.repair()
+            fix_result["fixes_applied"].append("fs_abstraction_repair")
+        
+        # Repair permissions if needed
+        permission_repair_result = fs_abstraction.repair_permissions()
+        if permission_repair_result.get("repaired", False):
+            fix_result["fixes_applied"].append("permission_repair")
+        
+        # Clean temp directories
+        temp_cleanup_result = fs_abstraction.cleanup_temp_directories()
+        if temp_cleanup_result.get("cleaned", False):
+            fix_result["fixes_applied"].append("temp_directory_cleanup")
+        
+        # Clear the failure cluster for this module after fix
+        global failure_clusters
+        failure_clusters = load_failure_clusters()
+        if module_name in failure_clusters:
+            del failure_clusters[module_name]
+            save_failure_clusters(failure_clusters)
+        
+        fix_result["success"] = True
+        fix_result["message"] = f"Environment fixes applied for module: {module_name}"
+        
+    except Exception as e:
+        fix_result["success"] = False
+        fix_result["message"] = f"Failed to apply environment fixes: {str(e)}"
+    
+    return fix_result
 
 def update_simulation_accuracy(sim_result: SimulationResult, actual_test_result: Dict[str, Any]) -> None:
     """Update simulation accuracy tracking based on actual test results."""
@@ -262,6 +384,7 @@ def run_smoke_test() -> Dict[str, Any]:
     Integrates prerequisite verification to check dependencies before execution.
     Integrates fitness evaluator to assess code quality before and after mutation.
     Integrates curiosity engine for autonomous exploration.
+    Integrates failure cluster analyzer for detecting and fixing recurring failures.
 
     Returns:
         A structured dictionary containing:
@@ -512,6 +635,45 @@ def run_smoke_test() -> Dict[str, Any]:
             
             # Update simulation accuracy tracking
             update_simulation_accuracy(sim_result, test_result)
+            
+            # Integrate failure cluster analyzer after mutation attempt
+            module_name = "counter"  # In real scenario, extract from goal or file path
+            failure_info = {
+                "goal": selected_goal.get("name", goal),
+                "test_result": test_result,
+                "simulation_confidence": simulation_confidence,
+                "mutation_applied": True
+            }
+            
+            # Update failure cluster regardless of success/failure
+            update_failure_cluster(module_name, failure_info)
+            
+            # Check if cluster threshold exceeded
+            if check_cluster_threshold(module_name):
+                logs.append({
+                    "step": 4.1,
+                    "action": "failure_cluster_detected",
+                    "status": "warning",
+                    "details": f"Failure cluster threshold exceeded for module: {module_name}"
+                })
+                
+                # Trigger environment-level fix
+                fix_result = trigger_environment_fix(module_name)
+                logs.append({
+                    "step": 4.2,
+                    "action": "environment_fix",
+                    "status": "success" if fix_result["success"] else "failed",
+                    "details": fix_result["message"]
+                })
+                
+                # Log applied fixes
+                for fix in fix_result["fixes_applied"]:
+                    logs.append({
+                        "step": 4.3,
+                        "action": f"applied_fix_{fix}",
+                        "status": "success",
+                        "details": f"Applied fix: {fix}"
+                    })
             
         finally:
             os.chdir(original_cwd)
