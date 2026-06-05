@@ -54,7 +54,7 @@ DASHBOARD_HTML = '''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Self-Evolution Agent Dashboard</title>
+<title>自进化智能体 - 监控面板</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { 
@@ -134,56 +134,56 @@ body {
 </head>
 <body>
 <div class="header">
-    <h1>Self-Evolution Agent</h1>
+    <h1>自进化智能体</h1>
     <div>
-        <span class="gen-badge" id="gen-badge">GEN 1</span>
-        <span class="status-badge status-evolving" id="status-badge">LOADING</span>
+        <span class="gen-badge" id="gen-badge">第 1 代</span>
+        <span class="status-badge status-evolving" id="status-badge">加载中</span>
     </div>
 </div>
 <div class="container">
     <div class="grid">
-        <div class="metric-card"><div class="value" id="m-cycle">-</div><div class="label">Evolution Cycles</div></div>
-        <div class="metric-card"><div class="value" id="m-rate">-</div><div class="label">Success Rate</div></div>
-        <div class="metric-card"><div class="value" id="m-caps">-</div><div class="label">Capabilities</div></div>
-        <div class="metric-card"><div class="value" id="m-goals">-</div><div class="label">Goals Completed</div></div>
+        <div class="metric-card"><div class="value" id="m-cycle">-</div><div class="label">进化周期</div></div>
+        <div class="metric-card"><div class="value" id="m-rate">-</div><div class="label">成功率</div></div>
+        <div class="metric-card"><div class="value" id="m-caps">-</div><div class="label">已获能力</div></div>
+        <div class="metric-card"><div class="value" id="m-goals">-</div><div class="label">已完成目标</div></div>
     </div>
 
     <div class="two-col">
         <div class="section">
-            <h2>Capabilities Acquired</h2>
+            <h2>已获得能力</h2>
             <ul class="capability-list" id="cap-list"></ul>
         </div>
         <div class="section">
-            <h2>Pending Goals</h2>
+            <h2>待完成目标</h2>
             <div id="goal-list"></div>
         </div>
     </div>
 
     <div class="section">
-        <h2>Recent Activity</h2>
+        <h2>最近活动</h2>
         <table class="activity-table">
-            <thead><tr><th>Cycle</th><th>Goal</th><th>Result</th><th>Time</th></tr></thead>
+            <thead><tr><th>周期</th><th>目标</th><th>结果</th><th>时间</th></tr></thead>
             <tbody id="activity-body"></tbody>
         </table>
     </div>
 
     <div class="two-col">
         <div class="section">
-            <h2>Recent Insights</h2>
+            <h2>最新洞察</h2>
             <div id="insights-list"></div>
         </div>
         <div class="section">
-            <h2>Success History (last 20)</h2>
+            <h2>成功率趋势（近20轮）</h2>
             <div id="chart-area"></div>
         </div>
     </div>
 
     <div class="section">
-        <h2>Live Log</h2>
-        <div class="log-area" id="log-area">Loading...</div>
+        <h2>实时日志</h2>
+        <div class="log-area" id="log-area">加载中...</div>
     </div>
 
-    <div class="refresh-info">Auto-refreshes every 10 seconds | <span id="last-update"></span></div>
+    <div class="refresh-info">每 10 秒自动刷新 | <span id="last-update"></span></div>
 </div>
 
 <script>
@@ -198,31 +198,32 @@ function updateDashboard(data) {
     document.getElementById('m-rate').textContent = data.success_rate + '%';
     document.getElementById('m-caps').textContent = data.capabilities.length;
     document.getElementById('m-goals').textContent = data.completed_goals.length;
-    document.getElementById('gen-badge').textContent = 'GEN ' + data.generation;
+    document.getElementById('gen-badge').textContent = '第 ' + data.generation + ' 代';
 
+    const statusMap = {evolving:'进化中', paused:'已暂停', initialized:'已初始化', error:'异常'};
     const badge = document.getElementById('status-badge');
-    badge.textContent = data.status.toUpperCase();
+    badge.textContent = statusMap[data.status] || data.status;
     badge.className = 'status-badge status-' + (data.status === 'evolving' ? 'evolving' : data.status === 'paused' ? 'paused' : 'error');
 
     const capList = document.getElementById('cap-list');
-    capList.innerHTML = data.capabilities.map(c => '<li>' + c + '</li>').join('') || '<li style="color:#8b949e">None yet</li>';
+    capList.innerHTML = data.capabilities.map(c => '<li>' + c + '</li>').join('') || '<li style="color:#8b949e">暂无</li>';
 
     const goalList = document.getElementById('goal-list');
     goalList.innerHTML = data.pending_goals.slice(0, 8).map(g =>
         '<div class="goal-item"><span class="goal-priority">' + (g.priority||'?') + '</span>' + g.description + '</div>'
-    ).join('') || '<div style="color:#8b949e">No pending goals</div>';
+    ).join('') || '<div style="color:#8b949e">暂无待完成目标</div>';
 
     const tbody = document.getElementById('activity-body');
     tbody.innerHTML = data.history.slice().reverse().slice(0, 15).map(h =>
         '<tr><td>' + h.cycle + '</td><td>' + (h.goal||'').substring(0,70) + '</td><td class="' +
-        (h.success ? 'result-success' : 'result-failed') + '">' + (h.success ? 'SUCCESS' : 'FAILED') +
+        (h.success ? 'result-success' : 'result-failed') + '">' + (h.success ? '成功' : '失败') +
         '</td><td>' + formatTime(h.timestamp) + '</td></tr>'
     ).join('');
 
     const insightsList = document.getElementById('insights-list');
     insightsList.innerHTML = data.insights.slice().reverse().map(i =>
         '<div class="insight-item"><span class="insight-time">' + formatTime(i.timestamp) + '</span> ' + i.content.substring(0,150) + '</div>'
-    ).join('') || '<div style="color:#8b949e">No insights yet</div>';
+    ).join('') || '<div style="color:#8b949e">暂无洞察</div>';
 
     const chartArea = document.getElementById('chart-area');
     const last20 = data.history.slice(-20);
@@ -232,7 +233,7 @@ function updateDashboard(data) {
     ).join('');
 
     document.getElementById('log-area').textContent = data.log_lines.join('');
-    document.getElementById('last-update').textContent = 'Last update: ' + new Date().toLocaleTimeString('zh-CN');
+    document.getElementById('last-update').textContent = '最后更新: ' + new Date().toLocaleTimeString('zh-CN');
 }
 
 function fetchData() {
