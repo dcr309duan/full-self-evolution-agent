@@ -127,6 +127,120 @@ class IntegrationTestSuite:
         
         return results
     
+    def run_meta_mutation_sanity_check(self) -> Dict[str, Any]:
+        """
+        Run a sanity check on the meta-mutation engine itself.
+        After a meta-mutation is applied, verify that core functionality still works.
+        
+        Returns:
+            Dict containing sanity check results
+        """
+        sanity_results = {
+            "meta_mutation_sanity_check": "PASS",
+            "checks": []
+        }
+        
+        try:
+            # Simulate a meta-mutation by applying a mutation to the meta-module
+            print("\n--- Meta-Mutation Sanity Check ---")
+            print("Applying meta-mutation to meta-module...")
+            
+            # Apply a simple meta-mutation (e.g., add a docstring to mutation_engine)
+            meta_goal = "add a docstring to mutation_engine.apply_mutation()"
+            meta_mutation = self.mutation_engine.apply_mutation(meta_goal)
+            
+            # Rewrite the AST for the meta-module
+            meta_ast_result = self.ast_rewriter.rewrite_ast(meta_mutation)
+            
+            # Check 1: Verify reflection_parser still parses correctly
+            print("Check 1: Verifying reflection_parser...")
+            try:
+                # Simulate parsing a reflection result
+                test_reflection_data = {
+                    "test_goal": "test",
+                    "pipeline_steps": [{"step": "test", "status": "PASS"}],
+                    "overall_status": "PASS",
+                    "error_traces": []
+                }
+                parsed = self.reflection_system.process_results(test_reflection_data)
+                sanity_results["checks"].append({
+                    "check": "reflection_parser",
+                    "status": "PASS",
+                    "detail": "Reflection parser parsed test data successfully"
+                })
+                print("  ✓ Reflection parser works correctly")
+            except Exception as e:
+                sanity_results["checks"].append({
+                    "check": "reflection_parser",
+                    "status": "FAIL",
+                    "detail": f"Reflection parser failed: {str(e)}"
+                })
+                sanity_results["meta_mutation_sanity_check"] = "FAIL"
+                print(f"  ✗ Reflection parser failed: {str(e)}")
+            
+            # Check 2: Verify orchestrator still runs
+            print("Check 2: Verifying orchestrator...")
+            try:
+                # Simulate running the orchestrator with a simple goal
+                test_goal = "add a docstring to dummy_utility_module.add()"
+                goal = self.goal_generator.generate_goal(test_goal)
+                mutation = self.mutation_engine.apply_mutation(goal)
+                ast_result = self.ast_rewriter.rewrite_ast(mutation)
+                test_results = self.test_runner.run_tests("dummy_utility_module")
+                analysis = self.failure_analyzer.analyze(test_results)
+                
+                sanity_results["checks"].append({
+                    "check": "orchestrator",
+                    "status": "PASS",
+                    "detail": "Orchestrator completed full pipeline successfully"
+                })
+                print("  ✓ Orchestrator runs correctly")
+            except Exception as e:
+                sanity_results["checks"].append({
+                    "check": "orchestrator",
+                    "status": "FAIL",
+                    "detail": f"Orchestrator failed: {str(e)}"
+                })
+                sanity_results["meta_mutation_sanity_check"] = "FAIL"
+                print(f"  ✗ Orchestrator failed: {str(e)}")
+            
+            # Check 3: Verify meta-module integrity
+            print("Check 3: Verifying meta-module integrity...")
+            try:
+                # Check that the mutation engine still works after meta-mutation
+                test_mutation = self.mutation_engine.apply_mutation("test mutation")
+                if test_mutation is not None:
+                    sanity_results["checks"].append({
+                        "check": "meta_module_integrity",
+                        "status": "PASS",
+                        "detail": "Meta-module functions correctly after meta-mutation"
+                    })
+                    print("  ✓ Meta-module integrity maintained")
+                else:
+                    raise ValueError("Mutation engine returned None after meta-mutation")
+            except Exception as e:
+                sanity_results["checks"].append({
+                    "check": "meta_module_integrity",
+                    "status": "FAIL",
+                    "detail": f"Meta-module integrity check failed: {str(e)}"
+                })
+                sanity_results["meta_mutation_sanity_check"] = "FAIL"
+                print(f"  ✗ Meta-module integrity check failed: {str(e)}")
+            
+            print(f"Meta-Mutation Sanity Check: {sanity_results['meta_mutation_sanity_check']}")
+            print("--- End Meta-Mutation Sanity Check ---\n")
+            
+        except Exception as e:
+            sanity_results["meta_mutation_sanity_check"] = "FAIL"
+            sanity_results["checks"].append({
+                "check": "meta_mutation_execution",
+                "status": "FAIL",
+                "detail": f"Meta-mutation execution failed: {str(e)}"
+            })
+            print(f"  ✗ Meta-mutation execution failed: {str(e)}")
+        
+        return sanity_results
+    
     def format_results_as_json(self, results: Dict[str, Any]) -> str:
         """
         Format the results as structured JSON for the reflection system.
@@ -162,6 +276,14 @@ class IntegrationTestSuite:
             for i, error in enumerate(results['error_traces'], 1):
                 print(f"  {i}. {error.get('error_type', 'Unknown')}: {error.get('error_message', 'No message')}")
         
+        # Print meta-mutation sanity check results if present
+        if 'meta_mutation_sanity_check' in results:
+            print(f"\nMeta-Mutation Sanity Check: {results['meta_mutation_sanity_check']}")
+            if 'checks' in results:
+                for check in results['checks']:
+                    status_icon = "✓" if check['status'] == "PASS" else "✗"
+                    print(f"  {status_icon} {check['check']}: {check['status']}")
+        
         print("="*60)
 
 def main():
@@ -174,6 +296,20 @@ def main():
     
     # Run the integration test
     results = suite.run_integration_test()
+    
+    # Run meta-mutation sanity check
+    sanity_results = suite.run_meta_mutation_sanity_check()
+    results["meta_mutation_sanity_check"] = sanity_results["meta_mutation_sanity_check"]
+    results["meta_mutation_checks"] = sanity_results["checks"]
+    
+    # Update overall status if sanity check fails
+    if sanity_results["meta_mutation_sanity_check"] == "FAIL":
+        results["overall_status"] = "FAIL"
+        results["error_traces"].append({
+            "error_type": "MetaMutationSanityCheck",
+            "error_message": "Meta-mutation sanity check failed",
+            "traceback": ""
+        })
     
     # Print summary
     suite.print_summary(results)

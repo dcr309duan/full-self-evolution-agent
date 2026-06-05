@@ -265,6 +265,59 @@ class MetaEvaluationLoop:
             "recent_diversity_scores": [m["diversity_score"] for m in self.metrics_history]
         }
 
+    def export_aggregated_statistics(self, n_cycles: int = 10) -> Dict[str, Any]:
+        """
+        Export aggregated performance statistics over the last N cycles.
+        This method is designed to be called by the meta-mutation engine to get
+        the data needed for analysis.
+
+        Args:
+            n_cycles: Number of recent cycles to consider for aggregation.
+                     Defaults to 10. If fewer cycles are available, uses all available.
+
+        Returns:
+            Dictionary containing aggregated statistics including:
+            - average_mutation_success_rate: Average improvement rate over the period
+            - evolution_score_trend: List of evolution scores (avg capability scores) over the period
+            - diversity_trend: List of diversity scores over the period
+            - total_cycles_analyzed: Number of cycles actually analyzed
+            - current_objective: The active objective name
+            - stagnation_status: Whether stagnation is currently detected
+        """
+        # Get the last n_cycles from metrics_history
+        recent_metrics = list(self.metrics_history)
+        if len(recent_metrics) > n_cycles:
+            recent_metrics = recent_metrics[-n_cycles:]
+
+        if not recent_metrics:
+            return {
+                "average_mutation_success_rate": 0.0,
+                "evolution_score_trend": [],
+                "diversity_trend": [],
+                "total_cycles_analyzed": 0,
+                "current_objective": self.current_objective_name,
+                "stagnation_status": self.stagnation_detected
+            }
+
+        # Calculate average mutation success rate (average improvement rate)
+        improvement_rates = [m["improvement_rate"] for m in recent_metrics]
+        average_mutation_success_rate = sum(improvement_rates) / len(improvement_rates)
+
+        # Get evolution score trend (avg capability scores)
+        evolution_score_trend = [m["avg_capability_score"] for m in recent_metrics]
+
+        # Get diversity trend
+        diversity_trend = [m["diversity_score"] for m in recent_metrics]
+
+        return {
+            "average_mutation_success_rate": average_mutation_success_rate,
+            "evolution_score_trend": evolution_score_trend,
+            "diversity_trend": diversity_trend,
+            "total_cycles_analyzed": len(recent_metrics),
+            "current_objective": self.current_objective_name,
+            "stagnation_status": self.stagnation_detected
+        }
+
 # Example usage (if run as script)
 if __name__ == "__main__":
     # Create meta-evaluation loop
@@ -305,3 +358,8 @@ if __name__ == "__main__":
     # Get summary
     summary = meta_loop.get_summary()
     print(f"Summary: {summary}")
+
+    # Test the new export method
+    print("\nExporting aggregated statistics for last 5 cycles:")
+    stats = meta_loop.export_aggregated_statistics(n_cycles=5)
+    print(f"Aggregated Statistics: {stats}")
