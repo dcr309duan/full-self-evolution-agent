@@ -1,8 +1,9 @@
-"""Evolution Orchestrator with schema alignment validation.
+"""Evolution Orchestrator with schema alignment validation and self-consistency checks.
 
 This module provides an orchestrator that ensures all inter-module communication
 adheres to the defined schema alignment. It includes startup validation to verify
 that all active modules produce schema-compliant data and logs violations as critical errors.
+It also integrates self-consistency checks into the evolution loop.
 """
 
 import logging
@@ -49,6 +50,7 @@ class EvolutionOrchestrator:
         self._schema_validator = SchemaValidator(schema_registry or SchemaRegistry())
         self._initialized: bool = False
         self._validation_report: Optional[OrchestratorValidationReport] = None
+        self._rollback_stack: List[Dict[str, Any]] = []  # Stack for rollback operations
 
     def register_module(self, module_id: str, module: ModuleInterface) -> None:
         """Register a module with the orchestrator.
@@ -305,3 +307,146 @@ class EvolutionOrchestrator:
             True if initialized, False otherwise.
         """
         return self._initialized
+
+    def run_self_consistency_checks(self) -> bool:
+        """Run self-consistency checks on all active modules.
+
+        This method checks that each active module's internal state is consistent
+        and that its output conforms to expected schemas.
+
+        Returns:
+            True if all checks pass, False otherwise.
+        """
+        logger.info("Running self-consistency checks on all active modules")
+        all_pass = True
+        active_modules = self.get_active_modules()
+
+        for module_id, module in active_modules.items():
+            try:
+                # Check module internal consistency
+                if hasattr(module, 'check_consistency'):
+                    if not module.check_consistency():
+                        logger.error(f"Self-consistency check failed for module '{module_id}'")
+                        all_pass = False
+                        continue
+
+                # Validate module output schema
+                sample_data = module.get_sample_output()
+                if sample_data is not None:
+                    schema_name = module.get_output_schema_name()
+                    if schema_name:
+                        result = self.validate_module_output(module_id, sample_data, schema_name)
+                        if result == ValidationResult.FAIL:
+                            logger.error(
+                                f"Schema validation failed during self-consistency check "
+                                f"for module '{module_id}'"
+                            )
+                            all_pass = False
+            except Exception as e:
+                logger.error(
+                    f"Error during self-consistency check for module '{module_id}': {str(e)}"
+                )
+                all_pass = False
+
+        if all_pass:
+            logger.info("All self-consistency checks passed")
+        else:
+            logger.warning("Some self-consistency checks failed")
+
+        return all_pass
+
+    def rollback_last_mutation(self) -> bool:
+        """Rollback the last mutation operation.
+
+        This method restores the state to before the last mutation was applied.
+
+        Returns:
+            True if rollback was successful, False otherwise.
+        """
+        if not self._rollback_stack:
+            logger.warning("No mutations to rollback")
+            return False
+
+        try:
+            rollback_data = self._rollback_stack.pop()
+            # Restore module states from rollback data
+            for module_id, state in rollback_data.items():
+                if module_id in self._modules:
+                    module = self._modules[module_id]
+                    if hasattr(module, 'restore_state'):
+                        module.restore_state(state)
+                        logger.info(f"Rolled back module '{module_id}' to previous state")
+                    else:
+                        logger.warning(
+                            f"Module '{module_id}' does not support state restoration"
+                        )
+            logger.info("Rollback completed successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Rollback failed: {str(e)}")
+            return False
+
+    def save_mutation_state(self) -> None:
+        """Save the current state of all modules for potential rollback."""
+        state_snapshot = {}
+        for module_id, module in self._modules.items():
+            if hasattr(module, 'get_state'):
+                state_snapshot[module_id] = module.get_state()
+        self._rollback_stack.append(state_snapshot)
+        logger.debug("Saved mutation state for potential rollback")
+
+    def apply_mutation(self, mutation_func, *args, **kwargs) -> bool:
+        """Apply a mutation with self-consistency checks and automatic rollback.
+
+        This method integrates the self-consistency test suite into the evolution loop.
+        After each mutation is applied and before the next cycle, it calls
+        run_self_consistency_checks(). If any check fails, it triggers automatic rollback
+        and logs the failure with details.
+
+        Args:
+            mutation_func: The function that applies the mutation.
+            *args: Arguments to pass to the mutation function.
+            **kwargs: Keyword arguments to pass to the mutation function.
+
+        Returns:
+            True if mutation was applied successfully and passed consistency checks,
+            False otherwise.
+        """
+        # Save current state before mutation
+        self.save_mutation_state()
+
+        try:
+            # Apply the mutation
+            logger.info("Applying mutation")
+            result = mutation_func(*args, **kwargs)
+
+            if not result:
+                logger.error("Mutation function returned failure")
+                self.rollback_last_mutation()
+                return False
+
+            # Run self-consistency checks after mutation
+            if not self.run_self_consistency_checks():
+                logger.error(
+                    "Self-consistency check failed after mutation. "
+                    "Triggering automatic rollback."
+                )
+                # Log failure details
+                failed_modules = []
+                for module_id, module in self.get_active_modules().items():
+                    if hasattr(module, 'check_consistency'):
+                        if not module.check_consistency():
+                            failed_modules.append(module_id)
+                logger.error(
+                    f"Self-consistency failure details - failed modules: {failed_modules}"
+                )
+                self.rollback_last_mutation()
+                return False
+
+            logger.info("Mutation applied successfully with all consistency checks passed")
+            return True
+
+        except Exception as e:
+            logger.error(f"Mutation failed with exception: {str(e)}")
+            self.rollback_last_mutation()
+            return False

@@ -1,5 +1,6 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from agent_core.schema_alignment import SchemaAligner, SchemaValidationError
+from datetime import datetime
 
 class SystemModel:
     """
@@ -9,6 +10,7 @@ class SystemModel:
     def __init__(self, initial_state: Optional[Dict[str, Any]] = None):
         self._state: Dict[str, Any] = {}
         self._aligner = SchemaAligner()
+        self._consistency_history: List[Dict[str, Any]] = []
         if initial_state:
             self.update(initial_state)
 
@@ -59,3 +61,45 @@ class SystemModel:
 
     def __setitem__(self, key: str, value: Any) -> None:
         self.set(key, value)
+
+    def record_consistency_check(self, passed: bool, module: str, details: str) -> None:
+        """
+        Record a consistency check result for trend analysis and early warning.
+
+        Args:
+            passed: Whether the consistency check passed.
+            module: The module or component that was checked.
+            details: Additional details about the check result.
+        """
+        check_record = {
+            "timestamp": datetime.now().isoformat(),
+            "passed": passed,
+            "module": module,
+            "details": details
+        }
+        self._consistency_history.append(check_record)
+
+    def get_consistency_history(self) -> List[Dict[str, Any]]:
+        """Return the history of consistency checks."""
+        return self._consistency_history.copy()
+
+    def get_recent_consistency_checks(self, count: int = 10) -> List[Dict[str, Any]]:
+        """Return the most recent consistency checks."""
+        return self._consistency_history[-count:] if self._consistency_history else []
+
+    def get_consistency_summary(self) -> Dict[str, Any]:
+        """Return a summary of consistency check results."""
+        total = len(self._consistency_history)
+        if total == 0:
+            return {"total_checks": 0, "passed": 0, "failed": 0, "pass_rate": 0.0}
+        
+        passed = sum(1 for check in self._consistency_history if check["passed"])
+        failed = total - passed
+        pass_rate = (passed / total) * 100
+        
+        return {
+            "total_checks": total,
+            "passed": passed,
+            "failed": failed,
+            "pass_rate": pass_rate
+        }

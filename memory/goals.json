@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a self-consistency test suite that runs after every mutation to verify system integrity: it checks that the mutation engine, reflection parser, and goal generator outputs are consistent with the actual code state, and triggers an automatic rollback if any check fails.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780634744.6814713
-    },
-    {
       "description": "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a dependency graph (tracking prerequisites like 'pre-mutation validation depends on mutation engine'), automatically blocks goals with unmet dependencies, and re-prioritizes the backlog to focus on completing the end-to-end pipeline first.",
       "priority": 8,
       "status": "pending",
@@ -361,6 +355,13 @@
       "status": "completed",
       "created_at": 1780634744.6796439,
       "completed_at": 1780634871.8894753
+    },
+    {
+      "description": "Build a self-consistency test suite that runs after every mutation to verify system integrity: it checks that the mutation engine, reflection parser, and goal generator outputs are consistent with the actual code state, and triggers an automatic rollback if any check fails.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780634744.6814713,
+      "completed_at": 1780635016.3611052
     }
   ],
   "generated_goals": []
