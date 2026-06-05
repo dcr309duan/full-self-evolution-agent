@@ -28,7 +28,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', or 'nash_escape'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', 'challenge', 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal', 'ecological_evolution', 'ecological_gap', 'nash_escape', or 'coordinated_mutation'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -204,6 +204,59 @@ def generate_nash_escape_goal(stuck_modules: List[str], nash_analysis: Dict) -> 
 
     logger.info(
         "Generated Nash escape goal for modules %s with coordinated change proposal",
+        stuck_modules
+    )
+
+    return goal
+
+
+def generate_coordinated_mutation_goal(stuck_modules: List[str], nash_analysis: Dict) -> Goal:
+    """Generate a coordinated mutation goal when Nash equilibrium is detected.
+
+    This goal specifies multiple modules to mutate and the desired interaction
+    improvement to break the equilibrium.
+
+    Args:
+        stuck_modules: List of module names currently stuck in Nash equilibrium.
+        nash_analysis: Dictionary containing Nash equilibrium analysis details,
+            including fitness scores and interaction patterns.
+
+    Returns:
+        A Goal object with type 'coordinated_mutation' that specifies multiple
+        modules to mutate and the desired interaction improvement.
+    """
+    if not stuck_modules:
+        logger.warning("generate_coordinated_mutation_goal called with empty stuck_modules list")
+        return None
+
+    # Build a description that specifies multiple modules and desired interaction improvement
+    modules_str = ", ".join(stuck_modules)
+    description = (
+        f"Coordinated mutation across modules [{modules_str}] to escape Nash equilibrium. "
+        f"Desired interaction improvement: break the local optimum by simultaneously "
+        f"mutating all stuck modules to explore new interaction patterns and fitness landscapes."
+    )
+
+    # Create the goal with critical priority
+    goal = Goal(
+        description=description,
+        priority=GoalPriority.CRITICAL,
+        module=",".join(stuck_modules),  # Use comma-separated module names
+        goal_type="coordinated_mutation",
+        source="fitness",
+        tags=["coordinated_mutation", "nash_equilibrium", "multi_module_mutation", "interaction_improvement"]
+    )
+
+    # Add nash analysis details as tags for reference
+    if nash_analysis:
+        for key, value in nash_analysis.items():
+            if isinstance(value, str):
+                goal.tags.append(f"nash_{key}:{value}")
+            elif isinstance(value, (int, float)):
+                goal.tags.append(f"nash_{key}:{value:.2f}")
+
+    logger.info(
+        "Generated coordinated mutation goal for modules %s with desired interaction improvement",
         stuck_modules
     )
 
@@ -847,46 +900,4 @@ def generate_sub_goals(
             sub_goals = [analyze_goal, fix_goal, verify_goal]
         elif decomposition_strategy == "dependency-based":
             # Dependency-based: analyze is independent, fix depends on analyze, verify depends on fix
-            fix_goal.dependencies.append(analyze_goal.description)
-            verify_goal.dependencies.append(fix_goal.description)
-            sub_goals = [analyze_goal, fix_goal, verify_goal]
-        else:
-            # Default to sequential for unknown strategies
-            fix_goal.dependencies.append(analyze_goal.description)
-            verify_goal.dependencies.append(fix_goal.description)
-            sub_goals = [analyze_goal, fix_goal, verify_goal]
-    elif parent_goal.goal_type == "meta_goal":
-        # Break meta-goal into smaller steps
-        analyze_goal = Goal(
-            description=f"Analyze current test suite gaps for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="meta_goal",
-            source=parent_goal.source
-        )
-        design_goal = Goal(
-            description=f"Design new test cases to push system beyond current capabilities for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="meta_goal",
-            source=parent_goal.source
-        )
-        implement_goal = Goal(
-            description=f"Implement new test cases in test suite for {parent_goal.module}",
-            priority=parent_goal.priority,
-            module=parent_goal.module,
-            goal_type="meta_goal",
-            source=parent_goal.source
-        )
-        
-        if decomposition_strategy == "sequential":
-            # Linear chain: analyze -> design -> implement
-            design_goal.dependencies.append(analyze_goal.description)
-            implement_goal.dependencies.append(design_goal.description)
-            sub_goals = [analyze_goal, design_goal, implement_goal]
-        elif decomposition_strategy == "parallel":
-            # No dependencies between sub-goals
-            sub_goals = [analyze_goal, design_goal, implement_goal]
-        elif decomposition_strategy == "dependency-based":
-            # Dependency-based: analyze is independent, design depends on analyze, implement depends on design
-            design_goal
+            fix_goal.dependencies

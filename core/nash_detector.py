@@ -6,7 +6,7 @@ class NashEquilibriumDetector:
     Detects Nash equilibrium conditions in module interaction scores.
     Tracks module fitness scores over a sliding window, detects when no single
     module's fitness improves by >1% over N consecutive cycles, and provides
-    a 'force_coordinated_change' method that generates multi-module mutation plans
+    a 'detect_and_force_coordinated_change' method that generates multi-module mutation plans
     designed to escape local optima.
     """
 
@@ -51,14 +51,19 @@ class NashEquilibriumDetector:
         # Number of cycles without improvement
         self.cycles_without_improvement: int = 0
         
+        # Dependency graph: module_name -> set of dependency module names
+        self.dependency_graph: Dict[str, set] = {}
+        
         # Initialize current scores to 0
         for module_name in self.module_names:
             self.current_scores[module_name] = 0.0
             self.module_fitness_history[module_name] = [0.0]
+            self.dependency_graph[module_name] = set()
 
     def track_module_interactions(self, module_name: str, success_rate: float, dependency_list: List[str]) -> None:
         """
         Records which modules were mutated together and success rates.
+        Also updates the dependency graph for the given module.
         
         Args:
             module_name: The module name
@@ -68,11 +73,12 @@ class NashEquilibriumDetector:
         if module_name not in self.module_names:
             return
         
+        # Update dependency graph
+        valid_deps = [dep for dep in dependency_list if dep in self.module_names]
+        self.dependency_graph[module_name] = set(valid_deps)
+        
         # Track interactions with each dependency
-        for dep in dependency_list:
-            if dep not in self.module_names:
-                continue
-            
+        for dep in valid_deps:
             # Normalize order for consistent key
             key = tuple(sorted([module_name, dep]))
             
@@ -83,73 +89,6 @@ class NashEquilibriumDetector:
             # Keep only last 100 interactions per pair
             if len(self.module_interactions[key]) > 100:
                 self.module_interactions[key] = self.module_interactions[key][-100:]
-
-    def is_nash_equilibrium(self) -> bool:
-        """
-        Checks if no single module change improves the system by more than 1%.
-        This is the core Nash equilibrium condition: no unilateral deviation yields improvement.
-        
-        Returns:
-            True if the system is at a Nash equilibrium
-        """
-        # Check if we have enough history
-        if len(self._cycle_improvement_history) < self.stagnation_threshold:
-            return False
-        
-        # Check the last N cycles
-        recent_cycles = self._cycle_improvement_history[-self.stagnation_threshold:]
-        
-        # If any cycle had improvement, not in equilibrium
-        if any(recent_cycles):
-            return False
-        
-        # Also check stagnation counters for all modules
-        for module_name in self.module_names:
-            if self.stagnation_counter.get(module_name, 0) < self.stagnation_threshold:
-                return False
-        
-        return True
-
-    def detect_nash_equilibrium(self) -> List[Dict]:
-        """
-        Analyzes module interaction matrices and identifies when no single-module change improves the system.
-        Scans all module pairs to detect Nash equilibria conditions.
-        For each pair, checks if both modules are stagnant and if their interaction
-        success rate is below a threshold, indicating a potential local optimum.
-        
-        Returns:
-            List of dictionaries, each describing a detected equilibrium condition
-            for a module pair
-        """
-        equilibria = []
-        
-        for i in range(len(self.module_names)):
-            for j in range(i + 1, len(self.module_names)):
-                module1 = self.module_names[i]
-                module2 = self.module_names[j]
-                
-                # Check if both modules are stagnant
-                stagnant1 = self.stagnation_counter.get(module1, 0) >= self.stagnation_threshold
-                stagnant2 = self.stagnation_counter.get(module2, 0) >= self.stagnation_threshold
-                
-                if stagnant1 and stagnant2:
-                    # Get interaction success rate
-                    success_rate = self.get_interaction_success_rate(module1, module2)
-                    
-                    # Check if interaction is stuck (low success rate)
-                    if success_rate < 0.5 or len(self.module_interactions.get(tuple(sorted([module1, module2])), [])) == 0:
-                        equilibria.append({
-                            'module1': module1,
-                            'module2': module2,
-                            'success_rate': success_rate,
-                            'stagnant1': stagnant1,
-                            'stagnant2': stagnant2,
-                            'score1': self.current_scores.get(module1, 0.0),
-                            'score2': self.current_scores.get(module2, 0.0),
-                            'description': f"Nash equilibrium detected between {module1} and {module2}"
-                        })
-        
-        return equilibria
 
     def detect_equilibrium(self) -> List[List[str]]:
         """
@@ -226,11 +165,8 @@ class NashEquilibriumDetector:
         if not module_set or len(module_set) < 2:
             return []
         
-        # Ensure we have at least 2 modules
-        selected_modules = module_set[:3]  # Max 3 modules
-        
-        # Generate coordinated mutation plan with complementary modifications
-        plan = []
+        # Ensure we have at least 2 modules, max 3
+        selected_modules = module_set[:3]
         
         # Define complementary changes that work well together
         complementary_changes = [
@@ -240,6 +176,8 @@ class NashEquilibriumDetector:
             ('concurrency_model_change', 'error_handling_restructure'),
             ('logging_infrastructure_change', 'security_policy_update')
         ]
+        
+        plan = []
         
         # Assign complementary changes to pairs of modules
         for i in range(0, len(selected_modules), 2):
@@ -270,83 +208,6 @@ class NashEquilibriumDetector:
                 )
         
         return plan
-
-    def apply_coordinated_change(self, plan: List[Dict]) -> bool:
-        """
-        Executes a coordinated change plan atomically.
-        Applies all changes in the plan to the module interaction matrix and updates
-        scores accordingly. If any change fails, rolls back all changes.
-        
-        Args:
-            plan: List of dictionaries with 'module' and 'change' keys from force_coordinated_change()
-            
-        Returns:
-            True if all changes were applied successfully, False if rollback occurred
-        """
-        if not plan:
-            return False
-        
-        # Save state for rollback
-        saved_scores = dict(self.current_scores)
-        saved_stagnation = dict(self.stagnation_counter)
-        saved_history = {}
-        for module_name in self.module_names:
-            saved_history[module_name] = list(self.module_fitness_history.get(module_name, []))
-        
-        try:
-            # Apply each change
-            for change in plan:
-                module = change['module']
-                
-                if module not in self.module_names:
-                    raise ValueError(f"Unknown module: {module}")
-                
-                # Simulate applying the change (in real system, this would call mutation logic)
-                # For now, we just record the interaction and update scores
-                score_delta = 0.05  # Simulated improvement
-                self.record_mutation_outcome(module, score_delta)
-                
-                # Track the interaction for all pairs in the plan
-                for other_change in plan:
-                    if other_change['module'] != module:
-                        self.track_module_interactions(module, 1.0, [other_change['module']])
-            
-            # If we get here, all changes succeeded
-            return True
-            
-        except Exception as e:
-            # Rollback all changes
-            self.current_scores = saved_scores
-            self.stagnation_counter = saved_stagnation
-            self.module_fitness_history = saved_history
-            
-            # Record failed interactions
-            for change in plan:
-                for other_change in plan:
-                    if other_change['module'] != change['module']:
-                        self.track_module_interactions(change['module'], 0.0, [other_change['module']])
-            
-            return False
-
-    def run_detection_cycle(self) -> Optional[List[Dict]]:
-        """
-        Runs a detection cycle and returns a plan if equilibrium is detected.
-        
-        Returns:
-            List of dictionaries with coordinated change plan if at equilibrium, or None if not at equilibrium
-        """
-        equilibrium_sets = self.detect_equilibrium()
-        if not equilibrium_sets:
-            return None
-        
-        # Generate plans for each equilibrium set
-        all_plans = []
-        for module_set in equilibrium_sets:
-            plan = self.force_coordinated_change(module_set)
-            if plan:
-                all_plans.extend(plan)
-        
-        return all_plans if all_plans else None
 
     def record_mutation_outcome(self, module_name: str, score_delta: float) -> None:
         """
@@ -506,6 +367,73 @@ class NashEquilibriumDetector:
             raise ValueError("Stagnation threshold must be at least 1")
         self.stagnation_threshold = threshold
 
+    def get_dependency_graph(self) -> Dict[str, set]:
+        """
+        Get the current dependency graph.
+        
+        Returns:
+            Dictionary mapping module names to sets of their dependencies
+        """
+        return dict(self.dependency_graph)
+
+    def validate_dependency_graph(self) -> bool:
+        """
+        Validate the dependency graph for circular dependencies.
+        
+        Returns:
+            True if no circular dependencies exist, False otherwise
+        """
+        # Use DFS to detect cycles
+        visited = set()
+        rec_stack = set()
+        
+        def dfs(module: str) -> bool:
+            visited.add(module)
+            rec_stack.add(module)
+            
+            for dep in self.dependency_graph.get(module, set()):
+                if dep not in visited:
+                    if dfs(dep):
+                        return True
+                elif dep in rec_stack:
+                    return True
+            
+            rec_stack.discard(module)
+            return False
+        
+        for module in self.module_names:
+            if module not in visited:
+                if dfs(module):
+                    return False
+        
+        return True
+
+    def get_dependency_chain(self, module_name: str) -> List[str]:
+        """
+        Get the dependency chain for a given module.
+        
+        Args:
+            module_name: Name of the module
+            
+        Returns:
+            List of module names in the dependency chain (including the module itself)
+        """
+        if module_name not in self.module_names:
+            return []
+        
+        chain = [module_name]
+        visited = {module_name}
+        
+        def traverse(current: str) -> None:
+            for dep in self.dependency_graph.get(current, set()):
+                if dep not in visited:
+                    visited.add(dep)
+                    chain.append(dep)
+                    traverse(dep)
+        
+        traverse(module_name)
+        return chain
+
     # Integration hooks for orchestrator registration
     def register_with_orchestrator(self, orchestrator) -> None:
         """
@@ -525,15 +453,13 @@ class NashEquilibriumDetector:
         """
         return {
             'detect_equilibrium': self.detect_equilibrium,
-            'is_nash_equilibrium': self.is_nash_equilibrium,
-            'detect_nash_equilibrium': self.detect_nash_equilibrium,
-            'detect_nash_equilibria': self.detect_nash_equilibria,
             'force_coordinated_change': self.force_coordinated_change,
-            'apply_coordinated_change': self.apply_coordinated_change,
-            'run_detection_cycle': self.run_detection_cycle,
             'get_equilibrium_state': self.get_equilibrium_state,
             'record_mutation_outcome': self.record_mutation_outcome,
             'track_module_interactions': self.track_module_interactions,
             'increment_cycle': self.increment_cycle,
-            'reset': self.reset
+            'reset': self.reset,
+            'validate_dependency_graph': self.validate_dependency_graph,
+            'get_dependency_graph': self.get_dependency_graph,
+            'get_dependency_chain': self.get_dependency_chain
         }

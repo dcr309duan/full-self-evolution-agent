@@ -1,9 +1,7 @@
 import pytest
-import random
 import os
 import tempfile
 import shutil
-from unittest.mock import Mock, patch, PropertyMock
 from ecology_engine import EcologyEngine, Test, DifficultyLevel, OverfittingDetector
 
 # Fixtures
@@ -646,3 +644,51 @@ class TestEcologyEngineMinimal:
         assert len(test.test_cases) >= 1
         assert test.code is not None
         assert len(test.code) > 0
+
+# Minimal end-to-end test for ecology engine
+class TestEcologyEngineEndToEnd:
+    def test_scan_test_suite_and_analyze_and_mutate(self):
+        """Minimal end-to-end test: scan, analyze, mutate, verify."""
+        # Create a temporary directory with dummy test files
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Create dummy test files
+            test_file1 = os.path.join(temp_dir, "test_example1.py")
+            test_file2 = os.path.join(temp_dir, "test_example2.py")
+            with open(test_file1, 'w') as f:
+                f.write("def test_add(): assert 1 + 1 == 2\n")
+            with open(test_file2, 'w') as f:
+                f.write("def test_sub(): assert 2 - 1 == 1\n")
+            
+            # Initialize engine
+            engine = EcologyEngine(seed=42)
+            
+            # (1) Call scan_test_suite()
+            engine.scan_test_suite(temp_dir)
+            
+            # (2) Call analyze_test_diversity() and verify it returns a dict with required keys
+            diversity = engine.analyze_test_diversity()
+            assert isinstance(diversity, dict)
+            assert 'unit' in diversity
+            assert 'integration' in diversity
+            assert 'stress' in diversity
+            assert 'edge_case' in diversity
+            
+            # (3) Call mutate_test_suite() and verify a new test file was created
+            initial_files = set(os.listdir(temp_dir))
+            engine.mutate_test_suite(temp_dir)
+            final_files = set(os.listdir(temp_dir))
+            new_files = final_files - initial_files
+            assert len(new_files) > 0, "No new test file was created by mutate_test_suite()"
+            
+            # (4) Verify the new test file has valid Python syntax
+            for new_file in new_files:
+                file_path = os.path.join(temp_dir, new_file)
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                try:
+                    compile(content, file_path, 'exec')
+                except SyntaxError as e:
+                    pytest.fail(f"New file {new_file} has invalid Python syntax: {e}")
+        finally:
+            shutil.rmtree(temp_dir)

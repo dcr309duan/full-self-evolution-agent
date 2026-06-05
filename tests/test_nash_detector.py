@@ -27,7 +27,7 @@ class TestNashDetector(unittest.TestCase):
     def setUp(self):
         self.detector = NashEquilibriumDetector()
         
-        # Create 3 mock modules with stable success rates (interdependent fitness)
+        # Create 3 mock modules with interdependent fitness functions
         def fitness_a(state):
             a_val = state.get('module_a', 0)
             b_val = state.get('module_b', 0)
@@ -63,6 +63,25 @@ class TestNashDetector(unittest.TestCase):
             'module_b': 8,
             'module_c': 1
         }
+    
+    def test_initial_detect_equilibrium_returns_false(self):
+        """Test that detect_equilibrium() returns False initially."""
+        result = self.detector.detect_equilibrium(self.modules, self.non_equilibrium_state)
+        self.assertFalse(result, "detect_equilibrium should return False for non-equilibrium state")
+    
+    def test_detect_equilibrium_returns_true_after_simulation(self):
+        """Test that after simulating equilibrium conditions, detect_equilibrium() returns True."""
+        # First verify it returns False for non-equilibrium
+        result = self.detector.detect_equilibrium(self.modules, self.non_equilibrium_state)
+        self.assertFalse(result, "detect_equilibrium should return False initially")
+        
+        # Simulate equilibrium conditions by checking equilibrium state multiple times
+        for _ in range(5):
+            self.detector.check_equilibrium(self.modules, self.equilibrium_state)
+        
+        # Now detect_equilibrium should return True
+        result = self.detector.detect_equilibrium(self.modules, self.equilibrium_state)
+        self.assertTrue(result, "detect_equilibrium should return True after equilibrium conditions are simulated")
     
     def test_detection_with_mock_scores(self):
         """Test that equilibrium detection works with mock module data (stable success rates)."""
