@@ -1,0 +1,12 @@
+[
+    {
+        "code_pattern": "API endpoint",
+        "strategy": "template_insertion",
+        "success_count": 0
+    },
+    {
+        "code_pattern": "test_file",
+        "strategy": "random_crossover",
+        "success_count": 0
+    }
+]

@@ -2,22 +2,22 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the specific AST nodes selected, the generated mutation, and the exact error from the AST rewriter or Python parser for each of the 3 consecutive failures. Then, based on the logged patterns, implement a pre-validation guard that checks (1) the mutated code parses into valid Python AST, (2) the AST structure is different from the original, and (3) the mutation does not remove critical structural elements like function definitions or class bodies. If the guard fails, automatically retry with a different random selection up to 5 times before logging a hard failure.",
-      "priority": 10,
-      "status": "pending",
-      "created_at": 1780626105.4495976
-    },
-    {
-      "description": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
+      "description": "Create a 'successful mutation pattern extractor' that, whenever a mutation attempt passes all tests, extracts the AST diff (before/after) and stores it as a reusable pattern in a 'mutation corpus'. The corpus is indexed by code context (e.g., function with loop, if-statement, variable assignment). The mutation engine then queries this corpus to find analogous patterns when mutating similar code structures, enabling analogy-based mutation generation. This leverages the 39 successful strategies to bootstrap future success.",
       "priority": 9,
       "status": "pending",
-      "created_at": 1780626105.451548
+      "created_at": 1780626426.745552
     },
     {
       "description": "Implement a 'strategy switch' mechanism in the mutation engine: when the engine logs its 4th consecutive failure (including the 3 existing ones), it automatically shifts from random crossover mutation to a grammar-guided mutation approach. Specifically, define 3 template-based mutation patterns (e.g., 'wrap function body in try-except', 'add logging call at function entry', 'replace constant with parameter') sourced from the 34 successful strategies in the knowledge base. Apply these templates instead of random AST splicing. If this also fails, the engine should log a detailed report and pause mutation activity until the failure analysis module produces a new recommended strategy.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780626105.4531872
+    },
+    {
+      "description": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780626426.7464669
     },
     {
       "description": "Develop multi-file code analysis and refactoring capability",
@@ -106,6 +106,28 @@
       "created_at": 1780623346.364249,
       "consecutive_failures": 2,
       "completed_at": 1780626017.3934417
+    },
+    {
+      "description": "Conduct a root cause analysis of the mutation engine failures by instrumenting the engine to log the specific AST nodes selected, the generated mutation, and the exact error from the AST rewriter or Python parser for each of the 3 consecutive failures. Then, based on the logged patterns, implement a pre-validation guard that checks (1) the mutated code parses into valid Python AST, (2) the AST structure is different from the original, and (3) the mutation does not remove critical structural elements like function definitions or class bodies. If the guard fails, automatically retry with a different random selection up to 5 times before logging a hard failure.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780626105.4495976,
+      "completed_at": 1780626158.3195443
+    },
+    {
+      "description": "Integrate the mutation engine with the existing testing framework to create a closed evolutionary loop: after a mutation passes the pre-validation guard, run the existing unit tests on the mutated code. Only commit the mutation to the codebase if all tests pass. If tests fail, log the failure details into the failure analysis module and automatically switch the mutation strategy (e.g., from random crossover to template-based insertion using a successful strategy from the knowledge base) for the next attempt. This creates the autonomous self-improvement cycle described in the reflection.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780626105.451548,
+      "consecutive_failures": 1,
+      "completed_at": 1780626370.5882506
+    },
+    {
+      "description": "Implement a 'failure-driven mutation strategy selector' that, upon each mutation failure, logs the failure type (syntax, semantic, test timeout, assertion error) into a structured failure history. After each failure, the selector probabilistically chooses from a pool of 3 mutation strategies (random AST splicing, template-based replacement, LLM-guided rewrite) with probabilities updated via a simple bandit algorithm (e.g., epsilon-greedy) favoring strategies that have produced successful mutations in the past 10 attempts. This directly couples failure analysis with adaptive mutation, breaking the cycle of repeated failures.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780626426.744684,
+      "completed_at": 1780626557.1800725
     }
   ],
   "generated_goals": []
