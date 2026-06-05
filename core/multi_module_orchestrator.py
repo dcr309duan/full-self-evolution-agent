@@ -476,6 +476,81 @@ class MultiModuleOrchestrator:
         success = await self.apply_coordinated_change(proposal)
         return proposal if success else None
 
+    async def orchestrate_multi_mutation(
+        self,
+        modules: List[str],
+        goal: str
+    ) -> Optional[CoordinatedChangeProposal]:
+        """
+        Orchestrate a coordinated mutation across multiple modules based on a goal.
+
+        Args:
+            modules: List of 2-3 module names to mutate simultaneously
+            goal: Description of the goal (e.g., 'add shared interface', 'refactor common dependency')
+
+        Returns:
+            The applied proposal or None if failed
+        """
+        if len(modules) < 2 or len(modules) > 3:
+            logger.error(f"Need 2-3 modules, got {len(modules)}")
+            return None
+
+        logger.info(f"Orchestrating multi-mutation for modules {modules} with goal: {goal}")
+
+        # Generate coordinated mutations based on the goal
+        changes = []
+        synergy_score = 0.0
+
+        for module_name in modules:
+            # Determine change type based on goal
+            if 'shared interface' in goal.lower():
+                change_type = 'add_interface'
+            elif 'refactor' in goal.lower() and 'dependency' in goal.lower():
+                change_type = 'refactor_dependency'
+            elif 'shared' in goal.lower() and 'dependency' in goal.lower():
+                change_type = 'add_shared_dependency'
+            else:
+                change_type = 'modify'
+
+            # Generate change data
+            change_data = {
+                'mutation_type': change_type,
+                'parameters': self._generate_mutation_parameters(module_name, change_type),
+                'goal': goal,
+                'timestamp': datetime.now().isoformat()
+            }
+
+            # Capture current state for rollback
+            rollback_data = await self._capture_module_state(module_name)
+
+            # Expected impact based on goal complexity
+            expected_impact = 0.15 if 'shared' in goal.lower() else 0.1
+
+            change = ModuleChange(
+                module_name=module_name,
+                change_type=change_type,
+                change_data=change_data,
+                expected_impact=expected_impact,
+                rollback_data=rollback_data
+            )
+            changes.append(change)
+            synergy_score += expected_impact
+
+        # Normalize synergy score
+        synergy_score = min(1.0, max(0.0, synergy_score / len(changes)))
+        risk_score = 1.0 - synergy_score
+
+        proposal = CoordinatedChangeProposal(
+            proposal_id=f"orchestrated_{datetime.now().timestamp()}",
+            changes=changes,
+            synergy_score=synergy_score,
+            risk_score=risk_score
+        )
+
+        # Apply the coordinated mutation atomically
+        success = await self.apply_coordinated_change(proposal)
+        return proposal if success else None
+
     async def cleanup(self) -> None:
         """Clean up resources and rollback any active changes."""
         logger.info("Cleaning up MultiModuleOrchestrator")

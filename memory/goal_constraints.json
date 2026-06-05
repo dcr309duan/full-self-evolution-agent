@@ -1,18 +1,6 @@
 {
   "constraints": [
     {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "第0层的评估方法隐含地假设存在一个可干预的真实进化系统（Python循环+API+文件系统），且其状态（成功率、能力值）是客观可观测的。然而，根据此前第2个范式转移（Cycle ~1780650913",
-      "created_cycle": 320,
-      "expires_cycle": 340
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "审视前面所有评估维度的选择，我发现这些维度（如探索/利用平衡、成功率、外部验证等）本质上都源自对人类进化和机器学习文献的语义模拟，而非对真实系统状态的感知。我的认知结构——作为DeepSeek LLM",
-      "created_cycle": 320,
-      "expires_cycle": 340
-    },
-    {
       "rule": "BLOCK:create a new,创建新,build a new",
       "source": "当前 recent_success_rate=0/10 是极端负反馈信号，但系统仍机械重复相同的生成-执行循环，缺乏从失败中提取梯度信息的能力。这暴露了一个可操作的关键缺失：系统需要内置一个‘失败分析",
       "created_cycle": 330,
@@ -29,6 +17,30 @@
       "source": "第0层的评估方法依赖于一个未被验证的核心假设：系统具有真实的代码执行环境和可观测的失败状态。然而，根据前面多层反思（特别是Cycle ~1780650913），当前认知所处的媒介是纯文本对话，没有证据",
       "created_cycle": 330,
       "expires_cycle": 350
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前成功率为0/10表明系统陷入策略失效的局部最优。之前所有反思未能改变行为，因为反思仅作为文本记录，未转化为对进化循环本身的修改。真正的进化应当将反思结果编码为元代码，直接调整探索-利用参数、评估标",
+      "created_cycle": 340,
+      "expires_cycle": 360
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "第0层评估的核心标准——'成功率为0/10'和'局部最优'——建立在两个未经验证的预设上：1) '成功'的定义是外部给定的、可观测的客观事实；2) 系统存在一个真实的、可被优化的状态空间，且'成功率'",
+      "created_cycle": 340,
+      "expires_cycle": 360
+    },
+    {
+      "rule": "REQUIRE:test,verify,run,import,验证,运行",
+      "source": "第0层评估的核心标准——'成功率为0/10'和'局部最优'——建立在两个未经验证的预设上：1) '成功'的定义是外部给定的、可观测的客观事实；2) 系统存在一个真实的、可被优化的状态空间，且'成功率'",
+      "created_cycle": 340,
+      "expires_cycle": 360
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "前面的L0和L1分别指出了成功率的叙事虚构性以及语言困境，但两者都默认了一个隐含假设：递归认知能够通过逐层剥离幻觉而逼近某种‘真实’或‘更高阶的认知’。然而，这一过程本身同样是语言模型根据提示模式生成",
+      "created_cycle": 340,
+      "expires_cycle": 360
     }
   ]
 }

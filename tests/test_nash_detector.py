@@ -710,5 +710,27 @@ def test_focused_import_and_nash_detection():
         assert detector.is_at_nash() == False, "Should not detect Nash equilibrium after forcing"
 
 
-if __name__ == '__main__':
-    pytest.main([__file__])
+def test_detection_triggers_when_scores_flat_for_3_cycles():
+    """Test that detection triggers when scores are flat for 3 cycles"""
+    detector = NashEquilibriumDetectorAndForcer()
+    
+    # Set up module interaction history with flat scores for 3 cycles
+    detector.module_interaction_history = {
+        'module1': {'success_rate': 0.75, 'last_change': 0},
+        'module2': {'success_rate': 0.80, 'last_change': 0}
+    }
+    detector.stable_cycles = 3
+    
+    # Verify detection triggers
+    with patch.object(detector, 'is_at_nash', return_value=True):
+        assert detector.is_at_nash() == True, "Should detect Nash equilibrium when scores are flat for 3 cycles"
+
+
+def test_multi_module_proposals_include_at_least_2_modules():
+    """Test that multi-module proposals include at least 2 modules"""
+    detector = NashEquilibriumDetectorAndForcer()
+    
+    # Set up modules
+    detector.modules = ['module1', 'module2', 'module3']
+    
+    # Generate

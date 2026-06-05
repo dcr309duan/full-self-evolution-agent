@@ -721,6 +721,118 @@ class TestNashIntegration(unittest.TestCase):
             self.assertIsNotNone(history_data, f"History should exist for {module_name}")
             self.assertEqual(len(history_data), 5, f"History should have 5 entries for {module_name}")
 
+    def test_mini_evolution_loop(self):
+        """Integration test that runs a mini evolution loop (3 cycles) with mock modules."""
+        if NashDetectorAndForcer is None or MultiModuleForcer is None:
+            self.skipTest("Required modules could not be imported")
+        
+        # Load test data
+        with open(os.path.join(self.test_dir, "history.json"), 'r') as f:
+            history = json.load(f)
+        with open(os.path.join(self.test_dir, "interaction_matrix.json"), 'r') as f:
+            interaction_matrix = json.load(f)
+        with open(os.path.join(self.test_dir, "dependency_graph.json"), 'r') as f:
+            dependency_graph = json.load(f)
+        
+        # Create detector and load initial history
+        detector = NashDetectorAndForcer()
+        for module_name, module_history in history.items():
+            for entry in module_history:
+                detector.record_fitness(module_name, entry["fitness"], entry["timestamp"])
+        
+        # Create mock modules with state tracking
+        class MockModule:
+            def __init__(self, name, fitness):
+                self.name = name
+                self.fitness = fitness
+                self.original_fitness = fitness
+            def get_scores(self):
+                return interaction_matrix[self.name]
+            def mutate(self):
+                return self
+            def rollback(self):
+                self.fitness = self.original_fitness
+        
+        module_names = ["ModuleA", "ModuleB", "ModuleC"]
+        modules = []
+        for name in module_names:
+            module_file = os.path.join(self.test_dir, f"{name}.json")
+            with open(module_file, 'r') as f:
+                data = json.load(f)
+            modules.append(MockModule(name, data["fitness"]))
+        
+        # Run mini evolution loop for 3 cycles
+        cycle_results = []
+        for cycle in range(3):
+            cycle_data = {"cycle": cycle + 1}
+            
+            # Step 1: Detect equilibrium
+            is_nash = detector.detect_equilibrium(modules)
+            cycle_data["equilibrium_detected"] = is_nash
+            
+            # Step 2: If equilibrium detected, generate and apply plan
+            plan = None
+            if is_nash:
+                forcer = MultiModuleForcer()
+                plan = forcer.generate_plan(dependency_graph, {"is_equilibrium": True})
+                cycle_data["plan_generated"] = plan is not None
+                
+                if plan:
+                    # Apply mutations to simulate state change
+                    for mutation in plan:
+                        module_name = mutation["module"]
+                        for module in modules:
+                            if module.name == module_name:
+                                # Apply mutation: change fitness to break equilibrium
+                                module.fitness = 0.5 + (cycle + 1) * 0.1
+                                break
+                    
+                    # Record new fitness values in detector
+                    timestamp = 6 + cycle
+                    for module in modules:
+                        detector.record_fitness(module.name, module.fitness, timestamp)
+                    
+                    cycle_data["mutations_applied"] = len(plan)
+                else:
+                    cycle_data["mutations_applied"] = 0
+            else:
+                cycle_data["plan_generated"] = False
+                cycle_data["mutations_applied"] = 0
+            
+            # Step 3: Verify state after mutation
+            new_is_nash = detector.detect_equilibrium(modules)
+            cycle_data["post_mutation_equilibrium"] = new_is_nash
+            
+            cycle_results.append(cycle_data)
+        
+        # Verify the evolution loop ran correctly
+        self.assertEqual(len(cycle_results), 3, "Should have 3 cycles")
+        
+        # Verify equilibrium was detected in at least one cycle
+        equilibrium_cycles = [c for c in cycle_results if c["equilibrium_detected"]]
+        self.assertGreaterEqual(len(equilibrium_cycles), 1, "Equilibrium should be detected in at least one cycle")
+        
+        # Verify plans were generated when equilibrium was detected
+        for cycle_data in cycle_results:
+            if cycle_data["equilibrium_detected"]:
+                self.assertTrue(cycle_data["plan_generated"],
+                                f"Plan should be generated when equilibrium detected in cycle {cycle_data['cycle']}")
+                self.assertGreaterEqual(cycle_data["mutations_applied"], 2,
+                                        f"At least 2 mutations should be applied in cycle {cycle_data['cycle']}")
+        
+        # Verify that after mutations, system is no longer at equilibrium
+        for cycle_data in cycle_results:
+            if cycle_data["mutations_applied"] > 0:
+                self.assertFalse(cycle_data["post_mutation_equilibrium"],
+                                 f"System should not be at equilibrium after mutations in cycle {cycle_data['cycle']}")
+        
+        # Verify the detector has recorded history for all cycles
+        for module_name in module_names:
+            history_data = detector.get_history(module_name)
+            self.assertIsNotNone(history_data, f"History should exist for {module_name}")
+            # Initial 5 entries + 3 cycle entries = 8 entries
+            self.assertEqual(len(history_data), 8, f"History should have 8 entries for {module_name}")
+
     def tearDown(self):
         """Clean up temporary files."""
         import shutil
