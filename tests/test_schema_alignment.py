@@ -12,7 +12,7 @@ Tests cover:
 9. Round-trip data flow preserves schema integrity
 10. SCHEMA_MISMATCH errors are properly logged and block execution
 11. Self-repair is triggered on schema violation
-12. Comprehensive test suite for schema alignment
+12. Integration test suite for schema alignment
 """
 
 import json
@@ -955,4 +955,4 @@ class TestSelfRepair:
             repaired_data = self_repair(violated_data)
             
             # Validate after repair
-            is_valid_after, errors_after
+            is_valid_after, errors_after = validator.validate
