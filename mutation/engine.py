@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from mutation.classifier import FailurePatternClassifier
 from mutation.strategies import StrategySelector, MutationStrategy
+from schema.validator import validate_output_schema
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,25 @@ class MutationEngine:
             mutated_code = code
             success = False
 
+        # Pre-mutation hook: validate all component outputs against schema
+        if success:
+            try:
+                # Extract component outputs from mutated code
+                component_outputs = self._extract_component_outputs(mutated_code)
+                # Validate each component output against schema
+                for component_name, output in component_outputs.items():
+                    if not validate_output_schema(component_name, output):
+                        error_msg = f"Schema mismatch for component '{component_name}' after mutation"
+                        logger.error(error_msg)
+                        # Abort mutation and trigger self-repair
+                        self._trigger_self_repair(target_id, error_msg)
+                        return code, False
+            except Exception as e:
+                logger.error(f"Schema validation failed: {e}")
+                # Abort mutation and trigger self-repair
+                self._trigger_self_repair(target_id, f"Schema validation error: {str(e)}")
+                return code, False
+
         # Log result to classifier
         mutation_record = {
             "target_id": target_id,
@@ -165,6 +185,42 @@ class MutationEngine:
                 self._handle_strategy_recommendation(target_id, recommended_strategy)
 
         return mutated_code, success
+
+    def _extract_component_outputs(self, code: str) -> Dict[str, Any]:
+        """Extract component outputs from the mutated code for schema validation.
+        
+        This method parses the code and extracts return values or output variables
+        from component functions. Returns a dictionary mapping component names to their outputs.
+        """
+        component_outputs = {}
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    # Look for return statements in function definitions
+                    for child in ast.walk(node):
+                        if isinstance(child, ast.Return) and child.value:
+                            # Try to evaluate the return value if it's a simple literal
+                            if isinstance(child.value, ast.Constant):
+                                component_outputs[node.name] = child.value.value
+                            elif isinstance(child.value, ast.List):
+                                component_outputs[node.name] = [el.value if isinstance(el, ast.Constant) else None for el in child.value.elts]
+                            elif isinstance(child.value, ast.Dict):
+                                component_outputs[node.name] = {k.value if isinstance(k, ast.Constant) else str(k): v.value if isinstance(v, ast.Constant) else None for k, v in zip(child.value.keys, child.value.values)}
+        except Exception as e:
+            logger.warning(f"Failed to extract component outputs: {e}")
+        return component_outputs
+
+    def _trigger_self_repair(self, target_id: str, error_message: str) -> None:
+        """Trigger self-repair mechanism with specific error message about schema mismatch."""
+        logger.info(f"Triggering self-repair for target {target_id}: {error_message}")
+        # Log the self-repair event
+        self._classifier.log_self_repair(target_id, error_message)
+        # Reset current strategy to allow re-selection
+        self._current_strategy = None
+        # Clear target strategy map for this target to force re-evaluation
+        if target_id in self._target_strategy_map:
+            del self._target_strategy_map[target_id]
 
     def _select_strategy(self, target_id: str) -> MutationStrategy:
         """Select the best strategy for the given target."""

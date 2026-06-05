@@ -6,6 +6,7 @@ Tests cover:
 3. Validating each output against its schema
 4. Testing conversion between formats
 5. Running a full reflection cycle and confirming no schema mismatches
+6. Validation test suite with specific tests
 """
 
 import json
@@ -416,3 +417,228 @@ class TestFullReflectionCycle:
         serialized = json.dumps(cycle_data)
         deserialized = json.loads(serialized)
         assert deserialized == cycle_data, "JSON serialization roundtrip failed"
+
+
+class TestValidationTestSuite:
+    """Validation test suite for schema alignment."""
+    
+    def test_reflection_parser_output_passes_schema_validation(self, schema_registry, sample_reflection_output):
+        """Test that reflection_parser output passes schema validation."""
+        validator = SchemaValidator(schema_registry)
+        output_dict = sample_reflection_output.to_dict()
+        is_valid, errors = validator.validate("reflection_parser", output_dict)
+        assert is_valid, f"Reflection parser output failed schema validation: {errors}"
+        assert len(errors) == 0
+    
+    def test_goal_generator_accepts_validated_input(self, schema_registry, sample_reflection_output):
+        """Test that goal_generator accepts validated input."""
+        validator = SchemaValidator(schema_registry)
+        reflection_dict = sample_reflection_output.to_dict()
+        is_valid, errors = validator.validate("reflection_parser", reflection_dict)
+        assert is_valid, f"Input validation failed: {errors}"
+        
+        # Use validated reflection data to generate a goal
+        generator = GoalGenerator()
+        goal = generator.generate_goal(
+            description=f"Address issue: {reflection_dict['content']}",
+            priority=3,
+            constraints=[
+                {"type": "reflection_id", "value": reflection_dict["reflection_id"]}
+            ]
+        )
+        goal_dict = goal.to_dict()
+        is_valid, errors = validator.validate("goal_generator", goal_dict)
+        assert is_valid, f"Goal output failed schema validation: {errors}"
+    
+    def test_migration_scripts_handle_version_mismatches(self, schema_registry):
+        """Test that migration scripts handle version mismatches."""
+        # Simulate a version mismatch scenario
+        old_schema = {
+            "type": "object",
+            "properties": {
+                "reflection_id": {"type": "string"},
+                "content": {"type": "string"}
+            },
+            "required": ["reflection_id", "content"]
+        }
+        new_schema = schema_registry.get_schema("reflection_parser")
+        
+        # Create a migration script that handles the mismatch
+        def migrate_v1_to_v2(old_data: Dict[str, Any]) -> Dict[str, Any]:
+            """Migrate from old schema to new schema."""
+            new_data = old_data.copy()
+            if "timestamp" not in new_data:
+                new_data["timestamp"] = datetime.now().isoformat()
+            if "metadata" not in new_data:
+                new_data["metadata"] = {
+                    "confidence": 0.5,
+                    "category": "migrated"
+                }
+            return new_data
+        
+        # Test migration with old data
+        old_data = {
+            "reflection_id": "migrated-001",
+            "content": "Migrated content"
+        }
+        migrated_data = migrate_v1_to_v2(old_data)
+        
+        # Validate migrated data against new schema
+        validator = SchemaValidator(schema_registry)
+        is_valid, errors = validator.validate("reflection_parser", migrated_data)
+        assert is_valid, f"Migration failed schema validation: {errors}"
+        
+        # Test that migration fails gracefully with incompatible data
+        with pytest.raises(ValueError, match="Missing required field"):
+            incomplete_data = {"reflection_id": "test"}
+            migrate_v1_to_v2(incomplete_data)
+    
+    def test_pre_mutation_validation_catches_malformed_data(self, schema_registry):
+        """Test that pre-mutation validation catches malformed data."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Test various malformed data scenarios
+        malformed_cases = [
+            {
+                "name": "missing_required_field",
+                "data": {
+                    "reflection_id": "test-001",
+                    "content": "Test content"
+                    # Missing timestamp and metadata
+                },
+                "expected_errors": True
+            },
+            {
+                "name": "invalid_enum_value",
+                "data": {
+                    "analysis_id": "test-001",
+                    "failure_type": "test",
+                    "severity": "invalid_severity",
+                    "root_cause": "test",
+                    "analyzed_at": datetime.now().isoformat()
+                },
+                "expected_errors": True
+            },
+            {
+                "name": "invalid_type",
+                "data": {
+                    "goal_id": "test-001",
+                    "description": "Test goal",
+                    "priority": "high",  # Should be integer
+                    "status": "pending",
+                    "created_at": datetime.now().isoformat()
+                },
+                "expected_errors": True
+            },
+            {
+                "name": "out_of_range_value",
+                "data": {
+                    "goal_id": "test-001",
+                    "description": "Test goal",
+                    "priority": 10,  # Should be between 1 and 5
+                    "status": "pending",
+                    "created_at": datetime.now().isoformat()
+                },
+                "expected_errors": True
+            }
+        ]
+        
+        for case in malformed_cases:
+            # Try to validate against appropriate schema
+            module_name = None
+            if "reflection_id" in case["data"]:
+                module_name = "reflection_parser"
+            elif "goal_id" in case["data"]:
+                module_name = "goal_generator"
+            elif "analysis_id" in case["data"]:
+                module_name = "failure_analysis"
+            
+            if module_name:
+                is_valid, errors = validator.validate(module_name, case["data"])
+                assert not is_valid, f"Case '{case['name']}' should have been caught"
+                assert len(errors) > 0, f"Case '{case['name']}' should have errors"
+    
+    def test_round_trip_compatibility_between_all_three_modules(self, schema_registry):
+        """Test round-trip compatibility between all three modules."""
+        validator = SchemaValidator(schema_registry)
+        
+        # Create initial reflection
+        parser = ReflectionParser()
+        reflection = parser.parse(
+            content="Database connection failures increasing",
+            metadata={
+                "confidence": 0.88,
+                "category": "database_error",
+                "tags": ["database", "connection", "failure"]
+            }
+        )
+        
+        # Validate reflection
+        reflection_dict = reflection.to_dict()
+        is_valid, errors = validator.validate("reflection_parser", reflection_dict)
+        assert is_valid, f"Initial reflection validation failed: {errors}"
+        
+        # Convert reflection to goal input
+        generator = GoalGenerator()
+        goal = generator.generate_goal(
+            description=f"Investigate and fix: {reflection_dict['content']}",
+            priority=4,
+            constraints=[
+                {"type": "reflection_id", "value": reflection_dict["reflection_id"]},
+                {"type": "category", "value": reflection_dict["metadata"]["category"]}
+            ]
+        )
+        
+        # Validate goal
+        goal_dict = goal.to_dict()
+        is_valid, errors = validator.validate("goal_generator", goal_dict)
+        assert is_valid, f"Goal validation failed: {errors}"
+        
+        # Convert goal to failure analysis input
+        analyzer = FailureAnalyzer()
+        failure = analyzer.analyze(
+            failure_type="database_connection_failure",
+            severity="high",
+            root_cause=f"Goal {goal_dict['goal_id']}: {goal_dict['description']}",
+            affected_components=["database_service", "connection_pool"],
+            recommendations=[
+                {
+                    "action": "Increase connection pool size",
+                    "priority": 4,
+                    "expected_impact": "Reduce connection failures"
+                },
+                {
+                    "action": "Monitor connection metrics",
+                    "priority": 3,
+                    "expected_impact": "Early detection of issues"
+                }
+            ]
+        )
+        
+        # Validate failure analysis
+        failure_dict = failure.to_dict()
+        is_valid, errors = validator.validate("failure_analysis", failure_dict)
+        assert is_valid, f"Failure analysis validation failed: {errors}"
+        
+        # Verify round-trip: Convert failure back to reflection context
+        round_trip_reflection = parser.parse(
+            content=f"Analysis of {failure_dict['failure_type']}: {failure_dict['root_cause']}",
+            metadata={
+                "confidence": 0.95,
+                "category": "analysis_result",
+                "tags": failure_dict["affected_components"]
+            }
+        )
+        
+        # Validate round-trip reflection
+        round_trip_dict = round_trip_reflection.to_dict()
+        is_valid, errors = validator.validate("reflection_parser", round_trip_dict)
+        assert is_valid, f"Round-trip reflection validation failed: {errors}"
+        
+        # Verify data consistency across the round-trip
+        assert round_trip_dict["metadata"]["tags"] == failure_dict["affected_components"], (
+            "Tags should match affected components from failure analysis"
+        )
+        assert "analysis" in round_trip_dict["content"].lower(), (
+            "Content should reference the analysis"
+        )

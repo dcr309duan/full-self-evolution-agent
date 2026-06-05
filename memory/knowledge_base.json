@@ -1,56 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/test_goal_feasibility_estimator.py to: Create comprehensive tests: (1) test that estimator correctly identifies missing capabilities, (2) test that low historical success rate (<20%) triggers block, (3) test that partial capability overlap triggers complexity adjustment, (4) test that high success rate with full capabilities allows proceed, (5) test edge cases like empty history or unknown goal types, (6) test integration with goal generator and orchestrator.",
-      "timestamp": 1780628153.6528664,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified failure_analysis_module.py to: Extend the failure analysis module to feed success/failure data back to the feasibility estimator. Add a method 'record_goal_outcome(goal_type, success, capabilities_used)' that updates the success rate database. Ensure this is called after each goal completion or failure.",
-      "timestamp": 1780628192.540167,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified failure_analysis_module.py to: Add a method 'update_goal_success_rate(goal_type, succeeded)' that the orchestrator calls after each goal attempt. This persists the success/failure data to a JSON file (e.g., 'goal_success_rates.json') so it survives restarts. The estimator reads from this file.",
-      "timestamp": 1780628206.083989,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified goal_success_rates.json to: Initialize a JSON file with default success rates for known goal types. Example: {'API server': {'attempts': 0, 'successes': 0}, 'mutation engine': {'attempts': 0, 'successes': 0}, 'web scraping': {'attempts': 0, 'successes': 0}, 'testing framework': {'attempts': 0, 'successes': 0}, 'task scheduler': {'attempts': 0, 'successes': 0}, 'reflection parser': {'attempts': 0, 'successes': 0}, 'failure analysis': {'attempts': 0, 'successes': 0}, 'self-healing': {'attempts': 0, 'successes': 0}}. This provides a starting point for the estimator.",
-      "timestamp": 1780628210.1150007,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified reflection_parser.py to: Add a method 'extract_goal_type_from_reflection(reflection_text)' that parses the reflection output to identify the goal type (e.g., 'API server', 'mutation engine'). This helps automatically categorize goals for the feasibility estimator's database.",
-      "timestamp": 1780628217.024652,
-      "cycle": 33
-    },
-    {
-      "content": "Successfully modified tests/test_goal_feasibility_estimator.py to: Add integration tests: (1) test that orchestrator blocks a goal with 0% historical success rate, (2) test that orchestrator adjusts complexity for a goal with 30% success rate, (3) test that orchestrator proceeds normally for a goal with 80% success rate, (4) test that the estimator correctly updates success rates after goal completion, (5) test edge cases: unknown goal type, empty capabilities list, first-time goal type.",
-      "timestamp": 1780628240.935748,
-      "cycle": 32
-    },
-    {
-      "content": "Self-reflection: The current evolution approach is additive — building new components without refactoring the core. This leads to local optima where the system becomes a collection of loosely coupled tools rather than",
-      "timestamp": 1780628296.0672007,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_pipeline_integration.py to: Create a new integration test file that defines a test class with methods to run the full pipeline: (1) trigger mutation engine on a sample capability, (2) run tests on mutated code, (3) parse reflection output, (4) update strategy based on results. Include mock fixtures for each component to allow isolated testing.",
-      "timestamp": 1780628298.2681618,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_pipeline_integration.py to: Add test method 'test_mutation_to_test_flow' that validates mutation engine returns results (non-empty list of mutations) and testing framework receives them. Assert no broken link between mutation and test stages.",
-      "timestamp": 1780628328.178679,
-      "cycle": 34
-    },
-    {
-      "content": "Successfully modified tests/test_integration_pipeline.py to: Create a comprehensive integration test suite that: (1) Sets up a test pipeline with mock components for mutation engine, testing framework, reflection parser, and strategy selector. (2) Tests the full flow: mutation produces variant -> test framework evaluates -> reflection parser extracts assessment -> strategy selector updates approach. (3) Validates data flow between each component (output of one matches input format of next). (4) Tests error propagation: mutation engine failure, reflection parser timeout, strategy selector crash.",
-      "timestamp": 1780628341.098191,
-      "cycle": 34
-    },
-    {
       "content": "Successfully modified tests/test_pipeline_integration.py to: Add test method 'test_test_to_reflection_flow' that validates test results are passed to reflection parser and parser extracts current_assessment, key_gaps, next_priority. Assert no broken link between test and reflection stages.",
       "timestamp": 1780628362.5660977,
       "cycle": 34
@@ -999,6 +949,56 @@
       "content": "Successfully modified orchestrator/core.py to: Add self-repair monitoring to orchestrator: (1) after each mutation cycle, check if strategy switches occurred, (2) log strategy effectiveness metrics (success rate per strategy per target), (3) if a target has exhausted all strategies, mark it as 'requires manual intervention' and generate a knowledge gap entry.",
       "timestamp": 1780633541.3562,
       "cycle": 57
+    },
+    {
+      "content": "Self-reflection: The evolution process has reached a phase where simply adding more capabilities creates diminishing returns. The true limiting factor is system-level coherence—the ability of components to interoperat",
+      "timestamp": 1780633592.7970595,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified schema/contract.py to: Define the canonical schema as a Pydantic model with version field. Include: CycleReport (reflection_parser output), GoalSpec (goal_generator output), FailureRecord (failure_analysis output). Each must have 'schema_version' (int), 'timestamp' (float), 'component' (str), and component-specific fields. Add validation methods that check required fields and type constraints.",
+      "timestamp": 1780633613.089241,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified schema/contract.py to: Add migration functions: migrate_v1_to_v2(old_report) that transforms legacy schema to current version, and get_current_version() that returns latest version number. Store migration registry as dict mapping (from_version, to_version) -> callable.",
+      "timestamp": 1780633623.5565333,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified schema/validator.py to: Implement pre-mutation validation function: validate_schema_alignment() that (1) loads current reflection_parser output, (2) checks it matches canonical schema, (3) if version mismatch, runs migration, (4) validates migrated output against expected schema for goal_generator input, (5) returns (is_valid, errors, migrated_data).",
+      "timestamp": 1780633636.722023,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified reflection_parser/core.py to: Update reflection_parser to output CycleReport objects from schema/contract.py instead of raw dicts. Add schema_version field set to current version. Ensure all required fields are populated before returning.",
+      "timestamp": 1780633643.9011285,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified goal_generator/core.py to: Update goal_generator to accept CycleReport objects and validate them using schema/validator.py before processing. Add migration step if version mismatch detected. Generate GoalSpec objects as output.",
+      "timestamp": 1780633662.9782948,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified failure_analysis/core.py to: Update failure_analysis to output FailureRecord objects. Ensure compatibility with canonical schema by adding schema_version and timestamp fields.",
+      "timestamp": 1780633671.10885,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified tests/test_schema_alignment.py to: Create validation test suite: (1) test that reflection_parser output passes schema validation, (2) test that goal_generator accepts validated input, (3) test that migration scripts handle version mismatches, (4) test that pre-mutation validation catches malformed data, (5) test round-trip compatibility between all three modules.",
+      "timestamp": 1780633704.4969583,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified orchestrator/core.py to: Integrate schema validation into the mutation cycle: before each mutation, call validate_schema_alignment() on the latest reflection_parser output. If validation fails, log error and skip mutation cycle with detailed diagnostic. After successful mutation, re-validate to ensure schema integrity.",
+      "timestamp": 1780633735.6076708,
+      "cycle": 58
+    },
+    {
+      "content": "Successfully modified mutation/engine.py to: Add pre-mutation hook that calls schema/validator.py to check all component outputs are schema-compliant before allowing mutation. If schema validation fails, abort mutation and trigger self-repair with specific error message about schema mismatch.",
+      "timestamp": 1780633755.8961697,
+      "cycle": 58
     }
   ],
   "learned_patterns": [],
@@ -2564,6 +2564,56 @@
       "strategy": "Create a self-repair mechanism that, upon mutation failure, automatically reverts the change and generates a fundamentally different approach (e.g., if AST rewriting fails, try a wrapper-based strategy instead). Include a failure pattern classifier that logs the root cause and adjusts the mutation strategy selector to avoid repeating the same mistake.",
       "outcome": "6/6 steps succeeded",
       "timestamp": 1780633541.3656323
+    },
+    {
+      "strategy": "modify schema/contract.py: Define the canonical schema as a Pydantic model with version field. Include: CycleReport (reflection_parser output), GoalSpec (goal_generator output), FailureRecord (failure_analysis output). Each must have 'schema_version' (int), 'timestamp' (float), 'component' (str), and component-specific fields. Add validation methods that check required fields and type constraints.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633613.0801206
+    },
+    {
+      "strategy": "modify schema/contract.py: Add migration functions: migrate_v1_to_v2(old_report) that transforms legacy schema to current version, and get_current_version() that returns latest version number. Store migration registry as dict mapping (from_version, to_version) -> callable.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633623.5477486
+    },
+    {
+      "strategy": "modify schema/validator.py: Implement pre-mutation validation function: validate_schema_alignment() that (1) loads current reflection_parser output, (2) checks it matches canonical schema, (3) if version mismatch, runs migration, (4) validates migrated output against expected schema for goal_generator input, (5) returns (is_valid, errors, migrated_data).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633636.7107031
+    },
+    {
+      "strategy": "modify reflection_parser/core.py: Update reflection_parser to output CycleReport objects from schema/contract.py instead of raw dicts. Add schema_version field set to current version. Ensure all required fields are populated before returning.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633643.892363
+    },
+    {
+      "strategy": "modify goal_generator/core.py: Update goal_generator to accept CycleReport objects and validate them using schema/validator.py before processing. Add migration step if version mismatch detected. Generate GoalSpec objects as output.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633662.96905
+    },
+    {
+      "strategy": "modify failure_analysis/core.py: Update failure_analysis to output FailureRecord objects. Ensure compatibility with canonical schema by adding schema_version and timestamp fields.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633671.0967145
+    },
+    {
+      "strategy": "modify tests/test_schema_alignment.py: Create validation test suite: (1) test that reflection_parser output passes schema validation, (2) test that goal_generator accepts validated input, (3) test that migration scripts handle version mismatches, (4) test that pre-mutation validation catches malformed data, (5) test round-trip compatibility between all three modules.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633704.4885008
+    },
+    {
+      "strategy": "modify orchestrator/core.py: Integrate schema validation into the mutation cycle: before each mutation, call validate_schema_alignment() on the latest reflection_parser output. If validation fails, log error and skip mutation cycle with detailed diagnostic. After successful mutation, re-validate to ensure schema integrity.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633735.598471
+    },
+    {
+      "strategy": "modify mutation/engine.py: Add pre-mutation hook that calls schema/validator.py to check all component outputs are schema-compliant before allowing mutation. If schema validation fails, abort mutation and trigger self-repair with specific error message about schema mismatch.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780633755.88652
+    },
+    {
+      "strategy": "Implement a canonical schema alignment layer: a validated, versioned data contract that normalizes outputs from reflection_parser, goal_generator, and failure_analysis modules into a shared format, with automatic migration scripts to resolve mismatches and a validation test that runs before any mutation cycle.",
+      "outcome": "9/9 steps succeeded",
+      "timestamp": 1780633755.9060078
     }
   ],
   "capabilities_developed": []

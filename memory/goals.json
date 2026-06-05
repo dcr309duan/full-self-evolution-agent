@@ -2,6 +2,18 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Build a system-wide integration test suite that validates the end-to-end data flow from reflection → goal generation → mutation → testing → self-repair, catching SCHEMA_MISMATCH errors early and blocking execution of any mutation that would violate the canonical schema.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780633595.4985788
+    },
+    {
+      "description": "Create a dependency-aware goal feasibility estimator that penalizes goals requiring untested cross-component interactions by analyzing the current integration test coverage and schema alignment status, and automatically blocks goals whose prerequisites (e.g., schema alignment layer) are not yet met.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780633595.4999726
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -300,6 +312,13 @@
       "status": "completed",
       "created_at": 1780633098.6543932,
       "completed_at": 1780633541.3716457
+    },
+    {
+      "description": "Implement a canonical schema alignment layer: a validated, versioned data contract that normalizes outputs from reflection_parser, goal_generator, and failure_analysis modules into a shared format, with automatic migration scripts to resolve mismatches and a validation test that runs before any mutation cycle.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780633595.4971097,
+      "completed_at": 1780633755.9121096
     }
   ],
   "generated_goals": []

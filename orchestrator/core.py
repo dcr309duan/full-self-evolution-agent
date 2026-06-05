@@ -62,6 +62,45 @@ class EvolutionOrchestrator:
         self._strategy_effectiveness: Dict[str, Dict[str, Dict[str, float]]] = {}  # strategy -> target -> metrics
         self._exhausted_targets: Set[str] = set()  # targets that have exhausted all strategies
         self._knowledge_gaps: List[Dict[str, Any]] = []  # knowledge gap entries
+        # Store latest reflection_parser output for schema validation
+        self._latest_reflection_output: Optional[Dict[str, Any]] = None
+
+    def set_reflection_output(self, output: Dict[str, Any]) -> None:
+        """Set the latest reflection_parser output for schema validation.
+
+        Args:
+            output: The latest reflection_parser output.
+        """
+        self._latest_reflection_output = output
+
+    def _validate_schema_alignment(self, data: Dict[str, Any]) -> bool:
+        """Validate schema alignment using the latest reflection_parser output.
+
+        Args:
+            data: The data to validate.
+
+        Returns:
+            True if validation passes, False otherwise.
+        """
+        if not self.config.schema_validator or not self._latest_reflection_output:
+            return True  # No validation configured or no reflection output available
+
+        try:
+            # Use the reflection_parser output to validate schema alignment
+            is_valid = self.config.schema_validator.validate_alignment(
+                data, self._latest_reflection_output
+            )
+            if not is_valid:
+                errors = self.config.schema_validator.get_errors(data)
+                logger.error(
+                    "Schema alignment validation failed for data: %s. Errors: %s",
+                    data.get('id', 'unknown'),
+                    errors
+                )
+            return is_valid
+        except Exception as e:
+            logger.error("Error during schema alignment validation: %s", str(e))
+            return False
 
     def after_mutation_cycle(self, mutation_results: List[dict]) -> None:
         """Called after each mutation cycle to mine patterns and generate goals.
@@ -323,12 +362,37 @@ class EvolutionOrchestrator:
         for goal in ready_goals:
             if goal.id not in self._completed_goals:
                 logger.info("Executing ready goal: %s", goal.description)
+                
+                # Validate schema alignment before mutation
+                if not self._validate_schema_alignment(goal.to_dict()):
+                    logger.error(
+                        "Schema alignment validation failed for goal '%s'. Skipping mutation cycle.",
+                        goal.description
+                    )
+                    continue
+                
                 result = self.config.goal_queue.execute_goal(goal)
                 
                 if result.get('success', True):
-                    self._completed_goals.add(goal.id)
-                    # Re-evaluate dependencies after completion
-                    self._re_evaluate_dependencies()
+                    # Re-validate schema integrity after successful mutation
+                    if not self._validate_schema_alignment(result):
+                        logger.warning(
+                            "Schema integrity check failed after successful mutation for goal '%s'. "
+                            "Rolling back or logging diagnostic.",
+                            goal.description
+                        )
+                        # Log detailed diagnostic information
+                        diagnostic = {
+                            'goal_id': goal.id,
+                            'goal_description': goal.description,
+                            'result': result,
+                            'validation_errors': self.config.schema_validator.get_errors(result) if self.config.schema_validator else []
+                        }
+                        logger.error("Schema integrity diagnostic: %s", diagnostic)
+                    else:
+                        self._completed_goals.add(goal.id)
+                        # Re-evaluate dependencies after completion
+                        self._re_evaluate_dependencies()
                 else:
                     # Check if failure is due to missing dependencies
                     if self._is_dependency_failure(goal, result):
