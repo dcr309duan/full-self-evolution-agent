@@ -3,10 +3,15 @@
 import sys
 import os
 import argparse
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.evolution_loop import run_evolution
+from core.self_model_builder import SelfModelBuilder
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -14,6 +19,16 @@ def main():
     parser.add_argument("max_cycles", nargs="?", type=int, default=10, help="Maximum number of evolution cycles")
     parser.add_argument("--api", action="store_true", help="Start the API server instead of the evolution loop")
     args = parser.parse_args()
+
+    # Initialize and update self-model at startup
+    try:
+        model_builder = SelfModelBuilder()
+        model_data = model_builder.build_model()
+        node_count = len(model_data.get('nodes', []))
+        edge_count = len(model_data.get('edges', []))
+        logger.info(f"Self-model initialized with {node_count} nodes and {edge_count} edges")
+    except Exception as e:
+        logger.error(f"Failed to initialize self-model: {e}")
 
     if args.api:
         print("""

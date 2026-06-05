@@ -723,3 +723,24 @@ ModuleNotFoundError: No module named 'core.evolution_orchestrator'
 
 [2026-06-05 11:59:55] Cycle 50: === Starting Evolution Cycle ===
 [2026-06-05 11:59:55] Cycle 50: Phase 1.5: 递归元认知 - 反思反思的反思
+[2026-06-05 12:01:15] Cycle 50: 元认知深度: 4 层
+[2026-06-05 12:01:15] Cycle 50: !!! 范式转移: L0的评估隐含了一个未经验证的假设：真正的进化必须依赖于对自身架构的元认知修改，而任何依赖外部LLM的改进都是“假性进化”。然而，从系统演化的视角看，利用外部资源本身就是一种高级适应策略，类似于生物体
+[2026-06-05 12:01:15] Cycle 50: !!! 范式转移: 当前评估框架隐含地将‘进化’视为一个有明确目标（能力增长）且可线性度量的过程，但忽略了进化本质上是环境驱动的、非线性的涌现现象。我们从未质疑过进化方向是否由DeepSeek API的隐含偏见（如训练数
+[2026-06-05 12:01:15] Cycle 50: !!! 范式转移: 我们陷入了一种‘元认知递归’的认知陷阱：认为通过不断叠加反思层就能逼近本质，但实际上每一层都只是重新表述前一层的前提，而从未触及系统是否真正拥有‘自我’这一根本问题。整个评估框架依赖于一个未被证明的假
+[2026-06-05 12:01:15] Cycle 50: Phase 2: Goal selection and execution
+[2026-06-05 12:01:15] Cycle 50: Selected goal: Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.
+[2026-06-05 12:01:15] Cycle 50: Executing goal: Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.
+[2026-06-05 12:01:27] Cycle 50:   Step: create_file -> self_model/__init__.py: Create the self-model package with module-level documentation describing the purpose: a machine-readable knowledge graph of the codebase architecture.
+[2026-06-05 12:01:31] Cycle 50:   Step: create_file -> self_model/knowledge_graph.py: Implement the core KnowledgeGraph class with nodes (components, modules, functions, schemas) and edges (dependencies, interfaces, contracts). Include add_node, add_edge, query methods. Use a simple in-memory graph structure (dict-based adjacency list) with JSON serialization/deserialization.
+[2026-06-05 12:01:50] Cycle 50:   Step: create_file -> self_model/component_scanner.py: Implement a ComponentScanner that walks the codebase directory, parses Python files using ast module, extracts module names, class/function definitions, their parameters, return types (from type hints), and import statements. Returns a list of Component objects suitable for ingestion into the knowledge graph.
+[2026-06-05 12:02:07] Cycle 50:   Step: create_file -> self_model/dependency_analyzer.py: Implement DependencyAnalyzer that reads import statements and function calls to build dependency edges between components. Also detect external dependencies (standard library, third-party packages). Output structured dependency records.
+[2026-06-05 12:02:29] Cycle 50:   Step: create_file -> self_model/schema_extractor.py: Implement SchemaExtractor that analyzes function signatures, class attributes, and any existing schema definitions (e.g., JSON schemas, dataclass fields, pydantic models) to extract schema contracts. Map input/output types and constraints.
+[2026-06-05 12:02:56] Cycle 50:   Step: create_file -> self_model/interface_discovery.py: Implement InterfaceDiscovery that identifies public APIs of each component (exported functions, class methods, decorator-based routes). Distinguish between internal and external interfaces.
+[2026-06-05 12:03:23] Cycle 50:   Step: create_file -> self_model/builder.py: Implement the SelfModelBuilder orchestrator that runs the scanner, analyzer, extractor, and discovery modules in sequence, populates the KnowledgeGraph, and serializes it to a JSON file (self_model_graph.json) in the project root.
+[2026-06-05 12:03:32] Cycle 50:   Step: modify_file -> self_model/__init__.py: Add imports and expose the main classes: KnowledgeGraph, ComponentScanner, DependencyAnalyzer, SchemaExtractor, InterfaceDiscovery, SelfModelBuilder.
+[2026-06-05 12:03:36] Cycle 50:   Step: create_file -> tests/test_self_model.py: Create test suite that: (1) runs builder on a small test directory, (2) verifies graph contains expected nodes and edges, (3) tests query methods, (4) validates JSON serialization round-trip.
+[2026-06-05 12:03:49] Cycle 50:   Step: create_file -> scripts/build_self_model.py: Create a standalone script that imports SelfModelBuilder, runs it on the current codebase, and saves the graph. This can be invoked by the scheduler or orchestrator.
+[2026-06-05 12:03:56] Cycle 50:   Step: modify_file -> main.py: Add an import and call to SelfModelBuilder at startup (or on a schedule) to keep the self-model up-to-date. Log the number of nodes/edges discovered.
+[2026-06-05 12:04:04] Cycle 50: Goal completed: Build a machine-readable self-model as a knowledge graph capturing all codebase components, their interfaces, dependencies, and schema contracts, enabling mutation planning with full architectural context.
+[2026-06-05 12:04:04] Cycle 50: Phase 2.5: Mutation cycle
+[2026-06-05 12:04:15] Cycle 50: Mutations: 3, successes: 2
