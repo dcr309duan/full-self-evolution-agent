@@ -28,5 +28,9 @@
   "META_MUTATION_WINDOW_SIZE": 50,
   "META_MUTATION_ENABLED": true,
   "DECISION_FOREST_TREES": 5,
-  "MUTATION_TYPES": ["schema_alignment", "test_creation", "dependency_analysis", "reflection_enhancement", "goal_decomposition", "system_integration", "failure_analysis", "performance_optimization"]
+  "MUTATION_TYPES": ["schema_alignment", "test_creation", "dependency_analysis", "reflection_enhancement", "goal_decomposition", "system_integration", "failure_analysis", "performance_optimization"],
+  "CURIOSITY_INTERVAL": 10,
+  "CURIOSITY_ENABLED": true,
+  "CURIOSITY_DOMAINS": ["linguistics", "biology", "game_design", "architecture", "music_theory", "philosophy", "economics", "ecology", "artificial_life", "cybernetics"],
+  "CURIOSITY_LOG_PATH": "logs/curiosity_injections.json"
 }

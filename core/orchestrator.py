@@ -493,6 +493,34 @@ def post_mutation_hook() -> None:
         
         print(f"Meta-mutation analysis: Predicted highest-yield type '{predicted_type}' with confidence {confidence_score:.2f}")
 
+def log_structural_changes(task_result: Dict[str, Any]) -> None:
+    """Log structural changes made to the codebase after a curiosity task completes."""
+    global knowledge_base
+    
+    # Extract structural changes from task result
+    structural_changes = task_result.get("structural_changes", {})
+    
+    new_files = structural_changes.get("new_files", [])
+    modified_interfaces = structural_changes.get("modified_interfaces", [])
+    new_dependencies = structural_changes.get("new_dependencies", [])
+    
+    # Log the changes
+    knowledge_base.append({
+        "type": "structural_change",
+        "event": "curiosity_task_completed",
+        "new_files": new_files,
+        "modified_interfaces": modified_interfaces,
+        "new_dependencies": new_dependencies
+    })
+    
+    # Print summary
+    if new_files:
+        print(f"Structural changes: New files created: {', '.join(new_files)}")
+    if modified_interfaces:
+        print(f"Structural changes: Modified interfaces: {', '.join(modified_interfaces)}")
+    if new_dependencies:
+        print(f"Structural changes: New dependencies: {', '.join(new_dependencies)}")
+
 def run_smoke_test() -> Dict[str, Any]:
     """
     Execute the evolution smoke test in an isolated temporary directory.

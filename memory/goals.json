@@ -9,12 +9,6 @@
       "consecutive_failures": 1
     },
     {
-      "description": "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (e.g., 'generate a metaphorical description of the system architecture', 'design a simple state machine for a non-code problem') and requires the agent to either create a new module or adapt an existing one to complete it, logging any resulting structural changes. This forces cross-domain exploration and prevents cognitive stagnation.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780641168.5315
-    },
-    {
       "description": "Create a self-model consistency validator that, after each successful evolution cycle, updates an internal dependency graph and verifies that all module interfaces, schemas, and call sites remain aligned, flagging mismatches for immediate repair.",
       "priority": 7,
       "status": "pending",
@@ -579,6 +573,13 @@
       "status": "completed",
       "created_at": 1780641168.5292997,
       "completed_at": 1780641448.9341393
+    },
+    {
+      "description": "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (e.g., 'generate a metaphorical description of the system architecture', 'design a simple state machine for a non-code problem') and requires the agent to either create a new module or adapt an existing one to complete it, logging any resulting structural changes. This forces cross-domain exploration and prevents cognitive stagnation.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780641168.5315,
+      "completed_at": 1780641703.6329858
     }
   ],
   "generated_goals": []

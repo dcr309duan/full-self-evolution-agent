@@ -1,0 +1,194 @@
+[
+  {
+    "id": 1,
+    "domain": "system_architecture",
+    "description": "Generate a metaphorical description of the system architecture using biological terms",
+    "acceptance_criteria": "The description must use at least 3 distinct biological metaphors (e.g., heart, nervous system, immune response) and clearly map each to a specific component of the architecture.",
+    "difficulty": 3,
+    "example_output_format": "The database acts as the system's long-term memory, storing experiences. The API gateway is the sensory cortex, filtering incoming signals. The load balancer functions as the circulatory system, distributing resources."
+  },
+  {
+    "id": 2,
+    "domain": "state_machine_design",
+    "description": "Design a simple state machine for a non-code problem (e.g., a coffee maker or traffic light)",
+    "acceptance_criteria": "Define at least 4 states, 3 transitions with triggers, and an initial state. Output as a list of states and transitions.",
+    "difficulty": 2,
+    "example_output_format": "States: [Idle, Brewing, Pouring, Error]. Transitions: [Idle->Brewing (trigger: start_button), Brewing->Pouring (trigger: brew_complete), Pouring->Idle (trigger: cup_removed), Idle->Error (trigger: water_empty)]."
+  },
+  {
+    "id": 3,
+    "domain": "creative_writing",
+    "description": "Create a haiku that describes the current system state",
+    "acceptance_criteria": "Must follow 5-7-5 syllable structure. Must reference at least one system metric (e.g., latency, uptime, error rate).",
+    "difficulty": 1,
+    "example_output_format": "Errors spike at dawn / Servers gasp for cooler air / Uptime falls asleep"
+  },
+  {
+    "id": 4,
+    "domain": "dependency_modeling",
+    "description": "Model the dependency graph as an ecosystem food web",
+    "acceptance_criteria": "Identify at least 5 components as species, describe predator-prey relationships (dependencies), and note keystone species (critical dependencies).",
+    "difficulty": 4,
+    "example_output_format": "Database (producer) -> API (primary consumer) -> Frontend (secondary consumer). Auth service (keystone) supports all consumers."
+  },
+  {
+    "id": 5,
+    "domain": "system_architecture",
+    "description": "Describe the system's fault tolerance using a sports team analogy",
+    "acceptance_criteria": "Include at least 3 roles (e.g., quarterback, bench players, coach) and explain how they handle failures.",
+    "difficulty": 3,
+    "example_output_format": "The primary server is the quarterback; if injured, the backup (bench) takes over. The load balancer (coach) calls plays to distribute work."
+  },
+  {
+    "id": 6,
+    "domain": "state_machine_design",
+    "description": "Design a state machine for a vending machine",
+    "acceptance_criteria": "Include states for idle, coin insertion, item selection, dispensing, and change return. Define transitions with triggers like 'coin_inserted', 'item_selected', 'dispense_complete'.",
+    "difficulty": 2,
+    "example_output_format": "States: [Idle, CoinInserted, ItemSelected, Dispensing, ChangeReturn]. Transitions: [Idle->CoinInserted (coin_inserted), CoinInserted->ItemSelected (item_selected), ItemSelected->Dispensing (dispense), Dispensing->ChangeReturn (dispense_complete), ChangeReturn->Idle (change_taken)]."
+  },
+  {
+    "id": 7,
+    "domain": "creative_writing",
+    "description": "Write a short story (100-150 words) about a day in the life of a data packet",
+    "acceptance_criteria": "The story must include at least 3 network events (e.g., routing, collision, retransmission) and personify the packet.",
+    "difficulty": 3,
+    "example_output_format": "Little Packet 42 woke up in the sender's buffer. He was jostled onto the wire, dodged a collision, and rested at a router café. Finally, he arrived at the receiver, exhausted but happy."
+  },
+  {
+    "id": 8,
+    "domain": "dependency_modeling",
+    "description": "Map the CI/CD pipeline as a relay race",
+    "acceptance_criteria": "Identify at least 4 stages as runners, describe the baton pass (handoff), and note potential drop points (failures).",
+    "difficulty": 4,
+    "example_output_format": "Runner 1 (Code Commit) passes to Runner 2 (Build), who hands off to Runner 3 (Test), then to Runner 4 (Deploy). Baton drop at Test if flaky tests fail."
+  },
+  {
+    "id": 9,
+    "domain": "system_architecture",
+    "description": "Explain the concept of eventual consistency using a library book analogy",
+    "acceptance_criteria": "Must describe at least 2 replicas (branches) and the time delay for consistency.",
+    "difficulty": 2,
+    "example_output_format": "Two library branches have the same book. One branch checks it out, but the other still shows it available for a few hours until the catalog syncs."
+  },
+  {
+    "id": 10,
+    "domain": "state_machine_design",
+    "description": "Design a state machine for a pedestrian crossing with a push button",
+    "acceptance_criteria": "Include states for cars green, pedestrian wait, pedestrian walk, and flashing don't walk. Transitions triggered by button press and timers.",
+    "difficulty": 3,
+    "example_output_format": "States: [CarsGreen, PedWait, PedWalk, FlashingDontWalk]. Transitions: [CarsGreen->PedWait (button_press), PedWait->PedWalk (timer_expired), PedWalk->FlashingDontWalk (timer_expired), FlashingDontWalk->CarsGreen (timer_expired)]."
+  },
+  {
+    "id": 11,
+    "domain": "creative_writing",
+    "description": "Compose a limerick about a bug in production",
+    "acceptance_criteria": "Must follow AABBA rhyme scheme. Must mention a specific bug type (e.g., null pointer, race condition).",
+    "difficulty": 2,
+    "example_output_format": "A bug in production did lurk / It caused all the data to irk / A null pointer found / On the server mound / Now devs are all going berserk."
+  },
+  {
+    "id": 12,
+    "domain": "dependency_modeling",
+    "description": "Model the microservice dependencies as a city transportation network",
+    "acceptance_criteria": "Identify at least 5 services as stations, describe routes (API calls) and potential traffic jams (bottlenecks).",
+    "difficulty": 4,
+    "example_output_format": "Auth Station connects to User Station via a direct train (API). Payment Station is a hub; if it fails, all routes to Order Station are blocked."
+  },
+  {
+    "id": 13,
+    "domain": "system_architecture",
+    "description": "Describe the system's logging mechanism as a detective's notebook",
+    "acceptance_criteria": "Include at least 3 log levels (e.g., info, warning, error) and explain what each reveals.",
+    "difficulty": 2,
+    "example_output_format": "Info entries are routine patrol notes. Warnings are suspicious activities. Errors are crime scenes requiring immediate investigation."
+  },
+  {
+    "id": 14,
+    "domain": "state_machine_design",
+    "description": "Design a state machine for a smart thermostat",
+    "acceptance_criteria": "Include states for heating, cooling, idle, and fan-only. Transitions based on temperature thresholds and user override.",
+    "difficulty": 3,
+    "example_output_format": "States: [Heating, Cooling, Idle, FanOnly]. Transitions: [Idle->Heating (temp < threshold), Idle->Cooling (temp > threshold), Heating->Idle (temp >= target), Cooling->Idle (temp <= target), Idle->FanOnly (user_override)]."
+  },
+  {
+    "id": 15,
+    "domain": "creative_writing",
+    "description": "Write a dialogue between a frontend and a backend during a slow API call",
+    "acceptance_criteria": "The dialogue must include at least 4 exchanges and express frustration or impatience.",
+    "difficulty": 3,
+    "example_output_format": "Frontend: 'Hey Backend, I need that data!' Backend: 'Hold on, I'm querying the database.' Frontend: 'It's been 5 seconds!' Backend: 'Almost there...'"
+  },
+  {
+    "id": 16,
+    "domain": "dependency_modeling",
+    "description": "Map the data flow in a machine learning pipeline as a recipe",
+    "acceptance_criteria": "Identify at least 4 steps as ingredients or cooking actions, and note dependencies (e.g., preprocessing before training).",
+    "difficulty": 4,
+    "example_output_format": "Step 1: Gather raw data (ingredients). Step 2: Clean data (wash). Step 3: Train model (cook). Step 4: Evaluate (taste test). Must clean before cooking."
+  },
+  {
+    "id": 17,
+    "domain": "system_architecture",
+    "description": "Explain the concept of a CDN using a pizza delivery analogy",
+    "acceptance_criteria": "Must include at least 2 edge locations and the origin server.",
+    "difficulty": 1,
+    "example_output_format": "The origin is the central kitchen. Edge locations are local pizza shops that cache popular pizzas (content) for faster delivery to nearby customers."
+  },
+  {
+    "id": 18,
+    "domain": "state_machine_design",
+    "description": "Design a state machine for an elevator",
+    "acceptance_criteria": "Include states for idle, moving up, moving down, and door open. Transitions triggered by floor requests and door sensors.",
+    "difficulty": 3,
+    "example_output_format": "States: [Idle, MovingUp, MovingDown, DoorOpen]. Transitions: [Idle->MovingUp (floor_request_above), Idle->MovingDown (floor_request_below), MovingUp->Idle (arrived), MovingDown->Idle (arrived), Idle->DoorOpen (button_press), DoorOpen->Idle (door_closed)]."
+  },
+  {
+    "id": 19,
+    "domain": "creative_writing",
+    "description": "Create a sonnet (14 lines, iambic pentameter) about a database migration",
+    "acceptance_criteria": "Must follow Shakespearean sonnet structure (ABABCDCDEFEFGG). Must reference at least 2 migration challenges (e.g., downtime, data loss).",
+    "difficulty": 5,
+    "example_output_format": "When old database starts to slow and creak, / And new one waits with promise of great speed, / The migration must be done within a week, / But downtime is a risk we must not heed. / The data must be moved with careful hand, / Lest loss of rows should bring the system low, / And every table must in order stand, / So that the applications still can go. / The testing phase is long and full of dread, / But when it's done, the system runs anew, / And all the fears that once we had are dead, / The migration's success is pure and true. / So let this sonnet be a tale of might, / Of databases that survive the night."
+  },
+  {
+    "id": 20,
+    "domain": "dependency_modeling",
+    "description": "Model the service dependencies as a family tree",
+    "acceptance_criteria": "Identify at least 5 services as family members, describe parent-child relationships (direct dependencies) and inheritance (shared libraries).",
+    "difficulty": 4,
+    "example_output_format": "AuthService (grandparent) -> UserService (parent) -> ProfileService (child). All share the 'logging' gene (library)."
+  },
+  {
+    "id": 21,
+    "domain": "system_architecture",
+    "description": "Describe the system's caching strategy using a library analogy",
+    "acceptance_criteria": "Explain L1, L2, and L3 caches as different library sections (e.g., desk, shelf, archive).",
+    "difficulty": 2,
+    "example_output_format": "L1 cache is the book on your desk (immediate access). L2 is the shelf in your office (quick retrieval). L3 is the library archive (slower but larger)."
+  },
+  {
+    "id": 22,
+    "domain": "state_machine_design",
+    "description": "Design a state machine for a washing machine cycle",
+    "acceptance_criteria": "Include states for idle, fill, wash, rinse, spin, and drain. Transitions triggered by timers and sensors.",
+    "difficulty": 3,
+    "example_output_format": "States: [Idle, Fill, Wash, Rinse, Spin, Drain]. Transitions: [Idle->Fill (start), Fill->Wash (full_sensor), Wash->Rinse (timer), Rinse->Spin (timer), Spin->Drain (timer), Drain->Idle (empty_sensor)]."
+  },
+  {
+    "id": 23,
+    "domain": "creative_writing",
+    "description": "Write a haiku about a successful deployment",
+    "acceptance_criteria": "Must follow 5-7-5 syllable structure. Must include a sense of relief or celebration.",
+    "difficulty": 1,
+    "example_output_format": "Green lights all around / No errors in the log now / Deployment is done"
+  },
+  {
+    "id": 24,
+    "domain": "dependency_modeling",
+    "description": "Map the build process as a construction project",
+    "acceptance_criteria": "Identify at least 4 phases as construction stages (e.g., foundation, framing, plumbing) and dependencies between them.",
+    "difficulty": 3,
+    "example_output_format": "Foundation (dependency installation) must be complete before Framing (compilation). Plumbing (testing) happens after Framing but before Electrical (deployment)."
+  }
+]

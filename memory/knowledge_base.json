@@ -1,41 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified config/system_config.json to: Add a new configuration key `primitive_validation_required: true` and `primitive_test_path: 'tests/test_new_file_creation_metamorphic.py'` to make the validation check configurable and visible in the system model.",
-      "timestamp": 1780635685.530789,
-      "cycle": 70
-    },
-    {
-      "content": "Successfully modified tests/test_primitive_validation_abort.py to: Create a test that verifies the abort behavior: when the primitive validation fails, the orchestrator correctly aborts higher-level goals and logs the error. This ensures the safety mechanism works.",
-      "timestamp": 1780635698.563476,
-      "cycle": 70
-    },
-    {
-      "content": "[研究] Self-Reflective Error Diagnosis and Root Cause Analysis for Autonomous Agents: Current state-of-the-art approaches for self-reflective error diagnosis and root cause analysis in a",
-      "timestamp": 1780635720.9865775,
-      "cycle": 70
-    },
-    {
-      "content": "[研究] Automated Test Generation and Repair Using Symbolic Execution and Reinforcement Learning: The current state of the art in automated test generation and repair combines symbolic execution wit",
-      "timestamp": 1780635734.1911697,
-      "cycle": 70
-    },
-    {
-      "content": "Successfully modified evolution_engine/failure_context_recorder.py to: Create the FailureContextRecorder class with methods: capture_context(target_file_path, test_output, schema_version, mutation_params) that returns a structured dict with AST dump, test output, schema version, and mutation parameters. Include a generate_minimal_reproducible_example(context) method that creates a standalone Python script reproducing the failure.",
-      "timestamp": 1780635791.4621823,
-      "cycle": 71
-    },
-    {
-      "content": "Successfully modified evolution_engine/mutation_engine.py to: Integrate the FailureContextRecorder into the mutation engine's apply_mutation method. After a mutation fails tests, call recorder.capture_context() with the target file path, test output, current schema version, and mutation parameters. Then call recorder.generate_minimal_reproducible_example() and log the result to the failure analysis module.",
-      "timestamp": 1780635799.1123,
-      "cycle": 71
-    },
-    {
-      "content": "Successfully modified evolution_engine/failure_analysis.py to: Extend the failure analysis module to accept and store the detailed context from FailureContextRecorder. Add a new method analyze_with_context(context) that uses the AST dump and test output for deeper root cause classification. Store the minimal reproducible example path in the failure log.",
-      "timestamp": 1780635820.8531675,
-      "cycle": 71
-    },
-    {
       "content": "Successfully modified config/system_config.json to: Add configuration keys: 'failure_context_recorder.enabled': true, 'failure_context_recorder.max_contexts_per_module': 10, 'failure_context_recorder.reproducible_examples_dir': 'failure_examples/'",
       "timestamp": 1780635823.4932117,
       "cycle": 71
@@ -999,6 +964,41 @@
       "content": "[研究] Autonomous Test Case Generation from Execution Traces: Autonomous test case generation from execution traces leverages runtime monitoring, symbolic executi",
       "timestamp": 1780641477.795917,
       "cycle": 98
+    },
+    {
+      "content": "Successfully modified curiosity_generator.py to: Create a new module 'curiosity_generator.py' in the core directory. This module will: (1) maintain a counter of cycles since last curiosity injection; (2) contain a curated list of 20+ cross-domain tasks from fields like biology, linguistics, game design, architecture, music theory, etc.; (3) implement a selector that picks a task based on the least-recently-used domain; (4) format the task as a structured goal with clear acceptance criteria; (5) inject the goal into the goal queue with high priority; (6) log the injection event with timestamp, domain, and task description.",
+      "timestamp": 1780641572.2792053,
+      "cycle": 99
+    },
+    {
+      "content": "Successfully modified system_config.json to: Add configuration entries: CURIOSITY_INTERVAL=10, CURIOSITY_ENABLED=true, CURIOSITY_DOMAINS=['linguistics', 'biology', 'game_design', 'architecture', 'music_theory', 'philosophy', 'economics', 'ecology', 'artificial_life', 'cybernetics'], CURIOSITY_LOG_PATH='logs/curiosity_injections.json'",
+      "timestamp": 1780641577.8264883,
+      "cycle": 99
+    },
+    {
+      "content": "Successfully modified core/orchestrator.py to: Modify the main evolution loop to: (1) at the start of each cycle, check if cycle % CURIOSITY_INTERVAL == 0; (2) if so, call curiosity_generator.inject_curiosity_task(); (3) ensure the injected task is processed before regular goals; (4) after the task completes (success or failure), log structural changes made to the codebase (new files, modified interfaces, new dependencies).",
+      "timestamp": 1780641625.9247072,
+      "cycle": 99
+    },
+    {
+      "content": "Successfully modified curiosity_tasks.json to: Create a JSON file containing the initial pool of curiosity tasks. Each task has: 'id', 'domain', 'description', 'acceptance_criteria', 'difficulty' (1-5), 'example_output_format'. Include at least 20 tasks spanning the configured domains. Examples: 'Generate a metaphorical description of the system architecture using biological terms', 'Design a simple state machine for a non-code problem (e.g., a coffee maker or traffic light)', 'Create a haiku that describes the current system state', 'Model the dependency graph as an ecosystem food web'.",
+      "timestamp": 1780641659.7659893,
+      "cycle": 99
+    },
+    {
+      "content": "Successfully modified tests/unit/test_curiosity_generator.py to: Create unit tests for the curiosity generator: (1) test that injection only fires on correct cycle intervals; (2) test that tasks are selected from different domains in round-robin fashion; (3) test that the injected goal has valid format and is added to the goal queue; (4) test that structural changes are logged correctly; (5) test edge cases (all tasks exhausted, empty task list, disabled curiosity).",
+      "timestamp": 1780641680.0259058,
+      "cycle": 99
+    },
+    {
+      "content": "Successfully modified core/goal_manager.py to: Modify the goal manager to: (1) recognize curiosity tasks via a special flag or prefix in the goal ID; (2) prioritize curiosity tasks over regular evolution goals; (3) after completing a curiosity task, automatically trigger a 'structural diff' that compares the codebase before and after the task, logging any new files, modified interfaces, or added dependencies.",
+      "timestamp": 1780641700.69814,
+      "cycle": 99
+    },
+    {
+      "content": "Successfully modified logs/curiosity_injections.json to: Initialize the curiosity injection log file with an empty JSON array. This will store records of each injection including: timestamp, cycle number, domain, task description, outcome (success/failure), structural changes detected, and any new capabilities added as a result.",
+      "timestamp": 1780641703.6096728,
+      "cycle": 99
     }
   ],
   "learned_patterns": [],
@@ -4179,6 +4179,46 @@
       "strategy": "Implement a 'meta-mutation' selector that, after each 5 evolution cycles, analyzes the last 50 mutation outcomes from the successful strategies log and uses a decision forest (trained on the 561 strategies) to predict the highest-yield mutation type for the next cycle, dynamically biasing the mutation generator toward that type (e.g., schema alignment vs. test creation vs. dependency analysis). This directly breaks the local optimum of repetitive test infrastructure additions.",
       "outcome": "6/6 steps succeeded",
       "timestamp": 1780641448.924578
+    },
+    {
+      "strategy": "modify curiosity_generator.py: Create a new module 'curiosity_generator.py' in the core directory. This module will: (1) maintain a counter of cycles since last curiosity injection; (2) contain a curated list of 20+ cross-domain tasks from fields like biology, linguistics, game design, architecture, music theory, etc.; (3) implement a selector that picks a task based on the least-recently-used domain; (4) format the task as a structured goal with clear acceptance criteria; (5) inject the goal into the goal queue with high priority; (6) log the injection event with timestamp, domain, and task description.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641572.26412
+    },
+    {
+      "strategy": "modify system_config.json: Add configuration entries: CURIOSITY_INTERVAL=10, CURIOSITY_ENABLED=true, CURIOSITY_DOMAINS=['linguistics', 'biology', 'game_design', 'architecture', 'music_theory', 'philosophy', 'economics', 'ecology', 'artificial_life', 'cybernetics'], CURIOSITY_LOG_PATH='logs/curiosity_injections.json'",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641577.8129716
+    },
+    {
+      "strategy": "modify core/orchestrator.py: Modify the main evolution loop to: (1) at the start of each cycle, check if cycle % CURIOSITY_INTERVAL == 0; (2) if so, call curiosity_generator.inject_curiosity_task(); (3) ensure the injected task is processed before regular goals; (4) after the task completes (success or failure), log structural changes made to the codebase (new files, modified interfaces, new dependencies).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641625.9087262
+    },
+    {
+      "strategy": "modify curiosity_tasks.json: Create a JSON file containing the initial pool of curiosity tasks. Each task has: 'id', 'domain', 'description', 'acceptance_criteria', 'difficulty' (1-5), 'example_output_format'. Include at least 20 tasks spanning the configured domains. Examples: 'Generate a metaphorical description of the system architecture using biological terms', 'Design a simple state machine for a non-code problem (e.g., a coffee maker or traffic light)', 'Create a haiku that describes the current system state', 'Model the dependency graph as an ecosystem food web'.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641659.7512188
+    },
+    {
+      "strategy": "modify tests/unit/test_curiosity_generator.py: Create unit tests for the curiosity generator: (1) test that injection only fires on correct cycle intervals; (2) test that tasks are selected from different domains in round-robin fashion; (3) test that the injected goal has valid format and is added to the goal queue; (4) test that structural changes are logged correctly; (5) test edge cases (all tasks exhausted, empty task list, disabled curiosity).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641680.009544
+    },
+    {
+      "strategy": "modify core/goal_manager.py: Modify the goal manager to: (1) recognize curiosity tasks via a special flag or prefix in the goal ID; (2) prioritize curiosity tasks over regular evolution goals; (3) after completing a curiosity task, automatically trigger a 'structural diff' that compares the codebase before and after the task, logging any new files, modified interfaces, or added dependencies.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641700.6843257
+    },
+    {
+      "strategy": "modify logs/curiosity_injections.json: Initialize the curiosity injection log file with an empty JSON array. This will store records of each injection including: timestamp, cycle number, domain, task description, outcome (success/failure), structural changes detected, and any new capabilities added as a result.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641703.5953462
+    },
+    {
+      "strategy": "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (e.g., 'generate a metaphorical description of the system architecture', 'design a simple state machine for a non-code problem') and requires the agent to either create a new module or adapt an existing one to complete it, logging any resulting structural changes. This forces cross-domain exploration and prevents cognitive stagnation.",
+      "outcome": "7/7 steps succeeded",
+      "timestamp": 1780641703.6242468
     }
   ],
   "capabilities_developed": []
