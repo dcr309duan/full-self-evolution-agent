@@ -1461,3 +1461,5 @@ SyntaxError: invalid syntax
 [2026-06-05 14:27:56] Cycle 95: Goal completed: Build a failure pattern miner that records the cause of every failed mutation (e.g., missing import, schema mismatch, side effect on unrelated module) and generates a 'forbidden mutation space' rule set that blocks similar mutations before execution.
 [2026-06-05 14:27:56] Cycle 95: Phase 2.5: Mutation cycle
 [2026-06-05 14:28:03] Cycle 95: Mutations: 3, successes: 2
+[2026-06-05 14:28:11] Cycle 95: === Cycle Complete ===
+
