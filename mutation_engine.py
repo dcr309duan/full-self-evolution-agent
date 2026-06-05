@@ -4,6 +4,7 @@ import copy
 from typing import Any, Dict, List, Optional, Tuple
 from static_validator import validate_mutation
 from mutation_validator import MutationValidator
+from dependency_scheduler import DependencyScheduler
 
 class MutationEngine:
     """
@@ -78,8 +79,9 @@ class MutationEngine:
             'switch_to_single_gene_mutation': self.switch_to_single_gene_mutation
         }
 
-        # Initialize MutationValidator
+        # Initialize MutationValidator and DependencyScheduler
         self.validator = MutationValidator()
+        self.dependency_scheduler = DependencyScheduler()
         self.enable_validation = enable_validation
 
     def _normalize_weights(self) -> None:
@@ -194,12 +196,70 @@ class MutationEngine:
         print(f"Component '{component}' switched to single gene mutation mode")
         return True
 
+    def _check_dependency_hook(self, source_code: str) -> Tuple[bool, Optional[str]]:
+        """
+        Pre-mutation hook that checks the DependencyScheduler before applying any mutation.
+        
+        Args:
+            source_code: The source code to be mutated
+            
+        Returns:
+            Tuple of (allowed: bool, error_message: Optional[str])
+            - allowed: True if mutation can proceed, False if blocked
+            - error_message: Description of prerequisites that need attention if blocked
+        """
+        try:
+            tree = ast.parse(source_code)
+            # Extract module names from the AST
+            module_names = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Module):
+                    for child in node.body:
+                        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                            module_names.append(child.name)
+            
+            if not module_names:
+                return True, None
+            
+            # Check each module's prerequisites
+            for module_name in module_names:
+                if not self.dependency_scheduler.are_prerequisites_verified_consistent(module_name):
+                    # Get the prerequisites that need attention
+                    prerequisites = self.dependency_scheduler.get_prerequisites(module_name)
+                    unmet_prerequisites = []
+                    for prereq in prerequisites:
+                        if not self.dependency_scheduler.is_prerequisite_verified(prereq):
+                            unmet_prerequisites.append(prereq)
+                    
+                    error_msg = f"Mutation blocked for module '{module_name}'. The following prerequisites need attention: {', '.join(unmet_prerequisites)}"
+                    return False, error_msg
+            
+            return True, None
+            
+        except SyntaxError as e:
+            return True, None  # Allow mutation if parsing fails
+        except Exception as e:
+            return True, None  # Allow mutation on unexpected errors
+
     def mutate(self, source_code: str) -> str:
         """
         Apply a mutation to the source code based on weighted random selection.
         Returns the mutated source code as a string.
         """
         if self.paused:
+            return source_code
+
+        # Pre-mutation dependency check
+        allowed, error_message = self._check_dependency_hook(source_code)
+        if not allowed:
+            # Log the dependency_blocked event
+            failure_entry = {
+                'operator': 'dependency_blocked',
+                'failure_reason': error_message,
+                'source_code': source_code
+            }
+            self.validation_failures.append(failure_entry)
+            print(f"Dependency blocked: {error_message}")
             return source_code
 
         # Choose mutation type based on weights

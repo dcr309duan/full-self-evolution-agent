@@ -1,0 +1,29 @@
+{
+  "modules": {
+    "schema_definitions": {
+      "prerequisites": []
+    },
+    "base_parsers": {
+      "prerequisites": ["schema_definitions"]
+    },
+    "reflection_parser": {
+      "prerequisites": ["base_parsers", "schema_definitions"]
+    },
+    "goal_generator": {
+      "prerequisites": ["reflection_parser", "schema_definitions"]
+    },
+    "mutation_engine": {
+      "prerequisites": ["goal_generator", "testing_framework"]
+    },
+    "testing_framework": {
+      "prerequisites": ["schema_definitions"]
+    },
+    "module_state_store": {
+      "prerequisites": []
+    },
+    "dependency_scheduler": {
+      "prerequisites": ["module_state_store", "dependency_manifest"]
+    }
+  },
+  "bottleneck": "mutation_engine"
+}

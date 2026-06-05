@@ -8,6 +8,7 @@ Also integrates integration_test_suite execution after successful mutations.
 Integrates meta_mutation_engine to check for meta-mutations after each evolution cycle.
 Integrates rollback_manager to verify and rollback after each mutation application.
 Integrates curiosity_module to inject exploration tasks with configurable probability.
+Integrates DependencyScheduler to manage mutation dependencies and bottleneck resolution.
 """
 
 import logging
@@ -23,6 +24,7 @@ from integration_test_suite import IntegrationTestSuite
 from meta_mutation_engine import MetaMutationEngine
 from rollback_manager import RollbackManager
 from curiosity_module import CuriosityModule
+from dependency_scheduler import DependencyScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,7 @@ class UnifiedEvolutionLoopOrchestrator:
         meta_mutation_engine: MetaMutationEngine,
         rollback_manager: RollbackManager,
         curiosity_module: CuriosityModule,
+        dependency_scheduler: DependencyScheduler,
         max_retries: int = 3,
         curiosity_enabled: bool = True,
         curiosity_probability: float = 0.3,
@@ -54,6 +57,7 @@ class UnifiedEvolutionLoopOrchestrator:
         self.meta_mutation_engine = meta_mutation_engine
         self.rollback_manager = rollback_manager
         self.curiosity_module = curiosity_module
+        self.dependency_scheduler = dependency_scheduler
         self.max_retries = max_retries
         self.curiosity_enabled = curiosity_enabled
         self.curiosity_probability = curiosity_probability
@@ -63,6 +67,7 @@ class UnifiedEvolutionLoopOrchestrator:
         self.cycle_number = 0
         self.recent_failures = 0
         self.consecutive_successes = 0
+        self.state_store = {}  # Stores module states: 'needs_verification', 'verified_consistent', etc.
 
     def run_evolution_loop(self) -> None:
         """Main evolution loop that integrates redesign and integration testing when needed."""
@@ -153,6 +158,13 @@ class UnifiedEvolutionLoopOrchestrator:
         goal_id = goal.get("id", "unknown")
         logger.info(f"Processing goal: {goal_id}")
 
+        # Step 1: Identify bottleneck before mutation cycle
+        bottleneck = self.dependency_scheduler.get_bottleneck()
+        if bottleneck:
+            logger.info(f"Bottleneck identified: {bottleneck}")
+            # Step 2: Prioritize mutations that unblock the bottleneck
+            self._prioritize_bottleneck_mutations(bottleneck)
+
         for attempt in range(1, self.max_retries + 1):
             logger.info(f"Attempt {attempt}/{self.max_retries} for goal {goal_id}")
 
@@ -167,6 +179,15 @@ class UnifiedEvolutionLoopOrchestrator:
             if self.curiosity_enabled and random.random() < self.curiosity_probability:
                 self._inject_exploration_tasks(goal_id)
 
+            # Step 3: Verify prerequisites before mutating any module
+            module_id = goal.get("target_component", "")
+            if module_id:
+                prerequisites_met = self.dependency_scheduler.verify_prerequisites(module_id)
+                if not prerequisites_met:
+                    logger.warning(f"Prerequisites not met for module {module_id}. Skipping mutation for goal {goal_id}")
+                    self.goal_manager.mark_goal_failed(goal_id, "prerequisites_not_met")
+                    return
+
             result = self.execution_engine.execute_goal(goal)
 
             if result.get("success", False):
@@ -176,6 +197,11 @@ class UnifiedEvolutionLoopOrchestrator:
                 
                 # After successful mutation and test run, execute integration tests
                 if self._is_mutation_goal(goal):
+                    # Step 4: Update state to 'needs_verification' after successful mutation
+                    if module_id:
+                        self.state_store[module_id] = "needs_verification"
+                        logger.info(f"Module {module_id} state updated to 'needs_verification'")
+
                     integration_success = self._run_integration_tests(goal_id)
                     if not integration_success:
                         logger.warning(f"Integration tests failed after successful mutation for goal {goal_id}")
@@ -184,6 +210,11 @@ class UnifiedEvolutionLoopOrchestrator:
                         self.goal_manager.mark_goal_completed(goal_id, status="degraded")
                         return
                     
+                    # Step 5: Update state to 'verified_consistent' after integration tests pass
+                    if module_id:
+                        self.state_store[module_id] = "verified_consistent"
+                        logger.info(f"Module {module_id} state updated to 'verified_consistent'")
+
                     # After mutation application and before proceeding to next cycle,
                     # verify and rollback if needed
                     rollback_result = self.rollback_manager.verify_and_rollback()
@@ -221,6 +252,28 @@ class UnifiedEvolutionLoopOrchestrator:
         # All retries exhausted
         logger.error(f"Goal {goal_id} failed after {self.max_retries} attempts")
         self.goal_manager.mark_goal_failed(goal_id, "max_retries_exceeded")
+
+    def _prioritize_bottleneck_mutations(self, bottleneck: str) -> None:
+        """Prioritize mutations that unblock the identified bottleneck."""
+        try:
+            # Get pending goals from goal manager
+            pending_goals = self.goal_manager.get_pending_goals()
+            
+            # Filter goals that target the bottleneck module or its dependencies
+            bottleneck_goals = []
+            for goal in pending_goals:
+                target = goal.get("target_component", "")
+                if target == bottleneck or self.dependency_scheduler.is_dependency_of(bottleneck, target):
+                    bottleneck_goals.append(goal)
+            
+            # Reorder goals to prioritize bottleneck-related mutations
+            if bottleneck_goals:
+                logger.info(f"Prioritizing {len(bottleneck_goals)} goals related to bottleneck {bottleneck}")
+                # Move bottleneck goals to the front of the queue
+                self.goal_manager.reorder_goals(bottleneck_goals, priority="high")
+                
+        except Exception as e:
+            logger.error(f"Error prioritizing bottleneck mutations: {e}")
 
     def _check_goal_feasibility(self, goal: Dict[str, Any]) -> Dict[str, Any]:
         """Check if a goal is feasible before execution."""
@@ -493,4 +546,5 @@ class UnifiedEvolutionLoopOrchestrator:
             "max_retries": self.max_retries,
             "curiosity_enabled": self.curiosity_enabled,
             "curiosity_probability": self.curiosity_probability,
+            "state_store": self.state_store,
         }
