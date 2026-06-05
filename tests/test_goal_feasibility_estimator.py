@@ -309,3 +309,155 @@ class TestGoalFeasibilityEstimator:
         assert result.is_feasible  # Should proceed with default assumptions
         assert result.success_rate is None or result.success_rate == 0.5  # Default assumption for new goal type
         assert result.block_reason is None
+
+    def test_dependency_graph_construction_valid(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test dependency graph construction with valid dependencies."""
+        mock_goal_generator.get_goal_dependencies.return_value = ["goal_a", "goal_b"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory"}
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible
+        assert hasattr(result, 'dependency_graph')
+        assert result.dependency_graph is not None
+        assert "goal_a" in result.dependency_graph
+        assert "goal_b" in result.dependency_graph
+
+    def test_dependency_graph_construction_cyclic(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test dependency graph construction with cyclic dependencies."""
+        mock_goal_generator.get_goal_dependencies.return_value = ["test_goal"]  # Self-referential cycle
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision"}
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert not result.is_feasible
+        assert result.block_reason is not None
+        assert "cyclic" in result.block_reason.lower() or "cycle" in result.block_reason.lower()
+
+    def test_feasibility_scoring_various_states(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test feasibility scoring with various dependency states."""
+        # Test with all dependencies met
+        mock_goal_generator.get_goal_dependencies.return_value = ["dep1", "dep2"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_goal_status.return_value = "completed"
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        assert result.is_feasible
+        assert result.dependency_score >= 0.8
+
+        # Test with some dependencies pending
+        mock_orchestrator.get_goal_status.side_effect = ["completed", "pending"]
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        assert result.is_feasible
+        assert result.dependency_score < 1.0
+
+        # Test with failed dependencies
+        mock_orchestrator.get_goal_status.side_effect = ["failed", "completed"]
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        assert not result.is_feasible
+        assert result.block_reason is not None
+
+    def test_blocking_logic_unmet_prerequisites(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test blocking logic for goals with unmet prerequisites."""
+        mock_goal_generator.get_goal_dependencies.return_value = ["prereq_goal"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_goal_status.return_value = "not_started"
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert not result.is_feasible
+        assert result.block_reason is not None
+        assert "prerequisite" in result.block_reason.lower() or "dependency" in result.block_reason.lower()
+
+    def test_reprioritization_end_to_end_pipeline(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test re-prioritization to ensure end-to-end pipeline goals are prioritized."""
+        # Simulate pipeline goals with dependencies
+        mock_goal_generator.get_goal_dependencies.return_value = ["pipeline_step1", "pipeline_step2"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_orchestrator.get_goal_status.side_effect = ["completed", "in_progress"]
+        mock_orchestrator.get_goal_priority.return_value = 5  # High priority
+        
+        result = estimator.estimate_feasibility("pipeline_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible
+        assert result.priority_adjustment is not None
+        assert result.priority_adjustment > 1.0  # Priority should be increased for pipeline goals
+
+    def test_integration_with_orchestrator_full_flow(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test integration with orchestrator for full flow."""
+        # Setup complete scenario
+        mock_goal_generator.get_goal_dependencies.return_value = ["dep1", "dep2"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory", "planning"}
+        mock_orchestrator.get_historical_success_rate.return_value = 0.7
+        mock_orchestrator.get_goal_status.side_effect = ["completed", "completed"]
+        mock_orchestrator.get_goal_priority.return_value = 3
+        
+        result = estimator.estimate_feasibility("full_flow_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible
+        assert result.block_reason is None
+        assert result.confidence_score > 0.5
+        assert result.dependency_score > 0.8
+        assert result.priority_adjustment is not None
+
+    def test_estimator_handles_complex_dependency_graph(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test estimator handles complex dependency graph with multiple levels."""
+        mock_goal_generator.get_goal_dependencies.return_value = ["level1_dep1", "level1_dep2"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision", "memory"}
+        mock_orchestrator.get_goal_status.side_effect = ["completed", "completed"]
+        
+        # Simulate nested dependencies
+        mock_orchestrator.get_goal_dependencies.side_effect = [
+            ["level2_dep1"],  # For level1_dep1
+            ["level2_dep2"],  # For level1_dep2
+            [],  # For level2_dep1
+            []   # For level2_dep2
+        ]
+        
+        result = estimator.estimate_feasibility("complex_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert result.is_feasible
+        assert result.dependency_graph is not None
+        assert len(result.dependency_graph) >= 2
+
+    def test_estimator_handles_dependency_failures_gracefully(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test estimator handles dependency failures gracefully."""
+        mock_goal_generator.get_goal_dependencies.return_value = ["failing_dep"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_goal_status.side_effect = Exception("Dependency resolution failed")
+        
+        result = estimator.estimate_feasibility("test_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert not result.is_feasible
+        assert result.block_reason is not None
+        assert "dependency" in result.block_reason.lower() or "error" in result.block_reason.lower()
+
+    def test_estimator_prioritizes_pipeline_goals(self, estimator, mock_goal_generator, mock_orchestrator):
+        """Test estimator prioritizes pipeline goals over standalone goals."""
+        # Pipeline goal with dependencies
+        mock_goal_generator.get_goal_dependencies.return_value = ["step1", "step2"]
+        mock_goal_generator.get_required_capabilities.return_value = {"nlp"}
+        mock_orchestrator.get_available_capabilities.return_value = {"nlp", "vision"}
+        mock_orchestrator.get_goal_status.side_effect = ["completed", "in_progress"]
+        mock_orchestrator.get_goal_priority.return_value = 4
+        
+        pipeline_result = estimator.estimate_feasibility("pipeline_goal", mock_goal_generator, mock_orchestrator)
+        
+        # Standalone goal without dependencies
+        mock_goal_generator.get_goal_dependencies.return_value = []
+        mock_orchestrator.get_goal_status.side_effect = None
+        mock_orchestrator.get_goal_priority.return_value = 2
+        
+        standalone_result = estimator.estimate_feasibility("standalone_goal", mock_goal_generator, mock_orchestrator)
+        
+        assert pipeline_result.priority_adjustment > standalone_result.priority_adjustment
+        assert pipeline_result.is_feasible
+        assert standalone_result.is_feasible

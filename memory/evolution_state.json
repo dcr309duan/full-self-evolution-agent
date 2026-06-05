@@ -1,7 +1,7 @@
 {
-  "cycle_count": 65,
-  "current_generation": 38,
-  "last_evolution_time": 1780634905.814667,
+  "cycle_count": 66,
+  "current_generation": 39,
+  "last_evolution_time": 1780635059.9367733,
   "capabilities": [
     "Develop web scraping capability to gather knowledge from the internet",
     "Create a task scheduler for autonomous background processing",
@@ -50,7 +50,8 @@
     "Add a pre-mutation static validation step to the mutation engine: before generating any code change,",
     "Build a minimal end-to-end integration test suite that exercises the full mutation → test → system m",
     "Implement a canonical schema alignment layer that converts all inter-module data (reflection output,",
-    "Build a self-consistency test suite that runs after every mutation to verify system integrity: it ch"
+    "Build a self-consistency test suite that runs after every mutation to verify system integrity: it ch",
+    "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a depe"
   ],
   "history": [
     {
@@ -394,6 +395,12 @@
       "goal": "Build a self-consistency test suite that runs after every mutation to verify system integrity: it checks that the mutation engine, reflection parser, and goal generator outputs are consistent with the actual code state, and triggers an automatic rollback if any check fails.",
       "success": true,
       "timestamp": 1780635025.990661
+    },
+    {
+      "cycle": 66,
+      "goal": "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a dependency graph (tracking prerequisites like 'pre-mutation validation depends on mutation engine'), automatically blocks goals with unmet dependencies, and re-prioritizes the backlog to focus on completing the end-to-end pipeline first.",
+      "success": true,
+      "timestamp": 1780635174.2393758
     }
   ],
   "status": "evolving"

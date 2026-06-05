@@ -49,16 +49,37 @@ def _validate_recent_files(cycle_num):
             pass
 
 
+def _goal_similarity(a, b):
+    """Compute word-level Jaccard similarity between two goal descriptions."""
+    words_a = set(a.lower().split())
+    words_b = set(b.lower().split())
+    if not words_a or not words_b:
+        return 0.0
+    return len(words_a & words_b) / len(words_a | words_b)
+
+
 def select_goal(goals):
-    """Select the highest priority pending goal, skipping repeatedly failed ones."""
+    """Select the highest priority pending goal, filtering repetitive ones."""
     pending = [g for g in goals.get("sub_goals", []) if g["status"] == "pending"]
     if not pending:
         return None
+
+    state = get_evolution_state()
+    recent_goals = [h.get("goal", "") for h in state.get("history", [])[-15:]]
+
+    for g in pending:
+        if g.get("consecutive_failures", 0) >= 3:
+            continue
+        desc = g.get("description", "")
+        if any(_goal_similarity(desc, rg) > 0.6 for rg in recent_goals):
+            continue
+        return g
+
     for g in pending:
         if g.get("consecutive_failures", 0) >= 3:
             continue
         return g
-    # All goals have failed 3+ times - reset the least-failed one and try a different approach
+
     if pending:
         pending.sort(key=lambda x: x.get("consecutive_failures", 0))
         pending[0]["consecutive_failures"] = 0
@@ -230,6 +251,21 @@ def evolution_cycle(state):
             log_cycle(cycle_num, f"Mutations: {mut_result['mutations']}, successes: {mut_result['successes']}")
         except Exception as e:
             log_cycle(cycle_num, f"Mutation error: {str(e)[:100]}")
+
+    # Phase 2.6: Cross-domain novelty injection (every 15 cycles)
+    if cycle_num % 15 == 0:
+        log_cycle(cycle_num, "Phase 2.6: 跨领域新策略注入")
+        try:
+            from agents.cross_domain_synthesizer import CrossDomainSynthesizer
+            synthesizer = CrossDomainSynthesizer(state.get("capabilities", []))
+            concepts = synthesizer.get_novel_concepts(n=2)
+            from core.memory import add_goal
+            for concept in concepts:
+                novel_goal = synthesizer.synthesize_goal(concept)
+                add_goal(novel_goal["description"], priority=9)
+                log_cycle(cycle_num, f"注入跨领域目标 [{concept.source_domain}]: {concept.concept_name}")
+        except Exception as e:
+            log_cycle(cycle_num, f"跨领域注入异常: {str(e)[:100]}")
 
     # Phase 2.7: Autonomous research (every 7 cycles)
     if cycle_num % 7 == 0:

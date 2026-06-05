@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a dependency graph (tracking prerequisites like 'pre-mutation validation depends on mutation engine'), automatically blocks goals with unmet dependencies, and re-prioritizes the backlog to focus on completing the end-to-end pipeline first.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780634744.6834295
-    },
-    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
@@ -362,6 +356,13 @@
       "status": "completed",
       "created_at": 1780634744.6814713,
       "completed_at": 1780635016.3611052
+    },
+    {
+      "description": "Create a dependency-aware goal feasibility estimator that evaluates each pending goal against a dependency graph (tracking prerequisites like 'pre-mutation validation depends on mutation engine'), automatically blocks goals with unmet dependencies, and re-prioritizes the backlog to focus on completing the end-to-end pipeline first.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780634744.6834295,
+      "completed_at": 1780635174.1860452
     }
   ],
   "generated_goals": []
