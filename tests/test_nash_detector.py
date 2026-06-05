@@ -7,80 +7,52 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from core.nash_detector_and_forcer import NashEquilibriumDetectorAndForcer
 
 
-def test_equilibrium_detection():
-    """Test that equilibrium detection works correctly"""
+def test_import():
+    """Test that the module can be imported without errors"""
+    assert NashEquilibriumDetectorAndForcer is not None
+
+
+def test_detect_nash_false_when_changing():
+    """Test that detect_nash returns False when modules are changing frequently"""
     detector = NashEquilibriumDetectorAndForcer()
     
-    # Initially should not be at Nash equilibrium
-    assert detector.is_at_nash() == False, "is_at_nash should return False initially"
+    # Simulate frequent changes by adding unstable cycles
+    for _ in range(5):
+        detector.add_stable_cycle()
+        detector.apply_perturbation()
     
-    # Add stable cycles to reach equilibrium
+    assert detector.is_at_nash() == False, "is_at_nash should return False when modules are changing frequently"
+
+
+def test_detect_nash_true_after_stable():
+    """Test that detect_nash returns True after 3+ cycles of no changes"""
+    detector = NashEquilibriumDetectorAndForcer()
+    
+    # Add stable cycles without perturbations
     for _ in range(3):
         detector.add_stable_cycle()
     
-    # Should now be at Nash equilibrium
     assert detector.is_at_nash() == True, "is_at_nash should return True after 3 stable cycles"
-    
-    # Verify stable modules are detected
-    stable_modules = detector.get_stable_modules()
-    assert isinstance(stable_modules, list), "get_stable_modules should return a list"
-    assert len(stable_modules) > 0, "get_stable_modules should return non-empty list after stable cycles"
 
 
-def test_multi_module_force_generation():
-    """Test that force generation works across multiple modules"""
+def test_generate_coordinated_changes():
+    """Test that generate_coordinated_changes returns at least 2 module changes when Nash is detected"""
     detector = NashEquilibriumDetectorAndForcer()
     
-    # Add stable cycles to reach equilibrium
+    # Reach Nash equilibrium
     for _ in range(3):
         detector.add_stable_cycle()
     
-    # Generate forces for all stable modules
-    forces = detector.generate_forces()
+    # Generate coordinated changes
+    changes = detector.generate_coordinated_changes()
     
-    # Verify forces are generated correctly
-    assert isinstance(forces, dict), "generate_forces should return a dictionary"
-    assert len(forces) > 0, "generate_forces should return non-empty dictionary"
-    
-    # Verify each module has a force value
-    for module_name, force_value in forces.items():
-        assert isinstance(module_name, str), "Module name should be a string"
-        assert isinstance(force_value, float), "Force value should be a float"
-        assert force_value > 0, "Force value should be positive"
-
-
-def test_system_escapes_local_optima():
-    """Test that the system can escape local optima"""
-    detector = NashEquilibriumDetectorAndForcer()
-    
-    # Simulate being stuck in a local optimum
-    detector.add_stable_cycle()
-    detector.add_stable_cycle()
-    detector.add_stable_cycle()
-    
-    # Record initial state
-    initial_forces = detector.generate_forces()
-    initial_modules = detector.get_stable_modules()
-    
-    # Apply perturbation to escape local optimum
-    detector.apply_perturbation()
-    
-    # After perturbation, should detect new equilibrium
-    assert detector.is_at_nash() == True, "is_at_nash should return True after perturbation"
-    
-    # Generate new forces after perturbation
-    new_forces = detector.generate_forces()
-    new_modules = detector.get_stable_modules()
-    
-    # Verify that forces changed (system escaped local optimum)
-    assert new_forces != initial_forces, "Forces should change after escaping local optimum"
-    
-    # Verify modules may have changed
-    assert len(new_modules) > 0, "Should still have stable modules after perturbation"
+    assert isinstance(changes, list), "generate_coordinated_changes should return a list"
+    assert len(changes) >= 2, "generate_coordinated_changes should return at least 2 module changes"
 
 
 if __name__ == '__main__':
-    test_equilibrium_detection()
-    test_multi_module_force_generation()
-    test_system_escapes_local_optima()
+    test_import()
+    test_detect_nash_false_when_changing()
+    test_detect_nash_true_after_stable()
+    test_generate_coordinated_changes()
     print("All tests passed!")

@@ -38,13 +38,13 @@ class NashDetectorAndForcer:
         self.score_history: List[List[float]] = []
         
         # Sliding window for tracking module interaction frequencies and success rates
-        self.sliding_window_size: int = 20
+        self.sliding_window_size: int = 20  # Sliding window of 20 cycles as per requirement
         self.interaction_history: deque = deque(maxlen=self.sliding_window_size)
         self.interaction_frequencies: Dict[Tuple[int, int], int] = defaultdict(int)
         self.interaction_success_rates: Dict[Tuple[int, int], float] = defaultdict(float)
         
         # Threshold for considering a change "improving"
-        self.improvement_threshold: float = 0.01
+        self.improvement_threshold: float = 0.05  # 5% threshold as per requirement
         
         # Equilibrium detection parameters
         self.equilibrium_window: int = 5  # Number of recent iterations to check
@@ -141,20 +141,26 @@ class NashDetectorAndForcer:
             self.interaction_frequencies[key] = total_counts[key]
             self.interaction_success_rates[key] = success_counts[key] / total_counts[key]
 
-    def check_equilibrium(self) -> bool:
+    def detect_nash_equilibrium(self) -> bool:
         """
-        Check if the system is in a Nash equilibrium.
+        Enhanced Nash equilibrium detection function that analyzes module interaction
+        frequencies and success rates over the last 20 cycles, identifying when no
+        single module change improves any metric by more than 5%.
         
-        A Nash equilibrium exists when no single module can improve its score
-        by changing its dependencies (within a small tolerance) for 3+ consecutive cycles.
+        A Nash equilibrium exists when:
+        1. No single module can improve its score by changing its dependencies
+           (within a 5% threshold) for 3+ consecutive cycles.
+        2. Module interaction frequencies and success rates have stabilized
+           over the last 20 cycles.
         
         Returns:
-            True if system is in equilibrium, False otherwise
+            True if system is in Nash equilibrium, False otherwise
         """
-        # First check if scores have stabilized
+        # Check if we have enough history
         if len(self.score_history) < self.equilibrium_window:
             return False
         
+        # Check if scores have stabilized
         recent_scores = self.score_history[-self.equilibrium_window:]
         
         # Check if scores are stable over the window
@@ -164,7 +170,7 @@ class NashDetectorAndForcer:
                 self.consecutive_no_improvement = 0
                 return False
         
-        # Check if any single-module change improves the system
+        # Check if any single-module change improves the system by more than 5%
         improvement_found = False
         for module_idx in range(self.num_modules):
             # Try a small perturbation to this module's dependencies
@@ -181,8 +187,8 @@ class NashDetectorAndForcer:
             # Restore original
             self.dependency_matrix[module_idx] = original_deps
             
-            # If improvement found, not in equilibrium
-            if new_score > self.module_scores[module_idx] + self.improvement_threshold:
+            # If improvement found (more than 5%), not in equilibrium
+            if new_score > self.module_scores[module_idx] * (1 + self.improvement_threshold):
                 improvement_found = True
                 break
         
@@ -192,27 +198,78 @@ class NashDetectorAndForcer:
         else:
             self.consecutive_no_improvement += 1
             if self.consecutive_no_improvement >= 3:
-                self.in_equilibrium = True
-                self.equilibrium_iterations += 1
-                self.equilibrium_detected = True
-                return True
+                # Additional check: analyze interaction frequencies and success rates
+                # over the last 20 cycles for stability
+                if self._check_interaction_stability():
+                    self.in_equilibrium = True
+                    self.equilibrium_iterations += 1
+                    self.equilibrium_detected = True
+                    return True
             return False
+
+    def _check_interaction_stability(self) -> bool:
+        """
+        Check if module interaction frequencies and success rates have stabilized
+        over the last 20 cycles.
+        
+        Returns:
+            True if interactions are stable, False otherwise
+        """
+        # If we don't have enough interaction history, consider it unstable
+        if len(self.interaction_history) < 10:
+            return False
+        
+        # Check if interaction frequencies are consistent
+        # (i.e., no single interaction dominates)
+        if not self.interaction_frequencies:
+            return False
+        
+        total_interactions = sum(self.interaction_frequencies.values())
+        if total_interactions == 0:
+            return False
+        
+        # Check if any interaction has an unusually high frequency (>50% of total)
+        for key, freq in self.interaction_frequencies.items():
+            if freq / total_interactions > 0.5:
+                return False
+        
+        # Check if success rates are stable (not too volatile)
+        if self.interaction_success_rates:
+            rates = list(self.interaction_success_rates.values())
+            if rates:
+                avg_rate = sum(rates) / len(rates)
+                # If average success rate is too low or too high, consider it unstable
+                if avg_rate < 0.2 or avg_rate > 0.9:
+                    return False
+        
+        return True
+
+    def check_equilibrium(self) -> bool:
+        """
+        Legacy equilibrium check method that delegates to the enhanced detection.
+        
+        Returns:
+            True if system is in equilibrium, False otherwise
+        """
+        return self.detect_nash_equilibrium()
 
     def force_coordinated_change(self, num_modules_to_change: int = 3) -> Dict[str, Any]:
         """
-        Force a coordinated multi-module change to escape equilibrium.
+        Enhanced coordinated multi-module force function that generates simultaneous
+        changes to 3 modules when equilibrium is detected.
         
-        Generates simultaneous mutations across 2-3 interdependent modules and returns the plan
-        to the orchestrator for execution.
+        Generates simultaneous mutations across 3 interdependent modules and returns the plan
+        to the orchestrator for execution. The changes are designed to escape local optima
+        that single-module changes cannot overcome.
         
         Args:
-            num_modules_to_change: Number of modules to mutate (default 3, clamped to 2-3)
+            num_modules_to_change: Number of modules to mutate (default 3, clamped to 3)
             
         Returns:
             Dictionary describing the forced change plan for the orchestrator
         """
-        # Clamp to valid range (2-3 modules)
-        num_modules_to_change = max(2, min(3, num_modules_to_change))
+        # Always use 3 modules as per requirement
+        num_modules_to_change = 3
         
         # Select interdependent modules based on interaction frequencies
         modules_to_change = self._select_interdependent_modules(num_modules_to_change)
@@ -221,7 +278,8 @@ class NashDetectorAndForcer:
         mutation_plan = {
             "type": "coordinated_mutation",
             "modules_changed": modules_to_change,
-            "mutations": []
+            "mutations": [],
+            "rationale": "Simultaneous changes to escape single-module optimization"
         }
         
         for module_idx in modules_to_change:
@@ -385,12 +443,12 @@ class NashDetectorAndForcer:
                     interaction_success = random.random() > 0.3  # 70% success rate
                     self.record_interaction(i, j, interaction_success)
             
-            # Check for equilibrium
-            if self.check_equilibrium():
+            # Check for equilibrium using enhanced detection
+            if self.detect_nash_equilibrium():
                 results["equilibria_detected"] += 1
                 
-                # Generate coordinated change plan (2-3 modules)
-                num_to_change = random.randint(2, 3)
+                # Generate coordinated change plan (always 3 modules)
+                num_to_change = 3
                 change_plan = self.force_coordinated_change(num_to_change)
                 
                 # Execute the plan
@@ -407,6 +465,49 @@ class NashDetectorAndForcer:
         
         results["final_scores"] = self.module_scores.copy()
         return results
+
+    def get_orchestrator_api(self) -> Dict[str, Any]:
+        """
+        Simple API for integration with the evolution orchestrator.
+        
+        Returns a dictionary with methods that the orchestrator can call:
+        - 'detect_equilibrium': Check if system is in Nash equilibrium
+        - 'force_change': Generate and optionally execute a coordinated change
+        - 'get_state': Get current system state summary
+        
+        Returns:
+            Dictionary with API methods (as callable functions)
+        """
+        def detect_equilibrium() -> bool:
+            """Check if the system is in Nash equilibrium."""
+            return self.detect_nash_equilibrium()
+        
+        def force_change(execute: bool = True) -> Dict[str, Any]:
+            """
+            Generate and optionally execute a coordinated change.
+            
+            Args:
+                execute: If True, execute the change immediately. If False, return plan only.
+                
+            Returns:
+                Dictionary with change plan or execution result
+            """
+            num_to_change = 3
+            plan = self.force_coordinated_change(num_to_change)
+            if execute:
+                result = self.execute_coordinated_change(plan)
+                return result
+            return plan
+        
+        def get_state() -> Dict[str, Any]:
+            """Get current system state summary."""
+            return self.get_system_summary()
+        
+        return {
+            "detect_equilibrium": detect_equilibrium,
+            "force_change": force_change,
+            "get_state": get_state
+        }
 
     def to_json(self) -> str:
         """
@@ -516,17 +617,17 @@ def test_nash_detector_and_forcer():
     assert detector.interaction_success_rates[(1, 2)] == 0.0, "Success rate should be 0.0"
     print("  PASS: Interaction tracking works correctly")
     
-    # Test 4: Equilibrium detection
-    print("\nTest 4: Equilibrium detection")
+    # Test 4: Enhanced equilibrium detection
+    print("\nTest 4: Enhanced equilibrium detection")
     # Force stable scores to trigger equilibrium
     for _ in range(10):
         detector.update_all_scores()
     # Check equilibrium with stable scores
-    is_equilibrium = detector.check_equilibrium()
+    is_equilibrium = detector.detect_nash_equilibrium()
     # After 3+ consecutive no-improvement cycles, should detect equilibrium
     if detector.consecutive_no_improvement >= 3:
         assert is_equilibrium, "Should detect equilibrium after 3+ no-improvement cycles"
-        print("  PASS: Equilibrium detection works correctly")
+        print("  PASS: Enhanced equilibrium detection works correctly")
     else:
         print("  INFO: Not enough cycles to trigger equilibrium (may need more iterations)")
     
@@ -605,13 +706,29 @@ def test_nash_detector_and_forcer():
     for _ in range(20):
         detector4.update_all_scores()
     # Check equilibrium detection
-    eq_detected = detector4.check_equilibrium()
+    eq_detected = detector4.detect_nash_equilibrium()
     # The detector should eventually detect equilibrium after stable scores
     if detector4.consecutive_no_improvement >= 3:
         assert eq_detected, "Should detect equilibrium after 3+ no-improvement cycles"
         print("  PASS: Nash equilibrium detection validation works correctly")
     else:
         print("  INFO: Not enough cycles to validate equilibrium detection")
+    
+    # Test 12: Orchestrator API
+    print("\nTest 12: Orchestrator API")
+    detector5 = NashDetectorAndForcer(num_modules=5, random_seed=42)
+    api = detector5.get_orchestrator_api()
+    assert "detect_equilibrium" in api, "API should have detect_equilibrium"
+    assert "force_change" in api, "API should have force_change"
+    assert "get_state" in api, "API should have get_state"
+    # Test API functions
+    state = api["get_state"]()
+    assert "num_modules" in state, "State should have num_modules"
+    eq_result = api["detect_equilibrium"]()
+    assert isinstance(eq_result, bool), "detect_equilibrium should return bool"
+    change_result = api["force_change"](execute=False)
+    assert "type" in change_result, "force_change should return a plan"
+    print("  PASS: Orchestrator API works correctly")
     
     print("\nAll tests passed!")
 
@@ -655,6 +772,13 @@ def run_example():
     plan = detector.force_coordinated_change(3)
     print(f"Generated plan for {len(plan['modules_changed'])} modules:")
     print(json.dumps(plan, indent=2))
+    
+    # Demonstrate orchestrator API
+    print("\nDemonstrating orchestrator API...")
+    api = detector.get_orchestrator_api()
+    print("API methods available:", list(api.keys()))
+    state = api["get_state"]()
+    print("Current state via API:", json.dumps(state, indent=2))
     
     return detector
 

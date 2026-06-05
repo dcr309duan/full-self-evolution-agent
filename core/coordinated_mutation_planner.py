@@ -33,6 +33,8 @@ class CoordinatedMutationPlanner:
         self.equilibrium_file = equilibrium_file
         self.module_registry: Dict[str, Any] = {}
         self.dependency_graph: Dict[str, List[str]] = {}
+        self.interaction_frequencies: Dict[str, int] = {}
+        self.recent_successes: Dict[str, float] = {}
 
     def load_equilibrium_state(self) -> Optional[Dict[str, Any]]:
         """Read equilibrium state from JSON file."""
@@ -52,6 +54,8 @@ class CoordinatedMutationPlanner:
             deps = module.get('dependencies', [])
             self.dependency_graph[module_name] = deps
             self.module_registry[module_name] = module
+            self.interaction_frequencies[module_name] = module.get('interaction_frequency', 0)
+            self.recent_successes[module_name] = module.get('recent_success', 1.0)
 
     def plan_break_equilibrium(
         self,
@@ -121,6 +125,27 @@ class CoordinatedMutationPlanner:
                 'function_name': new_func_name
             })
 
+            if len(target_modules) >= 3:
+                third_module = target_modules[2]
+                third_mutation = Mutation(
+                    module_name=third_module,
+                    mutation_type='modify_parameter',
+                    payload={
+                        'parameter_name': 'threshold',
+                        'new_value': 0.5
+                    },
+                    rollback_payload={
+                        'parameter_name': 'threshold',
+                        'old_value': 0.0
+                    }
+                )
+                mutations.append(third_mutation)
+                rollback_plan.append({
+                    'module': third_module,
+                    'action': 'restore_parameter',
+                    'parameter_name': 'threshold'
+                })
+
             expected_gain = self._estimate_fitness_gain(
                 target_modules, equilibrium_state
             )
@@ -133,17 +158,30 @@ class CoordinatedMutationPlanner:
         )
 
     def _select_target_modules(self, candidates: List[str]) -> List[str]:
-        """Select 2-3 modules from candidates that have dependency relationships."""
+        """Select 2-3 modules from candidates using heuristic: highest interaction frequency and lowest recent success."""
         if not candidates:
             return []
 
+        scored_modules = []
         for module in candidates:
-            deps = self.dependency_graph.get(module, [])
-            for dep in deps:
-                if dep in candidates and dep != module:
-                    return [module, dep]
+            freq = self.interaction_frequencies.get(module, 0)
+            success = self.recent_successes.get(module, 1.0)
+            score = freq * (1.0 - success)
+            scored_modules.append((score, module))
 
-        return candidates[:min(3, len(candidates))]
+        scored_modules.sort(key=lambda x: x[0], reverse=True)
+
+        selected = []
+        for score, module in scored_modules:
+            if len(selected) >= 3:
+                break
+            if module not in selected:
+                selected.append(module)
+
+        if len(selected) < 2:
+            return candidates[:min(3, len(candidates))]
+
+        return selected
 
     def _estimate_fitness_gain(
         self,
@@ -198,3 +236,55 @@ class CoordinatedMutationPlanner:
             return False
         self.save_plan(plan_dict, output_file)
         return True
+
+    def plan_coordinated_mutations(self, equilibrium_state: Dict[str, Any]) -> List[tuple]:
+        """
+        Plan coordinated mutations based on equilibrium state.
+        Returns list of tuples (module_name, mutation_type, params).
+        """
+        self.build_dependency_graph(equilibrium_state)
+        equilibrium_modules = equilibrium_state.get('equilibrium_modules', [])
+        if not equilibrium_modules:
+            equilibrium_modules = list(self.module_registry.keys())
+
+        target_modules = self._select_target_modules(equilibrium_modules)
+        if not target_modules or len(target_modules) < 2:
+            return []
+
+        coordinated_mutations = []
+
+        donor_module = target_modules[0]
+        receiver_module = target_modules[1]
+
+        coordinated_mutations.append((
+            donor_module,
+            'new_function',
+            {
+                'function_name': f"_coordinated_{datetime.datetime.now().strftime('%H%M%S')}",
+                'function_body': 'return None',
+                'export': True
+            }
+        ))
+
+        coordinated_mutations.append((
+            receiver_module,
+            'new_call',
+            {
+                'target_module': donor_module,
+                'function_name': f"_coordinated_{datetime.datetime.now().strftime('%H%M%S')}",
+                'call_site': 'init'
+            }
+        ))
+
+        if len(target_modules) >= 3:
+            third_module = target_modules[2]
+            coordinated_mutations.append((
+                third_module,
+                'modify_parameter',
+                {
+                    'parameter_name': 'threshold',
+                    'new_value': 0.5
+                }
+            ))
+
+        return coordinated_mutations
