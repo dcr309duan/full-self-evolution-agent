@@ -1,9 +1,8 @@
 {
   "cycle_count": 90,
-  "current_generation": 60,
+  "current_generation": 61,
   "last_evolution_time": 1780639080.2621076,
   "capabilities": [
-    "Create a cross-component integration test suite that runs end-to-end tests for the mutation -> test ",
     "Develop multi-file code analysis and refactoring capability",
     "Implement a self-directed goal generator that analyzes the knowledge base (especially failure patter",
     "Integrate the failure analysis module with the goal generator so that repeated failures trigger a re",
@@ -52,7 +51,8 @@
     "Implement an external fitness function that scores the agent on solving 5 simple programming challen",
     "Create a 'curiosity engine' module that periodically generates a novel synthetic task (e.g., 'implem",
     "Implement a robust file system abstraction layer with atomic writes, retry logic, and automated perm",
-    "Build a meta-cognitive monitoring system that detects patterns in failures (e.g., consistent file wr"
+    "Build a meta-cognitive monitoring system that detects patterns in failures (e.g., consistent file wr",
+    "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., '"
   ],
   "history": [
     {
@@ -528,6 +528,12 @@
       "goal": "Build a meta-cognitive monitoring system that detects patterns in failures (e.g., consistent file write issues) and triggers environment-level fixes, with a dashboard to track failure clusters over cycles.",
       "success": true,
       "timestamp": 1780639044.0180132
+    },
+    {
+      "cycle": 90,
+      "goal": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
+      "success": true,
+      "timestamp": 1780639351.4493992
     }
   ],
   "status": "evolving"
