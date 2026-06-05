@@ -289,6 +289,26 @@
       "content": "[研究] Dynamic function composition and conflict resolution for AST mutations: Dynamic function composition for AST mutations is increasingly explored in program synthesis, geneti",
       "timestamp": 1780627261.0872033,
       "cycle": 28
+    },
+    {
+      "content": "Successfully modified static_validator.py to: Create a new module with functions: validate_syntax(ast_tree) -> bool (using ast.parse or similar), check_type_consistency(ast_tree, symbol_table) -> bool (build a simple symbol table from the AST and verify variable/function usage matches definitions), and check_complexity(ast_tree, max_complexity=10) -> bool (compute cyclomatic complexity via control flow analysis). Export a unified validate_mutation(ast_tree, max_complexity=10) function that runs all checks.",
+      "timestamp": 1780627329.4996777,
+      "cycle": 29
+    },
+    {
+      "content": "Successfully modified mutation_engine.py to: Import the static_validator module. In the mutation application loop (where a mutation operator is selected and applied to the AST), after generating the mutated AST but before passing it to the testing framework, call validate_mutation(mutated_ast). If it returns False, discard the mutated AST, log the failure reason (e.g., 'syntax error', 'type inconsistency', 'complexity exceeded'), increment a retry counter, and select a different mutation operator. If all operators fail after N retries, log a warning and skip the cycle.",
+      "timestamp": 1780627361.1685474,
+      "cycle": 29
+    },
+    {
+      "content": "Successfully modified mutation_engine.py to: Add configuration parameters for the validator: max_cyclomatic_complexity (default 10), enable_syntax_check (default True), enable_type_check (default True). Store these in the mutation engine's config dict. Also add a counter for discarded mutations per operator to track which operators produce the most invalid mutations.",
+      "timestamp": 1780627392.6703937,
+      "cycle": 29
+    },
+    {
+      "content": "Successfully modified mutation_engine.py to: Update the logging in the mutation engine to record each validation failure with the operator used and the specific check that failed. This will feed into the failure analysis module.",
+      "timestamp": 1780627427.574435,
+      "cycle": 29
     }
   ],
   "learned_patterns": [],
@@ -634,6 +654,31 @@
       "strategy": "Implement a unified evolution loop orchestrator that integrates the API server, task scheduler, and web scraping modules into a single, autonomous goal-selection and prioritization pipeline, using the existing strategy-switching mechanism to decide which subsystem to evolve next.",
       "outcome": "11/11 steps succeeded",
       "timestamp": 1780627237.837094
+    },
+    {
+      "strategy": "modify static_validator.py: Create a new module with functions: validate_syntax(ast_tree) -> bool (using ast.parse or similar), check_type_consistency(ast_tree, symbol_table) -> bool (build a simple symbol table from the AST and verify variable/function usage matches definitions), and check_complexity(ast_tree, max_complexity=10) -> bool (compute cyclomatic complexity via control flow analysis). Export a unified validate_mutation(ast_tree, max_complexity=10) function that runs all checks.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627329.4948835
+    },
+    {
+      "strategy": "modify mutation_engine.py: Import the static_validator module. In the mutation application loop (where a mutation operator is selected and applied to the AST), after generating the mutated AST but before passing it to the testing framework, call validate_mutation(mutated_ast). If it returns False, discard the mutated AST, log the failure reason (e.g., 'syntax error', 'type inconsistency', 'complexity exceeded'), increment a retry counter, and select a different mutation operator. If all operators fail after N retries, log a warning and skip the cycle.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627361.1657631
+    },
+    {
+      "strategy": "modify mutation_engine.py: Add configuration parameters for the validator: max_cyclomatic_complexity (default 10), enable_syntax_check (default True), enable_type_check (default True). Store these in the mutation engine's config dict. Also add a counter for discarded mutations per operator to track which operators produce the most invalid mutations.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627392.6679914
+    },
+    {
+      "strategy": "modify mutation_engine.py: Update the logging in the mutation engine to record each validation failure with the operator used and the specific check that failed. This will feed into the failure analysis module.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780627427.5707517
+    },
+    {
+      "strategy": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
+      "outcome": "4/4 steps succeeded",
+      "timestamp": 1780627427.5776336
     }
   ],
   "capabilities_developed": []

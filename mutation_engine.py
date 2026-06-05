@@ -2,6 +2,7 @@ import ast
 import random
 import copy
 from typing import Any, Dict, List, Optional, Tuple
+from static_validator import validate_mutation
 
 class MutationEngine:
     """
@@ -26,6 +27,25 @@ class MutationEngine:
         self.template_failure = {1: 0, 2: 0, 3: 0}
         self.paused = False
         self.failure_report = None
+        self.max_retries = 3
+        
+        # Configuration parameters for validator
+        self.config = {
+            'max_cyclomatic_complexity': 10,
+            'enable_syntax_check': True,
+            'enable_type_check': True
+        }
+        
+        # Counter for discarded mutations per operator
+        self.discarded_mutations = {
+            'refactor_architecture': 0,
+            'delete_dead_code': 0,
+            'optimize_performance': 0,
+            'grammar_guided_mutation': 0
+        }
+        
+        # Detailed failure logging for failure analysis
+        self.validation_failures = []
 
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
@@ -49,23 +69,52 @@ class MutationEngine:
 
         # Choose mutation type based on weights
         mutation_type = self._choose_mutation()
-        try:
-            tree = ast.parse(source_code)
-            if mutation_type == 'refactor_architecture':
-                tree = self._refactor_architecture(tree)
-            elif mutation_type == 'delete_dead_code':
-                tree = self._delete_dead_code(tree)
-            elif mutation_type == 'optimize_performance':
-                tree = self._optimize_performance(tree)
-            elif mutation_type == 'grammar_guided_mutation':
-                return self._grammar_guided_mutation(source_code)
-            return ast.unparse(tree)
-        except SyntaxError:
-            # If parsing fails, return original code unchanged
-            self.failure_counter += 1
-            if self.failure_counter >= 4:
-                self.use_grammar_mutation = True
-            return source_code
+        retry_count = 0
+        
+        while retry_count < self.max_retries:
+            try:
+                tree = ast.parse(source_code)
+                if mutation_type == 'refactor_architecture':
+                    tree = self._refactor_architecture(tree)
+                elif mutation_type == 'delete_dead_code':
+                    tree = self._delete_dead_code(tree)
+                elif mutation_type == 'optimize_performance':
+                    tree = self._optimize_performance(tree)
+                elif mutation_type == 'grammar_guided_mutation':
+                    return self._grammar_guided_mutation(source_code)
+                
+                mutated_ast = tree
+                mutated_code = ast.unparse(mutated_ast)
+                
+                # Validate the mutated AST
+                is_valid, failure_reason = validate_mutation(mutated_ast)
+                if is_valid:
+                    return mutated_code
+                else:
+                    # Track discarded mutation for this operator
+                    self.discarded_mutations[mutation_type] += 1
+                    # Log the failure reason with operator and specific check
+                    failure_entry = {
+                        'operator': mutation_type,
+                        'failure_reason': failure_reason,
+                        'retry_count': retry_count + 1
+                    }
+                    self.validation_failures.append(failure_entry)
+                    print(f"Mutation validation failed: operator={mutation_type}, reason={failure_reason}")
+                    retry_count += 1
+                    # Select a different mutation operator
+                    mutation_type = self._choose_mutation()
+                    
+            except SyntaxError:
+                # If parsing fails, return original code unchanged
+                self.failure_counter += 1
+                if self.failure_counter >= 4:
+                    self.use_grammar_mutation = True
+                return source_code
+        
+        # All retries failed
+        print(f"Warning: All {self.max_retries} retries failed for mutation type {mutation_type}")
+        return source_code
 
     def _choose_mutation(self) -> str:
         """Weighted random selection of mutation type."""
@@ -261,6 +310,15 @@ class MutationEngine:
         except Exception as e:
             # Track failure
             self.template_failure[template_number] += 1
+            # Track discarded mutation for grammar guided mutation
+            self.discarded_mutations['grammar_guided_mutation'] += 1
+            # Log validation failure for grammar mutation
+            failure_entry = {
+                'operator': 'grammar_guided_mutation',
+                'failure_reason': f"Template {template_number} failed: {str(e)}",
+                'template_number': template_number
+            }
+            self.validation_failures.append(failure_entry)
             # Check if all templates have failed
             if all(self.template_failure[t] > 0 for t in range(1, 4)):
                 # Generate failure report

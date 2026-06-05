@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780626426.7464669
-    },
-    {
       "description": "Add a structured reflection parser that extracts 'current_assessment', 'key_gaps', 'next_priority', and 'novel_ideas' from raw reflection text using regex or a lightweight NLP heuristic, and feeds the parsed output into goal generation to close the feedback loop.",
       "priority": 8,
       "status": "pending",
@@ -149,6 +143,13 @@
       "status": "completed",
       "created_at": 1780626959.285682,
       "completed_at": 1780627237.8399327
+    },
+    {
+      "description": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780626426.7464669,
+      "completed_at": 1780627427.579932
     }
   ],
   "generated_goals": []
