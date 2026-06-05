@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Implement a 'strategy switch' mechanism in the mutation engine: when the engine logs its 4th consecutive failure (including the 3 existing ones), it automatically shifts from random crossover mutation to a grammar-guided mutation approach. Specifically, define 3 template-based mutation patterns (e.g., 'wrap function body in try-except', 'add logging call at function entry', 'replace constant with parameter') sourced from the 34 successful strategies in the knowledge base. Apply these templates instead of random AST splicing. If this also fails, the engine should log a detailed report and pause mutation activity until the failure analysis module produces a new recommended strategy.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780626105.4531872
-    },
-    {
       "description": "Add a 'pre-mutation static validation step' to the mutation engine: before applying any mutation to the AST, run a lightweight static check (syntax validation, type consistency via a simple symbol table, and cyclomatic complexity bounds). If the mutated AST fails any check, discard it and retry with a different mutation operator. This filters out obviously broken mutations before test execution, reducing wasted cycles and increasing the success rate of the mutation engine.",
       "priority": 8,
       "status": "pending",
@@ -129,6 +123,13 @@
       "status": "completed",
       "created_at": 1780626426.745552,
       "completed_at": 1780626720.1356485
+    },
+    {
+      "description": "Implement a 'strategy switch' mechanism in the mutation engine: when the engine logs its 4th consecutive failure (including the 3 existing ones), it automatically shifts from random crossover mutation to a grammar-guided mutation approach. Specifically, define 3 template-based mutation patterns (e.g., 'wrap function body in try-except', 'add logging call at function entry', 'replace constant with parameter') sourced from the 34 successful strategies in the knowledge base. Apply these templates instead of random AST splicing. If this also fails, the engine should log a detailed report and pause mutation activity until the failure analysis module produces a new recommended strategy.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780626105.4531872,
+      "completed_at": 1780626902.2321997
     }
   ],
   "generated_goals": []

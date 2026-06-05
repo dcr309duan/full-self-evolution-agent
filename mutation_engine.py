@@ -20,6 +20,12 @@ class MutationEngine:
             'optimize_performance': 1.0
         }
         self._normalize_weights()
+        self.failure_counter = 0
+        self.use_grammar_mutation = False
+        self.template_success = {1: 0, 2: 0, 3: 0}
+        self.template_failure = {1: 0, 2: 0, 3: 0}
+        self.paused = False
+        self.failure_report = None
 
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
@@ -38,6 +44,9 @@ class MutationEngine:
         Apply a mutation to the source code based on weighted random selection.
         Returns the mutated source code as a string.
         """
+        if self.paused:
+            return source_code
+
         # Choose mutation type based on weights
         mutation_type = self._choose_mutation()
         try:
@@ -48,13 +57,20 @@ class MutationEngine:
                 tree = self._delete_dead_code(tree)
             elif mutation_type == 'optimize_performance':
                 tree = self._optimize_performance(tree)
+            elif mutation_type == 'grammar_guided_mutation':
+                return self._grammar_guided_mutation(source_code)
             return ast.unparse(tree)
         except SyntaxError:
             # If parsing fails, return original code unchanged
+            self.failure_counter += 1
+            if self.failure_counter >= 4:
+                self.use_grammar_mutation = True
             return source_code
 
     def _choose_mutation(self) -> str:
         """Weighted random selection of mutation type."""
+        if self.use_grammar_mutation:
+            return 'grammar_guided_mutation'
         types = list(self.objective_weights.keys())
         weights = [self.objective_weights[t] for t in types]
         return random.choices(types, weights=weights, k=1)[0]
@@ -214,6 +230,249 @@ class MutationEngine:
                 return node
 
         return PerformanceOptimizer().visit(tree)
+
+    def _grammar_guided_mutation(self, source_code: str) -> str:
+        """
+        Apply grammar-guided mutation using templates.
+        Randomly select one of the 3 templates and apply it to the target code.
+        Track success/failure of each template application.
+        """
+        # Define 3 grammar templates
+        templates = [
+            # Template 1: Add a try-except block around a function body
+            self._template_add_try_except,
+            # Template 2: Replace a for loop with a while loop
+            self._template_replace_for_with_while,
+            # Template 3: Inline a simple function call
+            self._template_inline_function
+        ]
+        
+        # Randomly select a template
+        template_index = random.randint(0, 2)
+        template_func = templates[template_index]
+        template_number = template_index + 1
+        
+        try:
+            # Apply the selected template
+            result = template_func(source_code)
+            # Track success
+            self.template_success[template_number] += 1
+            return result
+        except Exception as e:
+            # Track failure
+            self.template_failure[template_number] += 1
+            # Check if all templates have failed
+            if all(self.template_failure[t] > 0 for t in range(1, 4)):
+                # Generate failure report
+                self.failure_report = {
+                    'failure_reasons': f"All 3 templates failed. Last template {template_number} failed with error: {str(e)}",
+                    'template_used': template_number,
+                    'code_state': source_code,
+                    'template_success_counts': dict(self.template_success),
+                    'template_failure_counts': dict(self.template_failure)
+                }
+                # Set paused flag
+                self.paused = True
+            return source_code
+
+    def _template_add_try_except(self, source_code: str) -> str:
+        """
+        Template 1: Add a try-except block around a function body.
+        Wraps the entire body of a randomly selected function in a try-except that catches Exception.
+        """
+        tree = ast.parse(source_code)
+        
+        class TryExceptAdder(ast.NodeTransformer):
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+                if node.body and not any(isinstance(stmt, ast.Try) for stmt in node.body):
+                    # Create try-except block
+                    except_handler = ast.ExceptHandler(
+                        type=ast.Name(id='Exception', ctx=ast.Load()),
+                        name='e',
+                        body=[
+                            ast.Raise(
+                                exc=ast.Call(
+                                    func=ast.Attribute(
+                                        value=ast.Name(id='e', ctx=ast.Load()),
+                                        attr='__class__',
+                                        ctx=ast.Load()
+                                    ),
+                                    args=[],
+                                    keywords=[]
+                                ),
+                                cause=None
+                            )
+                        ]
+                    )
+                    try_node = ast.Try(
+                        body=node.body,
+                        handlers=[except_handler],
+                        orelse=[],
+                        finalbody=[]
+                    )
+                    node.body = [try_node]
+                return node
+        
+        tree = TryExceptAdder().visit(tree)
+        return ast.unparse(tree)
+
+    def _template_replace_for_with_while(self, source_code: str) -> str:
+        """
+        Template 2: Replace a for loop with a while loop.
+        Converts a simple for loop iterating over a list to an equivalent while loop.
+        """
+        tree = ast.parse(source_code)
+        
+        class ForToWhileReplacer(ast.NodeTransformer):
+            def visit_For(self, node: ast.For) -> ast.AST:
+                # Only replace simple for loops over names
+                if isinstance(node.iter, ast.Name):
+                    iter_name = node.iter.id
+                    target_name = node.target.id if isinstance(node.target, ast.Name) else None
+                    if target_name:
+                        # Create while loop equivalent
+                        # Initialize index variable
+                        index_var = ast.Name(id='_idx', ctx=ast.Store())
+                        init_assign = ast.Assign(
+                            targets=[index_var],
+                            value=ast.Constant(value=0)
+                        )
+                        
+                        # Create while condition: _idx < len(iter_name)
+                        while_condition = ast.Compare(
+                            left=ast.Name(id='_idx', ctx=ast.Load()),
+                            ops=[ast.Lt()],
+                            comparators=[
+                                ast.Call(
+                                    func=ast.Name(id='len', ctx=ast.Load()),
+                                    args=[ast.Name(id=iter_name, ctx=ast.Load())],
+                                    keywords=[]
+                                )
+                            ]
+                        )
+                        
+                        # Create loop body with index access
+                        new_body = []
+                        for stmt in node.body:
+                            # Replace references to target with iter_name[_idx]
+                            class ReplaceTarget(ast.NodeTransformer):
+                                def visit_Name(self, name_node):
+                                    if name_node.id == target_name:
+                                        return ast.Subscript(
+                                            value=ast.Name(id=iter_name, ctx=ast.Load()),
+                                            slice=ast.Name(id='_idx', ctx=ast.Load()),
+                                            ctx=name_node.ctx
+                                        )
+                                    return name_node
+                            new_stmt = ReplaceTarget().visit(copy.deepcopy(stmt))
+                            new_body.append(new_stmt)
+                        
+                        # Add increment at end of loop body
+                        increment = ast.AugAssign(
+                            target=ast.Name(id='_idx', ctx=ast.Store()),
+                            op=ast.Add(),
+                            value=ast.Constant(value=1)
+                        )
+                        new_body.append(increment)
+                        
+                        while_node = ast.While(
+                            test=while_condition,
+                            body=new_body,
+                            orelse=node.orelse
+                        )
+                        
+                        # Return both init and while as a list
+                        return [init_assign, while_node]
+                return node
+        
+        tree = ForToWhileReplacer().visit(tree)
+        return ast.unparse(tree)
+
+    def _template_inline_function(self, source_code: str) -> str:
+        """
+        Template 3: Inline a simple function call.
+        Finds a function that is called exactly once and inlines its body.
+        """
+        tree = ast.parse(source_code)
+        
+        # First pass: collect function definitions and call counts
+        class FunctionCollector(ast.NodeVisitor):
+            def __init__(self):
+                self.functions = {}
+                self.call_counts = {}
+            
+            def visit_FunctionDef(self, node):
+                self.functions[node.name] = node
+                self.generic_visit(node)
+            
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                    if func_name in self.call_counts:
+                        self.call_counts[func_name] += 1
+                    else:
+                        self.call_counts[func_name] = 1
+                self.generic_visit(node)
+        
+        collector = FunctionCollector()
+        collector.visit(tree)
+        
+        # Find a function that is called exactly once and has simple body
+        inline_candidate = None
+        for func_name, count in collector.call_counts.items():
+            if count == 1 and func_name in collector.functions:
+                func_node = collector.functions[func_name]
+                # Check if function has simple body (single return statement)
+                if (len(func_node.body) == 1 and 
+                    isinstance(func_node.body[0], ast.Return) and
+                    func_node.body[0].value is not None):
+                    inline_candidate = func_name
+                    break
+        
+        if inline_candidate is None:
+            raise ValueError("No suitable function found for inlining")
+        
+        # Second pass: inline the function
+        class Inliner(ast.NodeTransformer):
+            def __init__(self, func_name, func_node):
+                self.func_name = func_name
+                self.func_node = func_node
+                self.inlined = False
+            
+            def visit_Call(self, node):
+                if (isinstance(node.func, ast.Name) and 
+                    node.func.id == self.func_name and 
+                    not self.inlined):
+                    self.inlined = True
+                    # Get the return value expression
+                    return_expr = self.func_node.body[0].value
+                    # Replace parameters with arguments
+                    param_map = {}
+                    for param, arg in zip(self.func_node.args.args, node.args):
+                        param_map[param.arg] = arg
+                    
+                    # Replace parameter references in the expression
+                    class ParamReplacer(ast.NodeTransformer):
+                        def visit_Name(self, name_node):
+                            if name_node.id in param_map:
+                                return copy.deepcopy(param_map[name_node.id])
+                            return name_node
+                    
+                    return ParamReplacer().visit(copy.deepcopy(return_expr))
+                return node
+            
+            def visit_FunctionDef(self, node):
+                if node.name == self.func_name:
+                    # Remove the function definition
+                    return None
+                return node
+        
+        inliner = Inliner(inline_candidate, collector.functions[inline_candidate])
+        tree = inliner.visit(tree)
+        
+        # Fix the tree after removal
+        ast.fix_missing_locations(tree)
+        return ast.unparse(tree)
 
 
 def create_mutation_engine(objective_weights: Optional[Dict[str, float]] = None) -> MutationEngine:
