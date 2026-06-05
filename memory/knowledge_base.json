@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate meta_monitor into the orchestrator: 1) add a 'run_meta_monitor' step after each goal completion (success or failure), 2) on goal failure, call meta_monitor.record_failure(category, goal_id) and check for 3+ consecutive failures, 3) if triggered, call meta_monitor.trigger_reprioritization() which updates the goal queue, 4) before retrying any goal in a blocked category, require meta_monitor.generate_root_cause_hypothesis() and log the hypothesis, 5) add a '--meta-monitor-enabled' config flag.",
-      "timestamp": 1780636361.2835588,
-      "cycle": 75
-    },
-    {
-      "content": "Successfully modified evolution_engine/goal_generator.py to: Update goal generator to: 1) accept and respect 'blocked_categories' from meta_monitor, 2) when a category is blocked, generate a 'root_cause_analysis' goal type instead of regular goals in that category, 3) mark generated root cause analysis goals with priority 'critical'.",
-      "timestamp": 1780636369.7482073,
-      "cycle": 75
-    },
-    {
-      "content": "Successfully modified evolution_engine/reflection_parser.py to: Update reflection parser to: 1) include a 'failure_categories' field in its output schema, 2) when a root cause hypothesis is generated, include it in the reflection cycle for learning, 3) track which categories have been analyzed and what hypotheses were generated.",
-      "timestamp": 1780636390.9337113,
-      "cycle": 75
-    },
-    {
-      "content": "Successfully modified tests/test_core_evolution_loop.py to: Add integration test that: 1) creates 3 consecutive failing goals in 'file_creation' category, 2) verifies meta_monitor detects the pattern, 3) verifies reprioritization blocks file_creation goals, 4) verifies a root cause hypothesis is generated, 5) verifies that after hypothesis generation, a new file_creation goal can be attempted.",
-      "timestamp": 1780636427.9979663,
-      "cycle": 75
-    },
-    {
       "content": "Successfully modified evolution_engine/schema_registry.py to: Create a schema registry that defines canonical JSON schemas for all inter-module data contracts: goal_generator output, mutation_engine input/output, test_runner input/output, reflection_parser input/output. Each schema includes field names, types, required/optional status, and version number.",
       "timestamp": 1780636522.56745,
       "cycle": 76
@@ -999,6 +979,26 @@
       "content": "Successfully modified core/goal_selector.py to: Add a 'consolidation_priority' parameter that, when consolidation scanner outputs a high-confidence plan, elevates consolidation goals above new capability goals",
       "timestamp": 1780642343.5831976,
       "cycle": 101
+    },
+    {
+      "content": "Successfully modified core/meta_parameter_evolution.py to: Create the main meta-parameter evolution module with: (1) ParameterTracker class that logs mutation_rate, goal_selection_weights, reflection_depth per generation along with fitness delta, (2) HillClimber class that adjusts one parameter at a time by ±10% and accepts if fitness improves, (3) History buffer storing last 20 generations, (4) trigger() method called every 10 cycles that runs hill-climbing on the most impactful parameter based on correlation analysis",
+      "timestamp": 1780642411.2476158,
+      "cycle": 102
+    },
+    {
+      "content": "Successfully modified core/self_model.py to: Add 'meta_parameters' section to the self-model schema: store current mutation_rate (float 0.01-0.5), goal_selection_weights (dict with keys 'novelty','feasibility','impact'), reflection_depth (int 1-5), and a history of parameter changes with timestamps and fitness outcomes",
+      "timestamp": 1780642488.3943903,
+      "cycle": 102
+    },
+    {
+      "content": "Successfully modified tests/test_meta_parameter_evolution.py to: Create test suite that: (1) Simulates 30 generations with synthetic fitness data, (2) Verifies tracker correctly stores last 20 entries, (3) Tests hill-climbing adjusts parameters in correct direction, (4) Validates trigger only fires every 10 cycles, (5) Ensures parameters stay within defined bounds",
+      "timestamp": 1780642512.7889466,
+      "cycle": 102
+    },
+    {
+      "content": "Successfully modified core/goal_selector.py to: Add 'meta_optimization' goal type that, when meta-parameter evolution detects stagnation (no fitness improvement for 5 consecutive cycles), generates a goal to explore parameter space more aggressively (e.g., temporarily increase mutation rate to 0.3)",
+      "timestamp": 1780642533.2432837,
+      "cycle": 102
     }
   ],
   "learned_patterns": [],
@@ -1317,6 +1317,11 @@
       "approach": "modify core/mutation_engine.py: Add a 'consolidation_mutation' mode that, when a merge/delete plan is approved, can safely merge two modules by: (1) Creating a new combined module, (2) Updating all callers to use the new module, (3) Deleting old modules after verification",
       "reason": "Syntax error: '(' was never closed (<unknown>, line 904)",
       "timestamp": 1780642294.270736
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Integrate MetaParameterEvolution into the main loop: (1) After each mutation cycle, record current parameters and fitness delta to the tracker, (2) Every 10 cycles, call trigger() to adjust parameters, (3) Log parameter changes and their effects to the accumulated knowledge system",
+      "reason": "Syntax error: expected an indented block after 'elif' statement on line 858 (<unknown>, line 859)",
+      "timestamp": 1780642456.4844847
     }
   ],
   "successful_strategies": [
@@ -4314,6 +4319,31 @@
       "strategy": "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifies duplicates or near-duplicates (e.g., multiple schema alignment functions) by comparing function signatures, docstrings, and logic patterns; then outputs a prioritized merge/delete plan for the next evolution cycle.",
       "outcome": "4/5 steps succeeded",
       "timestamp": 1780642343.600107
+    },
+    {
+      "strategy": "modify core/meta_parameter_evolution.py: Create the main meta-parameter evolution module with: (1) ParameterTracker class that logs mutation_rate, goal_selection_weights, reflection_depth per generation along with fitness delta, (2) HillClimber class that adjusts one parameter at a time by ±10% and accepts if fitness improves, (3) History buffer storing last 20 generations, (4) trigger() method called every 10 cycles that runs hill-climbing on the most impactful parameter based on correlation analysis",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642411.2331202
+    },
+    {
+      "strategy": "modify core/self_model.py: Add 'meta_parameters' section to the self-model schema: store current mutation_rate (float 0.01-0.5), goal_selection_weights (dict with keys 'novelty','feasibility','impact'), reflection_depth (int 1-5), and a history of parameter changes with timestamps and fitness outcomes",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642488.3777301
+    },
+    {
+      "strategy": "modify tests/test_meta_parameter_evolution.py: Create test suite that: (1) Simulates 30 generations with synthetic fitness data, (2) Verifies tracker correctly stores last 20 entries, (3) Tests hill-climbing adjusts parameters in correct direction, (4) Validates trigger only fires every 10 cycles, (5) Ensures parameters stay within defined bounds",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642512.7695053
+    },
+    {
+      "strategy": "modify core/goal_selector.py: Add 'meta_optimization' goal type that, when meta-parameter evolution detects stagnation (no fitness improvement for 5 consecutive cycles), generates a goal to explore parameter space more aggressively (e.g., temporarily increase mutation rate to 0.3)",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642533.2221828
+    },
+    {
+      "strategy": "Build a 'meta-parameter evolution' module that tracks the performance impact of key evolution engine parameters (mutation rate, goal selection weights, reflection depth) over the last 20 generations, and uses a simple hill-climbing algorithm to adjust these parameters once per 10 cycles to maximize fitness improvement rate.",
+      "outcome": "4/5 steps succeeded",
+      "timestamp": 1780642533.2647707
     }
   ],
   "capabilities_developed": []

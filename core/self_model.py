@@ -95,6 +95,64 @@ class SelfModelKnowledgeGraph:
         self.edges: List[DependencyEdge] = []
         self.failure_clusters: Dict[str, FailureClusterNode] = {}  # Cluster ID -> FailureClusterNode
         self.module_interfaces: Dict[str, Dict[str, Dict[str, Any]]] = {}  # Module ID -> {function_name: {signature, docstring}}
+        self.meta_parameters: Dict[str, Any] = {
+            "mutation_rate": 0.1,  # Default value within 0.01-0.5
+            "goal_selection_weights": {
+                "novelty": 0.4,
+                "feasibility": 0.3,
+                "impact": 0.3
+            },
+            "reflection_depth": 3,  # Default value within 1-5
+            "parameter_change_history": []  # History of parameter changes with timestamps and fitness outcomes
+        }
+
+    def set_mutation_rate(self, rate: float):
+        """Set the mutation rate, clamped to valid range 0.01-0.5."""
+        self.meta_parameters["mutation_rate"] = max(0.01, min(0.5, rate))
+
+    def get_mutation_rate(self) -> float:
+        """Get the current mutation rate."""
+        return self.meta_parameters["mutation_rate"]
+
+    def set_goal_selection_weights(self, weights: Dict[str, float]):
+        """Set the goal selection weights, ensuring all required keys exist."""
+        required_keys = {"novelty", "feasibility", "impact"}
+        if not required_keys.issubset(weights.keys()):
+            raise ValueError(f"Goal selection weights must contain keys: {required_keys}")
+        # Normalize weights to sum to 1.0
+        total = sum(weights.values())
+        if total > 0:
+            normalized = {k: v / total for k, v in weights.items()}
+        else:
+            normalized = {k: 1.0 / len(weights) for k in weights}
+        self.meta_parameters["goal_selection_weights"] = normalized
+
+    def get_goal_selection_weights(self) -> Dict[str, float]:
+        """Get the current goal selection weights."""
+        return self.meta_parameters["goal_selection_weights"]
+
+    def set_reflection_depth(self, depth: int):
+        """Set the reflection depth, clamped to valid range 1-5."""
+        self.meta_parameters["reflection_depth"] = max(1, min(5, depth))
+
+    def get_reflection_depth(self) -> int:
+        """Get the current reflection depth."""
+        return self.meta_parameters["reflection_depth"]
+
+    def record_parameter_change(self, parameter_name: str, old_value: Any, new_value: Any, fitness_outcome: Optional[float] = None):
+        """Record a parameter change with timestamp and optional fitness outcome."""
+        change_entry = {
+            "timestamp": datetime.utcnow(),
+            "parameter": parameter_name,
+            "old_value": old_value,
+            "new_value": new_value,
+            "fitness_outcome": fitness_outcome
+        }
+        self.meta_parameters["parameter_change_history"].append(change_entry)
+
+    def get_parameter_change_history(self) -> List[Dict[str, Any]]:
+        """Get the history of parameter changes."""
+        return self.meta_parameters["parameter_change_history"]
 
     def register_module_interface(self, module_id: str, function_name: str, signature: str, docstring: str):
         """Register a function's signature and docstring for a module, enabling the scanner to access this data without re-parsing."""
@@ -270,7 +328,8 @@ class SelfModelKnowledgeGraph:
             "nodes": {},
             "edges": [],
             "failure_clusters": {},
-            "module_interfaces": {}
+            "module_interfaces": {},
+            "meta_parameters": copy.deepcopy(self.meta_parameters)
         }
         # Deep copy nodes to avoid mutation of original data
         for node_id, node in self.nodes.items():
@@ -310,6 +369,21 @@ class SelfModelKnowledgeGraph:
         self.edges.clear()
         self.failure_clusters.clear()
         self.module_interfaces.clear()
+        self.meta_parameters.clear()
+        # Restore meta_parameters
+        if "meta_parameters" in snapshot:
+            self.meta_parameters = copy.deepcopy(snapshot["meta_parameters"])
+        else:
+            self.meta_parameters = {
+                "mutation_rate": 0.1,
+                "goal_selection_weights": {
+                    "novelty": 0.4,
+                    "feasibility": 0.3,
+                    "impact": 0.3
+                },
+                "reflection_depth": 3,
+                "parameter_change_history": []
+            }
         # Restore nodes
         for node_id, node_data in snapshot["nodes"].items():
             node = SimulationNode(node_data["id"], node_data["name"], node_data["accuracy"])
@@ -387,4 +461,18 @@ class SelfModelKnowledgeGraph:
             for cluster_id in node.failure_clusters:
                 if cluster_id not in self.failure_clusters:
                     inconsistencies.append(f"Module '{node_id}' references non-existent failure cluster '{cluster_id}'")
+        # Validate meta_parameters consistency
+        if "mutation_rate" in self.meta_parameters:
+            rate = self.meta_parameters["mutation_rate"]
+            if not (0.01 <= rate <= 0.5):
+                inconsistencies.append(f"Mutation rate {rate} is outside valid range [0.01, 0.5]")
+        if "reflection_depth" in self.meta_parameters:
+            depth = self.meta_parameters["reflection_depth"]
+            if not (1 <= depth <= 5):
+                inconsistencies.append(f"Reflection depth {depth} is outside valid range [1, 5]")
+        if "goal_selection_weights" in self.meta_parameters:
+            weights = self.meta_parameters["goal_selection_weights"]
+            required_keys = {"novelty", "feasibility", "impact"}
+            if not required_keys.issubset(weights.keys()):
+                inconsistencies.append(f"Goal selection weights missing required keys: {required_keys - set(weights.keys())}")
         return inconsistencies

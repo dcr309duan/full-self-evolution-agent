@@ -5,6 +5,7 @@ class GoalType(Enum):
     REPAIR = "repair"
     NEW_CAPABILITY = "new_capability"
     TEST_HARNESS = "test_harness"
+    META_OPTIMIZATION = "meta_optimization"
 
 class Goal:
     """Represents a goal with its type, dependencies, and priority."""
@@ -41,6 +42,9 @@ class GoalSelector:
         self.pending_repair_goals: List[Goal] = []
         self.pending_new_goals: List[Goal] = []
         self.pending_consolidation_goals: List[Goal] = []
+        self.pending_meta_optimization_goals: List[Goal] = []
+        self.stagnation_counter = 0
+        self.last_fitness_improvement = True
 
     def add_goal(self, goal: Goal) -> None:
         """Add a goal to the selector."""
@@ -48,6 +52,8 @@ class GoalSelector:
             self.pending_repair_goals.append(goal)
         elif goal.goal_type == GoalType.NEW_CAPABILITY:
             self.pending_new_goals.append(goal)
+        elif goal.goal_type == GoalType.META_OPTIMIZATION:
+            self.pending_meta_optimization_goals.append(goal)
         else:
             self.goals.append(goal)
 
@@ -113,6 +119,77 @@ class GoalSelector:
 
         return sorted_goals
 
+    def _get_meta_optimization_goals_in_dependency_order(self) -> List[Goal]:
+        """
+        Return meta-optimization goals sorted by dependency order.
+        Uses topological sort to ensure dependencies are processed first.
+        """
+        if not self.pending_meta_optimization_goals:
+            return []
+
+        # Build dependency graph
+        goal_map = {g.goal_id: g for g in self.pending_meta_optimization_goals}
+        visited = set()
+        sorted_goals = []
+
+        def dfs(goal_id: str) -> None:
+            if goal_id in visited:
+                return
+            visited.add(goal_id)
+            goal = goal_map.get(goal_id)
+            if goal:
+                for dep_id in goal.dependencies:
+                    if dep_id in goal_map:
+                        dfs(dep_id)
+                sorted_goals.append(goal)
+
+        for goal in self.pending_meta_optimization_goals:
+            dfs(goal.goal_id)
+
+        return sorted_goals
+
+    def check_stagnation(self, fitness_improved: bool) -> Optional[Goal]:
+        """
+        Check for stagnation in meta-parameter evolution.
+        
+        If no fitness improvement for 5 consecutive cycles, generate a meta-optimization
+        goal to explore parameter space more aggressively (e.g., temporarily increase mutation rate).
+        
+        Args:
+            fitness_improved: Whether fitness improved in the current cycle
+            
+        Returns:
+            A meta-optimization goal if stagnation is detected, None otherwise
+        """
+        if fitness_improved:
+            self.stagnation_counter = 0
+            self.last_fitness_improvement = True
+        else:
+            self.stagnation_counter += 1
+            self.last_fitness_improvement = False
+
+        if self.stagnation_counter >= 5:
+            # Reset counter to avoid generating multiple goals for the same stagnation period
+            self.stagnation_counter = 0
+            
+            # Create a meta-optimization goal to explore parameter space more aggressively
+            meta_goal = Goal(
+                goal_id=f"meta_opt_stagnation_{len(self.completed_goals) + len(self.pending_meta_optimization_goals)}",
+                goal_type=GoalType.META_OPTIMIZATION,
+                priority=100,  # High priority to ensure it gets processed
+                metadata={
+                    "reason": "stagnation_detected",
+                    "stagnation_cycles": 5,
+                    "action": "increase_mutation_rate",
+                    "mutation_rate": 0.3,
+                    "description": "No fitness improvement for 5 cycles. Temporarily increasing mutation rate to 0.3 to explore parameter space more aggressively."
+                }
+            )
+            self.add_goal(meta_goal)
+            return meta_goal
+        
+        return None
+
     def select_next_goal(self) -> Optional[Goal]:
         """
         Select the next goal to process based on current mode.
@@ -120,6 +197,7 @@ class GoalSelector:
         In test_mode, repair goals are prioritized and processed in dependency order.
         When consolidation_priority is True and consolidation goals exist, they are 
         prioritized over new capability goals.
+        Meta-optimization goals are processed after repair and consolidation but before new capabilities.
         In normal mode, goals are selected by priority.
         """
         if self.test_mode:
@@ -152,6 +230,17 @@ class GoalSelector:
                 # (wait for dependencies to be completed)
                 return None
 
+        # Process meta-optimization goals (after repair and consolidation, before new capabilities)
+        if self.pending_meta_optimization_goals:
+            meta_goals = self._get_meta_optimization_goals_in_dependency_order()
+            if meta_goals:
+                for goal in meta_goals:
+                    if all(dep in [g.goal_id for g in self.completed_goals] 
+                           for dep in goal.dependencies):
+                        self.pending_meta_optimization_goals.remove(goal)
+                        return goal
+                return None
+
         # Fall back to normal priority-based selection
         all_goals = self.pending_new_goals + self.goals
         if not all_goals:
@@ -175,7 +264,8 @@ class GoalSelector:
 
     def get_pending_goals(self) -> List[Goal]:
         """Get all pending goals."""
-        return self.goals + self.pending_repair_goals + self.pending_new_goals + self.pending_consolidation_goals
+        return (self.goals + self.pending_repair_goals + self.pending_new_goals + 
+                self.pending_consolidation_goals + self.pending_meta_optimization_goals)
 
     def has_pending_repair_goals(self) -> bool:
         """Check if there are any pending repair goals."""
@@ -185,6 +275,10 @@ class GoalSelector:
         """Check if there are any pending consolidation goals."""
         return len(self.pending_consolidation_goals) > 0
 
+    def has_pending_meta_optimization_goals(self) -> bool:
+        """Check if there are any pending meta-optimization goals."""
+        return len(self.pending_meta_optimization_goals) > 0
+
     def clear(self) -> None:
         """Clear all goals and reset state."""
         self.goals.clear()
@@ -192,6 +286,9 @@ class GoalSelector:
         self.pending_repair_goals.clear()
         self.pending_new_goals.clear()
         self.pending_consolidation_goals.clear()
+        self.pending_meta_optimization_goals.clear()
+        self.stagnation_counter = 0
+        self.last_fitness_improvement = True
 
 
 def create_goal_selector(test_mode: bool = False, consolidation_priority: bool = False) -> GoalSelector:
