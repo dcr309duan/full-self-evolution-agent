@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/test_mutation_validator.py to: Create a comprehensive test suite for the validator. Test cases: (1) valid mutation that passes all phases, (2) mutation with syntax error (should fail phase 1), (3) mutation that breaks a critical interface (should fail phase 2), (4) mutation that passes phases 1-2 but fails tests (should fail phase 3), (5) edge cases like empty mutation, mutation on non-existent module, and circular dependency scenarios.",
-      "timestamp": 1780632593.0887961,
-      "cycle": 52
-    },
-    {
-      "content": "Successfully modified scripts/run_validation_pipeline.py to: Create a standalone script that can be run externally to validate a proposed mutation. It takes a mutation description (e.g., file path, old code, new code) and runs all three phases, outputting a JSON report. This allows manual or automated validation outside the evolution loop.",
-      "timestamp": 1780632605.8805656,
-      "cycle": 52
-    },
-    {
-      "content": "Successfully modified self_model/builder.py to: Enhance the get_dependency_graph() method to also return a list of 'critical interfaces' (e.g., public functions, classes, and their signatures) that are depended upon by other modules. This will be used by the validator to detect breaking changes more precisely.",
-      "timestamp": 1780632620.3621936,
-      "cycle": 52
-    },
-    {
-      "content": "Successfully modified self_model/builder.py to: Extend get_dependency_graph() to also return 'interface_usage_map': a dict mapping each public function/class to a list of modules that call it. Use AST analysis to scan all modules for function calls, class instantiations, and attribute accesses. Store this in the self-model as a persistent JSON file.",
-      "timestamp": 1780632705.7224166,
-      "cycle": 53
-    },
-    {
-      "content": "Successfully modified self_model/side_effect_simulator.py to: Create a new module that takes a proposed mutation (file, old code, new code) and simulates side effects. It uses the interface_usage_map to identify all callers of any changed interfaces, then traces the call chain 2 levels deep. Output: a list of affected modules, affected functions, and a risk score (0-100) based on number of callers, depth, and whether the interface signature changed.",
-      "timestamp": 1780632722.6892438,
-      "cycle": 53
-    },
-    {
       "content": "Successfully modified mutation_engine/validator.py to: Integrate side_effect_simulator into Phase 2 of the validator. After checking critical interfaces, run the simulator and add a 'side_effects' field to the validation result containing: affected_modules, risk_score, and recommended_compensations (list of suggested fixes). If risk_score > 70, mark Phase 2 as failed with a warning.",
       "timestamp": 1780632748.7683103,
       "cycle": 53
@@ -999,6 +974,31 @@
       "content": "Successfully modified evolution_engine/reflection_parser.py to: Add a 'capability_fitness' section to the structured reflection output that: (1) reports current fitness scores for top 5 and bottom 5 capabilities, (2) notes any deprecation events since last reflection, (3) suggests capabilities that could be merged or consolidated based on overlapping downstream usage patterns",
       "timestamp": 1780637027.6411097,
       "cycle": 78
+    },
+    {
+      "content": "Self-reflection: The biggest bottleneck is not missing capabilities but the lack of a unified, self-correcting feedback loop that operates with minimal latency. I have been adding tools to manage complexity (schema al",
+      "timestamp": 1780637077.6185615,
+      "cycle": 79
+    },
+    {
+      "content": "Successfully modified evolution_engine/self_healing_retry.py to: Create a new SelfHealingRetry module that: (1) wraps mutation execution with retry logic, (2) tracks failure count per mutation attempt, (3) implements strategy switching (smaller scope, different module, different mutation type), (4) escalates after 3 failures, (5) integrates with existing rollback mechanism",
+      "timestamp": 1780637103.6146188,
+      "cycle": 79
+    },
+    {
+      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate SelfHealingRetry into the orchestrator: (1) import and instantiate the retry handler, (2) replace direct mutation calls with retry wrapper, (3) add escalation callback for manual intervention, (4) update orchestrator state machine to handle retry states",
+      "timestamp": 1780637152.768885,
+      "cycle": 79
+    },
+    {
+      "content": "Successfully modified tests/test_self_healing_retry.py to: Create comprehensive test suite: (1) test successful mutation on first try, (2) test retry with different strategy after failure, (3) test escalation after 3 failures, (4) test rollback on each failure, (5) test failure logging format, (6) test strategy switching logic",
+      "timestamp": 1780637174.7731411,
+      "cycle": 79
+    },
+    {
+      "content": "Successfully modified evolution_engine/goal_generator.py to: Add retry-awareness to goal generation: (1) when generating new goals, avoid strategies that have failed 3+ times, (2) prefer strategies that have succeeded in retry scenarios, (3) include retry strategy recommendations in goal metadata",
+      "timestamp": 1780637245.0739675,
+      "cycle": 79
     }
   ],
   "learned_patterns": [],
@@ -1207,6 +1207,11 @@
       "approach": "modify evolution_engine/orchestrator.py: Integrate fitness tracking into the main evolution loop: (1) after each cycle, call CapabilityFitnessTracker.update_fitness_scores() to recalculate, (2) check for capabilities below threshold that have persisted for cycles_before_deprecation, (3) automatically remove deprecated capabilities from the active registry, (4) log deprecation events to the knowledge base, (5) expose dashboard endpoint or periodic print",
       "reason": "Syntax error: '(' was never closed (<unknown>, line 922)",
       "timestamp": 1780636972.7940989
+    },
+    {
+      "approach": "modify evolution_engine/reflection_parser.py: Add self_healing section to reflection output: (1) report retry attempts and outcomes, (2) track which strategies were successful/failed, (3) suggest strategy tuning based on historical success rates",
+      "reason": "Syntax error: expected ':' (<unknown>, line 861)",
+      "timestamp": 1780637217.7881346
     }
   ],
   "successful_strategies": [
@@ -3399,6 +3404,31 @@
       "strategy": "Create a 'capability fitness function' that measures the number of downstream tasks each capability enables and automatically deprecates capabilities with fitness below a configurable threshold (e.g., < 2 downstream uses) after a set number of cycles. Implement a dashboard that displays fitness scores per capability.",
       "outcome": "5/6 steps succeeded",
       "timestamp": 1780637027.6595888
+    },
+    {
+      "strategy": "modify evolution_engine/self_healing_retry.py: Create a new SelfHealingRetry module that: (1) wraps mutation execution with retry logic, (2) tracks failure count per mutation attempt, (3) implements strategy switching (smaller scope, different module, different mutation type), (4) escalates after 3 failures, (5) integrates with existing rollback mechanism",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637103.6033537
+    },
+    {
+      "strategy": "modify evolution_engine/orchestrator.py: Integrate SelfHealingRetry into the orchestrator: (1) import and instantiate the retry handler, (2) replace direct mutation calls with retry wrapper, (3) add escalation callback for manual intervention, (4) update orchestrator state machine to handle retry states",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637152.756137
+    },
+    {
+      "strategy": "modify tests/test_self_healing_retry.py: Create comprehensive test suite: (1) test successful mutation on first try, (2) test retry with different strategy after failure, (3) test escalation after 3 failures, (4) test rollback on each failure, (5) test failure logging format, (6) test strategy switching logic",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637174.761423
+    },
+    {
+      "strategy": "modify evolution_engine/goal_generator.py: Add retry-awareness to goal generation: (1) when generating new goals, avoid strategies that have failed 3+ times, (2) prefer strategies that have succeeded in retry scenarios, (3) include retry strategy recommendations in goal metadata",
+      "outcome": "Applied successfully",
+      "timestamp": 1780637245.0626895
+    },
+    {
+      "strategy": "Implement the self-healing retry mechanism for the evolution orchestrator: when a mutation fails validation, automatically rollback the change, log the failure reason, and retry with a different mutation strategy (e.g., smaller scope or different module) up to 3 times before escalating to manual intervention.",
+      "outcome": "4/5 steps succeeded",
+      "timestamp": 1780637245.0852408
     }
   ],
   "capabilities_developed": []

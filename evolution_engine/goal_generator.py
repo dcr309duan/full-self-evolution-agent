@@ -15,6 +15,9 @@ class GoalGenerator:
     a feedback loop to deprioritize blocked goal types.
     Supports injection of externally generated goals via a priority queue.
     Tracks capability dependencies for each generated goal.
+    Includes retry-awareness: avoids strategies that have failed 3+ times,
+    prefers strategies that have succeeded in retry scenarios, and includes
+    retry strategy recommendations in goal metadata.
     """
 
     def __init__(self, feasibility_estimator: FeasibilityEstimator,
@@ -35,6 +38,12 @@ class GoalGenerator:
         self.injected_goals: PriorityQueue = PriorityQueue()
         # Track capabilities that are marked for deprecation
         self.deprecated_capabilities: set = set()
+        # Retry tracking: strategy -> failure count
+        self.strategy_failure_counts: Dict[str, int] = {}
+        # Retry tracking: strategy -> success count in retry scenarios
+        self.strategy_retry_success_counts: Dict[str, int] = {}
+        # Threshold for avoiding a strategy
+        self.strategy_failure_threshold = 3
 
     def set_deprecated_capabilities(self, deprecated_capabilities: set) -> None:
         """Set the set of capability IDs that are marked for deprecation."""
@@ -122,6 +131,53 @@ class GoalGenerator:
                 return True
         return False
 
+    def _get_retry_strategy_recommendations(self, goal: Goal) -> List[str]:
+        """
+        Generate retry strategy recommendations for a goal based on historical data.
+        Returns a list of recommended strategies.
+        """
+        recommendations = []
+        
+        # Get strategies that have succeeded in retry scenarios
+        successful_strategies = [
+            strategy for strategy, count in self.strategy_retry_success_counts.items()
+            if count > 0
+        ]
+        
+        # Sort by success count (most successful first)
+        successful_strategies.sort(
+            key=lambda s: self.strategy_retry_success_counts.get(s, 0),
+            reverse=True
+        )
+        
+        # Add top successful strategies as recommendations
+        for strategy in successful_strategies[:3]:
+            if self.strategy_failure_counts.get(strategy, 0) < self.strategy_failure_threshold:
+                recommendations.append(strategy)
+        
+        # If no specific recommendations, provide default retry strategies
+        if not recommendations:
+            recommendations = ['incremental_retry', 'exponential_backoff', 'alternative_approach']
+        
+        return recommendations
+
+    def _is_strategy_avoided(self, strategy: str) -> bool:
+        """
+        Check if a strategy should be avoided based on failure count.
+        Returns True if the strategy has failed 3+ times.
+        """
+        return self.strategy_failure_counts.get(strategy, 0) >= self.strategy_failure_threshold
+
+    def _record_strategy_failure(self, strategy: str) -> None:
+        """Record a failure for a given strategy."""
+        self.strategy_failure_counts[strategy] = self.strategy_failure_counts.get(strategy, 0) + 1
+        logger.debug(f"Strategy '{strategy}' failure count: {self.strategy_failure_counts[strategy]}")
+
+    def _record_strategy_retry_success(self, strategy: str) -> None:
+        """Record a success in a retry scenario for a given strategy."""
+        self.strategy_retry_success_counts[strategy] = self.strategy_retry_success_counts.get(strategy, 0) + 1
+        logger.debug(f"Strategy '{strategy}' retry success count: {self.strategy_retry_success_counts[strategy]}")
+
     def generate_goals(self) -> List[Goal]:
         """
         Generate goals by first emitting any injected goals from the priority queue,
@@ -130,6 +186,9 @@ class GoalGenerator:
         Respects blocked categories by generating root_cause_analysis goals instead.
         Records capability dependencies for each generated goal.
         Excludes goals that require deprecated capabilities.
+        Includes retry-awareness: avoids strategies that have failed 3+ times,
+        prefers strategies that have succeeded in retry scenarios, and includes
+        retry strategy recommendations in goal metadata.
         Returns a list of feasible goals with schema_version included.
         """
         feasible_goals = []
@@ -193,7 +252,32 @@ class GoalGenerator:
                 logger.info(f"Skipping deprioritized goal type: {goal.goal_type}")
                 continue
 
+            # Check retry-awareness: avoid strategies that have failed 3+ times
+            strategy = f"default_{goal.goal_type.value}"
+            if self._is_strategy_avoided(strategy):
+                logger.info(f"Avoiding strategy '{strategy}' for goal {goal.goal_type} due to repeated failures")
+                # Try to find an alternative strategy that hasn't failed
+                alternative_strategies = [
+                    f"alt_{i}_{goal.goal_type.value}" for i in range(1, 4)
+                ]
+                alternative_found = False
+                for alt_strategy in alternative_strategies:
+                    if not self._is_strategy_avoided(alt_strategy):
+                        strategy = alt_strategy
+                        alternative_found = True
+                        break
+                if not alternative_found:
+                    logger.warning(f"No viable strategy found for goal {goal.goal_type}, skipping")
+                    continue
+
             if self.feasibility_estimator.is_feasible(goal):
+                # Record success for the strategy used
+                self._record_strategy_retry_success(strategy)
+                
+                # Add retry strategy recommendations to goal metadata
+                retry_recommendations = self._get_retry_strategy_recommendations(goal)
+                goal.retry_strategy_recommendations = retry_recommendations
+                
                 feasible_goals.append(goal)
                 # Register capability usage for the feasible goal
                 self.capability_fitness_tracker.register_goal_capability_usage(
@@ -201,12 +285,17 @@ class GoalGenerator:
                 )
                 self._reset_blocked_count(goal.goal_type)
             else:
+                # Record failure for the strategy
+                self._record_strategy_failure(strategy)
                 self._handle_blocked_goal(goal)
 
         # Add schema_version to each feasible goal (if not already set)
         for goal in feasible_goals:
             if not hasattr(goal, 'schema_version') or not goal.schema_version:
                 goal.schema_version = self.schema_version
+            # Ensure retry_strategy_recommendations exists
+            if not hasattr(goal, 'retry_strategy_recommendations'):
+                goal.retry_strategy_recommendations = self._get_retry_strategy_recommendations(goal)
 
         # Self-validate each goal against the canonical schema
         validated_goals = []

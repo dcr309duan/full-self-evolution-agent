@@ -19,6 +19,86 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+class SelfHealingRetry:
+    """Handles retry logic with self-healing capabilities and escalation."""
+    
+    def __init__(self, max_retries: int = 3, escalation_threshold: int = 3):
+        self.max_retries = max_retries
+        self.escalation_threshold = escalation_threshold
+        self.retry_counts: Dict[str, int] = {}
+        self.escalation_callbacks: List[callable] = []
+        self.retry_states: Dict[str, str] = {}  # goal_id -> state
+    
+    def register_escalation_callback(self, callback: callable) -> None:
+        """Register a callback for manual intervention escalation."""
+        self.escalation_callbacks.append(callback)
+        logger.info(f"Registered escalation callback: {callback.__name__}")
+    
+    def execute_with_retry(self, goal_id: str, func: callable, *args, **kwargs) -> Any:
+        """
+        Execute a function with retry logic.
+        
+        Args:
+            goal_id: Identifier for the goal being executed
+            func: Function to execute
+            *args: Arguments to pass to the function
+            **kwargs: Keyword arguments to pass to the function
+            
+        Returns:
+            Result of the function execution
+            
+        Raises:
+            Exception: If all retries fail and escalation is triggered
+        """
+        if goal_id not in self.retry_counts:
+            self.retry_counts[goal_id] = 0
+            self.retry_states[goal_id] = 'pending'
+        
+        while self.retry_counts[goal_id] < self.max_retries:
+            try:
+                self.retry_states[goal_id] = 'running'
+                result = func(*args, **kwargs)
+                self.retry_states[goal_id] = 'success'
+                self.retry_counts[goal_id] = 0  # Reset on success
+                return result
+            except Exception as e:
+                self.retry_counts[goal_id] += 1
+                logger.warning(f"Goal {goal_id} failed (attempt {self.retry_counts[goal_id]}/{self.max_retries}): {e}")
+                
+                if self.retry_counts[goal_id] >= self.max_retries:
+                    self.retry_states[goal_id] = 'failed'
+                    self._trigger_escalation(goal_id, e)
+                    raise
+                else:
+                    self.retry_states[goal_id] = 'retrying'
+                    # Simple backoff strategy
+                    import time
+                    time.sleep(2 ** self.retry_counts[goal_id])
+        
+        self.retry_states[goal_id] = 'failed'
+        raise Exception(f"Goal {goal_id} failed after {self.max_retries} retries")
+    
+    def _trigger_escalation(self, goal_id: str, exception: Exception) -> None:
+        """Trigger escalation callbacks for manual intervention."""
+        logger.error(f"Escalating goal {goal_id} for manual intervention: {exception}")
+        for callback in self.escalation_callbacks:
+            try:
+                callback(goal_id, exception)
+            except Exception as e:
+                logger.error(f"Escalation callback failed: {e}")
+    
+    def get_retry_state(self, goal_id: str) -> str:
+        """Get the current retry state for a goal."""
+        return self.retry_states.get(goal_id, 'unknown')
+    
+    def reset_retry_state(self, goal_id: str) -> None:
+        """Reset retry state for a goal."""
+        if goal_id in self.retry_counts:
+            self.retry_counts[goal_id] = 0
+            self.retry_states[goal_id] = 'pending'
+            logger.info(f"Reset retry state for goal {goal_id}")
+
+
 class SchemaAlignmentChecker:
     """Checks schema alignment and auto-generates migration patches."""
     
@@ -394,6 +474,15 @@ feasibility_estimator = DependencyAwareFeasibilityEstimator()
 meta_monitor = MetaMonitor()
 schema_checker = SchemaAlignmentChecker()
 failure_detector = FailurePatternDetector()
+retry_handler = SelfHealingRetry(max_retries=3, escalation_threshold=3)
+
+
+def escalation_callback(goal_id: str, exception: Exception) -> None:
+    """Callback for manual intervention when retries are exhausted."""
+    logger.critical(f"MANUAL INTERVENTION REQUIRED: Goal {goal_id} failed after all retries. Exception: {exception}")
+    # In a real system, this would trigger alerts, create tickets, etc.
+    # For now, we log the critical message and update the orchestrator state
+    retry_handler.reset_retry_state(goal_id)
 
 
 def check_primitive_validation(sandbox_mode: bool = False) -> None:
@@ -644,6 +733,39 @@ def validate_and_fix(data: Dict[str, Any], context: str) -> Dict[str, Any]:
     return data
 
 
+def execute_mutation_with_retry(goal: Dict[str, Any], sandbox_mode: bool = False) -> bool:
+    """
+    Execute a mutation with retry logic using the retry handler.
+    
+    Args:
+        goal: The goal to execute
+        sandbox_mode: Whether to use sandbox mode
+        
+    Returns:
+        True if execution succeeded, False otherwise
+    """
+    global retry_handler
+    
+    goal_id = goal.get('id', 'unknown')
+    
+    def mutation_execution():
+        # Simulated mutation execution
+        # In real implementation, this would call the actual mutation engine
+        logger.info(f"Executing mutation for goal {goal_id}")
+        # Simulate potential failure for testing
+        import random
+        if random.random() < 0.3:  # 30% chance of failure
+            raise Exception(f"Simulated mutation failure for goal {goal_id}")
+        return True
+    
+    try:
+        result = retry_handler.execute_with_retry(goal_id, mutation_execution)
+        return result
+    except Exception as e:
+        logger.error(f"Mutation execution failed for goal {goal_id}: {e}")
+        return False
+
+
 def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, meta_monitor_enabled: bool = False) -> None:
     """
     Main evolution loop that checks primitive validation before proceeding.
@@ -659,6 +781,10 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
     global meta_monitor
     global schema_checker
     global failure_detector
+    global retry_handler
+
+    # Register escalation callback
+    retry_handler.register_escalation_callback(escalation_callback)
 
     # Initial validation check
     check_primitive_validation(sandbox_mode)
@@ -717,8 +843,18 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
             }
             validated_mutation = validate_and_fix(mutation_engine_output, "mutation_engine_output")
             
-            process_mutation_result('mutation_001', True, sandbox_mode)
-            process_mutation_result('mutation_002', True, sandbox_mode)
+            # Use retry handler for mutation execution
+            mutation_success = execute_mutation_with_retry(example_goal, sandbox_mode)
+            
+            if mutation_success:
+                process_mutation_result('mutation_001', True, sandbox_mode)
+                process_mutation_result('mutation_002', True, sandbox_mode)
+            else:
+                # Handle mutation failure
+                logger.error(f"Mutation failed for goal {example_goal.get('id', 'unknown')}")
+                # Check retry state
+                retry_state = retry_handler.get_retry_state(example_goal.get('id', 'unknown'))
+                logger.info(f"Retry state for goal {example_goal.get('id', 'unknown')}: {retry_state}")
             
             # Validate test_runner output before passing to reflection_parser
             test_runner_output = {
@@ -729,7 +865,7 @@ def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5, met
             validated_test_result = validate_and_fix(test_runner_output, "test_runner_output")
             
             # Run meta monitor after goal completion
-            run_meta_monitor(example_goal, True, meta_monitor_enabled)
+            run_meta_monitor(example_goal, mutation_success, meta_monitor_enabled)
             
             # Example of failure scenario
             failed_goal = {

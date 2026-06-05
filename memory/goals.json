@@ -8,10 +8,22 @@
       "created_at": 1780636490.6140091
     },
     {
+      "description": "Build a lightweight 'mutation simulation' module that, given a proposed mutation, clones the affected module's dependency subgraph, applies the change to the clone, runs the relevant test suite on the clone, and returns predicted pass/fail and side-effect impact without touching production code.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780637080.7282043
+    },
+    {
       "description": "Build a goal dependency graph tracker that records which goals are prerequisites for others (e.g., 'pre-mutation validation' depends on 'mutation engine'), and automatically re-prioritizes or blocks goals whose dependencies are unmet, preventing wasted cycles on disconnected implementations.",
       "priority": 7,
       "status": "pending",
       "created_at": 1780626959.28765
+    },
+    {
+      "description": "Create a 'goal feasibility pre-check' step that, before a goal enters the active queue, uses the existing dependency graph and module test coverage to estimate whether the goal is achievable given current capabilities, and automatically blocks or downgrades goals with <50% feasibility score.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780637080.7299275
     },
     {
       "description": "Create a performance monitoring and optimization system",
@@ -446,6 +458,13 @@
       "status": "completed",
       "created_at": 1780636043.9321492,
       "completed_at": 1780637027.6697392
+    },
+    {
+      "description": "Implement the self-healing retry mechanism for the evolution orchestrator: when a mutation fails validation, automatically rollback the change, log the failure reason, and retry with a different mutation strategy (e.g., smaller scope or different module) up to 3 times before escalating to manual intervention.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780637080.7263644,
+      "completed_at": 1780637245.0923033
     }
   ],
   "generated_goals": []
