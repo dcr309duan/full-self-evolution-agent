@@ -249,6 +249,69 @@ class KnowledgeGapAnalyzer:
             'topics_affected': len(set(g.topic for g in self.gaps))
         }
 
+    def get_repeated_failure_patterns(self, failure_log: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Scan the failure log and return components that have failed 3+ consecutive times
+        with the same failure type. This is used by the goal generator to trigger redesign.
+        
+        Args:
+            failure_log: List of failure records. Each record is a dictionary with keys:
+                - 'component': str (e.g., 'mutation_strategy', 'dependency_graph')
+                - 'failure_type': str (e.g., 'timeout', 'invalid_output', 'crash')
+                - 'timestamp': str (optional, for ordering)
+        
+        Returns:
+            List of dictionaries with keys:
+                - 'component': str
+                - 'failure_type': str
+                - 'consecutive_failures': int (number of consecutive failures, >= 3)
+                - 'suggested_action': str (e.g., 'redesign')
+        """
+        if not failure_log:
+            return []
+        
+        # Sort by timestamp if available, otherwise maintain order
+        sorted_log = sorted(failure_log, key=lambda x: x.get('timestamp', ''))
+        
+        # Track consecutive failures per component
+        component_failures: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for entry in sorted_log:
+            component = entry.get('component', 'unknown')
+            component_failures[component].append(entry)
+        
+        patterns = []
+        for component, entries in component_failures.items():
+            # Count consecutive same failure types
+            consecutive_count = 0
+            current_failure_type = None
+            for entry in entries:
+                failure_type = entry.get('failure_type', 'unknown')
+                if failure_type == current_failure_type:
+                    consecutive_count += 1
+                else:
+                    # Check if previous streak was >= 3
+                    if consecutive_count >= 3 and current_failure_type is not None:
+                        patterns.append({
+                            'component': component,
+                            'failure_type': current_failure_type,
+                            'consecutive_failures': consecutive_count,
+                            'suggested_action': 'redesign'
+                        })
+                    # Start new streak
+                    current_failure_type = failure_type
+                    consecutive_count = 1
+            
+            # Check last streak
+            if consecutive_count >= 3 and current_failure_type is not None:
+                patterns.append({
+                    'component': component,
+                    'failure_type': current_failure_type,
+                    'consecutive_failures': consecutive_count,
+                    'suggested_action': 'redesign'
+                })
+        
+        return patterns
+
 
 def knowledge_gap_analysis(knowledge_base: Dict[str, Any]) -> List[KnowledgeGap]:
     """

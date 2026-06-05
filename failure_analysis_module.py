@@ -1,7 +1,8 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 import logging
 import os
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +233,113 @@ class FailureAnalyzer:
         
         logger.info(f"Generated subsystem recommendation for '{subsystem_name}' failure #{len(self.failure_history)}: {recommendation}")
         return recommendation
+
+    def extract_redesign_signals(self, n_cycles: int = 10) -> List[Dict[str, Any]]:
+        """
+        Analyze failure patterns over the last N cycles and output specific redesign recommendations.
+        
+        This method parses the failure classification logs and identifies recurring structural issues
+        that may require redesign of the system components.
+        
+        Args:
+            n_cycles: Number of recent cycles to analyze (default: 10)
+        
+        Returns:
+            List of dictionaries containing redesign recommendations with the following keys:
+            - 'signal_type': str (e.g., 'mutation_strategy_too_aggressive', 'dependency_graph_cyclic', 'component_under-specified')
+            - 'severity': str ('low', 'medium', 'high')
+            - 'description': str describing the issue
+            - 'affected_components': list of affected component names
+            - 'recommended_action': str with suggested redesign action
+            - 'frequency': int number of times this pattern was observed
+        """
+        redesign_signals = []
+        
+        # Get the last N cycles of failure history
+        recent_failures = self.failure_history[-n_cycles:] if len(self.failure_history) > n_cycles else self.failure_history
+        
+        if not recent_failures:
+            return redesign_signals
+        
+        # Analyze failure patterns
+        error_type_counts = defaultdict(int)
+        template_failures = defaultdict(int)
+        mutation_failures = defaultdict(int)
+        parameter_failures = defaultdict(int)
+        
+        for failure in recent_failures:
+            error_type = failure.get('error_type', 'unknown')
+            error_type_counts[error_type] += 1
+            
+            if error_type == 'template_error':
+                template = failure.get('template_used', 'unknown')
+                template_failures[template] += 1
+            elif error_type == 'mutation_failure':
+                mutation = failure.get('mutation_type', 'unknown')
+                mutation_failures[mutation] += 1
+            elif error_type == 'parameter_out_of_bounds':
+                params = failure.get('parameters', {})
+                for param in params:
+                    parameter_failures[param] += 1
+        
+        # Check for mutation_strategy_too_aggressive signal
+        total_mutation_failures = sum(mutation_failures.values())
+        if total_mutation_failures >= 3 and total_mutation_failures / len(recent_failures) > 0.3:
+            most_common_mutation = max(mutation_failures, key=mutation_failures.get)
+            redesign_signals.append({
+                'signal_type': 'mutation_strategy_too_aggressive',
+                'severity': 'high' if total_mutation_failures >= 5 else 'medium',
+                'description': f"Mutation strategy '{most_common_mutation}' has failed {total_mutation_failures} times in the last {len(recent_failures)} cycles, indicating the mutation rate or type is too aggressive for the current system state.",
+                'affected_components': [most_common_mutation],
+                'recommended_action': f"Reduce mutation rate for '{most_common_mutation}' or switch to a more conservative mutation strategy. Consider implementing adaptive mutation rates based on success history.",
+                'frequency': total_mutation_failures
+            })
+        
+        # Check for dependency_graph_cyclic signal
+        # This is detected when template errors occur repeatedly with the same template
+        # suggesting circular dependencies in template composition
+        for template, count in template_failures.items():
+            if count >= 2 and count / len(recent_failures) > 0.2:
+                redesign_signals.append({
+                    'signal_type': 'dependency_graph_cyclic',
+                    'severity': 'high' if count >= 4 else 'medium',
+                    'description': f"Template '{template}' has failed {count} times in the last {len(recent_failures)} cycles, suggesting possible circular dependencies or incompatible template composition.",
+                    'affected_components': [template],
+                    'recommended_action': f"Review template '{template}' for circular dependencies. Consider breaking down the template into smaller, independent components or implementing dependency resolution mechanisms.",
+                    'frequency': count
+                })
+        
+        # Check for component_under-specified signal
+        # This is detected when parameter errors occur frequently with specific parameters
+        # suggesting the component specification is incomplete
+        for param, count in parameter_failures.items():
+            if count >= 2 and count / len(recent_failures) > 0.15:
+                redesign_signals.append({
+                    'signal_type': 'component_under-specified',
+                    'severity': 'medium' if count < 4 else 'high',
+                    'description': f"Parameter '{param}' has caused {count} out-of-bounds errors in the last {len(recent_failures)} cycles, indicating the component specification may be incomplete or the parameter ranges are not well-defined.",
+                    'affected_components': [param],
+                    'recommended_action': f"Review and expand the specification for parameter '{param}'. Consider adding validation rules, expanding allowed ranges, or implementing adaptive parameter bounds.",
+                    'frequency': count
+                })
+        
+        # Check for general structural issues based on error type distribution
+        if len(error_type_counts) >= 3 and sum(error_type_counts.values()) >= 5:
+            redesign_signals.append({
+                'signal_type': 'component_under-specified',
+                'severity': 'medium',
+                'description': f"Multiple error types ({', '.join(error_type_counts.keys())}) observed in the last {len(recent_failures)} cycles, suggesting the overall system specification may be incomplete or inconsistent.",
+                'affected_components': list(error_type_counts.keys()),
+                'recommended_action': "Perform a comprehensive review of the system specification. Consider adding more robust error handling, expanding component interfaces, and implementing graceful degradation mechanisms.",
+                'frequency': sum(error_type_counts.values())
+            })
+        
+        # Sort by severity (high first) and then by frequency
+        severity_order = {'high': 0, 'medium': 1, 'low': 2}
+        redesign_signals.sort(key=lambda x: (severity_order.get(x['severity'], 3), -x['frequency']))
+        
+        logger.info(f"Extracted {len(redesign_signals)} redesign signals from last {len(recent_failures)} cycles")
+        return redesign_signals
 
     def _normalize_parameter_pattern(self, parameters: Dict[str, Any]) -> str:
         """

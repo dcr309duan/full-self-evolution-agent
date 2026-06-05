@@ -46,6 +46,30 @@ class MutationEngine:
         
         # Detailed failure logging for failure analysis
         self.validation_failures = []
+        
+        # Strategy configurations for each mutation type
+        self.strategy_configs = {
+            'refactor_architecture': {
+                'mutation_rate': 0.1,
+                'crossover_method': 'single_point',
+                'enabled': True
+            },
+            'delete_dead_code': {
+                'mutation_rate': 0.1,
+                'crossover_method': 'single_point',
+                'enabled': True
+            },
+            'optimize_performance': {
+                'mutation_rate': 0.1,
+                'crossover_method': 'single_point',
+                'enabled': True
+            },
+            'grammar_guided_mutation': {
+                'mutation_rate': 0.1,
+                'crossover_method': 'single_point',
+                'enabled': True
+            }
+        }
 
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
@@ -58,6 +82,63 @@ class MutationEngine:
         """Update objective weights from meta-evaluation loop."""
         self.objective_weights = weights
         self._normalize_weights()
+
+    def redesign_strategy(self, strategy_name: str, new_params: Optional[Dict[str, Any]] = None, replacement_strategy: Optional[str] = None) -> bool:
+        """
+        Modify the mutation strategy parameters for a given strategy name or replace it with an alternative.
+        
+        Args:
+            strategy_name: Name of the strategy to modify (e.g., 'refactor_architecture', 'delete_dead_code', 'optimize_performance', 'grammar_guided_mutation')
+            new_params: Dictionary of parameters to update (e.g., {'mutation_rate': 0.2, 'crossover_method': 'two_point'})
+            replacement_strategy: Name of an alternative strategy to replace the current one (e.g., 'grammar_guided_mutation')
+            
+        Returns:
+            bool: True if the strategy was successfully modified, False otherwise
+        """
+        if strategy_name not in self.strategy_configs:
+            print(f"Error: Unknown strategy '{strategy_name}'. Available strategies: {list(self.strategy_configs.keys())}")
+            return False
+        
+        if replacement_strategy is not None:
+            if replacement_strategy not in self.strategy_configs:
+                print(f"Error: Unknown replacement strategy '{replacement_strategy}'. Available strategies: {list(self.strategy_configs.keys())}")
+                return False
+            
+            # Replace the current strategy with the alternative
+            self.strategy_configs[strategy_name] = self.strategy_configs[replacement_strategy].copy()
+            print(f"Strategy '{strategy_name}' replaced with '{replacement_strategy}'")
+            return True
+        
+        if new_params is not None:
+            # Update the strategy parameters
+            current_config = self.strategy_configs[strategy_name]
+            valid_params = {'mutation_rate', 'crossover_method', 'enabled'}
+            
+            for param, value in new_params.items():
+                if param not in valid_params:
+                    print(f"Warning: Unknown parameter '{param}' for strategy '{strategy_name}'. Valid parameters: {valid_params}")
+                    continue
+                
+                if param == 'mutation_rate':
+                    if not isinstance(value, (int, float)) or value < 0 or value > 1:
+                        print(f"Error: mutation_rate must be a float between 0 and 1, got {value}")
+                        return False
+                elif param == 'crossover_method':
+                    if value not in ['single_point', 'two_point', 'uniform']:
+                        print(f"Error: crossover_method must be one of 'single_point', 'two_point', 'uniform', got {value}")
+                        return False
+                elif param == 'enabled':
+                    if not isinstance(value, bool):
+                        print(f"Error: enabled must be a boolean, got {value}")
+                        return False
+                
+                current_config[param] = value
+            
+            print(f"Strategy '{strategy_name}' updated with parameters: {new_params}")
+            return True
+        
+        print(f"Error: Either new_params or replacement_strategy must be provided")
+        return False
 
     def mutate(self, source_code: str) -> str:
         """

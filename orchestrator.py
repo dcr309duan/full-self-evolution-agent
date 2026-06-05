@@ -6,6 +6,7 @@ import logging
 
 from goal_feasibility_estimator import GoalFeasibilityEstimator
 from goal_generator import GoalGenerator
+from failure_analysis import FailureAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class Orchestrator:
         """
         self.estimator = GoalFeasibilityEstimator()
         self.goal_generator = GoalGenerator()
+        self.failure_analysis = FailureAnalysis()
         self.capabilities = capabilities
         self.history = history
         self.execution_queue: List[Goal] = []
@@ -44,10 +46,14 @@ class Orchestrator:
         self.max_concurrent_goals = max_concurrent_goals
         self.cycle_count = 0
         self.generated_goals: List[Goal] = []  # Track generated goals to avoid duplicates
+        self.failure_patterns: Dict[str, int] = {}  # Track failure patterns
 
-    def generate_and_prioritize_goals(self) -> Optional[Goal]:
+    def generate_and_prioritize_goals(self, failure_analysis_instance: Optional[FailureAnalysis] = None) -> Optional[Goal]:
         """
         Generate new goals using the goal generator and select the highest-priority goal for execution.
+
+        Args:
+            failure_analysis_instance: Optional failure analysis instance for context
 
         Returns:
             Optional[Goal]: The highest-priority goal, or None if no goals were generated
@@ -74,6 +80,10 @@ class Orchestrator:
                     "description": entry.get("description", ""),
                     "complexity": entry.get("complexity", 1.0)
                 })
+
+        # Add failure analysis insights if available
+        if failure_analysis_instance:
+            knowledge_base["failure_analysis"] = failure_analysis_instance.get_analysis_results()
 
         # Generate new goals using the goal generator
         proposed_goals = self.goal_generator.generate_goals(
@@ -336,13 +346,36 @@ class Orchestrator:
         """Process all goals in the execution queue with integrated goal generation phase."""
         while self.execution_queue:
             goal = self.execution_queue.pop(0)
-            self.execute_with_feasibility_check(goal)
+            success = self.execute_with_feasibility_check(goal)
+            
+            # Check for repeated failure patterns
+            if not success:
+                failure_key = f"{goal.description}_{goal.complexity}"
+                self.failure_patterns[failure_key] = self.failure_patterns.get(failure_key, 0) + 1
+                
+                # Check if failure is part of a repeated pattern (3 or more failures)
+                if self.failure_patterns[failure_key] >= 3:
+                    logger.info(f"Detected repeated failure pattern for goal '{goal.id}', bypassing normal retry")
+                    # Directly enqueue a redesign goal
+                    redesign_goal = Goal(
+                        id=f"{goal.id}_redesign",
+                        description=f"Redesign {goal.description} to address repeated failures",
+                        complexity=goal.complexity * 1.2,
+                        metadata={
+                            "original_goal_id": goal.id,
+                            "type": "redesign",
+                            "failure_count": self.failure_patterns[failure_key]
+                        }
+                    )
+                    logger.info(f"Enqueuing redesign goal '{redesign_goal.id}' for repeated failure pattern")
+                    self.execution_queue.append(redesign_goal)
+                    continue  # Skip normal retry logic
             
             # Increment cycle count
             self.cycle_count += 1
             
             # After each reflection cycle, invoke the goal generator to propose new goals
-            new_goal = self.generate_and_prioritize_goals()
+            new_goal = self.generate_and_prioritize_goals(failure_analysis_instance=self.failure_analysis)
             if new_goal:
                 logger.info(f"New goal generated and prioritized: '{new_goal.id}'")
                 self.add_to_queue(new_goal)
@@ -361,7 +394,7 @@ class Orchestrator:
         # Generate multiple goals in this phase
         generated_goals = []
         for _ in range(self.goals_per_cycle):
-            new_goal = self.generate_and_prioritize_goals()
+            new_goal = self.generate_and_prioritize_goals(failure_analysis_instance=self.failure_analysis)
             if new_goal:
                 generated_goals.append(new_goal)
         
