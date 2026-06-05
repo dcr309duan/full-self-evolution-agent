@@ -8,6 +8,7 @@ from dependency_scheduler import DependencyScheduler
 from self_consistency_test_suite import run_self_consistency_tests
 from failure_analysis import classify_failure
 from schema_alignment_layer import SchemaValidator
+from failure_context_recorder import FailureContextRecorder
 
 class MutationEngine:
     """
@@ -82,12 +83,13 @@ class MutationEngine:
             'switch_to_single_gene_mutation': self.switch_to_single_gene_mutation
         }
 
-        # Initialize MutationValidator, DependencyScheduler, and SchemaValidator
+        # Initialize MutationValidator, DependencyScheduler, SchemaValidator, and FailureContextRecorder
         self.validator = MutationValidator()
         self.dependency_scheduler = DependencyScheduler()
         self.enable_validation = enable_validation
         self.schema_validator = SchemaValidator()
         self.normalized_goal = None
+        self.failure_context_recorder = FailureContextRecorder()
 
     def _normalize_weights(self) -> None:
         """Normalize weights so they sum to 1.0."""
@@ -292,6 +294,22 @@ class MutationEngine:
             }
             self.validation_failures.append(failure_entry)
             
+            # Record failure context before rollback
+            self.failure_context_recorder.record_failure(
+                mutation_type=mutation_type,
+                original_code=original_code,
+                mutated_code=mutated_code,
+                failure_reason=failure_details,
+                failure_classification=failure_classification,
+                context={
+                    'validation_failures': self.validation_failures,
+                    'discarded_mutations': self.discarded_mutations,
+                    'template_success': self.template_success,
+                    'template_failure': self.template_failure,
+                    'failure_counter': self.failure_counter
+                }
+            )
+            
             # Revert to original code using rollback mechanism
             print(f"Self-consistency test failed for mutation type '{mutation_type}'. Reverting mutation.")
             print(f"Failure classification: {failure_classification}")
@@ -317,6 +335,23 @@ class MutationEngine:
                 'source_code': source_code
             }
             self.validation_failures.append(failure_entry)
+            
+            # Record failure context for dependency block
+            self.failure_context_recorder.record_failure(
+                mutation_type='dependency_blocked',
+                original_code=source_code,
+                mutated_code=source_code,
+                failure_reason=error_message,
+                failure_classification='dependency_blocked',
+                context={
+                    'validation_failures': self.validation_failures,
+                    'discarded_mutations': self.discarded_mutations,
+                    'template_success': self.template_success,
+                    'template_failure': self.template_failure,
+                    'failure_counter': self.failure_counter
+                }
+            )
+            
             print(f"Dependency blocked: {error_message}")
             return source_code
 
@@ -354,6 +389,24 @@ class MutationEngine:
                             'retry_count': retry_count + 1
                         }
                         self.validation_failures.append(failure_entry)
+                        
+                        # Record failure context before retry
+                        self.failure_context_recorder.record_failure(
+                            mutation_type=mutation_type,
+                            original_code=source_code,
+                            mutated_code=mutated_code,
+                            failure_reason=failure_reason,
+                            failure_classification='validation_failure',
+                            context={
+                                'validation_failures': self.validation_failures,
+                                'discarded_mutations': self.discarded_mutations,
+                                'template_success': self.template_success,
+                                'template_failure': self.template_failure,
+                                'failure_counter': self.failure_counter,
+                                'retry_count': retry_count + 1
+                            }
+                        )
+                        
                         print(f"Mutation validation failed: operator={mutation_type}, reason={failure_reason}")
                         retry_count += 1
                         # Select a different mutation operator
@@ -375,6 +428,24 @@ class MutationEngine:
                         'retry_count': retry_count + 1
                     }
                     self.validation_failures.append(failure_entry)
+                    
+                    # Record failure context before retry
+                    self.failure_context_recorder.record_failure(
+                        mutation_type=mutation_type,
+                        original_code=source_code,
+                        mutated_code=mutated_code,
+                        failure_reason=failure_reason,
+                        failure_classification='validation_failure',
+                        context={
+                            'validation_failures': self.validation_failures,
+                            'discarded_mutations': self.discarded_mutations,
+                            'template_success': self.template_success,
+                            'template_failure': self.template_failure,
+                            'failure_counter': self.failure_counter,
+                            'retry_count': retry_count + 1
+                        }
+                    )
+                    
                     print(f"Mutation validation failed: operator={mutation_type}, reason={failure_reason}")
                     retry_count += 1
                     # Select a different mutation operator
@@ -383,12 +454,47 @@ class MutationEngine:
             except SyntaxError:
                 # If parsing fails, return original code unchanged
                 self.failure_counter += 1
+                
+                # Record failure context for syntax error
+                self.failure_context_recorder.record_failure(
+                    mutation_type=mutation_type,
+                    original_code=source_code,
+                    mutated_code=source_code,
+                    failure_reason='SyntaxError during mutation',
+                    failure_classification='syntax_error',
+                    context={
+                        'validation_failures': self.validation_failures,
+                        'discarded_mutations': self.discarded_mutations,
+                        'template_success': self.template_success,
+                        'template_failure': self.template_failure,
+                        'failure_counter': self.failure_counter
+                    }
+                )
+                
                 if self.failure_counter >= 4:
                     self.use_grammar_mutation = True
                 return source_code
         
         # All retries failed
         print(f"Warning: All {self.max_retries} retries failed for mutation type {mutation_type}")
+        
+        # Record failure context for all retries exhausted
+        self.failure_context_recorder.record_failure(
+            mutation_type=mutation_type,
+            original_code=source_code,
+            mutated_code=source_code,
+            failure_reason=f"All {self.max_retries} retries exhausted",
+            failure_classification='retries_exhausted',
+            context={
+                'validation_failures': self.validation_failures,
+                'discarded_mutations': self.discarded_mutations,
+                'template_success': self.template_success,
+                'template_failure': self.template_failure,
+                'failure_counter': self.failure_counter,
+                'max_retries': self.max_retries
+            }
+        )
+        
         return source_code
 
     def _choose_mutation(self) -> str:
@@ -596,6 +702,24 @@ class MutationEngine:
                         'template_number': template_number
                     }
                     self.validation_failures.append(failure_entry)
+                    
+                    # Record failure context for grammar mutation validation failure
+                    self.failure_context_recorder.record_failure(
+                        mutation_type='grammar_guided_mutation',
+                        original_code=source_code,
+                        mutated_code=result,
+                        failure_reason=f"Template {template_number} validation failed: {failure_reason}",
+                        failure_classification='grammar_validation_failure',
+                        context={
+                            'template_number': template_number,
+                            'validation_failures': self.validation_failures,
+                            'discarded_mutations': self.discarded_mutations,
+                            'template_success': self.template_success,
+                            'template_failure': self.template_failure,
+                            'failure_counter': self.failure_counter
+                        }
+                    )
+                    
                     # Check if all templates have failed
                     if all(self.template_failure[t] > 0 for t in range(1, 4)):
                         # Generate failure report
@@ -625,6 +749,24 @@ class MutationEngine:
                 'template_number': template_number
             }
             self.validation_failures.append(failure_entry)
+            
+            # Record failure context for grammar mutation exception
+            self.failure_context_recorder.record_failure(
+                mutation_type='grammar_guided_mutation',
+                original_code=source_code,
+                mutated_code=source_code,
+                failure_reason=f"Template {template_number} failed: {str(e)}",
+                failure_classification='grammar_exception',
+                context={
+                    'template_number': template_number,
+                    'validation_failures': self.validation_failures,
+                    'discarded_mutations': self.discarded_mutations,
+                    'template_success': self.template_success,
+                    'template_failure': self.template_failure,
+                    'failure_counter': self.failure_counter
+                }
+            )
+            
             # Check if all templates have failed
             if all(self.template_failure[t] > 0 for t in range(1, 4)):
                 # Generate failure report
@@ -786,92 +928,4 @@ class MutationEngine:
         for func_name, count in collector.call_counts.items():
             if count == 1 and func_name in collector.functions:
                 func_node = collector.functions[func_name]
-                # Check if function has simple body (single return statement)
-                if (len(func_node.body) == 1 and 
-                    isinstance(func_node.body[0], ast.Return) and
-                    func_node.body[0].value is not None):
-                    inline_candidate = func_name
-                    break
-        
-        if inline_candidate is None:
-            raise ValueError("No suitable function found for inlining")
-        
-        # Second pass: inline the function
-        class Inliner(ast.NodeTransformer):
-            def __init__(self, func_name, func_node):
-                self.func_name = func_name
-                self.func_node = func_node
-                self.inlined = False
-            
-            def visit_Call(self, node):
-                if (isinstance(node.func, ast.Name) and 
-                    node.func.id == self.func_name and 
-                    not self.inlined):
-                    self.inlined = True
-                    # Get the return value expression
-                    return_expr = self.func_node.body[0].value
-                    # Replace parameters with arguments
-                    param_map = {}
-                    for param, arg in zip(self.func_node.args.args, node.args):
-                        param_map[param.arg] = arg
-                    
-                    # Replace parameter references in the expression
-                    class ParamReplacer(ast.NodeTransformer):
-                        def visit_Name(self, name_node):
-                            if name_node.id in param_map:
-                                return copy.deepcopy(param_map[name_node.id])
-                            return name_node
-                    
-                    return ParamReplacer().visit(copy.deepcopy(return_expr))
-                return node
-            
-            def visit_FunctionDef(self, node):
-                if node.name == self.func_name:
-                    # Remove the function definition
-                    return None
-                return node
-        
-        inliner = Inliner(inline_candidate, collector.functions[inline_candidate])
-        tree = inliner.visit(tree)
-        
-        # Fix the tree after removal
-        ast.fix_missing_locations(tree)
-        return ast.unparse(tree)
-
-    def evolve_subsystem(self, subsystem_name: str, subsystem_code: str) -> Tuple[bool, str]:
-        """
-        Apply the current mutation strategy to a given subsystem's source code.
-        
-        Args:
-            subsystem_name: Name of the subsystem being mutated (for logging/tracking)
-            subsystem_code: Source code of the subsystem to mutate
-            
-        Returns:
-            Tuple of (success: bool, mutated_code: str)
-            - success: True if mutation was applied successfully, False otherwise
-            - mutated_code: The mutated source code if successful, original code if failed
-        """
-        try:
-            # Apply mutation based on current strategy
-            if self.use_grammar_mutation:
-                mutated_code = self._grammar_guided_mutation(subsystem_code)
-            else:
-                mutated_code = self.mutate(subsystem_code)
-            
-            # Check if mutation actually changed the code
-            if mutated_code == subsystem_code:
-                return False, subsystem_code
-            
-            return True, mutated_code
-            
-        except Exception as e:
-            # Track failure for strategy adaptation
-            self.failure_counter += 1
-            if self.failure_counter >= 4:
-                self.use_grammar_mutation = True
-            return False, subsystem_code
-
-
-def create_mutation_engine(objective_weights: Optional[Dict[str, float]] = None, enable_validation: bool = True) -> MutationEngine:
-    """Factory function to create a MutationEngine with optional weights and validation flag."""
-    return MutationEngine(objective_weights, enable_validation)
+                # Check if function has simple body (

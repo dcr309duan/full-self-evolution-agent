@@ -1,41 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified agent_core/failure_analysis.py to: Add schema validation to failure analysis module: (1) @validate_schema('failure_input', version=1) on the analyze_failure() method, (2) @validate_schema('failure_output', version=1) on the classification result, (3) add version check when receiving data from testing framework or mutation engine.",
-      "timestamp": 1780635394.3646677,
-      "cycle": 68
-    },
-    {
-      "content": "Successfully modified agent_core/planner.py to: Add schema validation to planning module: (1) @validate_schema('plan_request', version=1) on the generate_plan() method, (2) @validate_schema('plan_output', version=1) on the plan result, (3) add version check when receiving feasibility data from orchestrator.",
-      "timestamp": 1780635409.8597476,
-      "cycle": 68
-    },
-    {
-      "content": "Successfully modified agent_core/orchestrator.py to: Add inter-module call validation: (1) before any module call, call schema_registry.validate_inter_module_call() with source and target module names, (2) catch SchemaMismatchError and log blocked calls, (3) add a retry mechanism that re-registers schemas if version mismatch is detected.",
-      "timestamp": 1780635424.9651916,
-      "cycle": 68
-    },
-    {
-      "content": "Successfully modified tests/test_schema_alignment.py to: Create a comprehensive test suite for schema alignment: (1) test that each module's output validates against its canonical schema, (2) test that version mismatches are correctly detected and blocked, (3) test cross-module data flow with valid schemas, (4) test error handling for invalid data, (5) test schema registry CRUD operations.",
-      "timestamp": 1780635434.5241477,
-      "cycle": 68
-    },
-    {
-      "content": "Successfully modified config/evolution_config.py to: Add schema alignment configuration: ENABLE_SCHEMA_VALIDATION (default True), SCHEMA_VERSION_STRICT_MODE (default True - blocks mismatched data), SCHEMA_AUTO_MIGRATE (default False), SCHEMA_VALIDATION_LOG_LEVEL (default 'WARNING').",
-      "timestamp": 1780635439.0017323,
-      "cycle": 68
-    },
-    {
-      "content": "Successfully modified tests/test_schema_alignment.py to: Create integration test suite for schema alignment: (1) test that all modules register their schemas on startup, (2) test that version mismatches are caught and blocked, (3) test that valid data passes through all module interfaces, (4) test that schema updates trigger version bumps, (5) test end-to-end flow from mutation -> test -> failure analysis -> planning with schema validation enabled.",
-      "timestamp": 1780635469.8433192,
-      "cycle": 67
-    },
-    {
-      "content": "Successfully modified config/evolution_config.py to: Add schema alignment configuration: (1) ENABLE_SCHEMA_VALIDATION (default True), (2) SCHEMA_VERSION_STRICT_MODE (default True) to block mismatched data, (3) SCHEMA_AUTO_UPDATE (default False) to prevent automatic version bumps, (4) SCHEMA_VALIDATION_LOG_LEVEL (default 'WARNING').",
-      "timestamp": 1780635473.8331409,
-      "cycle": 68
-    },
-    {
       "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Create a comprehensive end-to-end integration test suite with three scenarios: (1) successful mutation → test → promote flow with valid data, (2) mutation with format mismatch that schema alignment layer catches, (3) mutation with partial schema compliance that triggers validation warnings. Each scenario should exercise the full pipeline including mutation engine, testing framework, schema alignment, and promotion logic.",
       "timestamp": 1780635504.3882632,
       "cycle": 68
@@ -999,6 +964,41 @@
       "content": "Successfully modified goal_dependency_graph.py to: Add a method 'get_sandbox_safe_goals()' that identifies goals which would benefit most from sandboxed execution (high risk, high reward, or goals that touch critical infrastructure). This integrates the sandbox executor with the goal planning system.",
       "timestamp": 1780640662.2002923,
       "cycle": 94
+    },
+    {
+      "content": "Successfully modified failure_context_recorder.py to: Create a module that captures detailed context for every failed mutation: the mutation AST, the error type (import error, schema mismatch, side effect, syntax error, etc.), the modules involved, the test that failed, and the full error traceback. Store these in a structured failure_log.jsonl file with timestamps and cycle numbers.",
+      "timestamp": 1780640723.418792,
+      "cycle": 95
+    },
+    {
+      "content": "Successfully modified mutation_engine.py to: Integrate the failure_context_recorder into the mutation engine's failure handling path. After a mutation fails validation or testing, automatically call the recorder to capture all context before any rollback occurs.",
+      "timestamp": 1780640774.7324357,
+      "cycle": 95
+    },
+    {
+      "content": "Successfully modified failure_pattern_miner.py to: Build the core miner that: (1) reads the failure_log.jsonl, (2) clusters failures by error type and affected modules, (3) identifies recurring patterns (e.g., '3+ import errors in module X', 'schema mismatches between A and B'), (4) generates 'forbidden mutation space' rules as JSON rules with conditions (module_pattern, error_type, affected_interface) and actions (block, warn, require_precheck).",
+      "timestamp": 1780640789.853114,
+      "cycle": 95
+    },
+    {
+      "content": "Successfully modified forbidden_mutation_rules.json to: Create an initial empty rules file with schema: {rules: [{id, pattern: {module_regex, error_type, affected_interface}, action: 'block'|'warn'|'require_precheck', created_at, hit_count, last_hit}]}. The miner will populate this dynamically.",
+      "timestamp": 1780640793.0324392,
+      "cycle": 95
+    },
+    {
+      "content": "Successfully modified pre_mutation_validator.py to: Add a step to the pre-mutation validation pipeline that checks proposed mutations against the forbidden_mutation_rules.json. If a mutation matches a 'block' rule, reject it immediately with explanation. If 'warn', log warning but allow. If 'require_precheck', trigger additional validation before proceeding.",
+      "timestamp": 1780640802.7111325,
+      "cycle": 95
+    },
+    {
+      "content": "Successfully modified test_failure_pattern_miner.py to: Create a test suite that: (1) seeds fake failure logs with known patterns, (2) runs the miner and verifies it correctly identifies the patterns, (3) tests that generated rules block matching mutations, (4) tests that rules don't block non-matching mutations, (5) tests rule hit counting and decay (old rules without hits get deprioritized).",
+      "timestamp": 1780640824.326413,
+      "cycle": 95
+    },
+    {
+      "content": "Successfully modified system_config.json to: Add configuration parameters: FAILURE_LOG_MAX_ENTRIES=1000, PATTERN_MIN_OCCURRENCES=3 (minimum failures to form a pattern), RULE_AUTO_ACTIVATE=true, RULE_DECAY_DAYS=30 (rules without hits auto-archive), ENABLE_FORBIDDEN_SPACE=true.",
+      "timestamp": 1780640876.743321,
+      "cycle": 95
     }
   ],
   "learned_patterns": [],
@@ -1282,6 +1282,11 @@
       "approach": "modify mutation_engine.py: Add a 'sandboxed' execution mode to the mutation engine. Before applying any mutation to the main codebase, route it through sandbox_executor. Add a configuration flag SANDBOX_MODE=true/false. When enabled, wrap the existing mutation application logic with: sandbox = SandboxExecutor.create_sandbox(); sandbox.apply_mutation(mutation); if sandbox.run_tests(): sandbox.merge(); else: sandbox.cleanup() + log failure.",
       "reason": "Syntax error: unterminated triple-quoted string literal (detected at line 925) (<unknown>, line 916)",
       "timestamp": 1780640572.8945568
+    },
+    {
+      "approach": "modify integration_test_suite.py: Add an end-to-end integration test 'test_failure_pattern_learning_loop' that: (1) creates a scenario guaranteed to fail (e.g., mutation that introduces an import error), (2) verifies the failure is recorded, (3) runs the miner, (4) verifies a rule is generated, (5) attempts a similar mutation and verifies it's blocked.",
+      "reason": "Safety check failed",
+      "timestamp": 1780640872.7186103
     }
   ],
   "successful_strategies": [
@@ -4014,6 +4019,56 @@
       "strategy": "Implement a sandboxed mutation executor that runs all mutations in a temporary git branch or copy of the codebase, runs the full integration test suite, and only merges changes if tests pass, enabling safe experimentation with high-risk transformations.",
       "outcome": "4/6 steps succeeded",
       "timestamp": 1780640662.21403
+    },
+    {
+      "strategy": "modify failure_context_recorder.py: Create a module that captures detailed context for every failed mutation: the mutation AST, the error type (import error, schema mismatch, side effect, syntax error, etc.), the modules involved, the test that failed, and the full error traceback. Store these in a structured failure_log.jsonl file with timestamps and cycle numbers.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640723.4062862
+    },
+    {
+      "strategy": "modify mutation_engine.py: Integrate the failure_context_recorder into the mutation engine's failure handling path. After a mutation fails validation or testing, automatically call the recorder to capture all context before any rollback occurs.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640774.7190948
+    },
+    {
+      "strategy": "modify failure_pattern_miner.py: Build the core miner that: (1) reads the failure_log.jsonl, (2) clusters failures by error type and affected modules, (3) identifies recurring patterns (e.g., '3+ import errors in module X', 'schema mismatches between A and B'), (4) generates 'forbidden mutation space' rules as JSON rules with conditions (module_pattern, error_type, affected_interface) and actions (block, warn, require_precheck).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640789.8392594
+    },
+    {
+      "strategy": "modify forbidden_mutation_rules.json: Create an initial empty rules file with schema: {rules: [{id, pattern: {module_regex, error_type, affected_interface}, action: 'block'|'warn'|'require_precheck', created_at, hit_count, last_hit}]}. The miner will populate this dynamically.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640793.0188296
+    },
+    {
+      "strategy": "modify pre_mutation_validator.py: Add a step to the pre-mutation validation pipeline that checks proposed mutations against the forbidden_mutation_rules.json. If a mutation matches a 'block' rule, reject it immediately with explanation. If 'warn', log warning but allow. If 'require_precheck', trigger additional validation before proceeding.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640802.6984775
+    },
+    {
+      "strategy": "modify test_failure_pattern_miner.py: Create a test suite that: (1) seeds fake failure logs with known patterns, (2) runs the miner and verifies it correctly identifies the patterns, (3) tests that generated rules block matching mutations, (4) tests that rules don't block non-matching mutations, (5) tests rule hit counting and decay (old rules without hits get deprioritized).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640824.3126333
+    },
+    {
+      "strategy": "modify system_config.json: Add configuration parameters: FAILURE_LOG_MAX_ENTRIES=1000, PATTERN_MIN_OCCURRENCES=3 (minimum failures to form a pattern), RULE_AUTO_ACTIVATE=true, RULE_DECAY_DAYS=30 (rules without hits auto-archive), ENABLE_FORBIDDEN_SPACE=true.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780640876.7300687
+    },
+    {
+      "strategy": "Build a failure pattern miner that records the cause of every failed mutation (e.g., missing import, schema mismatch, side effect on unrelated module) and generates a 'forbidden mutation space' rule set that blocks similar mutations before execution.",
+      "outcome": "7/8 steps succeeded",
+      "timestamp": 1780640876.757931
+    },
+    {
+      "strategy": "mutation:crossover(memoized_retry_fibonacci,memoized_flatten)",
+      "outcome": "Created memoized_retry_flatten, score=0.6",
+      "timestamp": 1780640879.0786998
+    },
+    {
+      "strategy": "mutation:hybrid(memoized_is_prime,quicksort)",
+      "outcome": "Created sorted_prime_list, score=0.4",
+      "timestamp": 1780640881.183524
     }
   ],
   "capabilities_developed": []
