@@ -1,16 +1,16 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-06 04:33:32
+> Generated: 2026-06-06 04:55:51
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 300 |
+| Current Cycle | 305 |
 | Generation | 130 |
-| Last Activity | 2026-06-06 04:25:47 |
-| Speed | ~14.0 cycles/hour |
+| Last Activity | 2026-06-06 04:52:34 |
+| Speed | ~13.7 cycles/hour |
 
 ## Performance
 
@@ -111,26 +111,26 @@
 
 ### Recent Insights
 
-- [06-06 04:29] Successfully modified core/multi_module_forcer.py to: Read the existing multi-module forcer to understand its current im
-- [06-06 04:30] Successfully modified evolution_orchestrator.py to: Read the orchestrator to find the integration points for Nash detect
-- [06-06 04:31] Successfully modified core/nash_detector_and_forcer.py to: Enhance the existing self-contained module to: (1) Track modu
-- [06-06 04:32] Successfully modified evolution_orchestrator.py to: Add hooks in the main evolution cycle to: (1) After each mutation, c
-- [06-06 04:33] Successfully modified tests/test_nash_coordinated.py to: Create a minimal integration test that: (1) Creates a mock orch
+- [06-06 04:52] Successfully modified tests/test_multi_module_force.py to: Create a minimal integration test that: (1) Imports from core
+- [06-06 04:53] Successfully modified core/nash_detector_and_forcer.py to: Add a Nash equilibrium detection function that tracks module 
+- [06-06 04:54] Successfully modified core/multi_module_forcer.py to: Enhance the multi-module force module to: (1) Import from nash_det
+- [06-06 04:54] Successfully modified tests/test_nash_integration.py to: Create a minimal integration test that: (1) Imports only from n
+- [06-06 04:55] Successfully modified core/__init__.py to: Ensure the core package has proper __init__.py that exports nash_detector_and
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 290 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
-| 291 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
-| 292 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
-| 293 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
-| 294 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 295 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 296 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 297 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 298 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 299 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 300 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
+| 301 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
+| 302 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
+| 303 | [ECOLOGY] The agent should not just adapt to its current tes | FAILED |
+| 304 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

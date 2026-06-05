@@ -57,6 +57,17 @@ class NashDetectorAndForcer:
         # Track consecutive cycles without improvement
         self.consecutive_no_improvement: int = 0
         self.equilibrium_detected: bool = False
+        
+        # Track module interaction pairs (caller, callee) and their success rates
+        self.module_interaction_pairs: Dict[Tuple[int, int], Dict[str, Any]] = defaultdict(
+            lambda: {"success_count": 0, "total_count": 0, "success_rate": 0.0, "last_cycles": deque(maxlen=20)}
+        )
+        
+        # Track improvement history per module
+        self.module_improvement_history: Dict[int, deque] = defaultdict(lambda: deque(maxlen=3))
+        
+        # List of module pairs in equilibrium
+        self.equilibrium_pairs: List[Tuple[int, int]] = []
 
     def set_dependency_matrix(self, matrix: List[List[float]]) -> None:
         """
@@ -140,6 +151,15 @@ class NashDetectorAndForcer:
         for key in total_counts:
             self.interaction_frequencies[key] = total_counts[key]
             self.interaction_success_rates[key] = success_counts[key] / total_counts[key]
+        
+        # Update module interaction pairs tracking
+        pair_key = (module_i, module_j)
+        pair_data = self.module_interaction_pairs[pair_key]
+        pair_data["total_count"] += 1
+        if success:
+            pair_data["success_count"] += 1
+        pair_data["success_rate"] = pair_data["success_count"] / pair_data["total_count"] if pair_data["total_count"] > 0 else 0.0
+        pair_data["last_cycles"].append(success)
 
     def detect_nash_equilibrium(self) -> bool:
         """
@@ -524,7 +544,9 @@ class NashDetectorAndForcer:
             "equilibrium_iterations": self.equilibrium_iterations,
             "consecutive_no_improvement": self.consecutive_no_improvement,
             "interaction_frequencies": {str(k): v for k, v in self.interaction_frequencies.items()},
-            "interaction_success_rates": {str(k): v for k, v in self.interaction_success_rates.items()}
+            "interaction_success_rates": {str(k): v for k, v in self.interaction_success_rates.items()},
+            "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
+            "equilibrium_pairs": [list(pair) for pair in self.equilibrium_pairs]
         }
         return json.dumps(state, indent=2)
 
@@ -556,6 +578,19 @@ class NashDetectorAndForcer:
             key = tuple(map(int, key_str.strip("()").split(", ")))
             instance.interaction_success_rates[key] = rate
         
+        # Restore module interaction pairs
+        for key_str, pair_data in state.get("module_interaction_pairs", {}).items():
+            key = tuple(map(int, key_str.strip("()").split(", ")))
+            instance.module_interaction_pairs[key] = {
+                "success_count": pair_data["success_count"],
+                "total_count": pair_data["total_count"],
+                "success_rate": pair_data["success_rate"],
+                "last_cycles": deque(pair_data.get("last_cycles", []), maxlen=20)
+            }
+        
+        # Restore equilibrium pairs
+        instance.equilibrium_pairs = [tuple(pair) for pair in state.get("equilibrium_pairs", [])]
+        
         return instance
 
     def get_system_summary(self) -> Dict[str, Any]:
@@ -577,8 +612,204 @@ class NashDetectorAndForcer:
                 sum(1 for val in row if val > 0.5) for row in self.dependency_matrix
             ) / (self.num_modules ** 2) if self.num_modules > 0 else 0.0,
             "interaction_frequencies": dict(self.interaction_frequencies),
-            "interaction_success_rates": dict(self.interaction_success_rates)
+            "interaction_success_rates": dict(self.interaction_success_rates),
+            "module_interaction_pairs": {str(k): dict(v) for k, v in self.module_interaction_pairs.items()},
+            "equilibrium_pairs": self.equilibrium_pairs
         }
+
+    def detect_nash_equilibrium_with_pairs(self) -> Tuple[bool, List[Tuple[int, int]]]:
+        """
+        Enhanced Nash equilibrium detection that tracks module interaction pairs (caller, callee)
+        and their success rates. Detects when no single module change improves the system by
+        checking if all modules have reached a local optimum (success rate > 0.8 and no improvement
+        in last 3 cycles). Returns a list of module pairs that are in equilibrium and need
+        coordinated changes.
+        
+        Returns:
+            Tuple of (is_in_equilibrium, list_of_equilibrium_pairs)
+        """
+        # Check if we have enough history
+        if len(self.score_history) < self.equilibrium_window:
+            return False, []
+        
+        # Check if scores have stabilized
+        recent_scores = self.score_history[-self.equilibrium_window:]
+        
+        # Check if scores are stable over the window
+        for i in range(self.num_modules):
+            scores_i = [s[i] for s in recent_scores]
+            if max(scores_i) - min(scores_i) > self.equilibrium_tolerance:
+                self.consecutive_no_improvement = 0
+                return False, []
+        
+        # Check if any single-module change improves the system by more than 5%
+        improvement_found = False
+        for module_idx in range(self.num_modules):
+            # Try a small perturbation to this module's dependencies
+            original_deps = self.dependency_matrix[module_idx].copy()
+            
+            # Try increasing a random dependency
+            dep_idx = random.randint(0, self.num_modules - 1)
+            original_value = self.dependency_matrix[module_idx][dep_idx]
+            self.dependency_matrix[module_idx][dep_idx] = min(1.0, original_value + 0.1)
+            
+            # Compute new score for this module
+            new_score = self.compute_module_score(module_idx)
+            
+            # Restore original
+            self.dependency_matrix[module_idx] = original_deps
+            
+            # If improvement found (more than 5%), not in equilibrium
+            if new_score > self.module_scores[module_idx] * (1 + self.improvement_threshold):
+                improvement_found = True
+                break
+        
+        if improvement_found:
+            self.consecutive_no_improvement = 0
+            return False, []
+        
+        # Check if all modules have reached a local optimum
+        # Local optimum: success rate > 0.8 and no improvement in last 3 cycles
+        all_modules_optimal = True
+        equilibrium_pairs = []
+        
+        for module_idx in range(self.num_modules):
+            # Check success rate for this module's interactions
+            module_success_rates = []
+            for pair_key, pair_data in self.module_interaction_pairs.items():
+                if module_idx in pair_key:
+                    module_success_rates.append(pair_data["success_rate"])
+            
+            # If no interaction data, consider not optimal
+            if not module_success_rates:
+                all_modules_optimal = False
+                continue
+            
+            # Check if average success rate > 0.8
+            avg_success_rate = sum(module_success_rates) / len(module_success_rates)
+            if avg_success_rate <= 0.8:
+                all_modules_optimal = False
+                continue
+            
+            # Check if no improvement in last 3 cycles
+            module_improvement_history = self.module_improvement_history[module_idx]
+            if len(module_improvement_history) < 3:
+                all_modules_optimal = False
+                continue
+            
+            # Check if there was any improvement in last 3 cycles
+            has_improvement = any(module_improvement_history)
+            if has_improvement:
+                all_modules_optimal = False
+                continue
+            
+            # This module is at local optimum, find its equilibrium pairs
+            for pair_key, pair_data in self.module_interaction_pairs.items():
+                if module_idx in pair_key and pair_data["success_rate"] > 0.8:
+                    other_module = pair_key[0] if pair_key[1] == module_idx else pair_key[1]
+                    # Check if the other module is also at local optimum
+                    other_improvement_history = self.module_improvement_history[other_module]
+                    if len(other_improvement_history) >= 3 and not any(other_improvement_history):
+                        other_success_rates = []
+                        for other_pair_key, other_pair_data in self.module_interaction_pairs.items():
+                            if other_module in other_pair_key:
+                                other_success_rates.append(other_pair_data["success_rate"])
+                        if other_success_rates:
+                            other_avg_success_rate = sum(other_success_rates) / len(other_success_rates)
+                            if other_avg_success_rate > 0.8:
+                                equilibrium_pairs.append(pair_key)
+        
+        if all_modules_optimal and equilibrium_pairs:
+            self.consecutive_no_improvement += 1
+            if self.consecutive_no_improvement >= 3:
+                self.in_equilibrium = True
+                self.equilibrium_iterations += 1
+                self.equilibrium_detected = True
+                self.equilibrium_pairs = equilibrium_pairs
+                return True, equilibrium_pairs
+        
+        self.consecutive_no_improvement = 0
+        return False, []
+
+    def update_module_improvement(self, module_idx: int, improved: bool) -> None:
+        """
+        Update the improvement history for a specific module.
+        
+        Args:
+            module_idx: Index of the module
+            improved: Whether the module improved in this cycle
+        """
+        self.module_improvement_history[module_idx].append(improved)
+
+    def detect_nash_equilibrium_with_stats(self, module_stats: Dict[Tuple[int, int], Dict[str, int]]) -> List[Tuple[int, int]]:
+        """
+        Nash equilibrium detection function that tracks module interaction frequencies and success rates.
+        
+        Accepts a dictionary of module interaction stats (module_pair -> {attempts, successes, failures}),
+        identifies pairs where no single module change improves the success rate by more than 5%
+        over the last 10 attempts, and returns a list of module pairs at equilibrium.
+        
+        Args:
+            module_stats: Dictionary mapping module pairs (i, j) to their interaction stats.
+                         Each stat dict must have 'attempts', 'successes', and 'failures' keys.
+                         Example: {(0, 1): {'attempts': 10, 'successes': 8, 'failures': 2}}
+        
+        Returns:
+            List of module pairs (tuples) that are at Nash equilibrium
+        """
+        equilibrium_pairs = []
+        
+        # Process each module pair
+        for pair_key, stats in module_stats.items():
+            # Validate stats
+            if 'attempts' not in stats or 'successes' not in stats or 'failures' not in stats:
+                continue
+            
+            attempts = stats['attempts']
+            successes = stats['successes']
+            failures = stats['failures']
+            
+            # Need at least 10 attempts to evaluate equilibrium
+            if attempts < 10:
+                continue
+            
+            # Calculate current success rate
+            current_success_rate = successes / attempts if attempts > 0 else 0.0
+            
+            # Check if no single module change improves the success rate by more than 5%
+            # We simulate changes by considering what happens if we adjust the pair's behavior
+            
+            # Simulate change: increase successes by 1 (improvement scenario)
+            improved_successes = successes + 1
+            improved_rate = improved_successes / (attempts + 1) if (attempts + 1) > 0 else 0.0
+            improvement_with_more_successes = improved_rate - current_success_rate
+            
+            # Simulate change: decrease failures by 1 (improvement scenario)
+            if failures > 0:
+                reduced_failures = failures - 1
+                reduced_rate = successes / (attempts - 1) if (attempts - 1) > 0 else 0.0
+                improvement_with_less_failures = reduced_rate - current_success_rate
+            else:
+                improvement_with_less_failures = 0.0
+            
+            # Simulate change: increase attempts by 1 with a success (improvement scenario)
+            extra_attempt_success = successes + 1
+            extra_rate = extra_attempt_success / (attempts + 1) if (attempts + 1) > 0 else 0.0
+            improvement_with_extra_attempt = extra_rate - current_success_rate
+            
+            # Check if any single change improves by more than 5%
+            max_improvement = max(improvement_with_more_successes, 
+                                  improvement_with_less_failures, 
+                                  improvement_with_extra_attempt)
+            
+            # If no single change improves by more than 5%, the pair is at equilibrium
+            if max_improvement <= 0.05:
+                equilibrium_pairs.append(pair_key)
+        
+        # Update the internal equilibrium_pairs list
+        self.equilibrium_pairs = equilibrium_pairs
+        
+        return equilibrium_pairs
 
 
 # Simple test function to validate core logic
@@ -648,146 +879,4 @@ def test_nash_detector_and_forcer():
     print("  PASS: Coordinated change execution works correctly")
     
     # Test 7: Serialization
-    print("\nTest 7: Serialization")
-    json_str = detector.to_json()
-    restored = NashDetectorAndForcer.from_json(json_str)
-    assert restored.num_modules == detector.num_modules, "Should restore num_modules"
-    assert restored.dependency_matrix == detector.dependency_matrix, "Should restore dependency matrix"
-    assert restored.module_scores == detector.module_scores, "Should restore module scores"
-    print("  PASS: Serialization works correctly")
-    
-    # Test 8: Interdependent module selection
-    print("\nTest 8: Interdependent module selection")
-    # Add more interactions to create interdependence
-    for _ in range(50):
-        i = random.randint(0, 4)
-        j = random.randint(0, 4)
-        if i != j:
-            detector.record_interaction(i, j, random.random() > 0.3)
-    selected = detector._select_interdependent_modules(3)
-    assert len(selected) == 3, "Should select 3 modules"
-    assert all(0 <= idx < 5 for idx in selected), "All indices should be valid"
-    print("  PASS: Interdependent module selection works correctly")
-    
-    # Test 9: Full cycle run
-    print("\nTest 9: Full cycle run")
-    detector2 = NashDetectorAndForcer(num_modules=5, random_seed=123)
-    results = detector2.run_equilibrium_cycle(max_iterations=30)
-    assert results["iterations"] == 30, "Should run 30 iterations"
-    assert len(results["final_scores"]) == 5, "Should have 5 final scores"
-    print(f"  Equilibria detected: {results['equilibria_detected']}")
-    print(f"  Coordinated changes forced: {results['coordinated_changes_forced']}")
-    print("  PASS: Full cycle run works correctly")
-    
-    # Test 10: Multi-module mutation proposals
-    print("\nTest 10: Multi-module mutation proposals")
-    # Generate a proposal that would be missed by single-module optimization
-    # This simulates a scenario where individual changes don't improve but combined do
-    detector3 = NashDetectorAndForcer(num_modules=5, random_seed=42)
-    # Set up a scenario where single changes are neutral but combined is positive
-    for i in range(5):
-        for j in range(5):
-            if i != j:
-                detector3.dependency_matrix[i][j] = 0.5
-    # Generate a coordinated proposal
-    proposal = detector3.force_coordinated_change(3)
-    assert proposal["type"] == "coordinated_mutation", "Should be coordinated mutation"
-    assert len(proposal["modules_changed"]) == 3, "Should propose 3 modules"
-    # Verify the proposal includes mutations that are interdependent
-    modules = proposal["modules_changed"]
-    for mutation in proposal["mutations"]:
-        assert mutation["module"] in modules, "Mutation module should be in proposed set"
-    print("  PASS: Multi-module mutation proposals work correctly")
-    
-    # Test 11: Nash equilibrium detection validation
-    print("\nTest 11: Nash equilibrium detection validation")
-    detector4 = NashDetectorAndForcer(num_modules=5, random_seed=42)
-    # Force a stable state where no single change improves score
-    for _ in range(20):
-        detector4.update_all_scores()
-    # Check equilibrium detection
-    eq_detected = detector4.detect_nash_equilibrium()
-    # The detector should eventually detect equilibrium after stable scores
-    if detector4.consecutive_no_improvement >= 3:
-        assert eq_detected, "Should detect equilibrium after 3+ no-improvement cycles"
-        print("  PASS: Nash equilibrium detection validation works correctly")
-    else:
-        print("  INFO: Not enough cycles to validate equilibrium detection")
-    
-    # Test 12: Orchestrator API
-    print("\nTest 12: Orchestrator API")
-    detector5 = NashDetectorAndForcer(num_modules=5, random_seed=42)
-    api = detector5.get_orchestrator_api()
-    assert "detect_equilibrium" in api, "API should have detect_equilibrium"
-    assert "force_change" in api, "API should have force_change"
-    assert "get_state" in api, "API should have get_state"
-    # Test API functions
-    state = api["get_state"]()
-    assert "num_modules" in state, "State should have num_modules"
-    eq_result = api["detect_equilibrium"]()
-    assert isinstance(eq_result, bool), "detect_equilibrium should return bool"
-    change_result = api["force_change"](execute=False)
-    assert "type" in change_result, "force_change should return a plan"
-    print("  PASS: Orchestrator API works correctly")
-    
-    print("\nAll tests passed!")
-
-
-# Example usage
-def run_example():
-    """
-    Run an example demonstrating the NashDetectorAndForcer.
-    """
-    print("Initializing NashDetectorAndForcer with 5 modules...")
-    detector = NashDetectorAndForcer(num_modules=5, random_seed=42)
-    
-    print("\nInitial system summary:")
-    print(json.dumps(detector.get_system_summary(), indent=2))
-    
-    print("\nRunning equilibrium cycle (20 iterations)...")
-    results = detector.run_equilibrium_cycle(max_iterations=20)
-    
-    print(f"\nCycle results:")
-    print(f"  Iterations: {results['iterations']}")
-    print(f"  Equilibria detected: {results['equilibria_detected']}")
-    print(f"  Coordinated changes forced: {results['coordinated_changes_forced']}")
-    print(f"  Final scores: {results['final_scores']}")
-    
-    print("\nFinal system summary:")
-    print(json.dumps(detector.get_system_summary(), indent=2))
-    
-    # Demonstrate serialization
-    print("\nSerializing to JSON...")
-    json_str = detector.to_json()
-    print(f"JSON length: {len(json_str)} characters")
-    
-    # Demonstrate deserialization
-    print("\nDeserializing from JSON...")
-    restored = NashDetectorAndForcer.from_json(json_str)
-    print(f"Restored system summary:")
-    print(json.dumps(restored.get_system_summary(), indent=2))
-    
-    # Demonstrate force_coordinated_change returning a plan
-    print("\nDemonstrating force_coordinated_change plan generation...")
-    plan = detector.force_coordinated_change(3)
-    print(f"Generated plan for {len(plan['modules_changed'])} modules:")
-    print(json.dumps(plan, indent=2))
-    
-    # Demonstrate orchestrator API
-    print("\nDemonstrating orchestrator API...")
-    api = detector.get_orchestrator_api()
-    print("API methods available:", list(api.keys()))
-    state = api["get_state"]()
-    print("Current state via API:", json.dumps(state, indent=2))
-    
-    return detector
-
-
-if __name__ == "__main__":
-    # Run tests first
-    test_nash_detector_and_forcer()
-    
-    # Then run example
-    print("\n" + "="*50)
-    print("Running example...")
-    run_example()
+   

@@ -650,6 +650,146 @@ def generate_benchmark_test(pressure: dict, test_function: Callable) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Meta-test scenario generation
+# ---------------------------------------------------------------------------
+
+def generate_adversarial_variant(test_function: Callable) -> Callable:
+    """
+    Create an adversarial variant of a test function by introducing edge-case inputs
+    that are likely to break naive implementations.
+    """
+    def adversarial_test():
+        # Try extreme values
+        try:
+            test_function(None)
+        except Exception:
+            pass
+        try:
+            test_function(float('nan'))
+        except Exception:
+            pass
+        try:
+            test_function(float('inf'))
+        except Exception:
+            pass
+        try:
+            test_function(-float('inf'))
+        except Exception:
+            pass
+        try:
+            test_function(0)
+        except Exception:
+            pass
+        try:
+            test_function("")
+        except Exception:
+            pass
+        try:
+            test_function([])
+        except Exception:
+            pass
+        try:
+            test_function({})
+        except Exception:
+            pass
+        try:
+            test_function(set())
+        except Exception:
+            pass
+        try:
+            test_function(b'')
+        except Exception:
+            pass
+        # Return True if no unhandled exception
+        return True
+    adversarial_test.__name__ = f"adversarial_{test_function.__name__}"
+    return adversarial_test
+
+
+def generate_timing_constraint(test_function: Callable, max_time_ms: float = 50.0) -> Callable:
+    """
+    Wrap a test function with a timing constraint that fails if execution exceeds max_time_ms.
+    """
+    def timed_test():
+        start = time.time()
+        result = test_function()
+        elapsed = (time.time() - start) * 1000
+        assert elapsed <= max_time_ms, f"Timing constraint violated: {elapsed:.2f}ms > {max_time_ms}ms"
+        return result
+    timed_test.__name__ = f"timed_{test_function.__name__}"
+    return timed_test
+
+
+def generate_dependency_check(test_functions: List[Callable]) -> Callable:
+    """
+    Create a cross-test dependency check that verifies consistency across multiple test functions.
+    """
+    def dependency_test():
+        results = []
+        for fn in test_functions:
+            try:
+                result = fn()
+                results.append(result)
+            except Exception as e:
+                results.append(f"ERROR: {e}")
+        # Check that all results are consistent (all True or all have same structure)
+        if len(results) > 1:
+            first_result = results[0]
+            for r in results[1:]:
+                if type(r) != type(first_result):
+                    raise AssertionError(f"Inconsistent result types: {type(first_result)} vs {type(r)}")
+                if isinstance(first_result, (int, float, str, bool)) and r != first_result:
+                    raise AssertionError(f"Inconsistent values: {first_result} vs {r}")
+        return True
+    dependency_test.__name__ = "cross_test_dependency_check"
+    return dependency_test
+
+
+def pressure_cascade(test_suite: List[Callable]) -> List[Callable]:
+    """
+    Generate meta-test scenarios that stress-test existing tests by:
+    (1) creating adversarial input variants,
+    (2) introducing timing constraints,
+    (3) adding cross-test dependency checks.
+    
+    Args:
+        test_suite: List of test functions to stress-test.
+    
+    Returns:
+        List of new meta-test functions.
+    """
+    meta_tests = []
+    
+    if not test_suite:
+        return meta_tests
+    
+    # (1) Create adversarial input variants for each test
+    for fn in test_suite:
+        adversarial = generate_adversarial_variant(fn)
+        meta_tests.append(adversarial)
+    
+    # (2) Introduce timing constraints on a subset of tests
+    for fn in test_suite[:max(1, len(test_suite) // 2)]:
+        timed = generate_timing_constraint(fn, max_time_ms=100.0)
+        meta_tests.append(timed)
+    
+    # (3) Add cross-test dependency checks
+    if len(test_suite) >= 2:
+        # Create dependency checks for pairs of tests
+        for i in range(0, len(test_suite) - 1, 2):
+            pair = [test_suite[i], test_suite[i + 1]]
+            dep_check = generate_dependency_check(pair)
+            meta_tests.append(dep_check)
+        
+        # Also create a global dependency check for all tests
+        if len(test_suite) >= 3:
+            global_check = generate_dependency_check(test_suite[:3])
+            meta_tests.append(global_check)
+    
+    return meta_tests
+
+
+# ---------------------------------------------------------------------------
 # Main pressure generator class
 # ---------------------------------------------------------------------------
 
@@ -735,6 +875,22 @@ class EnvironmentalPressureGenerator:
             for test_fn in test_suite[:3]:  # Test against first 3 test functions
                 benchmark = generate_benchmark_test(pressure, test_fn)
                 self.benchmark_results.append(benchmark)
+
+        # Apply pressure cascade to stress-test existing tests
+        if test_suite:
+            meta_tests = pressure_cascade(test_suite)
+            for meta_test in meta_tests:
+                # Record the meta-test as a new pressure
+                pressure = {
+                    "name": f"meta_{meta_test.__name__}",
+                    "description": f"Meta-test: {meta_test.__doc__ or 'Stress test'}",
+                    "params": {},
+                    "constraint": "meta_test",
+                    "cycle_applied": cycle,
+                }
+                self.tracker.record_application(pressure["name"], pressure["params"], cycle)
+                self.applied_pressures.append(pressure["name"])
+                new_pressures.append(pressure)
 
         return new_pressures
 

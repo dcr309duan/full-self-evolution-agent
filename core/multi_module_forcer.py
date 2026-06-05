@@ -1,12 +1,12 @@
 """
 Multi-Module Forcer: Escapes local optima by coordinating mutations across 2-3 modules.
-Imports only from nash_detector (standard library only).
+Imports from nash_detector_and_forcer for equilibrium detection and forcing.
 """
 
 import itertools
 import random
 from typing import Dict, List, Tuple, Any, Optional, Set
-from core.nash_detector import NashEquilibriumDetector
+from core.nash_detector_and_forcer import NashEquilibriumDetectorAndForcer
 
 
 class MultiModuleForcer:
@@ -15,10 +15,11 @@ class MultiModuleForcer:
     to escape local optima by changing multiple modules simultaneously.
     """
 
-    def __init__(self, detector: Optional[NashEquilibriumDetector] = None):
-        self.detector = detector or NashEquilibriumDetector()
+    def __init__(self, detector: Optional[NashEquilibriumDetectorAndForcer] = None):
+        self.detector = detector or NashEquilibriumDetectorAndForcer()
         self.mutation_history: List[Dict[str, Any]] = []
         self.multi_mutation_success: Dict[str, bool] = {}  # Track multi-module success
+        self.module_success_rates: Dict[str, float] = {}  # Track historical success rates per module
 
     def analyze_equilibrium_clusters(self) -> List[Set[str]]:
         """
@@ -234,6 +235,14 @@ class MultiModuleForcer:
         # Track multi-module success for feedback
         for module in modules:
             self.multi_mutation_success[module] = outcome.get("success", False)
+            # Update historical success rate
+            if module not in self.module_success_rates:
+                self.module_success_rates[module] = 0.0
+            # Exponential moving average
+            self.module_success_rates[module] = (
+                0.7 * self.module_success_rates[module] +
+                0.3 * (1.0 if outcome.get("success", False) else 0.0)
+            )
         
         return outcome
 
@@ -497,6 +506,97 @@ class MultiModuleForcer:
         successful = sum(1 for v in self.multi_mutation_success.values() if v)
         return successful / len(self.multi_mutation_success)
 
+    def get_module_success_rate(self, module: str) -> float:
+        """
+        Get the historical success rate for a specific module.
+        Returns 0.5 if no history exists (neutral starting point).
+        """
+        return self.module_success_rates.get(module, 0.5)
+
+    def generate_coordinated_multi_module_mutations(
+        self, equilibrium_pairs: List[Tuple[str, str]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Takes the equilibrium pairs and generates coordinated multi-module mutations
+        (changing 2-3 modules simultaneously).
+        
+        Args:
+            equilibrium_pairs: List of tuples representing pairs of modules in equilibrium.
+            
+        Returns:
+            A list of mutation plans for coordinated multi-module changes.
+        """
+        proposals = []
+        
+        if not equilibrium_pairs:
+            return proposals
+        
+        # Build a set of all modules involved in equilibrium pairs
+        modules_in_equilibrium = set()
+        for m1, m2 in equilibrium_pairs:
+            modules_in_equilibrium.add(m1)
+            modules_in_equilibrium.add(m2)
+        
+        modules_list = list(modules_in_equilibrium)
+        
+        # Generate plans for 2 and 3 module combinations
+        for size in range(2, min(3, len(modules_list)) + 1):
+            for combo in itertools.combinations(modules_list, size):
+                # Use voting mechanism to weight module selection
+                weighted_combo = self._vote_on_modules(list(combo))
+                if len(weighted_combo) >= 2:
+                    plan = self._create_mutation_plan(set(weighted_combo))
+                    if plan:
+                        plan["source"] = "equilibrium_pairs"
+                        plan["voting_weight"] = sum(
+                            self.get_module_success_rate(m) for m in weighted_combo
+                        ) / len(weighted_combo)
+                        proposals.append(plan)
+        
+        # Sort proposals by voting weight (descending)
+        proposals.sort(key=lambda p: p.get("voting_weight", 0.0), reverse=True)
+        
+        return proposals
+
+    def _vote_on_modules(self, modules: List[str]) -> List[str]:
+        """
+        Simple voting mechanism where each module's proposed change is weighted
+        by its historical success rate. Returns the top modules to change together.
+        
+        Args:
+            modules: List of module names to vote on.
+            
+        Returns:
+            List of modules sorted by vote weight (descending), limited to 2-3 modules.
+        """
+        if not modules:
+            return []
+        
+        # Calculate vote weights based on historical success rates
+        vote_weights = {}
+        for module in modules:
+            success_rate = self.get_module_success_rate(module)
+            data = self.detector.module_interactions.get(module, {})
+            stability = data.get("stability", 0.5)
+            references = len(data.get("references", []))
+            
+            # Weighted vote: success rate is primary, stability and interactions are secondary
+            vote_weight = (
+                success_rate * 0.5 +  # Historical success rate (50% weight)
+                (1.0 - stability) * 0.3 +  # Lower stability = more need for change (30% weight)
+                min(references / 10.0, 1.0) * 0.2  # Interaction count (20% weight)
+            )
+            vote_weights[module] = vote_weight
+        
+        # Sort modules by vote weight descending
+        sorted_modules = sorted(vote_weights.items(), key=lambda x: x[1], reverse=True)
+        
+        # Select top 2-3 modules
+        num_to_select = min(random.choice([2, 3]), len(sorted_modules))
+        selected = [m[0] for m in sorted_modules[:num_to_select]]
+        
+        return selected
+
 
 class MultiModuleOrchestrator:
     """
@@ -504,8 +604,8 @@ class MultiModuleOrchestrator:
     multi-module mutations, with conflict resolution and rollback mechanisms.
     """
 
-    def __init__(self, detector: Optional[NashEquilibriumDetector] = None):
-        self.detector = detector or NashEquilibriumDetector()
+    def __init__(self, detector: Optional[NashEquilibriumDetectorAndForcer] = None):
+        self.detector = detector or NashEquilibriumDetectorAndForcer()
         self.forcer = MultiModuleForcer(self.detector)
         self.execution_history: List[Dict[str, Any]] = []
         self.snapshot_stack: List[Dict[str, Any]] = []
@@ -733,7 +833,7 @@ class MultiModuleOrchestrator:
 
 
 def analyze_and_force_coordination(
-    detector: Optional[NashEquilibriumDetector] = None,
+    detector: Optional[NashEquilibriumDetectorAndForcer] = None,
     max_plans: int = 3,
 ) -> Dict[str, Any]:
     """
@@ -771,7 +871,7 @@ def analyze_and_force_coordination(
 
 def generate_coordinated_multi_module_mutations(
     equilibrium_state: Dict[str, Any],
-    detector: Optional[NashEquilibriumDetector] = None
+    detector: Optional[NashEquilibriumDetectorAndForcer] = None
 ) -> List[Dict[str, Any]]:
     """
     Generates coordinated multi-module mutations based on the equilibrium state.
@@ -779,7 +879,7 @@ def generate_coordinated_multi_module_mutations(
     
     Args:
         equilibrium_state: The current equilibrium state from the detector.
-        detector: Optional NashEquilibriumDetector instance.
+        detector: Optional NashEquilibriumDetectorAndForcer instance.
         
     Returns:
         A list of coordinated mutation plans.
@@ -790,7 +890,7 @@ def generate_coordinated_multi_module_mutations(
 
 def execute_multi_module_mutation_with_rollback(
     plan: Dict[str, Any],
-    detector: Optional[NashEquilibriumDetector] = None
+    detector: Optional[NashEquilibriumDetectorAndForcer] = None
 ) -> Dict[str, Any]:
     """
     Executes a multi-module mutation with rollback safety.
@@ -798,7 +898,7 @@ def execute_multi_module_mutation_with_rollback(
     
     Args:
         plan: The coordinated mutation plan to execute.
-        detector: Optional NashEquilibriumDetector instance.
+        detector: Optional NashEquilibriumDetectorAndForcer instance.
         
     Returns:
         A result dictionary with execution details and rollback status.
@@ -809,7 +909,7 @@ def execute_multi_module_mutation_with_rollback(
 
 def integrate_with_orchestrator_cycle(
     equilibrium_state: Dict[str, Any],
-    detector: Optional[NashEquilibriumDetector] = None,
+    detector: Optional[NashEquilibriumDetectorAndForcer] = None,
     max_mutations: int = 3
 ) -> Dict[str, Any]:
     """
@@ -819,7 +919,7 @@ def integrate_with_orchestrator_cycle(
     
     Args:
         equilibrium_state: The current equilibrium state from the detector.
-        detector: Optional NashEquilibriumDetector instance.
+        detector: Optional NashEquilibriumDetectorAndForcer instance.
         max_mutations: Maximum number of mutations to execute in this cycle.
         
     Returns:
@@ -860,7 +960,7 @@ def integrate_with_orchestrator_cycle(
 
 
 def check_and_force_coordinated_mutation(
-    detector: Optional[NashEquilibriumDetector] = None
+    detector: Optional[NashEquilibriumDetectorAndForcer] = None
 ) -> Dict[str, Any]:
     """
     Checks if the system is in a Nash equilibrium and forces a coordinated mutation
@@ -871,117 +971,10 @@ def check_and_force_coordinated_mutation(
     (4) verifies the system escapes the equilibrium.
     
     Args:
-        detector: Optional NashEquilibriumDetector instance.
+        detector: Optional NashEquilibriumDetectorAndForcer instance.
         
     Returns:
         A result dictionary with the outcome of the coordinated mutation attempt.
     """
     forcer = MultiModuleForcer(detector)
-    orchestrator = MultiModuleOrchestrator(detector)
-    
-    # Step 1: Check for Nash equilibrium
-    equilibrium_result = forcer.detector.detect_equilibrium()
-    
-    if not equilibrium_result.get("equilibrium_detected", False):
-        orchestrator.log_equilibrium_event("no_equilibrium", {"message": "No Nash equilibrium detected"})
-        return {
-            "success": False,
-            "error": "No Nash equilibrium detected",
-            "equilibrium_detected": False,
-            "mutation_applied": False,
-            "escaped_equilibrium": False
-        }
-    
-    orchestrator.log_equilibrium_event("equilibrium_detected", equilibrium_result)
-    
-    # Step 2: Generate coordinated multi-module mutation plan
-    plans = forcer.force_coalition_change()
-    
-    if not plans:
-        # Fall back to cluster-based planning
-        clusters = forcer.analyze_equilibrium_clusters()
-        if not clusters:
-            orchestrator.log_equilibrium_event("no_plans", {"message": "No viable mutation plans generated"})
-            return {
-                "success": False,
-                "error": "No viable mutation plans generated",
-                "equilibrium_detected": True,
-                "mutation_applied": False,
-                "escaped_equilibrium": False
-            }
-        
-        for cluster in clusters:
-            cluster_plans = forcer.generate_coordinated_mutation_plan(cluster)
-            plans.extend(cluster_plans)
-    
-    if not plans:
-        orchestrator.log_equilibrium_event("no_plans", {"message": "No viable mutation plans generated"})
-        return {
-            "success": False,
-            "error": "No viable mutation plans generated",
-            "equilibrium_detected": True,
-            "mutation_applied": False,
-            "escaped_equilibrium": False
-        }
-    
-    # Step 3: Apply all changes atomically
-    best_plan = plans[0]  # Plans are sorted by impact
-    result = orchestrator.integrate_with_mutation_pipeline(best_plan)
-    
-    if not result.get("success", False):
-        orchestrator.log_forced_change("failed_mutation", best_plan, result)
-        return {
-            "success": False,
-            "error": "Atomic mutation application failed",
-            "equilibrium_detected": True,
-            "mutation_applied": False,
-            "escaped_equilibrium": False,
-            "mutation_result": result
-        }
-    
-    # Step 4: Verify the system escapes the equilibrium
-    post_equilibrium = forcer.detector.detect_equilibrium()
-    escaped = not post_equilibrium.get("equilibrium_detected", True)
-    
-    orchestrator.log_forced_change("successful_mutation", best_plan, result)
-    orchestrator.log_equilibrium_event("post_mutation_check", {"escaped": escaped, "post_equilibrium": post_equilibrium})
-    
-    return {
-        "success": escaped,
-        "equilibrium_detected": True,
-        "mutation_applied": True,
-        "escaped_equilibrium": escaped,
-        "plan_applied": best_plan,
-        "mutation_result": result,
-        "post_equilibrium_state": post_equilibrium,
-        "verification": {
-            "pre_equilibrium": equilibrium_result,
-            "post_equilibrium": post_equilibrium,
-            "escaped": escaped
-        }
-    }
-
-
-def _vote_on_modules(modules: List[str], detector: NashEquilibriumDetector) -> List[str]:
-    """
-    Simple voting mechanism to select which modules to change together.
-    Each module gets a vote based on its stability and interaction count.
-    Returns the top 2-3 modules with the most votes.
-    """
-    votes = {}
-    for module in modules:
-        data = detector.module_interactions.get(module, {})
-        stability = data.get("stability", 0.5)
-        references = len(data.get("references", []))
-        referenced_by = len(data.get("referenced_by", []))
-        
-        # Vote score: higher stability and more interactions = more votes
-        vote_score = stability * 2.0 + references * 0.5 + referenced_by * 0.5
-        votes[module] = vote_score
-    
-    # Sort by vote score descending
-    sorted_modules = sorted(votes.items(), key=lambda x: x[1], reverse=True)
-    
-    # Select top 2-3 modules (randomly choose between 2 or 3)
-    num_to_select = random.choice([2, 3])
-    selected
+    orchestrator = MultiModuleOrchestr

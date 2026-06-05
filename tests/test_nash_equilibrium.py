@@ -1,11 +1,12 @@
 import sys
 import os
 import unittest
+from unittest.mock import patch, MagicMock
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.nash_equilibrium_handler import is_nash_equilibrium, force_multi_module_change
+from core.nash_detector_and_forcer import is_nash_equilibrium, force_multi_module_change
 
 
 class TestNashEquilibriumMinimal(unittest.TestCase):
