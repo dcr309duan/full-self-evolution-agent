@@ -1,9 +1,8 @@
 {
   "cycle_count": 150,
-  "current_generation": 120,
+  "current_generation": 121,
   "last_evolution_time": 1780653457.9748995,
   "capabilities": [
-    "Create a 'systemic integration test harness' that runs the full evolution loop (reflection → goal se",
     "Implement a 'codebase consolidation scanner' that analyzes all mutation implementations and identifi",
     "Build a 'meta-parameter evolution' module that tracks the performance impact of key evolution engine",
     "Build an end-to-end integration test harness that executes the full evolution loop (reflection → goa",
@@ -52,15 +51,10 @@
     "Add a pre-mutation integration test hook: before every mutation or module addition, run the full end",
     "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub reposito",
     "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa",
-    "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the"
+    "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the",
+    "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements"
   ],
   "history": [
-    {
-      "cycle": 48,
-      "goal": "Create a self-consistency test suite for introspection modules: for each reflection cycle, automatically generate test cases that check that the reflection parser output can be parsed by the goal generator without errors, and that the goal generator output can be consumed by the mutation engine, failing and rolling back any change that breaks this contract.",
-      "success": true,
-      "timestamp": 1780631530.1831326
-    },
     {
       "cycle": 49,
       "goal": "Implement a canonical schema alignment layer that validates and transforms reflection_parser outputs into a normalized format consumable by goal_generator and mutation_engine, including runtime validation and automated adaptation on mismatch detection.",
@@ -654,6 +648,12 @@
       "goal": "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the failure_pattern_learner for the most recent 10 failures, and if the target module appears in any failure, apply a penalty to the mutation probability and log a rationale. This closes the gap between analysis and action.",
       "success": true,
       "timestamp": 1780653421.0520468
+    },
+    {
+      "cycle": 150,
+      "goal": "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements and function calls, compare against a stored dependency map, and reject any change that introduces circular dependencies or references to non-existent modules.",
+      "success": true,
+      "timestamp": 1780653710.2876384
     }
   ],
   "status": "evolving"
