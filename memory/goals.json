@@ -2,12 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote pipeline with at least three distinct data flow scenarios, including one that simulates a format mismatch to verify the schema alignment layer catches it, and integrate it into the testing framework to run before each generation.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780635284.2135642
-    },
-    {
       "description": "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries the causal dependency graph and blocks goals whose prerequisites are incomplete, logging the blocked goal and its missing dependencies to the failure analysis module for pattern mining.",
       "priority": 8,
       "status": "pending",
@@ -382,6 +376,13 @@
       "status": "completed",
       "created_at": 1780635284.2114174,
       "completed_at": 1780635439.0184474
+    },
+    {
+      "description": "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote pipeline with at least three distinct data flow scenarios, including one that simulates a format mismatch to verify the schema alignment layer catches it, and integrate it into the testing framework to run before each generation.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780635284.2135642,
+      "completed_at": 1780635535.3638766
     }
   ],
   "generated_goals": []

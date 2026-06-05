@@ -1,26 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified meta_evaluation_loop.py to: Add a method to export aggregated performance statistics (e.g., average mutation success rate over last N cycles, trend of evolution score). This method will be called by the meta-mutation engine to get the data needed for analysis.",
-      "timestamp": 1780630289.4722404,
-      "cycle": 43
-    },
-    {
-      "content": "Successfully modified integration_test_suite.py to: Add a new test case that validates the meta-mutation engine itself: after a meta-mutation is applied, run a sanity check on the modified meta-module (e.g., ensure reflection_parser still parses correctly, orchestrator still runs). This prevents meta-mutations from breaking core functionality.",
-      "timestamp": 1780630314.7627409,
-      "cycle": 43
-    },
-    {
-      "content": "Successfully modified rollback_manager.py to: Create a new module that implements automatic rollback of the last mutation when integration tests fail. It should: (a) maintain a stack of recent mutations (module, original content, timestamp), (b) after each mutation, trigger the integration test suite, (c) on failure, revert to the original content using the AST-based code rewriter, (d) log the failure as a high-priority insight for the goal generator with details (module, error type, timestamp, rollback status).",
-      "timestamp": 1780630418.0824811,
-      "cycle": 44
-    },
-    {
-      "content": "Successfully modified unified_evolution_loop_orchestrator.py to: Integrate the rollback_manager into the main evolution loop. After each mutation application and before proceeding to the next cycle, call rollback_manager.verify_and_rollback() which runs the integration test suite and performs rollback if needed. Ensure the loop pauses if rollback occurs to allow the goal generator to process the failure insight.",
-      "timestamp": 1780630445.2918777,
-      "cycle": 44
-    },
-    {
       "content": "Successfully modified integration_test_suite.py to: Add a method run_full_pipeline_test() that executes the complete mutation->test pipeline and returns a structured result (pass/fail, error details, test coverage metrics). This method will be called by the rollback_manager to determine if rollback is needed.",
       "timestamp": 1780630472.4208875,
       "cycle": 44
@@ -999,6 +979,26 @@
       "content": "Successfully modified config/evolution_config.py to: Add schema alignment configuration: (1) ENABLE_SCHEMA_VALIDATION (default True), (2) SCHEMA_VERSION_STRICT_MODE (default True) to block mismatched data, (3) SCHEMA_AUTO_UPDATE (default False) to prevent automatic version bumps, (4) SCHEMA_VALIDATION_LOG_LEVEL (default 'WARNING').",
       "timestamp": 1780635473.8331409,
       "cycle": 68
+    },
+    {
+      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Create a comprehensive end-to-end integration test suite with three scenarios: (1) successful mutation → test → promote flow with valid data, (2) mutation with format mismatch that schema alignment layer catches, (3) mutation with partial schema compliance that triggers validation warnings. Each scenario should exercise the full pipeline including mutation engine, testing framework, schema alignment, and promotion logic.",
+      "timestamp": 1780635504.3882632,
+      "cycle": 68
+    },
+    {
+      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Rewrite test_end_to_end_pipeline.py to contain exactly three minimal, focused test scenarios: (1) Happy path: valid mutation output → schema validation passes → tests pass → promotion succeeds. (2) Format mismatch: mutation output has wrong schema version/format → schema alignment layer catches and blocks it → promotion fails with clear error. (3) Partial compliance: mutation output has valid schema but missing optional fields → schema alignment warns but allows (configurable). Each test should mock only the necessary components and assert clear outcomes.",
+      "timestamp": 1780635526.2672567,
+      "cycle": 69
+    },
+    {
+      "content": "Successfully modified tests/__init__.py to: Add a test runner function `run_pre_generation_tests()` that executes test_end_to_end_pipeline.py and returns success/failure status, so the evolution loop can call it before each generation.",
+      "timestamp": 1780635530.2984834,
+      "cycle": 69
+    },
+    {
+      "content": "Successfully modified config/evolution_config.py to: Add configuration options: PRE_GENERATION_TEST_SUITE_ENABLED (default True), PRE_GENERATION_TEST_TIMEOUT (default 30 seconds), PRE_GENERATION_TEST_ABORT_ON_FAILURE (default True).",
+      "timestamp": 1780635535.343937,
+      "cycle": 69
     }
   ],
   "learned_patterns": [],
@@ -3019,6 +3019,31 @@
       "strategy": "Implement a canonical schema alignment layer that normalizes data formats between all core modules (mutation engine, testing framework, failure analysis, planning) using a shared JSON schema registry with validation on every inter-module call, and add a schema version check to block mismatched data before processing.",
       "outcome": "8/8 steps succeeded",
       "timestamp": 1780635473.8433487
+    },
+    {
+      "strategy": "modify tests/test_end_to_end_pipeline.py: Create a comprehensive end-to-end integration test suite with three scenarios: (1) successful mutation → test → promote flow with valid data, (2) mutation with format mismatch that schema alignment layer catches, (3) mutation with partial schema compliance that triggers validation warnings. Each scenario should exercise the full pipeline including mutation engine, testing framework, schema alignment, and promotion logic.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635504.3781142
+    },
+    {
+      "strategy": "modify tests/test_end_to_end_pipeline.py: Rewrite test_end_to_end_pipeline.py to contain exactly three minimal, focused test scenarios: (1) Happy path: valid mutation output → schema validation passes → tests pass → promotion succeeds. (2) Format mismatch: mutation output has wrong schema version/format → schema alignment layer catches and blocks it → promotion fails with clear error. (3) Partial compliance: mutation output has valid schema but missing optional fields → schema alignment warns but allows (configurable). Each test should mock only the necessary components and assert clear outcomes.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635526.2572584
+    },
+    {
+      "strategy": "modify tests/__init__.py: Add a test runner function `run_pre_generation_tests()` that executes test_end_to_end_pipeline.py and returns success/failure status, so the evolution loop can call it before each generation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635530.2886918
+    },
+    {
+      "strategy": "modify config/evolution_config.py: Add configuration options: PRE_GENERATION_TEST_SUITE_ENABLED (default True), PRE_GENERATION_TEST_TIMEOUT (default 30 seconds), PRE_GENERATION_TEST_ABORT_ON_FAILURE (default True).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780635535.3335435
+    },
+    {
+      "strategy": "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote pipeline with at least three distinct data flow scenarios, including one that simulates a format mismatch to verify the schema alignment layer catches it, and integrate it into the testing framework to run before each generation.",
+      "outcome": "3/4 steps succeeded",
+      "timestamp": 1780635535.3572354
     }
   ],
   "capabilities_developed": []
