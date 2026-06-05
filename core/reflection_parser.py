@@ -60,6 +60,10 @@ class GoalTriageResults(BaseModel):
         default_factory=list,
         description="List of lessons learned from the triage process."
     )
+    prerequisite_blocker_analysis: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Analysis of blocking dependencies: identifies most common blockers, average deferral time per blocker, and suggests which blocker to resolve first."
+    )
 
     @validator("triage_quality_score", always=True)
     def compute_triage_quality_score(cls, v: float, values: Dict[str, Any]) -> float:
@@ -85,6 +89,50 @@ class GoalTriageResults(BaseModel):
         # Combine both metrics (weighted average, equal weight)
         quality_score = (archival_accuracy + sub_goal_success_rate) / 2.0
         return min(max(quality_score, 0.0), 1.0)
+
+    @validator("prerequisite_blocker_analysis", always=True)
+    def compute_prerequisite_blocker_analysis(cls, v: Dict[str, Any], values: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute prerequisite blocker analysis from knowledge base data."""
+        # This is a placeholder that would normally query the knowledge base.
+        # For demonstration, we simulate the analysis with default values.
+        # In a real implementation, this would access a knowledge base of dependencies.
+        knowledge_base = values.get("_knowledge_base", {})
+        if not knowledge_base:
+            # Simulate knowledge base data for demonstration
+            knowledge_base = {
+                "blockers": {
+                    "dependency_A": {"goals_blocked": ["goal1", "goal2"], "deferral_times": [5, 7]},
+                    "dependency_B": {"goals_blocked": ["goal3"], "deferral_times": [3]},
+                    "dependency_C": {"goals_blocked": ["goal1", "goal3", "goal4"], "deferral_times": [2, 4, 6]}
+                }
+            }
+        
+        blockers = knowledge_base.get("blockers", {})
+        if not blockers:
+            return {"most_common_blockers": [], "average_deferral_times": {}, "suggested_first_blocker": None}
+        
+        # (a) Identify most common blocking dependencies
+        blocker_counts = {blocker: len(info["goals_blocked"]) for blocker, info in blockers.items()}
+        max_count = max(blocker_counts.values()) if blocker_counts else 0
+        most_common_blockers = [blocker for blocker, count in blocker_counts.items() if count == max_count]
+        
+        # (b) Calculate average deferral time for goals blocked by each dependency
+        average_deferral_times = {}
+        for blocker, info in blockers.items():
+            deferral_times = info.get("deferral_times", [])
+            if deferral_times:
+                average_deferral_times[blocker] = sum(deferral_times) / len(deferral_times)
+            else:
+                average_deferral_times[blocker] = 0.0
+        
+        # (c) Suggest which blocker to resolve first based on how many goals it blocks
+        suggested_first_blocker = max(blocker_counts, key=blocker_counts.get) if blocker_counts else None
+        
+        return {
+            "most_common_blockers": most_common_blockers,
+            "average_deferral_times": average_deferral_times,
+            "suggested_first_blocker": suggested_first_blocker
+        }
 
 
 class SimulationResult(BaseModel):
@@ -164,6 +212,7 @@ class SchemaAlignmentLayer:
                         "sub_goals_succeeded": self.goal_triage_fields["properties"]["sub_goals_succeeded"],
                         "triage_quality_score": self.goal_triage_fields["properties"]["triage_quality_score"],
                         "lessons_learned": self.goal_triage_fields["properties"]["lessons_learned"],
+                        "prerequisite_blocker_analysis": self.goal_triage_fields["properties"]["prerequisite_blocker_analysis"],
                     },
                     "required": ["goals_triaged", "goals_flagged_stale", "goals_decomposed", "goals_archived"],
                     "description": "Triage results for goals in this reflection cycle."

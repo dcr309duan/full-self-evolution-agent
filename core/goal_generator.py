@@ -2,7 +2,8 @@
 
 This module provides functions to generate goals based on simulation accuracy
 metrics and unexpected side effects. Goals are prioritized to expand simulation
-coverage.
+coverage. Enhanced to proactively resolve blocking dependencies by querying
+the knowledge base and generating blocker resolution sub-goals.
 """
 
 from typing import List, Dict, Optional
@@ -26,10 +27,11 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy' or 'dependency_tracking'
+    goal_type: str  # 'accuracy', 'dependency_tracking', or 'blocker_resolution'
     archived: bool = False
     lesson: Optional[str] = None
     dependencies: List[str] = field(default_factory=list)  # List of sub-goal descriptions this goal depends on
+    tags: List[str] = field(default_factory=list)  # Tags for categorization
 
     def __str__(self) -> str:
         return f"[{self.priority.name}] {self.description}"
@@ -324,6 +326,68 @@ def generate_sub_goals(
     return sub_goals
 
 
+def query_knowledge_base_for_blockers(module: str) -> List[str]:
+    """Query the knowledge base for top blocking dependencies related to a module.
+
+    Args:
+        module: The module to check for blockers.
+
+    Returns:
+        List of blocker descriptions found in the knowledge base.
+    """
+    blockers = []
+    # Search knowledge base for entries related to this module that indicate blockers
+    for key, value in knowledge_base.items():
+        if module in key and "blocker" in key.lower():
+            blockers.append(value)
+        # Also check if the value mentions blocking
+        if module in key and "block" in value.lower():
+            blockers.append(value)
+    
+    # Sort by impact (prioritize entries with 'critical' or 'high' impact)
+    high_impact = [b for b in blockers if 'critical' in b.lower() or 'high' in b.lower()]
+    medium_impact = [b for b in blockers if b not in high_impact]
+    
+    return high_impact + medium_impact
+
+
+def generate_blocker_resolution_goals(module: str) -> List[Goal]:
+    """Generate sub-goals to resolve the most impactful blockers for a module.
+
+    Queries the knowledge base for blocking dependencies and creates high-priority
+    sub-goals tagged as 'blocker_resolution' to proactively address them.
+
+    Args:
+        module: The module to generate blocker resolution goals for.
+
+    Returns:
+        List of blocker resolution goals, each with HIGH priority and 'blocker_resolution' tag.
+    """
+    blockers = query_knowledge_base_for_blockers(module)
+    resolution_goals = []
+    
+    if not blockers:
+        logger.debug("No blockers found in knowledge base for module: %s", module)
+        return resolution_goals
+    
+    # Generate resolution goals for top blockers (limit to 3 most impactful)
+    for i, blocker in enumerate(blockers[:3]):
+        goal = Goal(
+            description=f"Resolve blocking dependency: {blocker} in {module}",
+            priority=GoalPriority.HIGH,
+            module=module,
+            goal_type="blocker_resolution",
+            tags=["blocker_resolution"]
+        )
+        resolution_goals.append(goal)
+        logger.info(
+            "Generated blocker resolution goal for %s: %s",
+            module, blocker
+        )
+    
+    return resolution_goals
+
+
 def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
     """Record the goal as archived in the goal registry and store the lesson in the knowledge base.
 
@@ -342,6 +406,11 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
     # Store lesson in knowledge base
     lesson_key = f"lesson:{goal.module}:{goal.goal_type}"
     knowledge_base[lesson_key] = lesson
+    
+    # If this was a blocker resolution, also store blocker info
+    if "blocker_resolution" in goal.tags:
+        blocker_key = f"blocker:{goal.module}:{goal.description}"
+        knowledge_base[blocker_key] = f"Resolved: {lesson}"
     
     logger.info(
         "Archived goal '%s' with lesson: %s",
@@ -404,6 +473,21 @@ if __name__ == "__main__":
         for sub_goal in sub_goals:
             deps = f" (depends on: {sub_goal.dependencies})" if sub_goal.dependencies else ""
             print(f"  {sub_goal}{deps}")
+
+    # Test blocker resolution goals
+    print("\nTesting blocker resolution goals:")
+    # Add some blocker info to knowledge base
+    knowledge_base["blocker:module_a:critical_dependency"] = "Critical: Module A depends on outdated library X"
+    knowledge_base["blocker:module_c:high_impact"] = "High impact: Module C has circular dependency with Module D"
+    
+    for module in ["module_a", "module_b", "module_c"]:
+        blocker_goals = generate_blocker_resolution_goals(module)
+        if blocker_goals:
+            print(f"  Blocker goals for {module}:")
+            for bg in blocker_goals:
+                print(f"    {bg} (tags: {bg.tags})")
+        else:
+            print(f"  No blocker goals for {module}")
 
     # Test archiving
     print("\nArchiving first goal with lesson:")

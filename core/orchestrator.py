@@ -121,11 +121,78 @@ def validate_triage_result(triage_result: Dict[str, Any]) -> Dict[str, Any]:
     
     return triage_result
 
+def verify_prerequisites(goal: Dict[str, Any], dependency_graph: Dict[str, Any]) -> List[Dict[str, str]]:
+    """
+    Verify that all hard prerequisites for a goal are met.
+    
+    Args:
+        goal: The goal to verify prerequisites for
+        dependency_graph: The dependency graph containing prerequisite information
+        
+    Returns:
+        A list of unmet prerequisites with reasons. Empty list if all prerequisites are met.
+    """
+    unmet_prerequisites = []
+    
+    # Query the dependency graph for all hard prerequisites of the goal
+    goal_name = goal.get("name", "")
+    hard_prerequisites = dependency_graph.get(goal_name, {}).get("hard_prerequisites", [])
+    
+    # Check each prerequisite against the current system state
+    for prerequisite in hard_prerequisites:
+        prereq_name = prerequisite.get("name", "")
+        prereq_type = prerequisite.get("type", "module")
+        prereq_value = prerequisite.get("value", "")
+        
+        # Check based on prerequisite type
+        if prereq_type == "module":
+            # Check if the module exists in the system
+            try:
+                __import__(prereq_value)
+            except ImportError:
+                unmet_prerequisites.append({
+                    "prerequisite": prereq_name,
+                    "reason": f"Required module '{prereq_value}' is not installed or available"
+                })
+        elif prereq_type == "capability":
+            # Check if the capability exists (placeholder - actual implementation depends on system)
+            # For now, we'll check if it's defined in a capabilities registry
+            capabilities = dependency_graph.get("capabilities", {})
+            if prereq_value not in capabilities:
+                unmet_prerequisites.append({
+                    "prerequisite": prereq_name,
+                    "reason": f"Required capability '{prereq_value}' is not available"
+                })
+        elif prereq_type == "file":
+            # Check if the file exists
+            file_path = Path(prereq_value)
+            if not file_path.exists():
+                unmet_prerequisites.append({
+                    "prerequisite": prereq_name,
+                    "reason": f"Required file '{prereq_value}' does not exist"
+                })
+        elif prereq_type == "environment_variable":
+            # Check if the environment variable is set
+            if prereq_value not in os.environ:
+                unmet_prerequisites.append({
+                    "prerequisite": prereq_name,
+                    "reason": f"Required environment variable '{prereq_value}' is not set"
+                })
+        else:
+            # Unknown prerequisite type
+            unmet_prerequisites.append({
+                "prerequisite": prereq_name,
+                "reason": f"Unknown prerequisite type '{prereq_type}' for '{prereq_value}'"
+            })
+    
+    return unmet_prerequisites
+
 def run_smoke_test() -> Dict[str, Any]:
     """
     Execute the evolution smoke test in an isolated temporary directory.
     Integrates simulation engine to predict outcomes before mutation.
     Integrates goal triage to avoid re-generating archived goals.
+    Integrates prerequisite verification to check dependencies before execution.
 
     Returns:
         A structured dictionary containing:
@@ -168,6 +235,63 @@ def run_smoke_test() -> Dict[str, Any]:
             "action": "invoke_goal_selector",
             "status": "success",
             "details": f"Selected goal: {selected_goal}"
+        })
+
+        # Step 2.5: Verify prerequisites before execution
+        # Build a dependency graph (in a real system, this would come from a database or configuration)
+        dependency_graph = {
+            selected_goal.get("name", goal): {
+                "hard_prerequisites": [
+                    {"name": "unittest module", "type": "module", "value": "unittest"},
+                    {"name": "counter.py file", "type": "file", "value": str(counter_path)},
+                    {"name": "test_counter.py file", "type": "file", "value": str(test_path)}
+                ]
+            },
+            "capabilities": {
+                "file_operations": True,
+                "module_import": True
+            }
+        }
+        
+        unmet_prerequisites = verify_prerequisites(selected_goal, dependency_graph)
+        
+        if unmet_prerequisites:
+            # Log unmet prerequisites
+            for prereq in unmet_prerequisites:
+                logs.append({
+                    "step": 2.3,
+                    "action": "prerequisite_check",
+                    "status": "failed",
+                    "details": f"Unmet prerequisite: {prereq['prerequisite']} - {prereq['reason']}"
+                })
+            
+            # Defer the goal if prerequisites are not met
+            logs.append({
+                "step": 2.4,
+                "action": "defer_goal",
+                "status": "deferred",
+                "details": f"Goal '{selected_goal.get('name', goal)}' deferred due to unmet prerequisites"
+            })
+            
+            # Return early with deferred result
+            result = {
+                "success": False,
+                "logs": logs,
+                "result": {
+                    "deferred": True,
+                    "unmet_prerequisites": unmet_prerequisites,
+                    "simulation_confidence": simulation_confidence,
+                    "simulation_accuracy": get_simulation_accuracy()
+                },
+                "simulation_confidence": simulation_confidence
+            }
+            return result
+        
+        logs.append({
+            "step": 2.3,
+            "action": "prerequisite_check",
+            "status": "success",
+            "details": "All prerequisites are met"
         })
 
         # Step 3: Run simulation before mutation

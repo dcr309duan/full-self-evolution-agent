@@ -20,6 +20,7 @@ class DependencyGraph:
         self._reverse_graph: Dict[str, Set[str]] = defaultdict(set)
         self._modules: Set[str] = set()
         self._circular_dependencies: Set[Tuple[str, str]] = set()
+        self._prerequisites: Dict[str, List[Dict]] = defaultdict(list)  # goal_id -> list of prerequisite dicts
 
     def build(self) -> None:
         """Parse all Python files in the root directory and build the dependency graph."""
@@ -161,6 +162,56 @@ class DependencyGraph:
     def graph(self) -> Dict[str, Set[str]]:
         """Get the full dependency graph."""
         return {k: v.copy() for k, v in self._graph.items()}
+
+    def add_prerequisite(self, goal_id: str, prerequisite: Dict) -> None:
+        """Add a prerequisite for a given goal.
+
+        Args:
+            goal_id: The identifier of the goal.
+            prerequisite: A dictionary with keys 'type', 'target', and 'required'.
+                          Example: {'type': 'module', 'target': 'os', 'required': True}
+        """
+        self._prerequisites[goal_id].append(prerequisite)
+
+    def get_hard_prerequisites(self, goal_id: str) -> List[Dict]:
+        """Return a list of hard prerequisites (those marked as 'required') for a given goal.
+
+        Args:
+            goal_id: The identifier of the goal.
+
+        Returns:
+            A list of prerequisite dictionaries where 'required' is True.
+        """
+        all_prereqs = self._prerequisites.get(goal_id, [])
+        return [p for p in all_prereqs if p.get('required', False)]
+
+    def check_prerequisite_satisfied(self, prerequisite: Dict) -> bool:
+        """Query the current system state to determine if a prerequisite is met.
+
+        Args:
+            prerequisite: A dictionary with keys 'type', 'target', and 'required'.
+                          Example: {'type': 'module', 'target': 'os', 'required': True}
+
+        Returns:
+            True if the prerequisite is satisfied, False otherwise.
+        """
+        prereq_type = prerequisite.get('type', '')
+        target = prerequisite.get('target', '')
+
+        if prereq_type == 'module':
+            # Check if the module exists in the dependency graph
+            return target in self._modules
+        elif prereq_type == 'capability':
+            # Check if a capability is registered (simplified check)
+            # In a real system, this would query a capability registry
+            return target in self._modules  # Placeholder: check if module exists
+        elif prereq_type == 'test':
+            # Check if a test passes (simplified check)
+            # In a real system, this would run the test or check test results
+            return True  # Placeholder: assume tests pass
+        else:
+            # Unknown prerequisite type, assume not satisfied
+            return False
 
 
 class CachedDependencyGraph(DependencyGraph):

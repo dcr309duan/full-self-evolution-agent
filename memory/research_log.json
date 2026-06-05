@@ -822,5 +822,93 @@
       ]
     },
     "timestamp": 1780636838.9293408
+  },
+  {
+    "topic": "Self-Healing Code Generation via Error-Aware Mutation",
+    "data": {
+      "state_of_art": "Self-healing code generation via error-aware mutation is an emerging field combining automated program repair (APR), large language models (LLMs), and mutation testing. Current state-of-the-art approaches leverage LLMs (e.g., Codex, GPT-4, CodeLlama) to generate patches by conditioning on error messages, stack traces, and failing test cases. Techniques like 'self-debugging' (Chen et al., 2023) and 'Reflexion' (Shinn et al., 2023) use iterative feedback loops where the model generates code, executes it, observes errors, and mutates the code accordingly. Another SOTA method is 'Code Repair with Reinforcement Learning' (e.g., CodeRL) that fine-tunes LLMs using reward signals from test pass rates. Additionally, mutation-based repair (e.g., GenProg, Prophet) has evolved to use neural-guided mutation operators that learn from past fixes. The integration of symbolic execution (e.g., Angelix) with LLM-generated patches is also a frontier.",
+      "key_techniques": [
+        "Self-Debugging / Self-Reflection: LLM generates code, runs it, and uses error feedback to mutate (e.g., 'Self-Debugging' by Chen et al., 2023).",
+        "Reflexion: Agent with memory that stores past errors and successful mutations to guide future fixes (Shinn et al., 2023).",
+        "Neural-Guided Mutation Operators: Using a neural network to select which code regions to mutate and how (e.g., DeepMutation, MuNN).",
+        "Reinforcement Learning from Execution Feedback (CodeRL): Fine-tuning LLM with rewards from test outcomes to improve patch generation.",
+        "Semantic-Preserving Mutations: Combining AST-level transformations (e.g., variable renaming, loop unrolling) with error-aware constraints.",
+        "Test-Driven Repair: Generating patches that pass a given test suite, using genetic programming or LLM-based crossover.",
+        "Runtime Monitoring & Hot Patching: Embedding error-handling code that triggers mutation at runtime (e.g., using try-catch with auto-generated fallbacks)."
+      ],
+      "implementation_strategies": [
+        "1. Build a feedback loop: Integrate code generation with a sandboxed execution environment (e.g., Docker) that captures stdout, stderr, exit codes, and runtime exceptions. Feed this back to the LLM as part of the prompt.",
+        "2. Use structured error representations: Convert error messages into a structured format (e.g., JSON with error type, line number, variable state) to make mutation more precise.",
+        "3. Implement mutation operators at multiple levels: Token-level (e.g., replace operator), AST-level (e.g., insert if-check), and semantic-level (e.g., change algorithm). Use a priority queue based on error severity.",
+        "4. Employ a 'mutation budget': Limit the number of mutation attempts per error to avoid infinite loops. Use a scoring function (e.g., test pass rate + code complexity) to rank mutations.",
+        "5. Use few-shot prompting with exemplars: Provide the LLM with examples of successful error-aware mutations (e.g., 'Error X was fixed by changing Y to Z').",
+        "6. Incorporate static analysis: Use linters or type checkers to pre-filter invalid mutations before execution.",
+        "7. Implement rollback with versioning: Keep a git-like history of mutations so that if a fix introduces new errors, the system can revert to the last working state."
+      ],
+      "pitfalls": [
+        "Overfitting to test cases: The generated code may pass the given tests but fail on unseen inputs (lack of generalization). Mitigate by using a held-out validation set or property-based testing.",
+        "Infinite mutation loops: The agent may keep mutating without convergence. Set a maximum iteration limit and use early stopping if no improvement.",
+        "Error message ambiguity: LLMs may misinterpret vague error messages (e.g., 'Segmentation fault'). Use symbolic execution or debugger traces to provide more context.",
+        "Mutation explosion: Too many possible mutations can overwhelm the system. Use heuristic pruning (e.g., only mutate lines in the stack trace).",
+        "Security risks: Self-healing code can introduce vulnerabilities if mutations are unconstrained. Use safety filters and sandbox execution.",
+        "Catastrophic forgetting: If the LLM is fine-tuned on repair tasks, it may lose general coding ability. Use parameter-efficient fine-tuning (e.g., LoRA) or keep a frozen base model.",
+        "Latency and cost: Repeated LLM calls for mutation can be slow and expensive. Use caching for common fixes or smaller specialized models (e.g., CodeBERT)."
+      ],
+      "unconventional": [
+        "1. Evolutionary Game Theory: Model mutation as a co-evolutionary game between the code and the error environment, using Nash equilibrium to find stable patches.",
+        "2. Probabilistic Program Synthesis: Use Bayesian inference to sample mutations that maximize the likelihood of passing tests, treating code as a probabilistic program.",
+        "3. Adversarial Mutation: Intentionally introduce errors (e.g., via fuzzing) to train the agent to handle a wider range of failures, similar to adversarial training.",
+        "4. Swarm Intelligence: Use multiple LLM agents (e.g., each with a different mutation strategy) that vote or combine patches via ensemble methods.",
+        "5. Quantum-Inspired Mutation: Apply superposition principles to explore multiple mutations simultaneously using quantum annealing or tensor networks (theoretical).",
+        "6. Bio-inspired Healing: Mimic biological DNA repair mechanisms (e.g., mismatch repair, homologous recombination) to design mutation operators that correct errors by referencing similar correct code snippets.",
+        "7. Meta-Learning for Mutation: Train a meta-learner that predicts which mutation operator will succeed given the error type and code context, using gradient-based meta-learning (e.g., MAML)."
+      ]
+    },
+    "timestamp": 1780638082.5997343
+  },
+  {
+    "topic": "Adaptive Task Decomposition for Complex Multi-Step Instructions",
+    "data": {
+      "state_of_art": "Adaptive Task Decomposition for complex multi-step instructions is an active area at the intersection of AI planning, large language models (LLMs), and reinforcement learning. Current SOTA approaches leverage LLMs as dynamic decomposers that break down instructions into subgoals based on context, often using hierarchical reinforcement learning (HRL) or chain-of-thought (CoT) prompting with self-reflection. Key methods include: (1) LLM-based planners like ReAct and Tree-of-Thoughts that interleave reasoning and action, (2) hierarchical task networks (HTNs) combined with learned decomposition policies, and (3) meta-learning frameworks that adapt decomposition strategies to novel tasks. Recent work also explores using world models to simulate sub-task outcomes before execution.",
+      "key_techniques": [
+        "Chain-of-Thought (CoT) Prompting: Step-by-step reasoning to decompose instructions, often with few-shot examples.",
+        "ReAct: Synergizing reasoning and acting in LLMs for dynamic task decomposition.",
+        "Tree-of-Thoughts (ToT): Exploring multiple decomposition paths via tree search with self-evaluation.",
+        "Hierarchical Reinforcement Learning (HRL): Learning high-level policies for subgoal selection and low-level policies for execution.",
+        "Option-Critic Architecture: Learning reusable subroutines (options) that can be composed adaptively.",
+        "LLM + Planner Hybrids: Using LLMs to generate candidate subgoals, then a classical planner (e.g., PDDL) to verify feasibility.",
+        "Self-Refine: Iterative decomposition where the agent critiques and adjusts its own plan.",
+        "Meta-Learning (MAML): Training a model to quickly adapt decomposition strategies to new tasks with few examples."
+      ],
+      "implementation_strategies": [
+        "Start with a modular architecture: a high-level decomposer (LLM or policy network) that outputs subgoals, and a low-level executor (e.g., a skill library or RL agent).",
+        "Use a feedback loop: after each sub-task, evaluate success/failure and update the decomposition dynamically (e.g., via Bayesian inference or gradient-based adaptation).",
+        "Implement a cost-benefit analysis for decomposition depth: avoid over-decomposition by penalizing unnecessary subgoals in the reward function.",
+        "Leverage pre-trained LLMs with in-context learning: provide 2-3 examples of good decompositions for similar tasks in the prompt.",
+        "Incorporate a world model (e.g., a learned simulator) to test subgoal sequences before execution, reducing trial-and-error.",
+        "Use hierarchical imitation learning: first collect expert demonstrations of decomposition, then train a policy to mimic them.",
+        "For real-time adaptation, maintain a cache of successful decompositions and retrieve similar ones via embedding similarity."
+      ],
+      "pitfalls": [
+        "Over-decomposition: breaking tasks into too many subgoals, leading to high overhead and error accumulation.",
+        "Under-decomposition: missing critical steps, causing the agent to fail on complex instructions.",
+        "Brittle decomposition: relying on fixed templates that fail when the instruction's context changes slightly.",
+        "Ignoring dependencies: not modeling sub-task ordering constraints (e.g., 'open door before entering').",
+        "Catastrophic forgetting in RL: when adapting to new tasks, the agent may lose previously learned decomposition skills.",
+        "LLM hallucination: generating unrealistic or infeasible subgoals that cannot be executed.",
+        "Lack of grounding: decompositions that are semantically correct but not executable by the low-level controller.",
+        "Reward sparsity: in HRL, the high-level policy may struggle to learn if rewards are only given after the entire task is completed."
+      ],
+      "unconventional": [
+        "Adversarial decomposition: train a discriminator to distinguish good vs. bad decompositions, then use it to guide a generator (GAN-style).",
+        "Evolutionary decomposition: use genetic algorithms to evolve a population of decomposition strategies, selecting the fittest based on task success rate.",
+        "Causal discovery for decomposition: apply causal inference to identify which sub-tasks are causally necessary for the final outcome.",
+        "Quantum-inspired superposition: represent the task as a superposition of possible decompositions and collapse to the most coherent one via measurement.",
+        "Swarm-based decomposition: use multiple agents (e.g., LLM instances) that propose subgoals and vote on the best sequence, inspired by swarm intelligence.",
+        "Dreamer-style decomposition: train a world model to 'dream' about possible decomposition paths and select the one with highest predicted reward (model-based RL).",
+        "Decomposition via constraint satisfaction: encode the instruction as a set of constraints and use a SAT solver to find a valid subgoal ordering."
+      ]
+    },
+    "timestamp": 1780638093.9187121
   }
 ]
