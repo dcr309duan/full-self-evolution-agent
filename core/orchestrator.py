@@ -13,6 +13,7 @@ from core.test_runner import run_tests
 from core.reflection import analyze_result
 from core.simulation_engine import simulate_change, SimulationResult
 from core.goal_triage import triage_pending_goals
+from core.fitness_evaluator import FitnessEvaluator
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -57,6 +58,9 @@ if __name__ == '__main__':
 
 # Track simulation accuracy over time
 simulation_history: List[Dict[str, Any]] = []
+
+# Knowledge base to store fitness scores and other data
+knowledge_base: List[Dict[str, Any]] = []
 
 def update_simulation_accuracy(sim_result: SimulationResult, actual_test_result: Dict[str, Any]) -> None:
     """Update simulation accuracy tracking based on actual test results."""
@@ -193,6 +197,7 @@ def run_smoke_test() -> Dict[str, Any]:
     Integrates simulation engine to predict outcomes before mutation.
     Integrates goal triage to avoid re-generating archived goals.
     Integrates prerequisite verification to check dependencies before execution.
+    Integrates fitness evaluator to assess code quality before and after mutation.
 
     Returns:
         A structured dictionary containing:
@@ -204,6 +209,7 @@ def run_smoke_test() -> Dict[str, Any]:
     logs: List[Dict[str, Any]] = []
     temp_dir = None
     simulation_confidence = 0.0
+    fitness_evaluator = FitnessEvaluator()
 
     try:
         # Step 1: Create isolated environment
@@ -326,6 +332,23 @@ def run_smoke_test() -> Dict[str, Any]:
             }
             return result
 
+        # Step 3.5: Run fitness evaluator before mutation
+        pre_mutation_fitness = fitness_evaluator.run_fitness_test(counter_path)
+        logs.append({
+            "step": 2.7,
+            "action": "run_fitness_evaluation_pre_mutation",
+            "status": "success",
+            "details": f"Pre-mutation fitness score: {pre_mutation_fitness}"
+        })
+
+        # Store pre-mutation fitness score in knowledge base
+        knowledge_base.append({
+            "type": "fitness_score",
+            "phase": "pre_mutation",
+            "score": pre_mutation_fitness,
+            "goal": selected_goal.get("name", goal)
+        })
+
         # Step 4: Invoke mutation engine
         mutated_code = mutate_file(str(counter_path), selected_goal)
         logs.append({
@@ -343,6 +366,70 @@ def run_smoke_test() -> Dict[str, Any]:
             "status": "success",
             "details": "Mutated code written back to counter.py"
         })
+
+        # Step 4.5: Run fitness evaluator after mutation
+        post_mutation_fitness = fitness_evaluator.run_fitness_test(counter_path)
+        logs.append({
+            "step": 3.5,
+            "action": "run_fitness_evaluation_post_mutation",
+            "status": "success",
+            "details": f"Post-mutation fitness score: {post_mutation_fitness}"
+        })
+
+        # Store post-mutation fitness score in knowledge base
+        knowledge_base.append({
+            "type": "fitness_score",
+            "phase": "post_mutation",
+            "score": post_mutation_fitness,
+            "goal": selected_goal.get("name", goal)
+        })
+
+        # Check if fitness score dropped significantly (>20%)
+        if pre_mutation_fitness > 0:
+            fitness_drop = (pre_mutation_fitness - post_mutation_fitness) / pre_mutation_fitness
+            if fitness_drop > 0.2:
+                logs.append({
+                    "step": 3.6,
+                    "action": "fitness_drop_detected",
+                    "status": "warning",
+                    "details": f"Fitness score dropped by {fitness_drop*100:.1f}% (>20%). Rolling back mutation."
+                })
+                
+                # Rollback the mutation by restoring original code
+                counter_path.write_text(original_code)
+                logs.append({
+                    "step": 3.7,
+                    "action": "rollback_mutation",
+                    "status": "success",
+                    "details": "Mutation rolled back to original code due to significant fitness drop"
+                })
+                
+                # Store rollback in knowledge base
+                knowledge_base.append({
+                    "type": "rollback",
+                    "reason": "fitness_drop",
+                    "pre_mutation_score": pre_mutation_fitness,
+                    "post_mutation_score": post_mutation_fitness,
+                    "drop_percentage": fitness_drop * 100,
+                    "goal": selected_goal.get("name", goal)
+                })
+                
+                # Return early with rollback result
+                result = {
+                    "success": False,
+                    "logs": logs,
+                    "result": {
+                        "rolled_back": True,
+                        "reason": "fitness_drop",
+                        "pre_mutation_fitness": pre_mutation_fitness,
+                        "post_mutation_fitness": post_mutation_fitness,
+                        "fitness_drop_percentage": fitness_drop * 100,
+                        "simulation_confidence": simulation_confidence,
+                        "simulation_accuracy": get_simulation_accuracy()
+                    },
+                    "simulation_confidence": simulation_confidence
+                }
+                return result
 
         # Step 5: Run test suite
         original_cwd = os.getcwd()
@@ -368,6 +455,8 @@ def run_smoke_test() -> Dict[str, Any]:
         # Add simulation confidence to reflection output
         analysis["simulation_confidence"] = simulation_confidence
         analysis["simulation_accuracy"] = get_simulation_accuracy()
+        analysis["pre_mutation_fitness"] = pre_mutation_fitness
+        analysis["post_mutation_fitness"] = post_mutation_fitness
         
         logs.append({
             "step": 5,

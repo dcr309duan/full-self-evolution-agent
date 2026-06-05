@@ -1,11 +1,80 @@
 from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field, validator
 from enum import Enum
+from collections import deque
 
 
 class SimulationPrediction(str, Enum):
     PASS = "pass"
     FAIL = "fail"
+
+
+class FitnessTrendAnalysis(BaseModel):
+    """Schema for fitness trend analysis fields."""
+    fitness_scores: deque = Field(
+        default_factory=lambda: deque(maxlen=10),
+        description="Last 10 fitness scores, ordered chronologically."
+    )
+    declining_areas: List[str] = Field(
+        default_factory=list,
+        description="List of areas where fitness is declining."
+    )
+    suggested_improvements: List[str] = Field(
+        default_factory=list,
+        description="List of specific code improvements to address declining areas."
+    )
+
+    def add_fitness_score(self, score: float) -> None:
+        """Add a new fitness score and update analysis."""
+        self.fitness_scores.append(score)
+        self._analyze_trend()
+
+    def _analyze_trend(self) -> None:
+        """Analyze fitness trend and update declining areas and suggestions."""
+        if len(self.fitness_scores) < 3:
+            self.declining_areas = []
+            self.suggested_improvements = []
+            return
+
+        scores = list(self.fitness_scores)
+        self.declining_areas = []
+        self.suggested_improvements = []
+
+        # Check overall trend
+        if scores[-1] < scores[0]:
+            self.declining_areas.append("overall_fitness")
+            self.suggested_improvements.append(
+                "Review recent code changes for performance regressions. "
+                "Consider profiling and optimizing critical paths."
+            )
+
+        # Check for recent decline (last 3 scores)
+        if len(scores) >= 3 and scores[-1] < scores[-2] < scores[-3]:
+            self.declining_areas.append("recent_trend")
+            self.suggested_improvements.append(
+                "Recent consecutive decline detected. Investigate recent commits "
+                "for potential issues. Run regression tests and compare with baseline."
+            )
+
+        # Check for volatility (high variance in last 5 scores)
+        if len(scores) >= 5:
+            recent_scores = scores[-5:]
+            mean = sum(recent_scores) / len(recent_scores)
+            variance = sum((s - mean) ** 2 for s in recent_scores) / len(recent_scores)
+            if variance > 0.1:
+                self.declining_areas.append("high_volatility")
+                self.suggested_improvements.append(
+                    "High fitness score volatility detected. Implement more consistent "
+                    "testing practices and stabilize deployment pipeline."
+                )
+
+        # Check for sustained low performance
+        if all(s < 0.5 for s in scores[-3:]):
+            self.declining_areas.append("sustained_low_performance")
+            self.suggested_improvements.append(
+                "Sustained low fitness scores. Consider a major refactoring of "
+                "core components. Prioritize fixing known bugs and improving test coverage."
+            )
 
 
 class GoalTriageResults(BaseModel):
@@ -63,6 +132,10 @@ class GoalTriageResults(BaseModel):
     prerequisite_blocker_analysis: Dict[str, Any] = Field(
         default_factory=dict,
         description="Analysis of blocking dependencies: identifies most common blockers, average deferral time per blocker, and suggests which blocker to resolve first."
+    )
+    fitness_trend_analysis: FitnessTrendAnalysis = Field(
+        default_factory=FitnessTrendAnalysis,
+        description="Analysis of fitness score trends over the last 10 cycles, identifying declining areas and suggesting improvements."
     )
 
     @validator("triage_quality_score", always=True)
@@ -213,6 +286,28 @@ class SchemaAlignmentLayer:
                         "triage_quality_score": self.goal_triage_fields["properties"]["triage_quality_score"],
                         "lessons_learned": self.goal_triage_fields["properties"]["lessons_learned"],
                         "prerequisite_blocker_analysis": self.goal_triage_fields["properties"]["prerequisite_blocker_analysis"],
+                        "fitness_trend_analysis": {
+                            "type": "object",
+                            "properties": {
+                                "fitness_scores": {
+                                    "type": "array",
+                                    "items": {"type": "number"},
+                                    "maxItems": 10,
+                                    "description": "Last 10 fitness scores, ordered chronologically."
+                                },
+                                "declining_areas": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of areas where fitness is declining."
+                                },
+                                "suggested_improvements": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of specific code improvements to address declining areas."
+                                }
+                            },
+                            "description": "Analysis of fitness score trends over the last 10 cycles."
+                        }
                     },
                     "required": ["goals_triaged", "goals_flagged_stale", "goals_decomposed", "goals_archived"],
                     "description": "Triage results for goals in this reflection cycle."

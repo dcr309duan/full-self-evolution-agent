@@ -27,7 +27,7 @@ class Goal:
     description: str
     priority: GoalPriority
     module: str
-    goal_type: str  # 'accuracy', 'dependency_tracking', or 'blocker_resolution'
+    goal_type: str  # 'accuracy', 'dependency_tracking', 'blocker_resolution', or 'challenge'
     archived: bool = False
     lesson: Optional[str] = None
     dependencies: List[str] = field(default_factory=list)  # List of sub-goal descriptions this goal depends on
@@ -56,7 +56,7 @@ def generate_goals(
     accuracy_threshold: float = 0.8,
     coverage_weight: float = 0.5
 ) -> List[Goal]:
-    """Generate goals based on simulation metrics.
+    """Generate goals based on simulation metrics and knowledge base fitness scores.
 
     Args:
         metrics_list: List of simulation metrics for different modules.
@@ -67,6 +67,10 @@ def generate_goals(
         List of generated goals, sorted by priority (highest first).
     """
     goals: List[Goal] = []
+
+    # First, check knowledge base for fitness scores and generate challenge goals
+    challenge_goals = _generate_challenge_goals_from_knowledge_base()
+    goals.extend(challenge_goals)
 
     for metrics in metrics_list:
         # Generate accuracy improvement goals if accuracy is below threshold
@@ -101,6 +105,48 @@ def generate_goals(
     goals.sort(key=lambda g: (g.priority.value, -_coverage_score(g, metrics_list)))
 
     return goals
+
+
+def _generate_challenge_goals_from_knowledge_base() -> List[Goal]:
+    """Generate goals based on fitness scores stored in the knowledge base.
+
+    Reads fitness scores from the knowledge base and generates goals for
+    challenges with low scores (score == 0).
+
+    Returns:
+        List of goals for low-scoring challenges.
+    """
+    challenge_goals = []
+    
+    # Look for fitness score entries in the knowledge base
+    for key, value in knowledge_base.items():
+        if key.startswith("fitness_score:"):
+            # Extract challenge name from key (format: "fitness_score:challenge_name")
+            challenge_name = key.split(":", 1)[1] if ":" in key else key
+            
+            try:
+                score = float(value)
+                if score == 0.0:
+                    # Generate a goal to implement this challenge correctly
+                    goal = Goal(
+                        description=f"Implement {challenge_name} correctly (current score: 0)",
+                        priority=GoalPriority.HIGH,
+                        module=challenge_name,
+                        goal_type="challenge",
+                        tags=["challenge", "low_score"]
+                    )
+                    challenge_goals.append(goal)
+                    logger.info(
+                        "Generated challenge goal for %s (fitness score: 0)",
+                        challenge_name
+                    )
+            except ValueError:
+                logger.warning(
+                    "Invalid fitness score value for %s: %s",
+                    challenge_name, value
+                )
+    
+    return challenge_goals
 
 
 def _calculate_priority(
@@ -412,6 +458,11 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
         blocker_key = f"blocker:{goal.module}:{goal.description}"
         knowledge_base[blocker_key] = f"Resolved: {lesson}"
     
+    # If this was a challenge goal, update the fitness score
+    if "challenge" in goal.tags:
+        fitness_key = f"fitness_score:{goal.module}"
+        knowledge_base[fitness_key] = "1.0"  # Mark as resolved
+    
     logger.info(
         "Archived goal '%s' with lesson: %s",
         goal.description, lesson
@@ -441,6 +492,11 @@ if __name__ == "__main__":
             coverage=0.5
         ),
     ]
+
+    # Add some fitness scores to knowledge base for testing
+    knowledge_base["fitness_score:FizzBuzz"] = "0.0"
+    knowledge_base["fitness_score:BinarySearch"] = "0.85"
+    knowledge_base["fitness_score:QuickSort"] = "0.0"
 
     generated = generate_goals(example_metrics)
     print("Generated goals:")

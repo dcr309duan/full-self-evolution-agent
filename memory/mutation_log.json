@@ -613,5 +613,49 @@
         "timestamp": 1780637419.989721
       }
     ]
+  },
+  {
+    "timestamp": 1780638282.0065892,
+    "results": [
+      {
+        "parent_a": "quicksorted_prime_factors",
+        "parent_b": "memoized_fibonacci_factorizer",
+        "operator": "hybrid",
+        "code": "def prime_fibonacci_analyzer(limit):\n    import math\n    \n    def is_prime(num):\n        if num < 2:\n            return False\n        for i in range(2, int(math.sqrt(num)) + 1):\n            if num % i == 0:\n                return False\n        return True\n    \n    def fibonacci_series(n):\n        series = []\n        a, b = 0, 1\n        for _ in range(n):\n            series.append(a)\n            a, b = b, a + b\n        return series\n    \n    def prime_factorize(num):\n        factors = []\n        d = 2\n        while d * d <= num:\n            while num % d == 0:\n                factors.append(d)\n                num //= d\n            d += 1\n        if num > 1:\n            factors.append(num)\n        return factors\n    \n    fib_series = fibonacci_series(limit)\n    result = {}\n    \n    for i, fib_num in enumerate(fib_series):\n        if fib_num > 1 and is_prime(fib_num):\n            factors = prime_factorize(fib_num + 1)\n            result[i] = {'fibonacci': fib_num, 'next_plus_one_factors': factors}\n    \n    return result",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.4,
+          "stdout": "FUNCTION: prime_fibonacci_analyzer\nSCORE: 2/5\n"
+        },
+        "timestamp": 1780638259.6647651
+      },
+      {
+        "parent_a": "retry_fibonacci_with_validation",
+        "parent_b": "quicksorted_prime_factors",
+        "operator": "crossover",
+        "code": "def retry_prime_factorization(n, max_attempts=3, delay=1):\n    import time\n    if not isinstance(n, int) or n < 0:\n        raise ValueError(\"n must be a non-negative integer\")\n    for attempt in range(max_attempts):\n        try:\n            def is_prime(num):\n                if num < 2:\n                    return False\n                for i in range(2, int(num**0.5) + 1):\n                    if num % i == 0:\n                        return False\n                return True\n            factors = []\n            d = 2\n            temp = n\n            while d * d <= temp:\n                while temp % d == 0:\n                    factors.append(d)\n                    temp //= d\n                d += 1\n            if temp > 1:\n                factors.append(temp)\n            if not factors:\n                return []\n            if len(factors) <= 1:\n                return factors\n            pivot = factors[len(factors)//2]\n            left = [x for x in factors if x < pivot]\n            mid = [x for x in factors if x == pivot]\n            right = [x for x in factors if x > pivot]\n            return left + mid + right\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.6,
+          "stdout": "FUNCTION: retry_prime_factorization\nSCORE: 3/5\n"
+        },
+        "timestamp": 1780638262.1490185
+      },
+      {
+        "parent_a": "retry",
+        "parent_b": "quicksorted_primes",
+        "operator": "hybrid",
+        "code": "def retry_primes(func, max_attempts=3, delay=1):\n    import time\n    def is_prime(n):\n        if n < 2:\n            return False\n        for i in range(2, int(n**0.5) + 1):\n            if n % i == 0:\n                return False\n        return True\n    for attempt in range(max_attempts):\n        try:\n            result = func()\n            if is_prime(result):\n                return result\n            else:\n                raise ValueError(f\"Result {result} is not prime\")\n        except Exception as e:\n            if attempt == max_attempts - 1:\n                raise\n            time.sleep(delay)",
+        "test_result": {
+          "valid": true,
+          "reason": "OK",
+          "score": 0.0,
+          "stdout": "FUNCTION: retry_primes\nSCORE: 0/5\n"
+        },
+        "timestamp": 1780638282.006144
+      }
+    ]
   }
 ]
