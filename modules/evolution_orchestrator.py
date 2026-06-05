@@ -26,6 +26,7 @@ class EvolutionOrchestrator:
         self.skipped_mutations = 0
         self.failure_insights: list = []
         self._predictor = None
+        self._cycle_count = 0
 
     def set_predictor(self, predictor: Any) -> None:
         """Set the static predictor instance."""
@@ -73,6 +74,7 @@ class EvolutionOrchestrator:
             Result of executor_func if mutation is executed, None if skipped.
         """
         self.total_mutations_attempted += 1
+        self._cycle_count += 1
 
         if not self.should_execute_mutation(mutation):
             return None
@@ -100,3 +102,70 @@ class EvolutionOrchestrator:
         self.total_mutations_attempted = 0
         self.skipped_mutations = 0
         self.failure_insights = []
+
+    def get_decision_logic_state(self) -> Dict[str, Any]:
+        """Return a serializable dict of the orchestrator's current decision parameters.
+
+        Returns:
+            Dictionary containing current decision parameters.
+        """
+        return {
+            "goal_selection_threshold": self.config.predictor_threshold,
+            "mutation_acceptance_criteria": "predictor_analysis",
+            "cycle_count": self._cycle_count,
+            "max_mutations": self.config.max_mutations,
+            "parallel_workers": self.config.parallel_workers,
+            "additional_params": dict(self.config.additional_params)
+        }
+
+    def apply_decision_mutation(self, mutation_spec: Dict[str, Any]) -> None:
+        """Apply a targeted mutation to one decision parameter.
+
+        Args:
+            mutation_spec: Dictionary specifying the mutation. Supported keys:
+                - "parameter": Name of the parameter to mutate.
+                - "operation": Operation to perform ("add", "subtract", "set", "swap").
+                - "value": Value for the operation (if applicable).
+
+        Raises:
+            ValueError: If the parameter or operation is invalid.
+        """
+        parameter = mutation_spec.get("parameter")
+        operation = mutation_spec.get("operation")
+        value = mutation_spec.get("value")
+
+        if parameter == "goal_selection_threshold":
+            if operation == "add":
+                self.config.predictor_threshold += value
+            elif operation == "subtract":
+                self.config.predictor_threshold -= value
+            elif operation == "set":
+                self.config.predictor_threshold = value
+            else:
+                raise ValueError(f"Unsupported operation '{operation}' for parameter '{parameter}'")
+        elif parameter == "mutation_acceptance_criteria":
+            if operation == "swap":
+                # Toggle between predictor_analysis and always_accept
+                if self.config.additional_params.get("acceptance_criteria") == "always_accept":
+                    self.config.additional_params["acceptance_criteria"] = "predictor_analysis"
+                else:
+                    self.config.additional_params["acceptance_criteria"] = "always_accept"
+            else:
+                raise ValueError(f"Unsupported operation '{operation}' for parameter '{parameter}'")
+        elif parameter == "cycle_count":
+            if operation == "set":
+                self._cycle_count = value
+            else:
+                raise ValueError(f"Unsupported operation '{operation}' for parameter '{parameter}'")
+        elif parameter == "max_mutations":
+            if operation == "set":
+                self.config.max_mutations = value
+            else:
+                raise ValueError(f"Unsupported operation '{operation}' for parameter '{parameter}'")
+        elif parameter == "parallel_workers":
+            if operation == "set":
+                self.config.parallel_workers = value
+            else:
+                raise ValueError(f"Unsupported operation '{operation}' for parameter '{parameter}'")
+        else:
+            raise ValueError(f"Unknown parameter '{parameter}'")

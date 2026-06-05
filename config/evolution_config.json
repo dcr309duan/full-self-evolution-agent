@@ -3,5 +3,17 @@
     "enabled": true,
     "conflict_threshold": 0.7,
     "max_affected_modules": 5
+  },
+  "core_cloning_sandbox": {
+    "enabled": true,
+    "temp_dir": "/tmp/evolution_sandbox",
+    "timeout_seconds": 60,
+    "max_concurrent_sandboxes": 1,
+    "decision_mutations": [
+      "goal_selection_threshold",
+      "acceptance_criteria",
+      "mutation_rate"
+    ],
+    "log_file": "logs/sandbox_outcomes.log"
   }
 }

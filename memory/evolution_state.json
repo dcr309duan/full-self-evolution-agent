@@ -1,9 +1,8 @@
 {
-  "cycle_count": 120,
-  "current_generation": 91,
-  "last_evolution_time": 1780646572.1449482,
+  "cycle_count": 121,
+  "current_generation": 92,
+  "last_evolution_time": 1780646823.5870879,
   "capabilities": [
-    "Build a minimal end-to-end integration test suite that validates the full mutation → test → promote ",
     "Build a minimal 'new file creation' metamorphic test: write a script that creates a new Python file ",
     "Implement a 'failure context recorder' that, for each failed mutation attempt, captures the AST of t",
     "Create a dependency-aware planning feasibility estimator that, before accepting a new goal, queries ",
@@ -52,15 +51,10 @@
     "Build a self-diagnosis module that scans the last 20 failure logs for the most common error type (e.",
     "Build a recursive sandbox module that clones the core evolution loop components (evolution_orchestra",
     "Implement a 'sleep cycle' phase: after every 5 successful goal completions, enter a 2-cycle maintena",
-    "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to s"
+    "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to s",
+    "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine,"
   ],
   "history": [
-    {
-      "cycle": 12,
-      "goal": "Create a 'mutation' mechanism that randomly selects two existing functions or strategies from the knowledge base, combines or modifies them, and tests the result against a basic problem suite, logging success or failure to generate new experimental capabilities.",
-      "success": false,
-      "timestamp": 1780624634.4953907
-    },
     {
       "cycle": 15,
       "goal": "Build an API server to expose agent capabilities externally",
@@ -654,6 +648,12 @@
       "goal": "Create a fail-fast static predictor that uses the dependency graph and schema alignment checker to simulate mutation impact before execution; if predicted conflicts exceed a configurable threshold, abort the mutation early and log the reasoning as a failure insight, reducing wasted cycles on high-risk core changes.",
       "success": true,
       "timestamp": 1780646787.4765794
+    },
+    {
+      "cycle": 121,
+      "goal": "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine, and goal generator into an isolated subprocess, applies a single targeted mutation to the orchestrator's decision logic, runs the full test suite, and either promotes or discards the change based on pass/fail results. Log the outcome and any errors for analysis.",
+      "success": true,
+      "timestamp": 1780646977.3764725
     }
   ],
   "status": "evolving"

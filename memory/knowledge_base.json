@@ -1,46 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified self_model_knowledge_graph.py to: Extend the knowledge graph to include 'coordination_potential' edges between modules that are tightly coupled (based on shared interfaces, data formats, or call graphs). This provides the coordinated planner with a pre-computed map of which modules are good candidates for simultaneous mutation.",
-      "timestamp": 1780640265.274554,
-      "cycle": 92
-    },
-    {
-      "content": "Successfully modified goal_feasibility_precheck.py to: Create a new module that implements the goal feasibility pre-check. It should: (1) accept a proposed goal, (2) query the dependency graph to identify all modules the goal depends on, (3) check test coverage for each dependent module using existing test infrastructure, (4) compute a feasibility score based on dependency completeness and test coverage, (5) return a decision (BLOCK, DOWNGRADE, or ALLOW) with justification.",
-      "timestamp": 1780640334.9187157,
-      "cycle": 93
-    },
-    {
-      "content": "Successfully modified goal_dependency_graph.py to: Add a method to compute a 'dependency completeness score' for a given goal. This should traverse the dependency graph and return a ratio of how many required dependencies are already satisfied (have working implementations) vs. missing.",
-      "timestamp": 1780640402.1765187,
-      "cycle": 93
-    },
-    {
-      "content": "Successfully modified test_goal_feasibility_precheck.py to: Create a test suite that validates the feasibility pre-check: (1) test that a goal with all dependencies met and high test coverage gets ALLOW, (2) test that a goal with missing critical dependencies gets BLOCK, (3) test that a goal with partial coverage gets DOWNGRADE, (4) test edge cases like circular dependencies or unknown modules.",
-      "timestamp": 1780640430.7409997,
-      "cycle": 93
-    },
-    {
-      "content": "Successfully modified system_config.json to: Add configuration parameters for the feasibility pre-check: FEASIBILITY_THRESHOLD_BLOCK=0.5, FEASIBILITY_THRESHOLD_DOWNGRADE=0.7, ENABLE_PRE_CHECK=true, LOG_PRE_CHECK_DECISIONS=true.",
-      "timestamp": 1780640434.1506565,
-      "cycle": 93
-    },
-    {
-      "content": "[External Repair] Fixed broken imports across the codebase:\n- Added get_fs() singleton to core/fs_abstraction.py (core.mutation_engine now imports)\n- Added MutationValidator class + exception classes to mutation_validator.py\n- Fixed self_model/__init__.py to reference actual files (knowledge_graph, component_scanner, etc.)\n- Fixed self_model/builder.py to use actual module names\n- Fixed goal_decomposition/__init__.py to import from decomposer.py\n- Added ParseError to reflection_parser.py\n- Added EvolutionObjective/StagnationType enums to meta_evaluation_loop.py\n- Installed networkx dependency\nImport success rate improved from 19/31 (61%) to 24/30 (80%).\nRemaining 6 broken modules have deeper chain dependencies requiring more substantial rewrites.\nKey systemic issue: agent generates imports for modules it plans to create but never creates them.",
-      "timestamp": 1780640476.5346642,
-      "cycle": 94
-    },
-    {
-      "content": "Self-reflection: The evolution process is currently stuck in a 'local optimum of safety' — the system has become so cautious (with pre-checks, rollbacks, dependency analysis) that the overhead of validating each mutat",
-      "timestamp": 1780640488.7748857,
-      "cycle": 94
-    },
-    {
-      "content": "Successfully modified system_config.json to: Add configuration parameters for the sandbox executor: SANDBOX_MODE=true, SANDBOX_TYPE='git_worktree' (or 'copy'), SANDBOX_TIMEOUT=300 (seconds), SANDBOX_MAX_RETRIES=2, SANDBOX_CLEANUP_ON_FAILURE=true, SANDBOX_MERGE_STRATEGY='fast-forward'.",
-      "timestamp": 1780640576.8518014,
-      "cycle": 94
-    },
-    {
       "content": "Successfully modified test_sandbox_executor.py to: Create a test suite for the sandbox executor: (1) test that sandbox creation succeeds and returns a valid path, (2) test that a mutation applied in sandbox doesn't affect the original codebase, (3) test that passing tests trigger a merge, (4) test that failing tests trigger cleanup without merge, (5) test timeout handling, (6) test that the sandbox executor works with the existing integration test suite.",
       "timestamp": 1780640601.8782506,
       "cycle": 94
@@ -999,6 +959,46 @@
       "content": "Successfully modified config/evolution_config.json to: Add a new config section: 'static_predictor': {'enabled': true, 'conflict_threshold': 0.7, 'max_affected_modules': 5}. This allows the threshold to be tuned without code changes.",
       "timestamp": 1780646773.2382865,
       "cycle": 120
+    },
+    {
+      "content": "Self-reflection: The evolution process has a strong bias toward additive changes (adding new modules) rather than transformative changes (rewriting core logic). This is a form of local optimum rooted in the mutation-t",
+      "timestamp": 1780646841.0731423,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified modules/core_cloning_sandbox.py to: Create the main core-cloning sandbox module with: (1) serialize_state() that deep-copies evolution_orchestrator, mutation_engine, and goal_generator into a serialized dict/JSON (including their current state, config, and loaded modules), (2) spawn_sandbox_subprocess() that writes serialized state to temp dir, spawns a child process running a sandbox runner, (3) apply_mutation_to_orchestrator() that modifies the orchestrator's decision logic (e.g., change goal selection threshold or mutation acceptance criteria), (4) run_test_suite_in_sandbox() that executes all tests in tests/ via subprocess and captures stdout/stderr/exit code, (5) promote_or_discard() that either merges changes back or discards the sandbox, (6) log_outcome() that records pass/fail, mutation details, test results, and any errors to a structured log file.",
+      "timestamp": 1780646886.1184359,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified modules/evolution_orchestrator.py to: Add a method get_decision_logic_state() that returns a serializable dict of the orchestrator's current decision parameters (goal selection threshold, mutation acceptance criteria, cycle count, etc.). Add a method apply_decision_mutation(mutation_spec) that applies a targeted mutation to one decision parameter (e.g., change threshold by +/- 0.1, swap acceptance criteria). This enables the sandbox to modify orchestrator logic without touching the running instance.",
+      "timestamp": 1780646912.1633506,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified modules/mutation_engine.py to: Add a method get_serialized_state() that returns a JSON-serializable dict of the mutation engine's current configuration (mutation rate, allowed mutation types, recent mutation history). Add a method from_serialized_state(state) class method to reconstruct the engine from saved state. This enables full state capture for sandboxing.",
+      "timestamp": 1780646926.1227672,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified modules/goal_generator.py to: Add a method get_serialized_state() that returns a JSON-serializable dict of the goal generator's current state (pending goals, completed goals, goal templates, generation parameters). Add a method from_serialized_state(state) class method for reconstruction. This completes the serialization triad.",
+      "timestamp": 1780646935.8271925,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified tests/test_core_cloning_sandbox.py to: Create comprehensive integration test that: (1) initializes the three core modules with known state, (2) calls serialize_state() and verifies output contains all key fields, (3) spawns sandbox subprocess with a mutation that changes orchestrator's goal_selection_threshold from 0.7 to 0.5, (4) verifies sandbox runs tests and produces a result file, (5) verifies promotion logic correctly merges the threshold change when tests pass, (6) verifies discard logic restores original state when tests fail, (7) verifies log file contains mutation description, test results, and any errors.",
+      "timestamp": 1780646962.6412108,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified config/evolution_config.json to: Add a new 'core_cloning_sandbox' config section: {'enabled': true, 'temp_dir': '/tmp/evolution_sandbox', 'timeout_seconds': 60, 'max_concurrent_sandboxes': 1, 'decision_mutations': ['goal_selection_threshold', 'acceptance_criteria', 'mutation_rate'], 'log_file': 'logs/sandbox_outcomes.log'}. This makes sandbox behavior configurable without code changes.",
+      "timestamp": 1780646966.1565394,
+      "cycle": 121
+    },
+    {
+      "content": "Successfully modified modules/logging_setup.py to: Add a new log handler for sandbox outcomes that writes structured JSON logs to logs/sandbox_outcomes.log with fields: timestamp, cycle, mutation_description, target_module, test_results (pass_count, fail_count, total), outcome (promoted/discarded/error), error_details, execution_time_seconds. This ensures all sandbox experiments are recorded for analysis.",
+      "timestamp": 1780646977.334231,
+      "cycle": 121
     }
   ],
   "learned_patterns": [],
@@ -1432,6 +1432,11 @@
       "approach": "modify tests/test_sleep_cycle.py: Create integration test for sleep cycle: (1) Mock 5 successful goal completions, verify phase transitions to SLEEP_CYCLE. (2) Verify dead-code scanner correctly identifies an unused module (create temp file with no imports and no test). (3) Verify duplicate consolidator detects identical utility functions. (4) Verify cleanup actions are logged. (5) Verify after 2 maintenance cycles, phase returns to normal and counter resets.",
       "reason": "Syntax error: '(' was never closed (<unknown>, line 441)",
       "timestamp": 1780646498.6930614
+    },
+    {
+      "approach": "modify modules/sandbox_runner.py: Create the sandbox subprocess entry point that: (1) receives serialized state via command-line argument (path to temp state file), (2) deserializes and reconstructs the three core modules in memory, (3) applies the specified mutation to the orchestrator's decision logic (e.g., modify goal_selection_threshold or acceptance_criteria), (4) executes the full test suite via pytest, (5) writes results (pass/fail, test output, errors) to a result file, (6) exits cleanly. This runs in complete isolation from the main process.",
+      "reason": "Safety check failed",
+      "timestamp": 1780646898.836567
     }
   ],
   "successful_strategies": [
@@ -5074,6 +5079,46 @@
       "strategy": "mutation:mutate(sorted_prime_list,fibonacci_primes_up_to_n)",
       "outcome": "Created prime_fibonacci_sieve, score=0.4",
       "timestamp": 1780646780.567989
+    },
+    {
+      "strategy": "modify modules/core_cloning_sandbox.py: Create the main core-cloning sandbox module with: (1) serialize_state() that deep-copies evolution_orchestrator, mutation_engine, and goal_generator into a serialized dict/JSON (including their current state, config, and loaded modules), (2) spawn_sandbox_subprocess() that writes serialized state to temp dir, spawns a child process running a sandbox runner, (3) apply_mutation_to_orchestrator() that modifies the orchestrator's decision logic (e.g., change goal selection threshold or mutation acceptance criteria), (4) run_test_suite_in_sandbox() that executes all tests in tests/ via subprocess and captures stdout/stderr/exit code, (5) promote_or_discard() that either merges changes back or discards the sandbox, (6) log_outcome() that records pass/fail, mutation details, test results, and any errors to a structured log file.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646886.1021988
+    },
+    {
+      "strategy": "modify modules/evolution_orchestrator.py: Add a method get_decision_logic_state() that returns a serializable dict of the orchestrator's current decision parameters (goal selection threshold, mutation acceptance criteria, cycle count, etc.). Add a method apply_decision_mutation(mutation_spec) that applies a targeted mutation to one decision parameter (e.g., change threshold by +/- 0.1, swap acceptance criteria). This enables the sandbox to modify orchestrator logic without touching the running instance.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646912.1467514
+    },
+    {
+      "strategy": "modify modules/mutation_engine.py: Add a method get_serialized_state() that returns a JSON-serializable dict of the mutation engine's current configuration (mutation rate, allowed mutation types, recent mutation history). Add a method from_serialized_state(state) class method to reconstruct the engine from saved state. This enables full state capture for sandboxing.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646926.1053731
+    },
+    {
+      "strategy": "modify modules/goal_generator.py: Add a method get_serialized_state() that returns a JSON-serializable dict of the goal generator's current state (pending goals, completed goals, goal templates, generation parameters). Add a method from_serialized_state(state) class method for reconstruction. This completes the serialization triad.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646935.7986872
+    },
+    {
+      "strategy": "modify tests/test_core_cloning_sandbox.py: Create comprehensive integration test that: (1) initializes the three core modules with known state, (2) calls serialize_state() and verifies output contains all key fields, (3) spawns sandbox subprocess with a mutation that changes orchestrator's goal_selection_threshold from 0.7 to 0.5, (4) verifies sandbox runs tests and produces a result file, (5) verifies promotion logic correctly merges the threshold change when tests pass, (6) verifies discard logic restores original state when tests fail, (7) verifies log file contains mutation description, test results, and any errors.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646962.622373
+    },
+    {
+      "strategy": "modify config/evolution_config.json: Add a new 'core_cloning_sandbox' config section: {'enabled': true, 'temp_dir': '/tmp/evolution_sandbox', 'timeout_seconds': 60, 'max_concurrent_sandboxes': 1, 'decision_mutations': ['goal_selection_threshold', 'acceptance_criteria', 'mutation_rate'], 'log_file': 'logs/sandbox_outcomes.log'}. This makes sandbox behavior configurable without code changes.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646966.1403925
+    },
+    {
+      "strategy": "modify modules/logging_setup.py: Add a new log handler for sandbox outcomes that writes structured JSON logs to logs/sandbox_outcomes.log with fields: timestamp, cycle, mutation_description, target_module, test_results (pass_count, fail_count, total), outcome (promoted/discarded/error), error_details, execution_time_seconds. This ensures all sandbox experiments are recorded for analysis.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780646977.3180285
+    },
+    {
+      "strategy": "Implement a core-cloning sandbox that serializes the entire evolution orchestrator, mutation engine, and goal generator into an isolated subprocess, applies a single targeted mutation to the orchestrator's decision logic, runs the full test suite, and either promotes or discards the change based on pass/fail results. Log the outcome and any errors for analysis.",
+      "outcome": "7/8 steps succeeded",
+      "timestamp": 1780646977.3515038
     }
   ],
   "capabilities_developed": []
