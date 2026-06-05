@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import logging
+import argparse
 
 # Global flag indicating whether primitive validation has failed
 PRIMITIVE_VALIDATION_FAILED = False
@@ -211,19 +212,39 @@ def process_mutation_result(mutation_id: str, success: bool, sandbox_mode: bool 
             schedule_goal(goal, sandbox_mode)
 
 
-def run_evolution_loop(sandbox_mode: bool = False) -> None:
+def run_triage(sandbox_mode: bool = False) -> None:
+    """
+    Execute the triage module scan and prune operation.
+    
+    Args:
+        sandbox_mode: If True, use temporary directory for file operations
+    """
+    try:
+        from module_triage import scan_and_prune
+        report = scan_and_prune(sandbox_mode=sandbox_mode)
+        logger.info(f"Triage report: {report}")
+    except ImportError:
+        logger.error("module_triage not available, skipping triage step")
+    except Exception as e:
+        logger.error(f"Triage step failed: {e}")
+
+
+def run_evolution_loop(sandbox_mode: bool = False, triage_interval: int = 5) -> None:
     """
     Main evolution loop that checks primitive validation before proceeding.
     
     Args:
         sandbox_mode: If True, use temporary directory for all file operations
                       to avoid modifying production code
+        triage_interval: Number of evolution cycles between triage runs
     """
     global PRIMITIVE_VALIDATION_FAILED
     global feasibility_estimator
 
     # Initial validation check
     check_primitive_validation(sandbox_mode)
+    
+    cycle_count = 0
 
     while True:
         if PRIMITIVE_VALIDATION_FAILED:
@@ -258,9 +279,35 @@ def run_evolution_loop(sandbox_mode: bool = False) -> None:
             process_mutation_result('mutation_001', True, sandbox_mode)
             process_mutation_result('mutation_002', True, sandbox_mode)
         
+        cycle_count += 1
+        
+        # Run triage every triage_interval cycles
+        if cycle_count % triage_interval == 0:
+            logger.info(f"Running triage at cycle {cycle_count}")
+            run_triage(sandbox_mode)
+        
         break  # Remove this break when implementing actual loop logic
 
 
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments for the orchestrator."""
+    parser = argparse.ArgumentParser(description="Evolution Engine Orchestrator")
+    parser.add_argument(
+        "--triage-interval",
+        type=int,
+        default=5,
+        help="Number of evolution cycles between triage runs (default: 5)"
+    )
+    parser.add_argument(
+        "--sandbox-mode",
+        action="store_true",
+        default=True,
+        help="Run in sandbox mode (default: True)"
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = parse_arguments()
     # Default to sandbox mode for safety
-    run_evolution_loop(sandbox_mode=True)
+    run_evolution_loop(sandbox_mode=args.sandbox_mode, triage_interval=args.triage_interval)

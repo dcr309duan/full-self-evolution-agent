@@ -15,6 +15,8 @@ from core.goal_generator import GoalGenerator
 from core.mutation_engine import MutationEngine
 from core.test_runner import TestRunner
 from core.promotion import PromotionLogic
+from core.orchestrator import Orchestrator
+from core.triage import TriageEngine
 
 
 class TestCoreEvolutionLoop(unittest.TestCase):
@@ -29,6 +31,8 @@ class TestCoreEvolutionLoop(unittest.TestCase):
         (self.sandbox_path / "logs").mkdir(exist_ok=True)
         (self.sandbox_path / "mutations").mkdir(exist_ok=True)
         (self.sandbox_path / "tests").mkdir(exist_ok=True)
+        (self.sandbox_path / "modules").mkdir(exist_ok=True)
+        (self.sandbox_path / "archive").mkdir(exist_ok=True)
 
         # Create a mock mutation engine that returns a known valid mutation
         self.mock_mutation_engine = MagicMock(spec=MutationEngine)
@@ -44,6 +48,12 @@ class TestCoreEvolutionLoop(unittest.TestCase):
         self.goal_generator = GoalGenerator(sandbox_path=self.sandbox_path)
         self.test_runner = TestRunner(sandbox_path=self.sandbox_path)
         self.promotion_logic = PromotionLogic(sandbox_path=self.sandbox_path)
+        self.triage_engine = TriageEngine(sandbox_path=self.sandbox_path)
+        self.orchestrator = Orchestrator(
+            sandbox_path=self.sandbox_path,
+            triage_engine=self.triage_engine,
+            triage_interval=1  # Short interval for testing
+        )
 
     def tearDown(self):
         """Clean up the sandbox directory after the test."""
@@ -284,6 +294,75 @@ class TestCoreEvolutionLoop(unittest.TestCase):
         finally:
             # Restore original parser
             self.reflection_parser.parse = original_parse
+            # Ensure sandbox directory is cleaned up even if test fails
+            if os.path.exists(self.test_dir):
+                shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_triage_integration(self):
+        """Test the triage integration: creates a sandbox with a known broken module,
+        runs the orchestrator with a short triage interval, and verifies the broken
+        module gets archived after 3 cycles."""
+        try:
+            # Create a known broken module
+            broken_module_path = self.sandbox_path / "modules" / "broken_module.py"
+            with open(broken_module_path, 'w') as f:
+                f.write("def broken_function():\n    return 1/0  # This will always fail\n")
+            
+            # Create a test for the broken module
+            test_file_path = self.sandbox_path / "tests" / "test_broken_module.py"
+            with open(test_file_path, 'w') as f:
+                f.write("""
+import sys
+sys.path.insert(0, '..')
+from modules.broken_module import broken_function
+
+def test_broken_function():
+    assert broken_function() == 1, "Expected 1"
+""")
+            
+            # Initialize the triage engine with the broken module
+            self.triage_engine.register_module("broken_module", broken_module_path)
+            
+            # Run the orchestrator for 3 cycles
+            for cycle in range(3):
+                self.orchestrator.run_cycle()
+            
+            # Verify the broken module has been archived
+            archived_path = self.sandbox_path / "archive" / "broken_module.py"
+            self.assertTrue(
+                archived_path.exists(),
+                f"Broken module should be archived after 3 cycles, but {archived_path} does not exist"
+            )
+            
+            # Verify the original module is no longer in the modules directory
+            self.assertFalse(
+                broken_module_path.exists(),
+                f"Broken module should no longer be in modules directory after archiving"
+            )
+            
+            # Verify the triage engine has recorded the archiving
+            triage_log = self.sandbox_path / "logs" / "triage.log"
+            self.assertTrue(
+                triage_log.exists(),
+                "Triage log should exist after archiving"
+            )
+            
+            with open(triage_log, 'r') as f:
+                log_content = f.read()
+                self.assertIn(
+                    "archived",
+                    log_content.lower(),
+                    "Triage log should contain 'archived' for the broken module"
+                )
+                self.assertIn(
+                    "broken_module",
+                    log_content,
+                    "Triage log should mention the broken module name"
+                )
+            
+            print("✓ Triage integration test passed - broken module correctly archived after 3 cycles")
+            
+        finally:
             # Ensure sandbox directory is cleaned up even if test fails
             if os.path.exists(self.test_dir):
                 shutil.rmtree(self.test_dir, ignore_errors=True)
