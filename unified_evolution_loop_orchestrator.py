@@ -440,6 +440,38 @@ class UnifiedEvolutionLoopOrchestrator:
             "priority": "high",
         }
 
+    def _validate_reflection_output(self, reflection_output: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate reflection parser output and compute defaults for missing fields."""
+        validated_output = dict(reflection_output)
+        
+        # Check and set default for meta_mutation_directives
+        if "meta_mutation_directives" not in validated_output:
+            logger.debug("Missing 'meta_mutation_directives' in reflection output. Setting default: []")
+            validated_output["meta_mutation_directives"] = []
+        else:
+            logger.debug(f"'meta_mutation_directives' present in reflection output: {validated_output['meta_mutation_directives']}")
+        
+        # Check and set default for exploration_task_acceptance
+        if "exploration_task_acceptance" not in validated_output:
+            logger.debug("Missing 'exploration_task_acceptance' in reflection output. Setting default: {'accepted': False, 'task_spec': None}")
+            validated_output["exploration_task_acceptance"] = {"accepted": False, "task_spec": None}
+        else:
+            logger.debug(f"'exploration_task_acceptance' present in reflection output: {validated_output['exploration_task_acceptance']}")
+        
+        return validated_output
+
+    def _process_reflection_output(self, reflection_output: Dict[str, Any]) -> Dict[str, Any]:
+        """Process reflection output with schema alignment before passing to goal generator."""
+        # Validate and align the reflection output schema
+        aligned_output = self._validate_reflection_output(reflection_output)
+        
+        # Log the schema alignment decisions
+        logger.info(f"Schema alignment completed for reflection output. "
+                    f"meta_mutation_directives: {aligned_output.get('meta_mutation_directives')}, "
+                    f"exploration_task_acceptance: {aligned_output.get('exploration_task_acceptance')}")
+        
+        return aligned_output
+
     def stop_evolution_loop(self) -> None:
         """Gracefully stop the evolution loop."""
         self._loop_active = False

@@ -115,6 +115,16 @@ DEFAULT_PATTERNS = {
         r"(?:failure\s+message|error\s+message)\s*[:=]?\s*(.+)",
         r"(?:integration\s+test\s+(?:error|failure|exception))\s*[:=]?\s*(.+)",
     ],
+    "meta_mutation_directives": [
+        r"(?:mutation\s+needed)\s*[:=]?\s*(.+)",
+        r"(?:mutation\s+required)\s*[:=]?\s*(.+)",
+        r"(?:mutation\s+directive)\s*[:=]?\s*(.+)",
+    ],
+    "exploration_task_acceptance": [
+        r"(?:exploration\s+opportunity)\s*[:=]?\s*(.+)",
+        r"(?:exploration\s+task)\s*[:=]?\s*(.+)",
+        r"(?:exploration\s+accepted)\s*[:=]?\s*(.+)",
+    ],
 }
 
 
@@ -580,103 +590,121 @@ class ReflectionParser:
             "next_actionable_insights": actionable_insights
         }
 
+    def parse_meta_mutation_directives(self, text: str) -> List[Dict[str, str]]:
+        """
+        Extract meta mutation directives from reflection text.
 
-# Example usage (if run as script)
-if __name__ == "__main__":
-    sample_text = (
-        "Current system state is stable but slow. We are missing key data integration. "
-        "The next priority should be optimizing the database. Consider using a cache layer. "
-        "Perhaps we could try a new approach for error handling. "
-        "Architecture change needed for the database layer. "
-        "New capability required for real-time data processing. "
-        "Optimization opportunity identified in query execution. "
-        "Knowledge gap: unclear about the exact data volume requirements."
-    )
+        Args:
+            text: Raw reflection text.
 
-    parser = ReflectionParser()
-    results = parser.parse(sample_text)
+        Returns:
+            List of dicts with keys: module, type_of_change, priority.
+        """
+        if not text or not isinstance(text, str):
+            return []
 
-    print("=== Full Parsed Results ===")
-    for field, matches in results.items():
-        print(f"\n{field}:")
-        for text, conf in matches:
-            print(f"  - '{text}' (confidence: {conf})")
+        directives = []
+        matches = self.extract_field(text, "meta_mutation_directives")
+        
+        for matched_text, confidence in matches:
+            # Parse the matched text to extract module, type_of_change, priority
+            # Pattern: "mutation needed: module=X, type_of_change=Y, priority=Z"
+            module_match = re.search(r"module\s*[:=]\s*(\w+)", matched_text, re.IGNORECASE)
+            type_match = re.search(r"type_of_change\s*[:=]\s*(\w+)", matched_text, re.IGNORECASE)
+            priority_match = re.search(r"priority\s*[:=]\s*(\w+)", matched_text, re.IGNORECASE)
+            
+            if module_match or type_match or priority_match:
+                directive = {
+                    "module": module_match.group(1) if module_match else "unknown",
+                    "type_of_change": type_match.group(1) if type_match else "unknown",
+                    "priority": priority_match.group(1) if priority_match else "medium"
+                }
+                directives.append(directive)
+        
+        # Also check for patterns like "mutation needed in module X for type Y with priority Z"
+        additional_patterns = [
+            r"mutation\s+needed\s+in\s+module\s+(\w+)\s+for\s+(\w+)\s+with\s+priority\s+(\w+)",
+            r"mutation\s+required\s+in\s+(\w+)\s+type\s+(\w+)\s+priority\s+(\w+)",
+        ]
+        for pattern_str in additional_patterns:
+            pattern = re.compile(pattern_str, re.IGNORECASE)
+            for match in pattern.finditer(text):
+                directive = {
+                    "module": match.group(1),
+                    "type_of_change": match.group(2),
+                    "priority": match.group(3)
+                }
+                directives.append(directive)
+        
+        # Remove duplicates
+        seen = set()
+        unique_directives = []
+        for d in directives:
+            key = (d["module"], d["type_of_change"], d["priority"])
+            if key not in seen:
+                seen.add(key)
+                unique_directives.append(d)
+        
+        return unique_directives
 
-    print("\n=== High Confidence (>= 0.7) ===")
-    high_conf = parser.get_high_confidence(sample_text, threshold=0.7)
-    for field, matches in high_conf.items():
-        print(f"{field}: {matches}")
+    def parse_exploration_task_acceptance(self, text: str) -> Dict[str, object]:
+        """
+        Extract exploration task acceptance from reflection text.
 
-    # Test tag_actionable_insights
-    print("\n=== Actionable Insights ===")
-    insights = parser.tag_actionable_insights(sample_text)
-    for insight_text, confidence, insight_type in insights:
-        print(f"  - '{insight_text}' (confidence: {confidence}, type: {insight_type})")
+        Args:
+            text: Raw reflection text.
 
-    # Test extract_knowledge_gaps
-    print("\n=== Knowledge Gaps ===")
-    gaps = parser.extract_knowledge_gaps(sample_text)
-    for gap_text, gap_conf in gaps:
-        print(f"  - '{gap_text}' (confidence: {gap_conf})")
+        Returns:
+            Dict with keys: accepted (bool), task_spec (optional dict with domain, description, priority).
+        """
+        if not text or not isinstance(text, str):
+            return {"accepted": False, "task_spec": None}
 
-    # Test generate_structured_summary
-    print("\n=== Structured Summary ===")
-    summary = parser.generate_structured_summary(sample_text)
-    print("\nKnowledge Gaps:")
-    for gap_text, gap_conf in summary["knowledge_gaps"]:
-        print(f"  - '{gap_text}' (confidence: {gap_conf})")
-    print("\nNext Actionable Insights:")
-    for insight_text, confidence, insight_type in summary["next_actionable_insights"]:
-        print(f"  - '{insight_text}' (confidence: {confidence}, type: {insight_type})")
-
-    # Test parse_failure_context
-    print("\n=== Failure Context Analysis ===")
-    failure_text = (
-        "Error: Connection timeout occurred due to network instability. "
-        "Root cause: missing retry logic. Suggested approach: implement exponential backoff."
-    )
-    failure_context = parser.parse_failure_context(failure_text)
-    for field, matches in failure_context.items():
-        print(f"\n{field}:")
-        for text, conf in matches:
-            print(f"  - '{text}' (confidence: {conf})")
-
-    # Test parse_refactoring_outcome
-    print("\n=== Refactoring Outcome Analysis ===")
-    refactoring_text = (
-        "Multi-file refactoring completed. Files affected: main.py, utils.py, config.py. "
-        "Dependency changes: added new import for logging module. "
-        "Refactoring success rate: 85%."
-    )
-    refactoring_outcome = parser.parse_refactoring_outcome(refactoring_text)
-    for field, matches in refactoring_outcome.items():
-        print(f"\n{field}:")
-        for text, conf in matches:
-            print(f"  - '{text}' (confidence: {conf})")
-
-    # Test extract_goal_type_from_reflection
-    print("\n=== Goal Type Extraction ===")
-    goal_texts = [
-        "The goal is to build an API server for user authentication.",
-        "Our objective is to create a mutation engine for genetic algorithms.",
-        "We need to implement a data pipeline for real-time analytics.",
-        "The target is to design a model training system.",
-        "This is just a general reflection without specific goal.",
-    ]
-    for text in goal_texts:
-        goal_type = parser.extract_goal_type_from_reflection(text)
-        print(f"Text: '{text}'")
-        print(f"  -> Goal type: {goal_type}\n")
-
-    # Test parse_integration_test_status
-    print("\n=== Integration Test Status Analysis ===")
-    integration_test_text = (
-        "Integration test status: failed. "
-        "Error trace: AssertionError at test_endpoint.py line 42. "
-        "Failure message: Expected status 200 but got 500."
-    )
-    integration_test_result = parser.parse_integration_test_status(integration_test_text)
-    for field, matches in integration_test_result.items():
-        print(f"\n{field}:")
-        for text, conf in matches:
-            print(f"  - '{text}' (confidence: {conf})")
+        result = {"accepted": False, "task_spec": None}
+        
+        # Check for exploration opportunity patterns
+        matches = self.extract_field(text, "exploration_task_acceptance")
+        
+        for matched_text, confidence in matches:
+            lower_text = matched_text.lower()
+            
+            # Check if exploration is accepted
+            if "accepted" in lower_text or "approved" in lower_text or "yes" in lower_text:
+                result["accepted"] = True
+            elif "rejected" in lower_text or "denied" in lower_text or "no" in lower_text:
+                result["accepted"] = False
+            
+            # Extract task spec if available
+            domain_match = re.search(r"domain\s*[:=]\s*(\w+)", matched_text, re.IGNORECASE)
+            desc_match = re.search(r"description\s*[:=]\s*(.+?)(?:,|$)", matched_text, re.IGNORECASE)
+            priority_match = re.search(r"priority\s*[:=]\s*(\w+)", matched_text, re.IGNORECASE)
+            
+            if domain_match or desc_match or priority_match:
+                task_spec = {}
+                if domain_match:
+                    task_spec["domain"] = domain_match.group(1)
+                if desc_match:
+                    task_spec["description"] = desc_match.group(1).strip()
+                if priority_match:
+                    task_spec["priority"] = priority_match.group(1)
+                result["task_spec"] = task_spec
+        
+        # Also check for patterns like "exploration opportunity: domain=X, description=Y, priority=Z"
+        additional_patterns = [
+            r"exploration\s+opportunity\s*[:=]\s*domain\s*[:=]\s*(\w+)\s*,\s*description\s*[:=]\s*(.+?)\s*,\s*priority\s*[:=]\s*(\w+)",
+            r"exploration\s+task\s*[:=]\s*accepted\s*[:=]\s*(yes|no|true|false)\s*,\s*domain\s*[:=]\s*(\w+)\s*,\s*description\s*[:=]\s*(.+?)\s*,\s*priority\s*[:=]\s*(\w+)",
+        ]
+        for pattern_str in additional_patterns:
+            pattern = re.compile(pattern_str, re.IGNORECASE)
+            for match in pattern.finditer(text):
+                if len(match.groups()) == 3:
+                    result["accepted"] = True
+                    result["task_spec"] = {
+                        "domain": match.group(1),
+                        "description": match.group(2).strip(),
+                        "priority": match.group(3)
+                    }
+                elif len(match.groups()) == 4:
+                    accepted_str = match.group(1).lower()
+                    result["accepted"] = accepted_str in ["yes", "true"]
+                    result
