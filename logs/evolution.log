@@ -2385,3 +2385,5 @@ SyntaxError: invalid syntax
 [2026-06-05 18:23:47] Cycle 155: Goal completed: Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation → test_ecosystem_engine → evolution_orchestrator) that must pass within 3 seconds. Run this test before and after every mutation. If it fails after a mutation, trigger an automatic rollback and generate a new mutation that reduces complexity instead.
 [2026-06-05 18:23:47] Cycle 155: Phase 2.5: Mutation cycle
 [2026-06-05 18:23:55] Cycle 155: Mutations: 3, successes: 2
+[2026-06-05 18:24:02] Cycle 155: === Cycle Complete ===
+

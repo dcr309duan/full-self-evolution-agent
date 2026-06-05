@@ -1,9 +1,8 @@
 {
   "cycle_count": 155,
-  "current_generation": 125,
+  "current_generation": 126,
   "last_evolution_time": 1780654759.491661,
   "capabilities": [
-    "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness i",
     "Implement a plasticity-stability scheduler that dynamically adjusts the mutation rate and goal accep",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
@@ -52,15 +51,10 @@
     "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, ident",
     "Create a performance monitoring and optimization system",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
-    "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of"
+    "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of",
+    "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation"
   ],
   "history": [
-    {
-      "cycle": 53,
-      "goal": "Build a causal dependency graph from the self-model that maps module interfaces and callers, enabling simulation of mutation side effects—automatically flag risky changes and generate compensating modifications to maintain integration stability.",
-      "success": true,
-      "timestamp": 1780632863.8985777
-    },
     {
       "cycle": 54,
       "goal": "Create a failure pattern miner that analyzes the failure log to identify high-level architectural bottlenecks (e.g., 'schema alignment failures account for 40% of recent errors'), and generates targeted refactoring goals to address root causes rather than symptoms.",
@@ -654,6 +648,12 @@
       "goal": "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of code across all core modules. If the new total exceeds the previous total by more than 5%, automatically revert the change and log the complexity debt. This forces consolidation and deletion of dead code before adding new features.",
       "success": true,
       "timestamp": 1780654722.157528
+    },
+    {
+      "cycle": 155,
+      "goal": "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation → test_ecosystem_engine → evolution_orchestrator) that must pass within 3 seconds. Run this test before and after every mutation. If it fails after a mutation, trigger an automatic rollback and generate a new mutation that reduces complexity instead.",
+      "success": true,
+      "timestamp": 1780655042.3799884
     }
   ],
   "status": "evolving"
