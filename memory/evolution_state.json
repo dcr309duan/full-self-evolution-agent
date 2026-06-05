@@ -1,9 +1,8 @@
 {
-  "cycle_count": 112,
-  "current_generation": 83,
-  "last_evolution_time": 1780644798.6964731,
+  "cycle_count": 113,
+  "current_generation": 84,
+  "last_evolution_time": 1780645050.2182758,
   "capabilities": [
-    "Create a dependency-aware goal feasibility estimator that penalizes goals requiring untested cross-c",
     "Implement a 'clone-and-promote' safety mechanism for all mutations: before applying any mutation to ",
     "Add a pre-mutation static validation step to the mutation engine: before generating any code change,",
     "Build a minimal end-to-end integration test suite that exercises the full mutation → test → system m",
@@ -52,15 +51,10 @@
     "Implement a Capability Consolidation Engine that runs every 5 cycles: scans all modules, scores each",
     "Build a real-time system health dashboard that correlates failures, performance metrics, and depende",
     "Create a self-model consistency validator that, after each successful evolution cycle, updates an in",
-    "Implement a sandboxed mutation executor that clones core modules (mutation engine, orchestrator, dep"
+    "Implement a sandboxed mutation executor that clones core modules (mutation engine, orchestrator, dep",
+    "Build a meta-cognitive evaluator that tracks long-term fitness trends (e.g., success rate on core vs"
   ],
   "history": [
-    {
-      "cycle": 3,
-      "goal": "Create a task scheduler for autonomous background processing",
-      "success": true,
-      "timestamp": 1780623561.6625285
-    },
     {
       "cycle": 4,
       "goal": "Implement a self-evaluation loop that periodically scores progress across current capabilities, identifies the weakest area, and autonomously generates a new evolution task to address that weakness, using a simple scoring function and a priority queue for generated tasks.",
@@ -654,6 +648,12 @@
       "goal": "Implement a sandboxed mutation executor that clones core modules (mutation engine, orchestrator, dependency graph) into a temporary directory, applies the mutation, runs a focused test suite, and promotes only if all tests pass; otherwise, rollback and log failure context.",
       "success": true,
       "timestamp": 1780645012.999694
+    },
+    {
+      "cycle": 113,
+      "goal": "Build a meta-cognitive evaluator that tracks long-term fitness trends (e.g., success rate on core vs. peripheral changes over last 30 cycles) and dynamically adjusts the mutation rate and goal acceptance threshold to favor core-stabilizing mutations when brittleness is detected.",
+      "success": true,
+      "timestamp": 1780645280.6656468
     }
   ],
   "status": "evolving"

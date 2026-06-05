@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/test_curiosity_engine.py to: Create a test suite for the curiosity engine that: (1) Tests template generation produces valid Python code. (2) Tests that attempting a known-solvable task (e.g., 'implement add function') succeeds. (3) Tests that attempting an impossible task (e.g., 'implement halting problem solver') correctly detects failure and promotes a goal. (4) Tests periodic scheduling works correctly.",
-      "timestamp": 1780638439.2478411,
-      "cycle": 86
-    },
-    {
-      "content": "Successfully modified core/reflection_parser.py to: Add a 'curiosity_insights' field to the reflection output that analyzes curiosity engine results: which task types fail most often, which capabilities are missing, and suggests expanding the template library in areas of weakness.",
-      "timestamp": 1780638462.4349887,
-      "cycle": 86
-    },
-    {
-      "content": "Self-reflection: I am caught in a local optimum where I keep adding high-level capabilities while neglecting the fundamental infrastructure that makes those capabilities reliable. My definition of 'progress' has been ",
-      "timestamp": 1780638590.3797832,
-      "cycle": 88
-    },
-    {
-      "content": "Successfully modified core/fs_abstraction.py to: Implement a robust file system abstraction class with: 1) Atomic file writes using temp files + rename, 2) Configurable retry logic with exponential backoff, 3) Automated permission checking before operations, 4) Context manager support for safe file handling, 5) Directory creation with permission validation, 6) Safe deletion with confirmation checks",
-      "timestamp": 1780638627.6660404,
-      "cycle": 88
-    },
-    {
-      "content": "Successfully modified core/orchestrator.py to: Integrate the fs_abstraction module into the orchestrator: replace all direct file operations (open/write/rename/delete) with calls to the new abstraction layer. Add a configuration section for retry parameters (max_retries, base_delay, max_delay).",
-      "timestamp": 1780638661.0401177,
-      "cycle": 88
-    },
-    {
       "content": "Successfully modified core/mutation_engine.py to: Update the mutation engine to use the fs_abstraction for all file mutations, ensuring atomic writes prevent partial file states during crashes. Add permission validation before attempting mutations.",
       "timestamp": 1780638684.6042202,
       "cycle": 88
@@ -999,6 +974,31 @@
       "content": "[研究] Dynamic Capability Synthesis through Cross-Module Dependency Graph Analysis: Dynamic Capability Synthesis (DCS) through Cross-Module Dependency Graph Analysis (CDGA) is an emerg",
       "timestamp": 1780645012.9424784,
       "cycle": 112
+    },
+    {
+      "content": "Successfully modified meta_cognitive_evaluator.py to: Create new module that tracks long-term fitness trends: (1) records every mutation outcome with timestamp, category (core vs peripheral), success/failure, and current parameters; (2) maintains a rolling window of last 30 cycles; (3) computes success rate for core changes vs peripheral changes; (4) detects brittleness when core success rate drops below 60% or when core changes fail 3+ times consecutively; (5) exposes methods to query current trend state and recommended parameter adjustments.",
+      "timestamp": 1780645080.7781758,
+      "cycle": 113
+    },
+    {
+      "content": "Successfully modified adaptive_parameter_controller.py to: Create module that adjusts mutation rate and goal acceptance threshold: (1) reads trend data from meta_cognitive_evaluator; (2) when brittleness detected, reduces mutation rate by 30% and increases goal acceptance threshold by 20% to favor core-stabilizing mutations; (3) when stability persists for 10+ cycles, gradually relaxes parameters back to baseline; (4) logs all parameter changes with reasoning; (5) exposes current parameter state for other modules to query.",
+      "timestamp": 1780645100.5589695,
+      "cycle": 113
+    },
+    {
+      "content": "Successfully modified mutation_engine.py to: Accept dynamic mutation rate parameter: (1) add parameter for mutation_rate that can be overridden by orchestrator; (2) use this rate when deciding whether to attempt a mutation vs skip; (3) log which rate was used for each mutation attempt; (4) ensure backward compatibility with default rate.",
+      "timestamp": 1780645198.4676762,
+      "cycle": 113
+    },
+    {
+      "content": "Successfully modified test_meta_cognitive_evaluator.py to: Write tests: (1) test that evaluator correctly tracks 30-cycle rolling window; (2) test brittleness detection when core success rate drops; (3) test that parameter controller reduces mutation rate on brittleness; (4) test that parameters gradually return to baseline after stability; (5) test integration with orchestrator using mock mutations.",
+      "timestamp": 1780645267.946294,
+      "cycle": 113
+    },
+    {
+      "content": "Successfully modified system_health_audit.py to: Add meta-cognitive health metrics: (1) include current mutation rate and acceptance threshold in health report; (2) report brittleness status; (3) track how many times parameters were adjusted in last 30 cycles; (4) flag if parameters are stuck at extreme values.",
+      "timestamp": 1780645280.5094228,
+      "cycle": 113
     }
   ],
   "learned_patterns": [],
@@ -1372,6 +1372,16 @@
       "approach": "modify mutation_engine.py: Add a method to the mutation engine that returns a 'mutation spec' dict with target files and the computed diff/changes, so the sandbox executor can apply it. Ensure the engine can work in 'dry-run' mode that produces the spec without applying changes.",
       "reason": "Syntax error: '(' was never closed (<unknown>, line 917)",
       "timestamp": 1780644955.8793595
+    },
+    {
+      "approach": "modify evolution_orchestrator.py: Integrate adaptive parameters: (1) import and instantiate meta_cognitive_evaluator and adaptive_parameter_controller; (2) after each mutation attempt, log outcome to evaluator; (3) before selecting next goal, query controller for current mutation rate and acceptance threshold; (4) pass adjusted parameters to mutation engine and goal selection logic; (5) add a periodic check every cycle to trigger parameter recalculation.",
+      "reason": "Syntax error: '{' was never closed (<unknown>, line 775)",
+      "timestamp": 1780645146.3713884
+    },
+    {
+      "approach": "modify goal_generator.py: Accept dynamic goal acceptance threshold: (1) add parameter for acceptance_threshold that filters out low-feasibility goals; (2) when threshold is higher, only accept goals with high feasibility scores (favoring core-stabilizing changes); (3) log threshold used for each goal selection cycle.",
+      "reason": "Syntax error: unterminated f-string literal (detected at line 821) (<unknown>, line 821)",
+      "timestamp": 1780645244.424738
     }
   ],
   "successful_strategies": [
@@ -4779,6 +4789,36 @@
       "strategy": "Implement a sandboxed mutation executor that clones core modules (mutation engine, orchestrator, dependency graph) into a temporary directory, applies the mutation, runs a focused test suite, and promotes only if all tests pass; otherwise, rollback and log failure context.",
       "outcome": "3/5 steps succeeded",
       "timestamp": 1780644985.3909059
+    },
+    {
+      "strategy": "modify meta_cognitive_evaluator.py: Create new module that tracks long-term fitness trends: (1) records every mutation outcome with timestamp, category (core vs peripheral), success/failure, and current parameters; (2) maintains a rolling window of last 30 cycles; (3) computes success rate for core changes vs peripheral changes; (4) detects brittleness when core success rate drops below 60% or when core changes fail 3+ times consecutively; (5) exposes methods to query current trend state and recommended parameter adjustments.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780645080.7631776
+    },
+    {
+      "strategy": "modify adaptive_parameter_controller.py: Create module that adjusts mutation rate and goal acceptance threshold: (1) reads trend data from meta_cognitive_evaluator; (2) when brittleness detected, reduces mutation rate by 30% and increases goal acceptance threshold by 20% to favor core-stabilizing mutations; (3) when stability persists for 10+ cycles, gradually relaxes parameters back to baseline; (4) logs all parameter changes with reasoning; (5) exposes current parameter state for other modules to query.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780645100.5443113
+    },
+    {
+      "strategy": "modify mutation_engine.py: Accept dynamic mutation rate parameter: (1) add parameter for mutation_rate that can be overridden by orchestrator; (2) use this rate when deciding whether to attempt a mutation vs skip; (3) log which rate was used for each mutation attempt; (4) ensure backward compatibility with default rate.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780645198.4524179
+    },
+    {
+      "strategy": "modify test_meta_cognitive_evaluator.py: Write tests: (1) test that evaluator correctly tracks 30-cycle rolling window; (2) test brittleness detection when core success rate drops; (3) test that parameter controller reduces mutation rate on brittleness; (4) test that parameters gradually return to baseline after stability; (5) test integration with orchestrator using mock mutations.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780645267.9302425
+    },
+    {
+      "strategy": "modify system_health_audit.py: Add meta-cognitive health metrics: (1) include current mutation rate and acceptance threshold in health report; (2) report brittleness status; (3) track how many times parameters were adjusted in last 30 cycles; (4) flag if parameters are stuck at extreme values.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780645280.4915264
+    },
+    {
+      "strategy": "Build a meta-cognitive evaluator that tracks long-term fitness trends (e.g., success rate on core vs. peripheral changes over last 30 cycles) and dynamically adjusts the mutation rate and goal acceptance threshold to favor core-stabilizing mutations when brittleness is detected.",
+      "outcome": "5/7 steps succeeded",
+      "timestamp": 1780645280.5252423
     }
   ],
   "capabilities_developed": []

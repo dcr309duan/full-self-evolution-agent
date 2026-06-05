@@ -16,10 +16,11 @@ class MutationEngine:
     Supports: refactor_architecture, delete_dead_code, optimize_performance.
     """
 
-    def __init__(self, objective_weights: Optional[Dict[str, float]] = None, enable_validation: bool = True):
+    def __init__(self, objective_weights: Optional[Dict[str, float]] = None, enable_validation: bool = True, mutation_rate: Optional[float] = None):
         """
-        Initialize mutation engine with optional objective weights and validation flag.
+        Initialize mutation engine with optional objective weights, validation flag, and mutation rate.
         Default weights are equal for all objectives.
+        Default mutation rate is 0.1 if not provided.
         """
         self.objective_weights = objective_weights or {
             'refactor_architecture': 1.0,
@@ -56,22 +57,22 @@ class MutationEngine:
         # Strategy configurations for each mutation type
         self.strategy_configs = {
             'refactor_architecture': {
-                'mutation_rate': 0.1,
+                'mutation_rate': mutation_rate if mutation_rate is not None else 0.1,
                 'crossover_method': 'single_point',
                 'enabled': True
             },
             'delete_dead_code': {
-                'mutation_rate': 0.1,
+                'mutation_rate': mutation_rate if mutation_rate is not None else 0.1,
                 'crossover_method': 'single_point',
                 'enabled': True
             },
             'optimize_performance': {
-                'mutation_rate': 0.1,
+                'mutation_rate': mutation_rate if mutation_rate is not None else 0.1,
                 'crossover_method': 'single_point',
                 'enabled': True
             },
             'grammar_guided_mutation': {
-                'mutation_rate': 0.1,
+                'mutation_rate': mutation_rate if mutation_rate is not None else 0.1,
                 'crossover_method': 'single_point',
                 'enabled': True
             }
@@ -357,6 +358,16 @@ class MutationEngine:
 
         # Choose mutation type based on weights
         mutation_type = self._choose_mutation()
+        
+        # Get the mutation rate for the selected mutation type
+        mutation_rate = self.strategy_configs[mutation_type]['mutation_rate']
+        print(f"Mutation rate used for {mutation_type}: {mutation_rate}")
+        
+        # Decide whether to attempt mutation or skip based on mutation rate
+        if random.random() > mutation_rate:
+            print(f"Skipping mutation for {mutation_type} due to mutation rate {mutation_rate}")
+            return source_code
+        
         retry_count = 0
         
         while retry_count < self.max_retries:
@@ -909,23 +920,4 @@ class MutationEngine:
             
             def visit_FunctionDef(self, node):
                 self.functions[node.name] = node
-                self.generic_visit(node)
-            
-            def visit_Call(self, node):
-                if isinstance(node.func, ast.Name):
-                    func_name = node.func.id
-                    if func_name in self.call_counts:
-                        self.call_counts[func_name] += 1
-                    else:
-                        self.call_counts[func_name] = 1
-                self.generic_visit(node)
-        
-        collector = FunctionCollector()
-        collector.visit(tree)
-        
-        # Find a function that is called exactly once and has simple body
-        inline_candidate = None
-        for func_name, count in collector.call_counts.items():
-            if count == 1 and func_name in collector.functions:
-                func_node = collector.functions[func_name]
-                # Check if function has simple body (
+                self.gener
