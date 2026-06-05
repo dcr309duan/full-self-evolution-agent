@@ -30,6 +30,17 @@ class IntegrationConflictDetector:
         self.interface_registry = defaultdict(dict)
         # interface_expectations: {module_name: {dependency_module: {function_name: expected_signature}}}
         self.interface_expectations = defaultdict(lambda: defaultdict(dict))
+        # consistency_validator: optional validator for interface consistency checks
+        self.consistency_validator = None
+
+    def set_consistency_validator(self, validator):
+        """
+        Set a consistency validator to integrate with.
+
+        Args:
+            validator: A validator object with a validate method that returns a list of mismatches
+        """
+        self.consistency_validator = validator
 
     def log_file_access(self, module: str, filename: str, cycle: int, operation: str = "write"):
         """
@@ -152,6 +163,64 @@ class IntegrationConflictDetector:
                         })
         return mismatches
 
+    def detect_consistency_conflicts(self) -> List[Dict]:
+        """
+        Detect conflicts using the consistency validator if available.
+
+        Returns:
+            List of conflict dictionaries from the consistency validator
+        """
+        conflicts = []
+        if self.consistency_validator is not None:
+            try:
+                validator_results = self.consistency_validator.validate()
+                for result in validator_results:
+                    if result.get("type") == "interface_mismatch":
+                        # Determine severity based on mismatch type
+                        mismatch_type = result.get("mismatch_type", "unknown")
+                        if mismatch_type == "parameter_count":
+                            severity = "critical"
+                        elif mismatch_type == "parameter_type":
+                            severity = "medium"
+                        elif mismatch_type == "return_type":
+                            severity = "medium"
+                        else:
+                            severity = "low"
+                        
+                        conflicts.append({
+                            "type": "consistency_interface_mismatch",
+                            "module": result.get("module", "unknown"),
+                            "dependency": result.get("dependency", "unknown"),
+                            "function": result.get("function", "unknown"),
+                            "expected": result.get("expected", ""),
+                            "actual": result.get("actual", ""),
+                            "description": f"Consistency validator detected interface mismatch: "
+                                         f"{result.get('description', '')}",
+                            "severity": severity,
+                            "mismatch_type": mismatch_type
+                        })
+                    elif result.get("type") == "interface_missing":
+                        conflicts.append({
+                            "type": "consistency_interface_missing",
+                            "module": result.get("module", "unknown"),
+                            "dependency": result.get("dependency", "unknown"),
+                            "function": result.get("function", "unknown"),
+                            "expected": result.get("expected", ""),
+                            "actual": None,
+                            "description": f"Consistency validator detected missing interface: "
+                                         f"{result.get('description', '')}",
+                            "severity": "critical",
+                            "mismatch_type": "missing"
+                        })
+            except Exception as e:
+                # Log error but don't crash
+                conflicts.append({
+                    "type": "consistency_validator_error",
+                    "description": f"Error running consistency validator: {str(e)}",
+                    "severity": "low"
+                })
+        return conflicts
+
     def _signatures_match(self, sig1: str, sig2: str) -> bool:
         """
         Compare two function signatures for compatibility.
@@ -258,6 +327,10 @@ class IntegrationConflictDetector:
             else:
                 return "medium"
 
+        elif conflict["type"] in ("consistency_interface_mismatch", "consistency_interface_missing"):
+            # Use severity already assigned by detect_consistency_conflicts
+            return conflict.get("severity", "low")
+
         return "low"
 
     def analyze_all(self) -> List[Dict]:
@@ -270,9 +343,11 @@ class IntegrationConflictDetector:
         all_conflicts = []
         all_conflicts.extend(self.detect_temporal_conflicts())
         all_conflicts.extend(self.detect_interface_mismatches())
+        all_conflicts.extend(self.detect_consistency_conflicts())
 
         for conflict in all_conflicts:
-            conflict["severity"] = self.assign_severity(conflict)
+            if "severity" not in conflict:
+                conflict["severity"] = self.assign_severity(conflict)
 
         return all_conflicts
 
@@ -303,3 +378,4 @@ class IntegrationConflictDetector:
         self.file_access_log.clear()
         self.interface_registry.clear()
         self.interface_expectations.clear()
+        self.consistency_validator = None

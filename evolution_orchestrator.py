@@ -7,6 +7,9 @@ Integrates reflection parsing to close the feedback loop between mutation outcom
 Integrates Nash equilibrium detection and coordinated mutation planning to escape local optima.
 Includes a health check hook that updates the system health dashboard after each mutation cycle,
 and a health check threshold that pauses evolution if the dashboard reports a critical integration conflict.
+Includes a post-mutation hook that calls self_model_consistency_validator.after_mutation(modified_files)
+after every successful mutation. If critical mismatches are found, the orchestrator should either
+rollback the mutation or queue a repair goal.
 """
 
 import time
@@ -28,6 +31,7 @@ from reflection_parser import ReflectionParser
 from nash_detector import NashEquilibriumDetector  # New import for Nash detection
 from coordinated_planner import CoordinatedMutationPlanner  # New import for coordinated planning
 from system_health_dashboard import SystemHealthDashboard  # Import for health dashboard
+from self_model_consistency_validator import SelfModelConsistencyValidator  # Import for consistency validation
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +63,7 @@ class EvolutionOrchestrator:
         self.nash_detector = NashEquilibriumDetector(self.config.get("nash_detector", {}))  # New subsystem
         self.coordinated_planner = CoordinatedMutationPlanner(self.config.get("coordinated_planner", {}))  # New subsystem
         self.system_health_dashboard = SystemHealthDashboard(self.config.get("system_health_dashboard", {}))  # New subsystem
+        self.consistency_validator = SelfModelConsistencyValidator(self.config.get("consistency_validator", {}))  # New subsystem
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -73,6 +78,7 @@ class EvolutionOrchestrator:
             "nash_detector": 1.0,  # Added nash_detector score
             "coordinated_planner": 1.0,  # Added coordinated_planner score
             "system_health_dashboard": 1.0,  # Added system_health_dashboard score
+            "consistency_validator": 1.0,  # Added consistency_validator score
         }
 
         # Count consecutive failures per subsystem
@@ -107,6 +113,7 @@ class EvolutionOrchestrator:
             "nash_detector": "nash_detector.py",  # Added nash_detector path
             "coordinated_planner": "coordinated_planner.py",  # Added coordinated_planner path
             "system_health_dashboard": "system_health_dashboard.py",  # Added system_health_dashboard path
+            "consistency_validator": "consistency_validator.py",  # Added consistency_validator path
         }
 
         # Mapping of subsystem names to their instances for restart
@@ -122,6 +129,7 @@ class EvolutionOrchestrator:
             "nash_detector": self.nash_detector,  # Added nash_detector instance
             "coordinated_planner": self.coordinated_planner,  # Added coordinated_planner instance
             "system_health_dashboard": self.system_health_dashboard,  # Added system_health_dashboard instance
+            "consistency_validator": self.consistency_validator,  # Added consistency_validator instance
         }
 
         # Goal selection mechanism: priority queue of evolution goals
@@ -150,6 +158,7 @@ class EvolutionOrchestrator:
             (9, time.time(), "improve nash detection", "nash_detector"),  # Added nash_detector goal
             (10, time.time(), "improve coordinated planning", "coordinated_planner"),  # Added coordinated_planner goal
             (11, time.time(), "improve system health dashboard", "system_health_dashboard"),  # Added system_health_dashboard goal
+            (12, time.time(), "improve consistency validation", "consistency_validator"),  # Added consistency_validator goal
         ]
         
         for goal in default_goals:
@@ -224,6 +233,7 @@ class EvolutionOrchestrator:
         scores["nash_detector"] = self.nash_detector.get_health_score()  # Added nash_detector score
         scores["coordinated_planner"] = self.coordinated_planner.get_health_score()  # Added coordinated_planner score
         scores["system_health_dashboard"] = self.system_health_dashboard.get_health_score()  # Added system_health_dashboard score
+        scores["consistency_validator"] = self.consistency_validator.get_health_score()  # Added consistency_validator score
 
         # Clamp to [0, 1]
         for name in scores:
@@ -394,6 +404,7 @@ class EvolutionOrchestrator:
             "nash_detector": self.nash_detector,
             "coordinated_planner": self.coordinated_planner,
             "system_health_dashboard": self.system_health_dashboard,
+            "consistency_validator": self.consistency_validator,
         }
 
         target = subsystem_map.get(subsystem_name)
@@ -808,26 +819,4 @@ class EvolutionOrchestrator:
             return
         
         # Update the plan with the result of this mutation
-        mutation_steps = self.coordinated_mutation_plan.get("mutation_steps", [])
-        for step in mutation_steps:
-            if step.get("subsystem") == subsystem_name:
-                step["completed"] = True
-                step["success"] = success
-                break
-        
-        # Check if all steps are completed
-        all_completed = all(step.get("completed", False) for step in mutation_steps)
-        
-        if all_completed:
-            logger.info("Coordinated mutation plan completed. Resuming normal operation.")
-            self.coordinated_mutation_active = False
-            self.coordinated_mutation_plan = None
-            self.nash_detected = False
-            
-            # Evaluate the overall success of the coordinated plan
-            successes = sum(1 for step in mutation_steps if step.get("success", False))
-            total_steps = len(mutation_steps)
-            success_rate = successes / total_steps if total_steps > 0 else 0
-            
-            if success_rate >= 0.5:
-                logger.info("Coordinated mutation plan was successful (%.0f%% success rate)", success_rate * 100)
+        mutation

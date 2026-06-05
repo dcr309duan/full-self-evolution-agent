@@ -64,6 +64,26 @@ critical_alerts = [
     {"module": "payment-gateway", "severity": "warning", "message": "Response time exceeding SLA by 40% - investigate upstream dependency"}
 ]
 
+# New data for consistency checks and repair queue
+consistency_checks = [
+    {"id": 1, "module": "auth-service", "check_type": "API Schema", "status": "pass", "timestamp": "2024-01-15 10:30:00"},
+    {"id": 2, "module": "payment-gateway", "check_type": "Data Integrity", "status": "fail", "timestamp": "2024-01-15 10:35:00"},
+    {"id": 3, "module": "inventory-api", "check_type": "Cache Sync", "status": "warning", "timestamp": "2024-01-15 10:40:00"},
+    {"id": 4, "module": "notification-service", "check_type": "Queue Depth", "status": "pass", "timestamp": "2024-01-15 10:45:00"},
+    {"id": 5, "module": "user-db", "check_type": "Replication Lag", "status": "fail", "timestamp": "2024-01-15 10:50:00"},
+    {"id": 6, "module": "cache-layer", "check_type": "TTL Consistency", "status": "pass", "timestamp": "2024-01-15 10:55:00"},
+    {"id": 7, "module": "search-index", "check_type": "Index Sync", "status": "warning", "timestamp": "2024-01-15 11:00:00"},
+    {"id": 8, "module": "logging-service", "check_type": "Log Format", "status": "pass", "timestamp": "2024-01-15 11:05:00"}
+]
+
+repair_queue = [
+    {"id": 1, "module": "payment-gateway", "mismatch_type": "API Version Mismatch", "severity": "high", "description": "Payment gateway v3.0 expects v2.1 API but receiving v2.0"},
+    {"id": 2, "module": "user-db", "mismatch_type": "Data Schema Drift", "severity": "high", "description": "User database schema has diverged from expected schema by 3 fields"},
+    {"id": 3, "module": "inventory-api", "mismatch_type": "Cache Inconsistency", "severity": "medium", "description": "Inventory cache shows 150 items but database has 145 items"},
+    {"id": 4, "module": "search-index", "mismatch_type": "Index Out of Sync", "severity": "medium", "description": "Search index is 2 hours behind database updates"},
+    {"id": 5, "module": "auth-service", "mismatch_type": "Token Format", "severity": "low", "description": "JWT token format differs from standard by expiration field order"}
+]
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -93,6 +113,13 @@ HTML_TEMPLATE = """
         .alert.critical { background-color: #ffebee; border-left: 4px solid #F44336; }
         .alert.warning { background-color: #fff3e0; border-left: 4px solid #FF9800; }
         .full-width { grid-column: 1 / -1; }
+        .status-pass { color: #4CAF50; font-weight: bold; }
+        .status-fail { color: #F44336; font-weight: bold; }
+        .status-warning { color: #FF9800; font-weight: bold; }
+        .severity-high { background-color: #ffebee; }
+        .severity-medium { background-color: #fff3e0; }
+        .severity-low { background-color: #e8f5e9; }
+        .repair-item { padding: 10px; margin: 5px 0; border-radius: 5px; border-left: 4px solid #999; }
     </style>
 </head>
 <body>
@@ -128,6 +155,25 @@ HTML_TEMPLATE = """
                 <h2>Critical Alerts</h2>
                 <div id="alerts-container"></div>
             </div>
+            <div class="card full-width">
+                <h2>Recent Consistency Checks</h2>
+                <table id="consistency-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Module</th>
+                            <th>Check Type</th>
+                            <th>Status</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="card full-width">
+                <h2>Repair Queue - Pending Mismatches</h2>
+                <div id="repair-queue-container"></div>
+            </div>
         </div>
     </div>
     <script>
@@ -147,7 +193,7 @@ HTML_TEMPLATE = """
             });
             
             // Render dependency graph
-            renderGraph(data.dependency_graph);
+            renderGraph(data.dependency_graph, data.module_health);
             
             // Render failure chart
             renderFailureChart(data.failure_rates);
@@ -170,11 +216,37 @@ HTML_TEMPLATE = """
                 div.innerHTML = `<strong>${alert.module}</strong> (${alert.severity}): ${alert.message}`;
                 alertsContainer.appendChild(div);
             });
+            
+            // Render consistency checks table
+            const consistencyBody = document.querySelector('#consistency-table tbody');
+            consistencyBody.innerHTML = '';
+            data.consistency_checks.forEach(check => {
+                const row = document.createElement('tr');
+                const statusClass = `status-${check.status}`;
+                row.innerHTML = `<td>${check.id}</td><td>${check.module}</td><td>${check.check_type}</td><td class="${statusClass}">${check.status}</td><td>${check.timestamp}</td>`;
+                consistencyBody.appendChild(row);
+            });
+            
+            // Render repair queue
+            const repairContainer = document.getElementById('repair-queue-container');
+            repairContainer.innerHTML = '';
+            data.repair_queue.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `repair-item severity-${item.severity}`;
+                div.style.borderLeftColor = item.severity === 'high' ? '#F44336' : item.severity === 'medium' ? '#FF9800' : '#4CAF50';
+                div.innerHTML = `<strong>${item.module}</strong> - ${item.mismatch_type}<br>
+                                 <em>Severity: ${item.severity}</em><br>
+                                 ${item.description}`;
+                repairContainer.appendChild(div);
+            });
         }
         
-        function renderGraph(graphData) {
+        function renderGraph(graphData, moduleHealth) {
             const width = document.getElementById('dependency-graph').clientWidth;
             const height = 400;
+            
+            // Clear previous graph
+            d3.select('#dependency-graph').selectAll('*').remove();
             
             const svg = d3.select('#dependency-graph')
                 .append('svg')
@@ -200,7 +272,7 @@ HTML_TEMPLATE = """
                 .enter().append('circle')
                 .attr('r', 10)
                 .attr('fill', d => {
-                    const health = data.module_health.find(m => m[0] === d.id);
+                    const health = moduleHealth.find(m => m[0] === d.id);
                     return health ? (health[1] === 'green' ? '#4CAF50' : health[1] === 'yellow' ? '#FFC107' : '#F44336') : '#999';
                 })
                 .call(d3.drag()
@@ -246,6 +318,9 @@ HTML_TEMPLATE = """
             const width = document.getElementById('failure-chart').clientWidth;
             const height = 300;
             const margin = {top: 20, right: 30, bottom: 30, left: 50};
+            
+            // Clear previous chart
+            d3.select('#failure-chart').selectAll('*').remove();
             
             const svg = d3.select('#failure-chart')
                 .append('svg')
@@ -320,12 +395,28 @@ def get_dashboard_data():
             if len(failure_rates[module]) > 20:
                 failure_rates[module] = failure_rates[module][-20:]
     
+    # Simulate consistency checks updates
+    updated_checks = []
+    for check in consistency_checks:
+        if random.random() < 0.2:  # 20% chance of status change
+            check["status"] = random.choice(["pass", "fail", "warning"])
+        updated_checks.append(check)
+    
+    # Simulate repair queue updates
+    updated_queue = []
+    for item in repair_queue:
+        if random.random() < 0.1:  # 10% chance of severity change
+            item["severity"] = random.choice(["high", "medium", "low"])
+        updated_queue.append(item)
+    
     return jsonify({
         "module_health": list(module_health.items()),
         "dependency_graph": dependency_graph,
         "failure_rates": failure_rates,
         "underutilized_components": underutilized_components,
-        "critical_alerts": critical_alerts
+        "critical_alerts": critical_alerts,
+        "consistency_checks": updated_checks,
+        "repair_queue": updated_queue
     })
 
 if __name__ == '__main__':
