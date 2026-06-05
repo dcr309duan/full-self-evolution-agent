@@ -1,0 +1,7 @@
+{
+  "sandbox_enabled": true,
+  "sandbox_temp_base": "/tmp/evo_sandbox/",
+  "sandbox_max_retries": 3,
+  "sandbox_test_timeout": 120,
+  "sandbox_promote_on_all_pass": true
+}

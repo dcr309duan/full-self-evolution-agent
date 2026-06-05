@@ -630,6 +630,58 @@ class EvolutionOrchestrator:
         except Exception as e:
             logger.exception("Error during reflection parsing for subsystem '%s': %s", subsystem_name, e)
 
+    def _run_sandboxed_mutation(self, subsystem_name: str, source_code: str, strategy: str) -> Tuple[Optional[str], bool, Optional[str]]:
+        """Run mutation in a sandboxed pipeline and test it.
+
+        Args:
+            subsystem_name: Name of the subsystem to mutate.
+            source_code: The source code to mutate.
+            strategy: The mutation strategy to use.
+
+        Returns:
+            Tuple of (mutated_code, sandbox_test_passed, failure_report_path)
+            - mutated_code: The mutated source code, or None if mutation failed
+            - sandbox_test_passed: Whether the sandbox tests passed
+            - failure_report_path: Path to the failure report if tests failed, None otherwise
+        """
+        logger.info("Running sandboxed mutation for subsystem '%s' with strategy '%s'", subsystem_name, strategy)
+        
+        try:
+            # Use the mutation engine to generate mutated code in sandbox
+            mutated_code = self.mutation_engine.evolve_subsystem(source_code, strategy=strategy, sandbox=True)
+            
+            if mutated_code is None:
+                logger.error("Sandboxed mutation returned None for subsystem '%s'", subsystem_name)
+                return None, False, None
+            
+            # Run tests in sandbox environment
+            sandbox_test_passed = self.testing_framework.run_tests(subsystem_name, sandbox=True)
+            
+            failure_report_path = None
+            if not sandbox_test_passed:
+                # Generate failure report
+                failure_report_path = f"failure_reports/{subsystem_name}_{int(time.time())}.json"
+                os.makedirs("failure_reports", exist_ok=True)
+                
+                failure_report = {
+                    "timestamp": time.time(),
+                    "subsystem": subsystem_name,
+                    "strategy": strategy,
+                    "mutated_code": mutated_code,
+                    "error_details": self.testing_framework.get_last_error_details()
+                }
+                
+                with open(failure_report_path, 'w') as f:
+                    json.dump(failure_report, f, indent=2)
+                
+                logger.info("Failure report saved to %s", failure_report_path)
+            
+            return mutated_code, sandbox_test_passed, failure_report_path
+            
+        except Exception as e:
+            logger.exception("Error during sandboxed mutation for subsystem '%s': %s", subsystem_name, e)
+            return None, False, None
+
     def evolution_cycle(self):
         """Execute one complete evolution cycle."""
         logger.info("Starting evolution cycle...")
@@ -662,25 +714,80 @@ class EvolutionOrchestrator:
             self._save_state()
             return
 
-        # 4) Call mutation_engine.evolve_subsystem() with that code
-        logger.info("Calling mutation engine to evolve subsystem '%s'", selected)
-        try:
-            mutated_code = self.mutation_engine.evolve_subsystem(source_code)
-        except Exception as e:
-            logger.exception("Mutation engine failed to evolve subsystem '%s': %s", selected, e)
-            self.update_scores_and_log(selected, False)
-            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
-            self._save_state()
-            return
+        # 4) Run sandboxed mutation with testing
+        mutated_code, sandbox_test_passed, failure_report_path = self._run_sandboxed_mutation(
+            selected, source_code, strategy
+        )
 
         if mutated_code is None:
-            logger.error("Mutation engine returned None for subsystem '%s'. Evolution failed.", selected)
+            logger.error("Sandboxed mutation failed for subsystem '%s'. Evolution failed.", selected)
             self.update_scores_and_log(selected, False)
             self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
             self._save_state()
             return
 
-        # 5) If successful, write the mutated code back to disk and restart the subsystem
+        # 5) Check if sandbox test passed before promoting
+        if not sandbox_test_passed:
+            logger.warning("Sandbox tests failed for subsystem '%s'. Recording failure and not promoting.", selected)
+            
+            # Record the failure report path in the goal's metadata
+            if highest_goal:
+                # Update the goal metadata with failure information
+                goal_metadata = {
+                    "failure_report_path": failure_report_path,
+                    "failure_timestamp": time.time(),
+                    "consecutive_failures": self.consecutive_failures.get(selected, 0) + 1
+                }
+                # Store in goal queue metadata (we'll use a separate dict for simplicity)
+                if not hasattr(self, '_goal_metadata'):
+                    self._goal_metadata = {}
+                self._goal_metadata[highest_goal[2]] = goal_metadata
+            
+            # Update scores and log failure
+            self.update_scores_and_log(selected, False)
+            self._log_evolution_cycle(selected, strategy, False, old_scores, self.subsystem_scores)
+            
+            # 6) Optionally retry with a different mutation strategy if the same goal fails 3+ times via sandbox
+            consecutive_failures = self.consecutive_failures.get(selected, 0)
+            if consecutive_failures >= FAILURE_THRESHOLD:
+                logger.warning("Goal for subsystem '%s' has failed %d times. Attempting retry with different strategy.", 
+                             selected, consecutive_failures)
+                
+                # Try different mutation strategies
+                alternative_strategies = ["conservative", "aggressive", "targeted", "random"]
+                retry_success = False
+                
+                for alt_strategy in alternative_strategies:
+                    if alt_strategy == strategy:
+                        continue
+                    
+                    logger.info("Retrying mutation for '%s' with strategy '%s'", selected, alt_strategy)
+                    
+                    # Run sandboxed mutation with alternative strategy
+                    retry_mutated_code, retry_test_passed, retry_failure_path = self._run_sandboxed_mutation(
+                        selected, source_code, alt_strategy
+                    )
+                    
+                    if retry_mutated_code is not None and retry_test_passed:
+                        logger.info("Retry with strategy '%s' succeeded for subsystem '%s'", alt_strategy, selected)
+                        mutated_code = retry_mutated_code
+                        sandbox_test_passed = True
+                        retry_success = True
+                        break
+                    else:
+                        logger.warning("Retry with strategy '%s' failed for subsystem '%s'", alt_strategy, selected)
+                
+                if not retry_success:
+                    logger.error("All retry strategies failed for subsystem '%s'. Triggering strategy switch.", selected)
+                    self.trigger_strategy_switch(selected)
+            
+            self._save_state()
+            return
+
+        # 7) If sandbox tests passed, promote the mutation
+        logger.info("Sandbox tests passed for subsystem '%s'. Promoting mutation.", selected)
+        
+        # Write the mutated code back to disk
         write_success = self.write_subsystem_source_code(selected, mutated_code)
         if not write_success:
             logger.error("Failed to write mutated code for subsystem '%s'. Evolution failed.", selected)
@@ -689,20 +796,21 @@ class EvolutionOrchestrator:
             self._save_state()
             return
 
+        # Restart the subsystem
         restart_success = self.restart_subsystem(selected)
         if not restart_success:
             logger.warning("Failed to restart subsystem '%s' after mutation. Continuing anyway.", selected)
 
-        # Run tests to validate the mutation
+        # Run full tests to validate the mutation
         tests_passed = self.run_tests(selected)
         success = self.evaluate_success(selected, tests_passed)
 
-        # 6) If failed, log failure and increment failure counter for that subsystem
+        # 8) If failed, log failure and increment failure counter for that subsystem
         if not success:
             logger.warning("Evolution of subsystem '%s' failed. Incrementing failure counter.", selected)
             self.update_scores_and_log(selected, False)
             
-            # 7) If failure counter reaches threshold, integrate with failure analysis module
+            # 9) If failure counter reaches threshold, integrate with failure analysis module
             if self.consecutive_failures[selected] >= FAILURE_THRESHOLD:
                 logger.warning("Failure threshold reached for subsystem '%s'. Calling failure analysis module.", selected)
                 try:
@@ -747,53 +855,4 @@ class EvolutionOrchestrator:
         self._log_evolution_cycle(selected, strategy, success, old_scores, self.subsystem_scores)
         
         # NEW: Parse reflection and update mutation strategy based on insights
-        self._parse_reflection_and_update_strategy(selected, success)
-        
-        # Save state after each cycle
-        self._save_state()
-
-        logger.info("Evolution cycle completed for '%s' (success=%s).", selected, success)
-
-    def run_continuous_loop(self, interval_seconds: float = EVOLUTION_INTERVAL):
-        """Run the continuous evolution loop.
-
-        Args:
-            interval_seconds: Time in seconds between evolution cycles.
-        """
-        self.running = True
-        logger.info("Starting continuous evolution loop with interval %.2f seconds.", interval_seconds)
-
-        try:
-            while self.running:
-                self.evolution_cycle()
-                # 8) Sleep for configurable interval then repeat
-                time.sleep(interval_seconds)
-        except KeyboardInterrupt:
-            logger.info("Evolution loop interrupted by user.")
-        except Exception as e:
-            logger.exception("Unexpected error in evolution loop: %s", e)
-        finally:
-            self.running = False
-            # Save state on exit
-            self._save_state()
-            logger.info("Evolution loop stopped.")
-
-    def stop(self):
-        """Signal the continuous loop to stop."""
-        self.running = False
-        logger.info("Stop signal sent to evolution loop.")
-
-
-# Example usage (if run as script)
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    orchestrator = EvolutionOrchestrator()
-    
-    # Example of adding custom goals
-    orchestrator.add_goal(1, "urgent: fix API server crash", "api_server")
-    orchestrator.add_goal(5, "improve web scraper efficiency", "web_scraper")
-    
-    # Run a single cycle for demonstration
-    orchestrator.evolution_cycle()
-    # Uncomment to run continuously:
-    # orchestrator.run_continuous_loop(interval_seconds=10)
+        self

@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified evolution_engine/orchestrator.py to: Integrate FailurePatternDetector into the orchestrator: (1) import and instantiate FailurePatternDetector at module level, (2) after each test run in the evolution loop, call detector.log_failure() for each failed test with extracted error type and module, (3) after logging, call detector.get_recurring_patterns() to check for 3-consecutive-cycle patterns, (4) if patterns found, call detector.generate_debugging_goal() and insert the returned goal into the pending_goals list (before the next goal_generator invocation), (5) log the auto-insertion event.",
-      "timestamp": 1780636760.0462346,
-      "cycle": 77
-    },
-    {
-      "content": "Successfully modified evolution_engine/goal_generator.py to: Update goal_generator to accept and process externally injected goals (like those from failure pattern detector): (1) add a method inject_goal(goal_dict) that appends to a priority queue, (2) modify generate_goals() to first emit any injected goals before generating new ones, (3) ensure injected goals have proper schema_version and are validated by the existing schema alignment checker.",
-      "timestamp": 1780636775.521556,
-      "cycle": 77
-    },
-    {
-      "content": "Successfully modified tests/test_failure_pattern_detector.py to: Create comprehensive test suite for FailurePatternDetector: (1) test that logging failures stores them correctly, (2) test that 2 consecutive same-type failures don't trigger goal generation, (3) test that 3 consecutive same-type failures trigger goal generation, (4) test that non-consecutive failures (e.g., pattern interrupted by other failure) don't trigger, (5) test that generated debugging goal has correct structure (priority=HIGH, description includes error_type and module, action='debugging'), (6) test that multiple simultaneous patterns each generate their own goals, (7) test integration with orchestrator (mock the test runner to produce controlled failure sequences).",
-      "timestamp": 1780636791.3924823,
-      "cycle": 77
-    },
-    {
-      "content": "Successfully modified evolution_engine/failure_log_parser.py to: Create a utility module to parse test runner output and extract structured failure information: (1) parse pytest-style output to extract test name, error type (AssertionError, TypeError, etc.), and module path, (2) normalize module names to consistent format, (3) provide a clean interface for FailurePatternDetector to consume.",
-      "timestamp": 1780636808.0812855,
-      "cycle": 77
-    },
-    {
-      "content": "[研究] Self-healing code generation via causal failure tracing: Self-healing code generation via causal failure tracing is an emerging area combining program repair",
-      "timestamp": 1780636824.7471645,
-      "cycle": 77
-    },
-    {
       "content": "[研究] Meta-learning for adaptive task decomposition and prioritization: Meta-learning for adaptive task decomposition and prioritization is an emerging area that combines h",
       "timestamp": 1780636838.9187999,
       "cycle": 77
@@ -999,6 +974,31 @@
       "content": "Successfully modified tests/test_integration_evolution_loop.py to: Add comprehensive assertions: (1) After each cycle, verify the self-model was updated, (2) Verify goal queue changed appropriately, (3) Verify no duplicate goals, (4) Verify the system state is consistent (no dangling references)",
       "timestamp": 1780642881.8554,
       "cycle": 103
+    },
+    {
+      "content": "Successfully modified core/sandbox_manager.py to: Create a new SandboxManager class that: (1) clones the entire agent state (files from core/, tests/, config/, goals.json, meta_parameters.json, history log) into a temporary directory using shutil.copytree, (2) applies a given mutation (diff/patch) to the cloned files, (3) runs the full integration test suite (tests/test_integration_evolution_loop.py) in the sandbox, (4) returns success/failure with detailed logs, (5) on failure, captures the test output, error types, and affected modules into a structured failure report stored in logs/failures/ with timestamp.",
+      "timestamp": 1780642950.7436206,
+      "cycle": 104
+    },
+    {
+      "content": "Successfully modified core/evolution_orchestrator.py to: Update the orchestrator's mutation step to use the sandboxed pipeline. Add logic to: (1) check if sandbox test passed before promoting, (2) on failure, record the failure report path in the goal's metadata, (3) optionally retry with a different mutation strategy if the same goal fails 3+ times via sandbox.",
+      "timestamp": 1780643037.5045154,
+      "cycle": 104
+    },
+    {
+      "content": "Successfully modified core/goal_manager.py to: Add a 'sandbox_test_results' field to each goal's metadata to track how many times it failed sandbox testing, enabling the orchestrator to deprioritize goals that repeatedly fail sandbox validation.",
+      "timestamp": 1780643055.6214812,
+      "cycle": 104
+    },
+    {
+      "content": "Successfully modified config/agent_config.json to: Add configuration parameters for the sandbox: 'sandbox_enabled': true, 'sandbox_temp_base': '/tmp/evo_sandbox/', 'sandbox_max_retries': 3, 'sandbox_test_timeout': 120 (seconds), 'sandbox_promote_on_all_pass': true.",
+      "timestamp": 1780643103.013238,
+      "cycle": 104
+    },
+    {
+      "content": "Successfully modified logs/failures/.gitkeep to: Create the failure reports directory structure so the SandboxManager can write structured failure reports (JSON files with timestamp, mutation diff, test output, error types, affected modules).",
+      "timestamp": 1780643105.8084147,
+      "cycle": 104
     }
   ],
   "learned_patterns": [],
@@ -1337,6 +1337,16 @@
       "approach": "modify tests/test_integration_evolution_loop.py: Implement detailed failure logging: (1) For each step, capture stdout/stderr, (2) Record exception tracebacks, (3) Log the state of the self-model before and after each cycle, (4) Record which files were modified by mutations, (5) Store all logs in a structured format (JSON) for post-mortem analysis",
       "reason": "Safety check failed",
       "timestamp": 1780642720.249015
+    },
+    {
+      "approach": "modify core/mutation_engine.py: Integrate the SandboxManager into the mutation pipeline: before applying any mutation to the real system, call SandboxManager.clone_and_test(mutation). Only if all tests pass (return code 0, no assertion errors), apply the mutation to the real files. If tests fail, discard the sandbox, log the failure report, and return a structured error to the orchestrator.",
+      "reason": "Safety check failed",
+      "timestamp": 1780642987.5695152
+    },
+    {
+      "approach": "modify tests/test_integration_evolution_loop.py: Add a new test case 'test_sandbox_isolates_state' that: (1) creates a temporary sandbox, (2) applies a known-good mutation, (3) verifies the real system files are unchanged, (4) verifies the sandbox files contain the mutation, (5) runs a simple assertion that the sandbox can be cleaned up without affecting the real system.",
+      "reason": "Safety check failed",
+      "timestamp": 1780643100.1743248
     }
   ],
   "successful_strategies": [
@@ -4399,6 +4409,36 @@
       "strategy": "Build an end-to-end integration test harness that executes the full evolution loop (reflection → goal generation → mutation → test → promotion) in a sandboxed environment, runs 5 consecutive cycles, and reports pass/fail status along with detailed failure logs for each step. This test must be self-contained, idempotent, and executable from a single command.",
       "outcome": "7/10 steps succeeded",
       "timestamp": 1780642881.8704214
+    },
+    {
+      "strategy": "modify core/sandbox_manager.py: Create a new SandboxManager class that: (1) clones the entire agent state (files from core/, tests/, config/, goals.json, meta_parameters.json, history log) into a temporary directory using shutil.copytree, (2) applies a given mutation (diff/patch) to the cloned files, (3) runs the full integration test suite (tests/test_integration_evolution_loop.py) in the sandbox, (4) returns success/failure with detailed logs, (5) on failure, captures the test output, error types, and affected modules into a structured failure report stored in logs/failures/ with timestamp.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780642950.729575
+    },
+    {
+      "strategy": "modify core/evolution_orchestrator.py: Update the orchestrator's mutation step to use the sandboxed pipeline. Add logic to: (1) check if sandbox test passed before promoting, (2) on failure, record the failure report path in the goal's metadata, (3) optionally retry with a different mutation strategy if the same goal fails 3+ times via sandbox.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643037.480475
+    },
+    {
+      "strategy": "modify core/goal_manager.py: Add a 'sandbox_test_results' field to each goal's metadata to track how many times it failed sandbox testing, enabling the orchestrator to deprioritize goals that repeatedly fail sandbox validation.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643055.6056962
+    },
+    {
+      "strategy": "modify config/agent_config.json: Add configuration parameters for the sandbox: 'sandbox_enabled': true, 'sandbox_temp_base': '/tmp/evo_sandbox/', 'sandbox_max_retries': 3, 'sandbox_test_timeout': 120 (seconds), 'sandbox_promote_on_all_pass': true.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643102.9990017
+    },
+    {
+      "strategy": "modify logs/failures/.gitkeep: Create the failure reports directory structure so the SandboxManager can write structured failure reports (JSON files with timestamp, mutation diff, test output, error types, affected modules).",
+      "outcome": "Applied successfully",
+      "timestamp": 1780643105.7944808
+    },
+    {
+      "strategy": "Add a 'recursive sandbox' mechanism that, before applying any mutation to the core evolution engine, clones the current agent state (files, goals, history, meta-parameters) into a temporary directory, applies the mutation there, runs the integration test harness, and only promotes the mutation to the real system if all tests pass. If tests fail, the sandbox is discarded and a detailed failure report is stored.",
+      "outcome": "5/7 steps succeeded",
+      "timestamp": 1780643105.823188
     }
   ],
   "capabilities_developed": []

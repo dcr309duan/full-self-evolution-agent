@@ -22,6 +22,7 @@ class Goal:
     completed: bool = False
     created_at: float = field(default_factory=time.time)
     completed_at: Optional[float] = None
+    sandbox_test_results: int = 0  # Track sandbox test failures
 
 @dataclass
 class StructuralDiff:
@@ -40,6 +41,7 @@ class GoalManager:
 
     CURIOSITY_PREFIX = "curiosity:"
     CURIOSITY_PRIORITY_BOOST = 1000
+    SANDBOX_FAILURE_PENALTY = 100  # Priority reduction per sandbox failure
 
     def __init__(self, codebase_path: Optional[Path] = None):
         self.goals: List[Goal] = []
@@ -79,14 +81,35 @@ class GoalManager:
         """
         Get the highest priority incomplete goal.
         Curiosity tasks are prioritized over regular goals.
+        Goals with sandbox test failures are deprioritized.
         """
         incomplete = [g for g in self.goals if not g.completed]
         if not incomplete:
             return None
 
-        # Sort by priority descending (higher priority first)
-        incomplete.sort(key=lambda g: g.priority, reverse=True)
+        # Sort by effective priority (base priority minus sandbox failure penalty)
+        incomplete.sort(key=lambda g: g.priority - (g.sandbox_test_results * self.SANDBOX_FAILURE_PENALTY), reverse=True)
         return incomplete[0]
+
+    def record_sandbox_failure(self, goal_id: str) -> bool:
+        """
+        Record a sandbox test failure for a goal.
+        Returns True if the goal was found and updated, False otherwise.
+        """
+        for goal in self.goals:
+            if goal.id == goal_id and not goal.completed:
+                goal.sandbox_test_results += 1
+                logger.info(f"Recorded sandbox failure for goal: {goal_id} (total failures: {goal.sandbox_test_results})")
+                return True
+        logger.warning(f"Goal not found or already completed: {goal_id}")
+        return False
+
+    def get_sandbox_failure_count(self, goal_id: str) -> Optional[int]:
+        """Get the number of sandbox test failures for a goal."""
+        for goal in self.goals:
+            if goal.id == goal_id:
+                return goal.sandbox_test_results
+        return None
 
     def complete_goal(self, goal_id: str) -> Optional[StructuralDiff]:
         """
@@ -207,13 +230,15 @@ class GoalManager:
         completed = len(self.completed_goals)
         curiosity = len(self.get_goals_by_type(GoalType.CURIOSITY))
         curiosity_completed = len([g for g in self.completed_goals if g.goal_type == GoalType.CURIOSITY])
+        total_sandbox_failures = sum(g.sandbox_test_results for g in self.goals)
         return {
             "total_goals": total,
             "completed_goals": completed,
             "curiosity_goals": curiosity,
             "curiosity_completed": curiosity_completed,
             "structural_diffs": len(self.structural_diffs),
-            "pending_goals": total - completed
+            "pending_goals": total - completed,
+            "total_sandbox_failures": total_sandbox_failures
         }
 
     def clear_completed_goals(self) -> int:
