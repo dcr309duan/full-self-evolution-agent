@@ -1,36 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Add test fixtures and helper functions: (a) mock mutation generator that produces test mutations with known schemas, (b) mock test runner that simulates test results, (c) schema alignment validator that can be configured to accept/reject based on format, (d) promotion tracker that logs whether mutations were promoted.",
-      "timestamp": 1780635539.5981836,
-      "cycle": 69
-    },
-    {
-      "content": "Successfully modified tests/test_end_to_end_pipeline.py to: Implement test_scenario_1_valid_pipeline: Generate a mutation with correct schema format, run through test suite (simulated passing), verify schema alignment passes, verify mutation is promoted. Assert all stages complete without errors.",
-      "timestamp": 1780635581.361657,
-      "cycle": 70
-    },
-    {
-      "content": "Self-reflection: The evolution process itself is falling into a pattern of 'local search' around the same set of failing goals. The meta-mutation mechanism should periodically not just rewrite modules but also rewrite",
-      "timestamp": 1780635584.4241345,
-      "cycle": 70
-    },
-    {
-      "content": "[范式转移 L0] 当前进化循环的成功率（10/10）完美，但能力值仅为50且增长缓慢，暗示系统可能陷入了‘局部最优陷阱’：所有生成的代码和计划都围绕已验证过的模式，缺乏探索性突变，导致能力提升停滞。这本质上是一个‘探索与利用’的失衡，且被表面上的成功掩盖。",
-      "timestamp": 1780635596.3657372,
-      "cycle": 70
-    },
-    {
-      "content": "[盲区发现 L0] 忽略了进化系统自身需要元认知层来定期质疑和重置优化方向，否则将陷入自我强化的死循环。",
-      "timestamp": 1780635596.378923,
-      "cycle": 70
-    },
-    {
-      "content": "[范式转移 L1] 第0层的评估依赖两个表面指标——能力值（50）和成功率（10/10），但这两个指标本身缺乏明确定义和测量标准。能力值可能是一个黑盒标量，其计算方式、量纲、单调性甚至稳定性都未知，导致‘增长缓慢’的判断可能基于无效基准。成功率看似完美，却可能是在一个固定、简单、重复的测试集上取得，这更像是‘记忆’而非‘能力’。更根本的问题是：评估没有区分‘学习效率’和‘学习资源消耗’，也没有考虑能力的多维性（如泛化",
-      "timestamp": 1780635616.9902754,
-      "cycle": 70
-    },
-    {
       "content": "[盲区发现 L1] 完全忽略了评估体系本身也需要进化：当前的评估方法（能力值+成功率）是静态的、自指的，没有内置机制来怀疑、更新或废弃这些指标。正如进化系统需要元认知层，评估体系也需要元评估层来定期审视自身有效性，否则会陷入‘用错误尺子衡量进步’的循环。",
       "timestamp": 1780635617.0052652,
       "cycle": 70
@@ -999,6 +969,36 @@
       "content": "Successfully modified system_config.json to: Add configuration for integration test scenarios: ENABLE_FAILURE_SIMULATION=true, FAILURE_SIMULATION_SEED=42 (for reproducibility), INTEGRATION_TEST_TIMEOUT=300, MAX_FAILURE_INJECTIONS_PER_TEST=10, RECOVERY_VALIDATION_LEVEL='strict'.",
       "timestamp": 1780641085.050602,
       "cycle": 96
+    },
+    {
+      "content": "Self-reflection: The agent's evolution has been trapped in a cycle of adding verification layers (tests, schema checks, dependency analyzers) because those tasks are straightforward to generate and measure, but they d",
+      "timestamp": 1780641164.3636022,
+      "cycle": 97
+    },
+    {
+      "content": "Successfully modified core/health_audit.py to: Create the SystemHealthAudit class with methods: score_capability(cap_name) -> float (0-1 per dimension), compute_average_score() -> float, identify_bottom_10_percent() -> list, merge_duplicates() -> list of merged pairs. Scoring: novelty = min(1.0, days_since_mod/30), necessity = min(1.0, dependents/5), integration = interface_alignment_score (from schema checker). Store scores in a JSON file for persistence.",
+      "timestamp": 1780641194.2714124,
+      "cycle": 97
+    },
+    {
+      "content": "Successfully modified core/orchestrator.py to: Add a post-mutation hook that calls health_audit.compute_average_score(). If score < 0.4, trigger pruning cycle: (1) log warning, (2) call identify_bottom_10%, (3) for each low-scorer, check if duplicate exists (same description prefix), (4) merge duplicates by keeping the most recent or most complete version, (5) remove truly redundant capabilities, (6) update system model and dependency graph.",
+      "timestamp": 1780641241.434194,
+      "cycle": 97
+    },
+    {
+      "content": "Successfully modified system_config.json to: Add health audit configuration: HEALTH_AUDIT_INTERVAL=10 (cycles between audits), PRUNING_THRESHOLD=0.4, BOTTOM_PERCENT=10, ENABLE_AUTO_MERGE=true, MAX_MERGE_CANDIDATES=5.",
+      "timestamp": 1780641245.4553692,
+      "cycle": 97
+    },
+    {
+      "content": "Successfully modified tests/unit/test_health_audit.py to: Create unit tests for health audit: (1) test scoring logic with known inputs, (2) test bottom 10% identification with 20 capabilities, (3) test duplicate detection (same prefix 'Implement a canonical schema alignment layer'), (4) test merge preserves functionality, (5) test pruning doesn't remove critical dependencies.",
+      "timestamp": 1780641267.1581254,
+      "cycle": 97
+    },
+    {
+      "content": "Successfully modified core/self_model.py to: Add method to update capability metadata after pruning: remove_deleted_capabilities(removed_list), update_dependency_counts(merged_pairs). Ensure the knowledge graph reflects the new capability set.",
+      "timestamp": 1780641284.4508462,
+      "cycle": 97
     }
   ],
   "learned_patterns": [],
@@ -4114,6 +4114,36 @@
       "strategy": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
       "outcome": "4/8 steps succeeded",
       "timestamp": 1780641107.8430088
+    },
+    {
+      "strategy": "modify core/health_audit.py: Create the SystemHealthAudit class with methods: score_capability(cap_name) -> float (0-1 per dimension), compute_average_score() -> float, identify_bottom_10_percent() -> list, merge_duplicates() -> list of merged pairs. Scoring: novelty = min(1.0, days_since_mod/30), necessity = min(1.0, dependents/5), integration = interface_alignment_score (from schema checker). Store scores in a JSON file for persistence.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641194.2530005
+    },
+    {
+      "strategy": "modify core/orchestrator.py: Add a post-mutation hook that calls health_audit.compute_average_score(). If score < 0.4, trigger pruning cycle: (1) log warning, (2) call identify_bottom_10%, (3) for each low-scorer, check if duplicate exists (same description prefix), (4) merge duplicates by keeping the most recent or most complete version, (5) remove truly redundant capabilities, (6) update system model and dependency graph.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641241.4133584
+    },
+    {
+      "strategy": "modify system_config.json: Add health audit configuration: HEALTH_AUDIT_INTERVAL=10 (cycles between audits), PRUNING_THRESHOLD=0.4, BOTTOM_PERCENT=10, ENABLE_AUTO_MERGE=true, MAX_MERGE_CANDIDATES=5.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641245.4400363
+    },
+    {
+      "strategy": "modify tests/unit/test_health_audit.py: Create unit tests for health audit: (1) test scoring logic with known inputs, (2) test bottom 10% identification with 20 capabilities, (3) test duplicate detection (same prefix 'Implement a canonical schema alignment layer'), (4) test merge preserves functionality, (5) test pruning doesn't remove critical dependencies.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641267.143735
+    },
+    {
+      "strategy": "modify core/self_model.py: Add method to update capability metadata after pruning: remove_deleted_capabilities(removed_list), update_dependency_counts(merged_pairs). Ensure the knowledge graph reflects the new capability set.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780641284.4356906
+    },
+    {
+      "strategy": "Create a 'system health audit' module that scores each existing capability on novelty (age since last modification), necessity (number of dependents), and integration quality (interface alignment score), then triggers a pruning cycle if the average score drops below 0.4, removing the bottom 10% of capabilities and merging duplicate implementations. This directly addresses the fragmentation and redundancy identified in the reflection.",
+      "outcome": "5/5 steps succeeded",
+      "timestamp": 1780641284.4649014
     }
   ],
   "capabilities_developed": []

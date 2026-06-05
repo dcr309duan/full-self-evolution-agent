@@ -205,3 +205,37 @@ class SelfModelKnowledgeGraph:
         node = self.nodes[module_id]
         node.add_simulation_entry(prediction, actual)
         node.add_cross_reference(prediction, actual, context)
+
+    def remove_deleted_capabilities(self, removed_list: List[str]):
+        """Remove capabilities (modules) that have been pruned from the knowledge graph."""
+        for module_id in removed_list:
+            if module_id in self.nodes:
+                # Remove all edges associated with this module
+                self.edges = [edge for edge in self.edges if edge.source_id != module_id and edge.target_id != module_id]
+                # Remove failure cluster links
+                module = self.nodes[module_id]
+                for cluster_id in module.failure_clusters[:]:
+                    self.unlink_failure_cluster_from_module(cluster_id, module_id)
+                # Remove the node itself
+                del self.nodes[module_id]
+
+    def update_dependency_counts(self, merged_pairs: List[tuple]):
+        """Update dependency counts after merging capabilities, adjusting edges to reflect new capability set."""
+        for old_id, new_id in merged_pairs:
+            if old_id in self.nodes and new_id in self.nodes:
+                # Redirect edges from old_id to new_id
+                for edge in self.edges:
+                    if edge.source_id == old_id:
+                        edge.source_id = new_id
+                    if edge.target_id == old_id:
+                        edge.target_id = new_id
+                # Merge failure clusters from old module to new module
+                old_module = self.nodes[old_id]
+                new_module = self.nodes[new_id]
+                for cluster_id in old_module.failure_clusters:
+                    if cluster_id not in new_module.failure_clusters:
+                        new_module.add_failure_cluster(cluster_id)
+                        if cluster_id in self.failure_clusters:
+                            self.failure_clusters[cluster_id].add_affected_module(new_id)
+                # Remove old module
+                self.remove_deleted_capabilities([old_id])

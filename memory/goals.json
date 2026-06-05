@@ -2,11 +2,23 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a 'meta-mutation' selector that, after each 5 evolution cycles, analyzes the last 50 mutation outcomes from the successful strategies log and uses a decision forest (trained on the 561 strategies) to predict the highest-yield mutation type for the next cycle, dynamically biasing the mutation generator toward that type (e.g., schema alignment vs. test creation vs. dependency analysis). This directly breaks the local optimum of repetitive test infrastructure additions.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780641168.5292997
+    },
+    {
       "description": "Add a meta-cognitive evaluator that, after every 10 evolution cycles, compares the rate of fitness improvement against the number of new capabilities added, and flags if the ratio drops below a threshold (e.g., <0.1 fitness points per new capability) to trigger pruning of low-impact modules.",
       "priority": 8,
       "status": "pending",
       "created_at": 1780638152.1299891,
       "consecutive_failures": 1
+    },
+    {
+      "description": "Build a 'curiosity generator' that, once per 10 cycles, injects a novel task from a foreign domain (e.g., 'generate a metaphorical description of the system architecture', 'design a simple state machine for a non-code problem') and requires the agent to either create a new module or adapt an existing one to complete it, logging any resulting structural changes. This forces cross-domain exploration and prevents cognitive stagnation.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780641168.5315
     },
     {
       "description": "Create a self-model consistency validator that, after each successful evolution cycle, updates an internal dependency graph and verifies that all module interfaces, schemas, and call sites remain aligned, flagging mismatches for immediate repair.",
@@ -559,6 +571,13 @@
       "status": "completed",
       "created_at": 1780638592.6659403,
       "completed_at": 1780641107.851833
+    },
+    {
+      "description": "Create a 'system health audit' module that scores each existing capability on novelty (age since last modification), necessity (number of dependents), and integration quality (interface alignment score), then triggers a pruning cycle if the average score drops below 0.4, removing the bottom 10% of capabilities and merging duplicate implementations. This directly addresses the fragmentation and redundancy identified in the reflection.",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780641168.5334888,
+      "completed_at": 1780641284.4742823
     }
   ],
   "generated_goals": []

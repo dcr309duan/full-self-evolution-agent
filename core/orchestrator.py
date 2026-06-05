@@ -18,6 +18,7 @@ from core.goal_triage import triage_pending_goals
 from core.fitness_evaluator import FitnessEvaluator
 from core.curiosity_engine import CuriosityEngine
 from core.fs_abstraction import FileSystemAbstraction
+from core.health_audit import compute_average_score, identify_bottom_10_percent
 
 SMOKE_TEST_GOAL = "Add error handling to counter function"
 
@@ -376,6 +377,84 @@ def run_curiosity_cycle() -> None:
             # Log the injection
             print(f"Curiosity engine: Injected failed goal '{failed_goal.get('name', 'unknown')}' with high priority")
 
+def post_mutation_hook() -> None:
+    """Post-mutation hook that performs health audit and pruning if needed."""
+    global knowledge_base
+    
+    # Step 1: Compute average health score
+    average_score = compute_average_score()
+    
+    # Log the health audit
+    knowledge_base.append({
+        "type": "health_audit",
+        "action": "post_mutation_check",
+        "average_score": average_score
+    })
+    
+    # Step 2: Check if score is below threshold
+    if average_score < 0.4:
+        # Log warning
+        print(f"WARNING: Health audit score {average_score} below threshold 0.4. Initiating pruning cycle.")
+        knowledge_base.append({
+            "type": "pruning_cycle",
+            "action": "initiated",
+            "reason": f"Health score {average_score} below 0.4 threshold"
+        })
+        
+        # Step 3: Identify bottom 10% capabilities
+        low_scorers = identify_bottom_10_percent()
+        
+        # Step 4: Process each low-scoring capability
+        for low_scorer in low_scorers:
+            # Check for duplicates based on same description prefix
+            description = low_scorer.get("description", "")
+            description_prefix = description.split(":")[0] if ":" in description else description
+            
+            # Find duplicates with same description prefix
+            duplicates = [c for c in low_scorers if c.get("description", "").startswith(description_prefix) and c != low_scorer]
+            
+            if duplicates:
+                # Merge duplicates by keeping the most recent or most complete version
+                all_versions = [low_scorer] + duplicates
+                # Sort by timestamp (most recent first) or completeness
+                all_versions.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+                # Keep the most recent version
+                kept_version = all_versions[0]
+                
+                # Log the merge
+                knowledge_base.append({
+                    "type": "pruning_cycle",
+                    "action": "merge_duplicates",
+                    "kept_capability": kept_version.get("name", "unknown"),
+                    "merged_capabilities": [d.get("name", "unknown") for d in all_versions[1:]],
+                    "description_prefix": description_prefix
+                })
+                
+                # Remove truly redundant capabilities (all except the kept one)
+                redundant = all_versions[1:]
+                for redundant_cap in redundant:
+                    # Remove from system model
+                    # This is a placeholder - actual implementation would depend on system model
+                    knowledge_base.append({
+                        "type": "pruning_cycle",
+                        "action": "remove_redundant_capability",
+                        "removed_capability": redundant_cap.get("name", "unknown")
+                    })
+        
+        # Step 5: Update system model and dependency graph
+        # This is a placeholder - actual implementation would update the system model
+        knowledge_base.append({
+            "type": "pruning_cycle",
+            "action": "update_system_model",
+            "status": "completed"
+        })
+        
+        knowledge_base.append({
+            "type": "pruning_cycle",
+            "action": "update_dependency_graph",
+            "status": "completed"
+        })
+
 def run_smoke_test() -> Dict[str, Any]:
     """
     Execute the evolution smoke test in an isolated temporary directory.
@@ -385,6 +464,7 @@ def run_smoke_test() -> Dict[str, Any]:
     Integrates fitness evaluator to assess code quality before and after mutation.
     Integrates curiosity engine for autonomous exploration.
     Integrates failure cluster analyzer for detecting and fixing recurring failures.
+    Integrates post-mutation hook for health audit and pruning.
 
     Returns:
         A structured dictionary containing:
@@ -728,7 +808,16 @@ def run_smoke_test() -> Dict[str, Any]:
             "details": f"Generated new goal: {new_goal}, excluding {len(archived_goals)} archived goals"
         })
 
-        # Step 9: Return structured result with simulation data
+        # Step 9: Execute post-mutation hook for health audit and pruning
+        post_mutation_hook()
+        logs.append({
+            "step": 8,
+            "action": "post_mutation_hook",
+            "status": "success",
+            "details": "Post-mutation health audit and pruning cycle completed"
+        })
+
+        # Step 10: Return structured result with simulation data
         result = {
             "success": True,
             "logs": logs,

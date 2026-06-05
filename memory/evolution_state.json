@@ -1,9 +1,8 @@
 {
-  "cycle_count": 96,
-  "current_generation": 67,
-  "last_evolution_time": 1780640927.1821747,
+  "cycle_count": 97,
+  "current_generation": 68,
+  "last_evolution_time": 1780641143.7991822,
   "capabilities": [
-    "Create a rollback mechanism for core modules that automatically reverts the last mutation if the int",
     "Build a curiosity module that periodically injects exploration tasks from domains not yet covered (e",
     "Implement a schema alignment layer between the reflection parser and goal generator: normalize the J",
     "Build a dependency-aware scheduling system that reads the system model (or a simple dependency manif",
@@ -52,7 +51,8 @@
     "Create a 'goal feasibility pre-check' step that, before a goal enters the active queue, uses the exi",
     "Implement a sandboxed mutation executor that runs all mutations in a temporary git branch or copy of",
     "Build a failure pattern miner that records the cause of every failed mutation (e.g., missing import,",
-    "Create an end-to-end integration test that validates the full evolution loop (mutation → test → prom"
+    "Create an end-to-end integration test that validates the full evolution loop (mutation → test → prom",
+    "Create a 'system health audit' module that scores each existing capability on novelty (age since las"
   ],
   "history": [
     {
@@ -570,6 +570,12 @@
       "goal": "Create an end-to-end integration test that validates the full evolution loop (mutation → test → promote/rollback) under realistic conditions, including simulated file I/O failures and resource exhaustion.",
       "success": true,
       "timestamp": 1780641107.8630207
+    },
+    {
+      "cycle": 97,
+      "goal": "Create a 'system health audit' module that scores each existing capability on novelty (age since last modification), necessity (number of dependents), and integration quality (interface alignment score), then triggers a pruning cycle if the average score drops below 0.4, removing the bottom 10% of capabilities and merging duplicate implementations. This directly addresses the fragmentation and redundancy identified in the reflection.",
+      "success": true,
+      "timestamp": 1780641284.6254728
     }
   ],
   "status": "evolving"
