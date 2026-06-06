@@ -1,6 +1,7 @@
 import re
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
+import hashlib
 
 # Default set of English stopwords for keyword extraction
 DEFAULT_STOPWORDS = frozenset({
@@ -25,7 +26,9 @@ CONFIG = {
     'similarity_threshold': 0.7,
     'stopwords': list(DEFAULT_STOPWORDS) + ['implement', 'create', 'add'],
     'merge_description_separator': ' | ',
-    'batch_interval_cycles': 10
+    'batch_interval_cycles': 10,
+    'hash_algorithm': 'sha256',
+    'fuzzy_match_threshold': 0.6
 }
 
 
@@ -75,14 +78,201 @@ def jaccard_similarity(set_a: set, set_b: set) -> float:
     return len(intersection) / len(union)
 
 
+def compute_goal_hash(goal_text: str, algorithm: str = None) -> str:
+    """
+    Computes a hash of the goal text for exact duplicate detection.
+    
+    Args:
+        goal_text: The goal description text to hash.
+        algorithm: Hash algorithm to use. Defaults to CONFIG['hash_algorithm'].
+    
+    Returns:
+        A hex string representing the hash of the goal text.
+    """
+    if algorithm is None:
+        algorithm = CONFIG['hash_algorithm']
+    
+    # Normalize the text before hashing
+    normalized_text = goal_text.lower().strip()
+    normalized_text = re.sub(r'\s+', ' ', normalized_text)
+    
+    hash_obj = hashlib.new(algorithm)
+    hash_obj.update(normalized_text.encode('utf-8'))
+    return hash_obj.hexdigest()
+
+
+def fuzzy_match_against_capabilities(
+    goal_text: str,
+    capabilities: List[Dict[str, Any]],
+    threshold: float = None
+) -> Tuple[bool, Optional[Dict[str, Any]], float]:
+    """
+    Fuzzy matches a goal text against a list of existing capabilities.
+    
+    Args:
+        goal_text: The proposed goal description text.
+        capabilities: List of capability dictionaries, each with at least 'description'.
+        threshold: Similarity threshold for fuzzy matching. Defaults to CONFIG['fuzzy_match_threshold'].
+    
+    Returns:
+        Tuple of (is_duplicate, matched_capability, similarity_score).
+        - is_duplicate: True if a match above threshold is found.
+        - matched_capability: The matched capability dictionary, or None if no match.
+        - similarity_score: The highest similarity score found.
+    """
+    if threshold is None:
+        threshold = CONFIG['fuzzy_match_threshold']
+    
+    if not capabilities or not goal_text:
+        return False, None, 0.0
+    
+    goal_keywords = extract_keywords(goal_text)
+    if not goal_keywords:
+        return False, None, 0.0
+    
+    best_match = None
+    best_similarity = 0.0
+    
+    for capability in capabilities:
+        if not isinstance(capability, dict) or 'description' not in capability:
+            continue
+        
+        cap_keywords = extract_keywords(capability.get('description', ''))
+        if not cap_keywords:
+            continue
+        
+        similarity = jaccard_similarity(goal_keywords, cap_keywords)
+        
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_match = capability
+            
+            if similarity >= threshold:
+                break
+    
+    is_duplicate = best_similarity >= threshold
+    return is_duplicate, best_match, best_similarity
+
+
 class GoalDeduplicator:
     """
     Manages goal deduplication with tracking and statistics.
     """
     
     def __init__(self):
-        """Initialize the deduplicator with empty merge log."""
+        """Initialize the deduplicator with empty merge log and hash cache."""
         self.merge_log: List[Dict[str, Any]] = []
+        self.goal_hash_cache: Dict[str, List[str]] = {}  # hash -> list of goal descriptions
+        self.rejection_log: List[Dict[str, Any]] = []
+    
+    def check_against_capabilities(
+        self,
+        proposed_goal: Dict[str, Any],
+        capabilities: List[Dict[str, Any]],
+        use_hash: bool = True,
+        use_fuzzy: bool = True
+    ) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+        """
+        Checks a proposed goal against all existing capabilities.
+        Uses both hash-based exact matching and fuzzy matching.
+        
+        Args:
+            proposed_goal: The proposed goal dictionary with at least 'description'.
+            capabilities: List of existing capability dictionaries.
+            use_hash: Whether to use hash-based exact matching.
+            use_fuzzy: Whether to use fuzzy keyword matching.
+        
+        Returns:
+            Tuple of (is_duplicate, matched_capability, reason).
+            - is_duplicate: True if the goal is a duplicate.
+            - matched_capability: The matched capability, or None.
+            - reason: String describing why it's considered a duplicate.
+        """
+        if not isinstance(proposed_goal, dict) or 'description' not in proposed_goal:
+            return False, None, "Invalid goal format"
+        
+        goal_text = proposed_goal['description']
+        
+        # Hash-based exact matching
+        if use_hash:
+            goal_hash = compute_goal_hash(goal_text)
+            
+            # Check against cached hashes
+            if goal_hash in self.goal_hash_cache:
+                return True, None, f"Exact hash match: {goal_hash}"
+            
+            # Check against capability descriptions
+            for capability in capabilities:
+                if not isinstance(capability, dict) or 'description' not in capability:
+                    continue
+                cap_hash = compute_goal_hash(capability['description'])
+                if cap_hash == goal_hash:
+                    # Cache the hash for future reference
+                    if goal_hash not in self.goal_hash_cache:
+                        self.goal_hash_cache[goal_hash] = []
+                    self.goal_hash_cache[goal_hash].append(goal_text)
+                    return True, capability, f"Exact hash match with capability: {capability.get('name', 'unknown')}"
+        
+        # Fuzzy keyword matching
+        if use_fuzzy:
+            is_duplicate, matched_cap, similarity = fuzzy_match_against_capabilities(
+                goal_text, capabilities
+            )
+            if is_duplicate:
+                return True, matched_cap, f"Fuzzy match with similarity {similarity:.2f}"
+        
+        return False, None, "No duplicate found"
+    
+    def pre_goal_generation_filter(
+        self,
+        proposed_goal: Dict[str, Any],
+        capabilities: List[Dict[str, Any]],
+        pending_goals: List[Dict[str, Any]]
+    ) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+        """
+        Runs before goal_generator adds new goals.
+        Checks the proposed goal against both existing capabilities and pending goals.
+        
+        Args:
+            proposed_goal: The proposed goal dictionary.
+            capabilities: List of existing capability dictionaries.
+            pending_goals: List of pending goal dictionaries.
+        
+        Returns:
+            Tuple of (should_reject, matched_item, reason).
+            - should_reject: True if the goal should be rejected as duplicate.
+            - matched_item: The matched capability or pending goal, or None.
+            - reason: String describing the rejection reason.
+        """
+        # First check against capabilities
+        is_dup_cap, matched_cap, reason_cap = self.check_against_capabilities(
+            proposed_goal, capabilities
+        )
+        if is_dup_cap:
+            self.rejection_log.append({
+                'timestamp': datetime.now().isoformat(),
+                'proposed_goal': proposed_goal,
+                'matched_item': matched_cap,
+                'reason': reason_cap,
+                'source': 'capability'
+            })
+            return True, matched_cap, f"Duplicate of capability: {reason_cap}"
+        
+        # Then check against pending goals
+        is_dup_pending, matched_pending, reason_pending = self.check_against_capabilities(
+            proposed_goal, pending_goals
+        )
+        if is_dup_pending:
+            self.rejection_log.append({
+                'timestamp': datetime.now().isoformat(),
+                'proposed_goal': proposed_goal,
+                'matched_item': matched_pending,
+                'reason': reason_pending,
+                'source': 'pending_goal'
+            })
+            return True, matched_pending, f"Duplicate of pending goal: {reason_pending}"
+        
+        return False, None, "Goal is unique"
     
     def deduplicate_goals(
         self,
@@ -307,32 +497,42 @@ class GoalDeduplicator:
             - total_merges: Total number of merges performed
             - average_similarity_threshold: Average similarity threshold used
             - most_merged_goal_category: Most frequently merged goal category
+            - total_rejections: Total number of goal rejections
+            - rejection_sources: Breakdown of rejection sources
         """
-        if not self.merge_log:
-            return {
-                'total_merges': 0,
-                'average_similarity_threshold': 0.0,
-                'most_merged_goal_category': None
-            }
-        
-        total_merges = len(self.merge_log)
-        total_threshold = sum(entry['similarity_threshold'] for entry in self.merge_log)
-        average_similarity_threshold = total_threshold / total_merges
-        
-        # Count goal categories (using 'category' key if present, otherwise 'description')
-        category_counts = {}
-        for entry in self.merge_log:
-            for goal in entry['original_goals']:
-                category = goal.get('category', goal.get('description', 'unknown'))
-                category_counts[category] = category_counts.get(category, 0) + 1
-        
-        most_merged_goal_category = max(category_counts, key=category_counts.get) if category_counts else None
-        
-        return {
-            'total_merges': total_merges,
-            'average_similarity_threshold': average_similarity_threshold,
-            'most_merged_goal_category': most_merged_goal_category
+        stats = {
+            'total_merges': 0,
+            'average_similarity_threshold': 0.0,
+            'most_merged_goal_category': None,
+            'total_rejections': len(self.rejection_log),
+            'rejection_sources': {}
         }
+        
+        if self.merge_log:
+            total_merges = len(self.merge_log)
+            total_threshold = sum(entry['similarity_threshold'] for entry in self.merge_log)
+            stats['total_merges'] = total_merges
+            stats['average_similarity_threshold'] = total_threshold / total_merges
+            
+            # Count goal categories
+            category_counts = {}
+            for entry in self.merge_log:
+                for goal in entry['original_goals']:
+                    category = goal.get('category', goal.get('description', 'unknown'))
+                    category_counts[category] = category_counts.get(category, 0) + 1
+            
+            stats['most_merged_goal_category'] = max(category_counts, key=category_counts.get) if category_counts else None
+        
+        # Count rejection sources
+        for entry in self.rejection_log:
+            source = entry.get('source', 'unknown')
+            stats['rejection_sources'][source] = stats['rejection_sources'].get(source, 0) + 1
+        
+        return stats
+    
+    def clear_rejection_log(self):
+        """Clears the rejection log."""
+        self.rejection_log = []
 
 
 # Create a default instance for backward compatibility
@@ -369,3 +569,40 @@ def batch_deduplicate(
     if similarity_threshold is None:
         similarity_threshold = CONFIG['similarity_threshold']
     return _default_deduplicator.batch_deduplicate(pending_goals, similarity_threshold)
+
+
+def pre_goal_generation_filter(
+    proposed_goal: Dict[str, Any],
+    capabilities: List[Dict[str, Any]],
+    pending_goals: List[Dict[str, Any]]
+) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+    """Backward-compatible wrapper for GoalDeduplicator.pre_goal_generation_filter."""
+    return _default_deduplicator.pre_goal_generation_filter(proposed_goal, capabilities, pending_goals)
+
+
+def check_against_capabilities(
+    proposed_goal: Dict[str, Any],
+    capabilities: List[Dict[str, Any]],
+    use_hash: bool = True,
+    use_fuzzy: bool = True
+) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+    """Backward-compatible wrapper for GoalDeduplicator.check_against_capabilities."""
+    return _default_deduplicator.check_against_capabilities(proposed_goal, capabilities, use_hash, use_fuzzy)
+
+
+def compute_goal_hash(goal_text: str, algorithm: str = None) -> str:
+    """Backward-compatible wrapper for compute_goal_hash function."""
+    if algorithm is None:
+        algorithm = CONFIG['hash_algorithm']
+    return compute_goal_hash(goal_text, algorithm)
+
+
+def fuzzy_match_against_capabilities(
+    goal_text: str,
+    capabilities: List[Dict[str, Any]],
+    threshold: float = None
+) -> Tuple[bool, Optional[Dict[str, Any]], float]:
+    """Backward-compatible wrapper for fuzzy_match_against_capabilities function."""
+    if threshold is None:
+        threshold = CONFIG['fuzzy_match_threshold']
+    return fuzzy_match_against_capabilities(goal_text, capabilities, threshold)

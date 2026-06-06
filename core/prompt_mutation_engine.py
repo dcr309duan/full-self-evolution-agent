@@ -498,3 +498,151 @@ class PromptMutationEngine:
             path: The file path to the lessons learned knowledge base
         """
         self.lessons_learned_path = path
+
+    def _query_pattern_in_lessons(self, pattern_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Query lessons_learned.json for a specific pattern by name.
+        
+        Args:
+            pattern_name: The name of the pattern to search for (e.g., 'repeated_goal_generation')
+            
+        Returns:
+            The pattern entry if found, None otherwise
+        """
+        lessons = self._load_lessons_learned()
+        if not lessons:
+            return None
+        
+        # Normalize pattern name for comparison
+        pattern_lower = pattern_name.lower().strip()
+        
+        # Check in patterns list
+        if 'patterns' in lessons:
+            for pattern in lessons['patterns']:
+                if isinstance(pattern, dict):
+                    pattern_entry_name = pattern.get('name', '').lower().strip()
+                    if pattern_entry_name == pattern_lower:
+                        return pattern
+        
+        # Check in failures list as fallback
+        if 'failures' in lessons:
+            for failure in lessons['failures']:
+                if isinstance(failure, dict):
+                    failure_pattern = failure.get('pattern', '').lower().strip()
+                    if pattern_lower in failure_pattern:
+                        return failure
+        
+        return None
+
+    def _inject_pattern_fix_into_prompt(self, pattern_entry: Dict[str, Any]) -> str:
+        """
+        Inject a fix suggestion from a pattern entry into the prompt context.
+        
+        Args:
+            pattern_entry: The pattern entry containing fix suggestion
+            
+        Returns:
+            Modified prompt with fix suggestion injected
+        """
+        fix_suggestion = pattern_entry.get('fix', pattern_entry.get('suggestion', ''))
+        pattern_name = pattern_entry.get('name', 'Unknown pattern')
+        
+        if not fix_suggestion:
+            return self.current_prompt
+        
+        fix_injection = (
+            f"\n\n=== FIX SUGGESTION FOR KNOWN PATTERN: {pattern_name} ===\n"
+            f"The following fix is recommended to avoid a known failure pattern:\n"
+            f"{fix_suggestion}\n"
+            f"Please incorporate this fix into the generated code.\n"
+        )
+        
+        if self.current_prompt:
+            modified_prompt = self.current_prompt + fix_injection
+        else:
+            modified_prompt = fix_injection
+        
+        return modified_prompt
+
+    def check_and_inject_repeated_goal_fix(self, target_module: str) -> str:
+        """
+        Check for 'repeated_goal_generation' pattern in lessons_learned KB and inject fix if found.
+        This method specifically targets goal_generator and any module involved in goal creation.
+        
+        Args:
+            target_module: The module name being targeted for code generation
+            
+        Returns:
+            Modified prompt with fix suggestion injected if pattern exists, original prompt otherwise
+        """
+        # Define modules involved in goal creation
+        goal_creation_modules = [
+            'goal_generator',
+            'goal_generator.py',
+            'core/goal_generator',
+            'core/goal_generator.py',
+            'goal_creator',
+            'goal_creator.py',
+            'core/goal_creator',
+            'core/goal_creator.py'
+        ]
+        
+        # Check if the target module is involved in goal creation
+        target_lower = target_module.lower().replace('.py', '').replace('/', '.').replace('\\', '.')
+        is_goal_creation_module = any(
+            goal_mod.lower().replace('.py', '').replace('/', '.').replace('\\', '.') in target_lower or
+            target_lower in goal_mod.lower().replace('.py', '').replace('/', '.').replace('\\', '.')
+            for goal_mod in goal_creation_modules
+        )
+        
+        if not is_goal_creation_module:
+            return self.current_prompt
+        
+        # Query for the 'repeated_goal_generation' pattern
+        pattern_entry = self._query_pattern_in_lessons('repeated_goal_generation')
+        
+        if pattern_entry is None:
+            return self.current_prompt
+        
+        # Inject the fix suggestion into the prompt context
+        modified_prompt = self._inject_pattern_fix_into_prompt(pattern_entry)
+        
+        # Log the injection
+        self._log_mutation("inject_repeated_goal_fix", {
+            "target_module": target_module,
+            "pattern_found": "repeated_goal_generation",
+            "fix_injected": True
+        })
+        
+        return modified_prompt
+
+    def apply_pre_generation_hook_with_pattern_check(self, proposal: str) -> str:
+        """
+        Enhanced pre-generation hook that also checks for 'repeated_goal_generation' pattern
+        before generating code for goal_generator or any module involved in goal creation.
+        
+        Args:
+            proposal: The mutation proposal string
+            
+        Returns:
+            The prompt context with any relevant warnings and fix suggestions injected
+        """
+        # First, apply the standard pre-generation hook
+        prompt_context = self.apply_pre_generation_hook(proposal)
+        
+        # Temporarily set current_prompt to the modified context for pattern check
+        original_prompt = self.current_prompt
+        self.current_prompt = prompt_context
+        
+        try:
+            # Identify the target module from the proposal
+            target_module = self._get_module_from_proposal(proposal)
+            
+            if target_module:
+                # Check and inject repeated_goal_generation fix if applicable
+                prompt_context = self.check_and_inject_repeated_goal_fix(target_module)
+        finally:
+            # Restore original prompt
+            self.current_prompt = original_prompt
+        
+        return prompt_context

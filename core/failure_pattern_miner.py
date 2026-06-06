@@ -5,6 +5,7 @@ from collections import defaultdict
 import json
 from datetime import datetime, timedelta
 import re
+import hashlib
 
 
 class ConflictType(Enum):
@@ -46,6 +47,7 @@ class FailurePatternMiner:
         self._error_records: List[Dict] = []  # Shared error log for clustering
         self._last_fix_suggestions: Dict[Tuple[str, str], str] = {}
         self._lessons_learned: Dict = {}  # Lessons learned data
+        self._capability_list: List[str] = []  # Capability list for duplication detection
 
     def record_failure(
         self,
@@ -326,6 +328,7 @@ class FailurePatternMiner:
         self._last_fix_suggestions.clear()
         self._lessons_learned.clear()
         self._cycle_count = 0
+        self._capability_list.clear()
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter and run failure log analysis every 10 cycles."""
@@ -468,3 +471,133 @@ class FailurePatternMiner:
     def add_error_record(self, record: Dict) -> None:
         """Add an error record to the shared error log."""
         self._error_records.append(record)
+
+    def add_capability(self, capability: str) -> None:
+        """
+        Add a capability to the capability list for duplication detection.
+
+        Args:
+            capability: The capability text to add
+        """
+        self._capability_list.append(capability)
+
+    def add_capabilities(self, capabilities: List[str]) -> None:
+        """
+        Add multiple capabilities to the capability list for duplication detection.
+
+        Args:
+            capabilities: List of capability texts to add
+        """
+        self._capability_list.extend(capabilities)
+
+    def detect_capability_duplications(self) -> Dict[str, Dict]:
+        """
+        Detect goal/capability duplication patterns in the capability list.
+        Parses the capability list for repeated entries (same text appearing >3 times),
+        clusters them by content hash, and generates fix suggestions.
+
+        Returns:
+            Dictionary with duplication analysis results, including clusters and fix suggestions
+        """
+        if not self._capability_list:
+            return {"duplications": [], "fix_suggestions": []}
+
+        # Count occurrences of each capability text
+        text_counts: Dict[str, int] = defaultdict(int)
+        for capability in self._capability_list:
+            text_counts[capability] += 1
+
+        # Filter for repeated entries (appearing >3 times)
+        duplicate_texts = {text: count for text, count in text_counts.items() if count > 3}
+
+        if not duplicate_texts:
+            return {"duplications": [], "fix_suggestions": []}
+
+        # Cluster by content hash
+        hash_clusters: Dict[str, List[str]] = defaultdict(list)
+        for text in duplicate_texts:
+            content_hash = hashlib.sha256(text.encode()).hexdigest()
+            hash_clusters[content_hash].append(text)
+
+        # Build duplication analysis results
+        duplications = []
+        fix_suggestions = []
+        for content_hash, texts in hash_clusters.items():
+            total_occurrences = sum(text_counts[text] for text in texts)
+            cluster_info = {
+                "content_hash": content_hash,
+                "texts": texts,
+                "total_occurrences": total_occurrences,
+                "unique_texts": len(texts)
+            }
+            duplications.append(cluster_info)
+
+            # Generate fix suggestion for this cluster
+            if len(texts) == 1:
+                text = texts[0]
+                fix_suggestions.append(
+                    f"add goal deduplication pass to goal_generator for text: '{text[:50]}...' "
+                    f"(appeared {text_counts[text]} times)"
+                )
+            else:
+                # Multiple similar texts in the same hash cluster
+                sample_text = texts[0][:50] if texts[0] else "unknown"
+                fix_suggestions.append(
+                    f"add goal deduplication pass to goal_generator for cluster with hash {content_hash[:8]}... "
+                    f"(sample: '{sample_text}...', total occurrences: {total_occurrences})"
+                )
+
+        # Add fix suggestions to lessons learned
+        for suggestion in fix_suggestions:
+            lesson_key = f"capability_duplication_{datetime.now().timestamp()}"
+            self._lessons_learned[lesson_key] = {
+                "error_type": "capability_duplication",
+                "module": "goal_generator",
+                "occurrence_count": sum(d["total_occurrences"] for d in duplications),
+                "is_critical": True,
+                "suggestion": suggestion,
+                "last_updated": datetime.now().isoformat()
+            }
+
+        # Update last fix suggestions with capability duplication fixes
+        for suggestion in fix_suggestions:
+            self._last_fix_suggestions[("capability_duplication", "goal_generator")] = suggestion
+
+        # Export updated lessons learned
+        try:
+            with open("lessons_learned.json", "w") as f:
+                json.dump(self._lessons_learned, f, indent=2)
+        except IOError:
+            pass
+
+        return {
+            "duplications": duplications,
+            "fix_suggestions": fix_suggestions
+        }
+
+    def get_capability_duplication_report(self) -> Dict:
+        """
+        Get a comprehensive report on capability duplications.
+
+        Returns:
+            Dictionary with duplication statistics and recommendations
+        """
+        duplication_data = self.detect_capability_duplications()
+        
+        if not duplication_data["duplications"]:
+            return {
+                "has_duplications": False,
+                "total_duplicate_entries": 0,
+                "total_clusters": 0,
+                "fix_suggestions": []
+            }
+
+        total_duplicate_entries = sum(d["total_occurrences"] for d in duplication_data["duplications"])
+        
+        return {
+            "has_duplications": True,
+            "total_duplicate_entries": total_duplicate_entries,
+            "total_clusters": len(duplication_data["duplications"]),
+            "duplications": duplication_data["duplications"],
+            "fix_suggestions": duplication_data["fix_suggestions"]
+        }

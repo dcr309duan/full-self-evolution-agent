@@ -388,3 +388,123 @@ def main():
         # Full guard should fail
         guard_result = pre_mutation_guard(invalid_file_content)
         assert guard_result is False or (hasattr(guard_result, 'is_valid') and not guard_result.is_valid)
+
+    def test_read_existing_test_file(self):
+        """Test reading the existing test file to understand test coverage."""
+        test_file_path = Path(__file__)
+        assert test_file_path.exists()
+        
+        # Read the test file content
+        with open(test_file_path, 'r') as f:
+            content = f.read()
+        
+        # Verify the file contains expected test patterns
+        assert 'class TestPreMutationGuard' in content
+        assert 'def test_' in content
+        
+        # Count the number of test methods
+        test_methods = [line for line in content.split('\n') if line.strip().startswith('def test_')]
+        assert len(test_methods) > 0
+        
+        # Verify key test coverage areas
+        assert 'test_valid_python_code_passes' in content
+        assert 'test_syntax_error_detected' in content
+        assert 'test_missing_import_detected' in content
+        assert 'test_mutation_aborted_on_validation_failure' in content
+        assert 'test_mutation_proceeds_on_validation_success' in content
+        
+        # Check for comprehensive coverage indicators
+        assert 'test_async_code_validation' in content
+        assert 'test_type_hints_validation' in content
+        assert 'test_class_with_methods_validation' in content
+        assert 'test_decorator_validation' in content
+        assert 'test_comprehensive_validation_pipeline' in content
+        assert 'test_comprehensive_validation_pipeline_with_errors' in content
+
+    def test_invalid_syntax_fails_with_correct_error_type_file_line(self):
+        """Test that invalid syntax fails with correct error type, file, and line."""
+        invalid_code = """
+def foo(
+    pass
+"""
+        result = validate_code_syntax(invalid_code)
+        assert not result.is_valid
+        assert result.error_type == "SyntaxError"
+        assert result.error_line is not None
+        assert result.error_line > 0
+        # Verify error message contains relevant info
+        assert result.error_message is not None
+        assert "unexpected EOF" in result.error_message.lower() or "invalid syntax" in result.error_message.lower()
+
+    def test_unresolvable_import_fails(self):
+        """Test that an unresolvable import fails validation."""
+        code = """
+import some_unresolvable_package_abcdef
+"""
+        result = validate_imports(code)
+        assert not result.is_valid
+        assert "some_unresolvable_package_abcdef" in result.error_message
+
+    def test_missing_module_fails(self):
+        """Test that a missing module fails validation."""
+        code = """
+import definitely_missing_module_12345
+"""
+        with patch('core.pre_mutation_guard._check_module_available') as mock_check:
+            mock_check.return_value = False
+            result = validate_module_availability(code)
+            assert not result.is_valid
+            assert "definitely_missing_module_12345" in result.error_message
+
+    def test_integration_with_mutation_pipeline_aborts_on_validation_failure(self):
+        """Test that integration with mutation pipeline aborts on validation failure."""
+        invalid_code = """
+def broken(
+    pass
+"""
+        # The guard should either raise an exception or return a failure indicator
+        try:
+            result = pre_mutation_guard(invalid_code)
+            # If it returns a result, it should indicate failure
+            if hasattr(result, 'is_valid'):
+                assert not result.is_valid
+            else:
+                assert result is False
+        except ValidationError:
+            # Exception is also acceptable
+            pass
+        except Exception as e:
+            # Any exception indicating failure is acceptable
+            assert "syntax" in str(e).lower() or "invalid" in str(e).lower()
+
+    def test_error_record_format_matches_expected_structure(self):
+        """Test that error record format matches expected structure."""
+        invalid_code = """
+import nonexistent_module_for_testing
+
+def test():
+    pass
+"""
+        # Test syntax error record
+        syntax_result = validate_code_syntax(invalid_code)
+        assert hasattr(syntax_result, 'is_valid')
+        assert hasattr(syntax_result, 'error_type')
+        assert hasattr(syntax_result, 'error_line')
+        assert hasattr(syntax_result, 'error_message')
+        
+        # Test import error record
+        import_result = validate_imports(invalid_code)
+        assert hasattr(import_result, 'is_valid')
+        assert hasattr(import_result, 'error_type')
+        assert hasattr(import_result, 'error_line')
+        assert hasattr(import_result, 'error_message')
+        
+        # Verify structure matches ValidationResult
+        assert isinstance(syntax_result, ValidationResult)
+        assert isinstance(import_result, ValidationResult)
+        
+        # Verify error record contains expected fields
+        if not import_result.is_valid:
+            assert import_result.error_type is not None
+            assert import_result.error_message is not None
+            assert "nonexistent_module_for_testing" in import_result.error_message

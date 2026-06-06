@@ -31,6 +31,14 @@
       "first_seen_cycle": 6,
       "last_seen_cycle": 6,
       "frequency": 1
+    },
+    {
+      "error_type": "repeated_goal_generation",
+      "module": "goal_generator.py",
+      "fix_suggestion": "Implement goal deduplication in goal_generator: before adding new goals, compare against existing capabilities using semantic similarity or exact match, and skip duplicates.",
+      "first_seen_cycle": 1,
+      "last_seen_cycle": 6,
+      "frequency": 3
     }
   ],
   "meta": {
