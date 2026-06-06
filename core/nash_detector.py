@@ -2,13 +2,15 @@ from collections import deque, defaultdict
 from datetime import datetime
 import json
 import os
+import sys
+import typing
 
 class NashEquilibriumDetector:
     """
     Self-contained Nash equilibrium detector.
     Tracks module performance over the last N cycles, detects when no single-module
     mutation improves the system for 3+ consecutive attempts.
-    Uses only standard library (collections, json, datetime).
+    Uses only standard library (collections, json, datetime, os, sys, typing).
     Exposes is_at_nash() method and get_stable_modules() list.
     """
 
@@ -225,18 +227,77 @@ class NashEquilibriumDetector:
                 print(f"Warning: Could not remove state file {self.state_file}: {e}")
 
 
+def scan_core_modules():
+    """
+    Scan all module files in the core/ directory for recent modification times and sizes.
+    
+    Returns:
+        dict: Mapping of module names to their (modification_time, size) tuples
+    """
+    core_dir = "core"
+    module_info = {}
+    if not os.path.isdir(core_dir):
+        return module_info
+    
+    for filename in os.listdir(core_dir):
+        if filename.endswith(".py"):
+            filepath = os.path.join(core_dir, filename)
+            try:
+                mod_time = os.path.getmtime(filepath)
+                size = os.path.getsize(filepath)
+                module_name = filename[:-3]  # Remove .py extension
+                module_info[module_name] = (mod_time, size)
+            except OSError:
+                continue
+    return module_info
+
+
 def detect_nash():
     """
     Detect if the system is at Nash equilibrium.
+    Scans core/ directory for module changes and detects equilibrium when no module
+    has changed in the last 3 cycles.
     
     Returns:
-        Tuple of (bool, dict) where bool is True if Nash equilibrium is detected,
-        and dict contains the Nash equilibrium state information
+        Tuple of (bool, list) where bool is True if Nash equilibrium is detected,
+        and list contains the names of modules at equilibrium
     """
     detector = NashEquilibriumDetector()
-    is_nash = detector.is_at_nash()
-    state = detector.get_nash_state()
-    return is_nash, state
+    
+    # Scan core modules
+    module_info = scan_core_modules()
+    if not module_info:
+        return False, []
+    
+    # Update detector with current modules
+    for module_name in module_info:
+        detector.add_module(module_name)
+    
+    # Check if any module has changed recently (within last 3 cycles)
+    # For simplicity, we use the current time as reference
+    current_time = datetime.now().timestamp()
+    three_cycles_ago = current_time - 3 * 60  # Assume 1 cycle = 1 minute
+    
+    changed_modules = []
+    for module_name, (mod_time, size) in module_info.items():
+        if mod_time > three_cycles_ago:
+            changed_modules.append(module_name)
+    
+    # If no modules changed recently, we're at equilibrium
+    if not changed_modules:
+        detector.set_system_goal_status(True)
+        for module_name in module_info:
+            detector.record_mutation_outcome(module_name, False)
+        is_nash = detector.is_at_nash()
+        stable_modules = detector.get_stable_modules()
+        return is_nash, stable_modules
+    else:
+        # Record successful mutations for changed modules
+        for module_name in changed_modules:
+            detector.record_mutation_outcome(module_name, True)
+        is_nash = detector.is_at_nash()
+        stable_modules = detector.get_stable_modules()
+        return is_nash, stable_modules
 
 
 def get_stable_modules():
@@ -344,15 +405,10 @@ def run_test_mode():
     print("  PASSED")
     
     print("\nTest 8: Test detect_nash() function")
-    is_nash, state = detect_nash()
-    print(f"  detect_nash() returned: ({is_nash}, {state})")
+    is_nash, stable = detect_nash()
+    print(f"  detect_nash() returned: ({is_nash}, {stable})")
     assert isinstance(is_nash, bool), "Should return bool"
-    assert isinstance(state, dict), "Should return dict"
-    assert 'nash' in state, "State should contain 'nash'"
-    assert 'stable_modules' in state, "State should contain 'stable_modules'"
-    assert 'module_success_rates' in state, "State should contain 'module_success_rates'"
-    assert 'consecutive_no_improvement' in state, "State should contain 'consecutive_no_improvement'"
-    assert 'system_failing_goals' in state, "State should contain 'system_failing_goals'"
+    assert isinstance(stable, list), "Should return list"
     print("  PASSED")
     
     print("\nTest 9: Test get_stable_modules() function")

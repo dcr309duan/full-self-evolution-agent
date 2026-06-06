@@ -34,7 +34,7 @@ class Goal:
                     # 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
                     # 'adapt_to_pressure', 'nash_equilibrium_meta', 'coordinated_multi_module_change',
                     # 'ecological_pressure', 'multi_module_change', 'COORDINATED_MULTI_MODULE',
-                    # 'nash_equilibrium_detection', or 'AV_RESEARCH'
+                    # 'nash_equilibrium_detection', 'AV_RESEARCH', or 'GAME_THEORY'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -107,6 +107,11 @@ av_research_active: bool = False  # Whether an AV_RESEARCH goal is active
 av_research_description: str = ""  # Description of the active AV_RESEARCH goal
 av_knowledge_gaps: Dict[str, List[str]] = {}  # Maps module names to lists of missing AV domain knowledge areas
 
+# GAME_THEORY goal tracking
+game_theory_active: bool = False  # Whether a GAME_THEORY goal is active
+game_theory_description: str = ""  # Description of the active GAME_THEORY goal
+game_theory_completed: bool = False  # Whether the GAME_THEORY goal has been completed
+
 
 def add_external_goal(goal: Goal) -> bool:
     """Add an external goal to the goal queue after validation.
@@ -145,7 +150,8 @@ def add_external_goal(goal: Goal) -> bool:
         'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
         'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure',
         'coordinated_multi_module_change', 'ecological_pressure', 'multi_module_change',
-        'COORDINATED_MULTI_MODULE', 'nash_equilibrium_detection', 'AV_RESEARCH'
+        'COORDINATED_MULTI_MODULE', 'nash_equilibrium_detection', 'AV_RESEARCH',
+        'GAME_THEORY'
     ]
     if goal.goal_type not in valid_goal_types:
         logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
@@ -897,12 +903,4 @@ def generate_nash_equilibrium_detection_goal(stuck_modules: List[str], nash_anal
         logger.warning("generate_nash_equilibrium_detection_goal called with empty stuck_modules list")
         return None
 
-    modules_str = ", ".join(stuck_modules)
-    description = (
-        f"Nash equilibrium detected in modules [{modules_str}]. "
-        f"The system is stuck in a local optimum where no module can improve unilaterally. "
-        f"Coordinated multi-module changes are required to break the equilibrium. "
-        f"Analysis: {nash_analysis.get('description', 'No additional analysis available')}."
-    )
-
-   
+    modules

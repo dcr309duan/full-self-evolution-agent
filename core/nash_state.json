@@ -1,5 +1,6 @@
 {
-  "mutation_history": [],
-  "equilibrium_states": [],
+  "module_improvement_history": [],
+  "nash_detected": false,
+  "forced_multi_changes": [],
   "last_updated": null
 }

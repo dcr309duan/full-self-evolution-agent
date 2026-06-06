@@ -6,3 +6,6 @@ Use direct imports like 'from core.memory import get_evolution_state' instead.
 
 # Ensure av_research_engine is importable
 from core import av_research_engine
+
+# Export nash_detector_and_forcer for evolution_orchestrator
+from core import nash_detector_and_forcer
