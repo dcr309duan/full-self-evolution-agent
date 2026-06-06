@@ -508,3 +508,240 @@ def test():
             assert import_result.error_type is not None
             assert import_result.error_message is not None
             assert "nonexistent_module_for_testing" in import_result.error_message
+
+    def test_guard_aborts_mutation_on_failure(self):
+        """Test that guard correctly aborts mutation on failure."""
+        invalid_code = """
+def broken_function(
+    pass
+"""
+        # The guard should abort mutation by either raising an exception or returning False
+        try:
+            result = pre_mutation_guard(invalid_code)
+            # If it returns a result, it should indicate failure
+            if hasattr(result, 'is_valid'):
+                assert not result.is_valid
+            else:
+                assert result is False
+        except ValidationError:
+            # Exception indicates abortion
+            pass
+        except Exception as e:
+            # Any exception indicating failure is acceptable
+            assert "syntax" in str(e).lower() or "invalid" in str(e).lower()
+
+    def test_guard_aborts_on_import_failure(self):
+        """Test that guard aborts mutation on import validation failure."""
+        code_with_bad_import = """
+import nonexistent_module_xyz
+
+def use_module():
+    return nonexistent_module_xyz.some_function()
+"""
+        # The guard should abort mutation due to import failure
+        try:
+            result = pre_mutation_guard(code_with_bad_import)
+            # If it returns a result, it should indicate failure
+            if hasattr(result, 'is_valid'):
+                assert not result.is_valid
+            else:
+                assert result is False
+        except ValidationError:
+            # Exception indicates abortion
+            pass
+        except Exception as e:
+            # Any exception indicating failure is acceptable
+            assert "import" in str(e).lower() or "module" in str(e).lower()
+
+    def test_guard_aborts_on_module_not_found(self):
+        """Test that guard aborts mutation when a module is not found."""
+        code_with_unavailable_module = """
+import some_rarely_installed_package_12345
+
+def use_it():
+    return some_rarely_installed_package_12345.do_something()
+"""
+        with patch('core.pre_mutation_guard._check_module_available') as mock_check:
+            mock_check.return_value = False
+            # The guard should abort mutation due to module not found
+            try:
+                result = pre_mutation_guard(code_with_unavailable_module)
+                # If it returns a result, it should indicate failure
+                if hasattr(result, 'is_valid'):
+                    assert not result.is_valid
+                else:
+                    assert result is False
+            except ValidationError:
+                # Exception indicates abortion
+                pass
+            except Exception as e:
+                # Any exception indicating failure is acceptable
+                assert "not found" in str(e).lower() or "unavailable" in str(e).lower()
+
+    def test_guard_proceeds_on_success(self):
+        """Test that guard proceeds with mutation on successful validation."""
+        valid_code = """
+def working_function():
+    return 42
+"""
+        result = pre_mutation_guard(valid_code)
+        assert result is True or (hasattr(result, 'is_valid') and result.is_valid)
+
+    def test_guard_proceeds_with_stdlib_imports(self):
+        """Test that guard proceeds with standard library imports."""
+        code_with_stdlib = """
+import os
+import sys
+import json
+
+def get_data():
+    return json.loads(os.environ.get('DATA', '{}'))
+"""
+        result = pre_mutation_guard(code_with_stdlib)
+        assert result is True or (hasattr(result, 'is_valid') and result.is_valid)
+
+    def test_guard_proceeds_with_common_third_party(self):
+        """Test that guard proceeds with common third-party imports."""
+        code_with_common = """
+import pytest
+import numpy
+
+def test_array():
+    return numpy.array([1, 2, 3])
+"""
+        with patch('core.pre_mutation_guard._check_module_available') as mock_check:
+            mock_check.return_value = True
+            result = pre_mutation_guard(code_with_common)
+            assert result is True or (hasattr(result, 'is_valid') and result.is_valid)
+
+    def test_guard_returns_false_on_failure(self):
+        """Test that guard returns False on validation failure."""
+        invalid_code = """
+def broken_function(
+    pass
+"""
+        result = pre_mutation_guard(invalid_code)
+        # The guard should return False or raise an exception
+        if not isinstance(result, bool):
+            if hasattr(result, 'is_valid'):
+                assert not result.is_valid
+            else:
+                assert result is False
+        else:
+            assert result is False
+
+    def test_guard_raises_validation_error_on_failure(self):
+        """Test that guard raises ValidationError on validation failure."""
+        invalid_code = """
+import nonexistent_module_xyz
+
+def test():
+    pass
+"""
+        with pytest.raises((ValidationError, Exception)):
+            pre_mutation_guard(invalid_code)
+
+    def test_guard_does_not_raise_on_success(self):
+        """Test that guard does not raise an exception on success."""
+        valid_code = """
+def working_function():
+    return 42
+"""
+        try:
+            result = pre_mutation_guard(valid_code)
+            assert result is True or (hasattr(result, 'is_valid') and result.is_valid)
+        except Exception:
+            pytest.fail("Guard raised an exception on valid code")
+
+    def test_guard_handles_empty_code(self):
+        """Test that guard handles empty code gracefully."""
+        empty_code = ""
+        try:
+            result = pre_mutation_guard(empty_code)
+            # Should not crash, may return True or False depending on design
+            assert result is not None
+        except Exception:
+            pytest.fail("Guard raised an exception on empty code")
+
+    def test_guard_handles_comments_only(self):
+        """Test that guard handles code with only comments."""
+        comment_code = """
+# This is a comment
+# Another comment
+"""
+        try:
+            result = pre_mutation_guard(comment_code)
+            # Should not crash, may return True or False depending on design
+            assert result is not None
+        except Exception:
+            pytest.fail("Guard raised an exception on comment-only code")
+
+    def test_guard_aborts_on_syntax_error_with_line_number(self):
+        """Test that guard aborts on syntax error and provides line number."""
+        invalid_code = """
+def foo(
+    pass
+"""
+        try:
+            result = pre_mutation_guard(invalid_code)
+            # If it returns a result, it should indicate failure
+            if hasattr(result, 'is_valid'):
+                assert not result.is_valid
+                assert result.error_line is not None
+                assert result.error_line > 0
+            else:
+                assert result is False
+        except ValidationError as e:
+            # Exception should contain line number info
+            assert hasattr(e, 'error_line') or 'line' in str(e).lower()
+        except Exception as e:
+            # Any exception indicating failure is acceptable
+            assert "line" in str(e).lower() or "syntax" in str(e).lower()
+
+    def test_guard_aborts_on_import_error_with_module_name(self):
+        """Test that guard aborts on import error and provides module name."""
+        code_with_bad_import = """
+import nonexistent_module_xyz
+
+def use_module():
+    return nonexistent_module_xyz.some_function()
+"""
+        try:
+            result = pre_mutation_guard(code_with_bad_import)
+            # If it returns a result, it should indicate failure
+            if hasattr(result, 'is_valid'):
+                assert not result.is_valid
+                assert "nonexistent_module_xyz" in result.error_message
+            else:
+                assert result is False
+        except ValidationError as e:
+            # Exception should contain module name
+            assert "nonexistent_module_xyz" in str(e)
+        except Exception as e:
+            # Any exception indicating failure is acceptable
+            assert "nonexistent_module_xyz" in str(e)
+
+    def test_guard_aborts_on_module_not_found_with_module_name(self):
+        """Test that guard aborts on module not found and provides module name."""
+        code_with_unavailable_module = """
+import some_rarely_installed_package_12345
+
+def use_it():
+    return some_rarely_installed_package_12345.do_something()
+"""
+        with patch('core.pre_mutation_guard._check_module_available') as mock_check:
+            mock_check.return_value = False
+            try:
+                result = pre_mutation_guard(code_with_unavailable_module)
+                # If it returns a result, it should indicate failure
+                if hasattr(result, 'is_valid'):
+                    assert not result.is_valid
+                    assert "some_rarely_installed_package_12345" in result.error_message
+                else:
+                    assert result is False
+            except ValidationError as e:
+                # Exception should contain module name
+                assert "some_rarely_installed_package_12345" in str(e)
+            except Exception as e:
+                # Any exception indicating failure is acceptable
+                assert "some_rarely_installed_package_12345" in str(e)

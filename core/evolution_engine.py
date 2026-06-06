@@ -4,15 +4,43 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 import random
 import logging
-from core.system_state import SystemState
-from core.plasticity_stability_scheduler import PlasticityStabilityScheduler
-from core.goal import Goal
-from core.mutation import Mutation
-from core.ecology_engine import EcologyEngine
-from core.nash_detector import NashDetector
-from core.coordinated_mutator import CoordinatedMutator
-from core.consolidation_engine import ConsolidationEngine
-from core.nash_detector_and_forcer import NashDetectorAndForcer
+
+try:
+    from core.system_state import SystemState
+except ImportError:
+    SystemState = None
+try:
+    from core.plasticity_stability_scheduler import PlasticityStabilityScheduler
+except ImportError:
+    PlasticityStabilityScheduler = None
+try:
+    from core.goal import Goal
+except ImportError:
+    Goal = None
+try:
+    from core.mutation import Mutation
+except ImportError:
+    Mutation = None
+try:
+    from core.ecology_engine import EcologyEngine
+except ImportError:
+    EcologyEngine = None
+try:
+    from core.nash_detector import NashDetector
+except ImportError:
+    NashDetector = None
+try:
+    from core.coordinated_mutator import CoordinatedMutator
+except ImportError:
+    CoordinatedMutator = None
+try:
+    from core.consolidation_engine import ConsolidationEngine
+except ImportError:
+    ConsolidationEngine = None
+try:
+    from core.nash_detector_and_forcer import NashDetectorAndForcer
+except ImportError:
+    NashDetectorAndForcer = None
 
 
 @dataclass

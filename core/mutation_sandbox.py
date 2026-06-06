@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import difflib
 import traceback
+import ast
 
 # Determine the original repository root (the directory containing this script's parent 'core' folder)
 # This is used to copy the repo into a temporary sandbox.
@@ -64,6 +65,117 @@ def _compute_diff(temp_repo_path, file_rel_path, original_repo_path):
         tofile=f"b/{file_rel_path}"
     )
     return "".join(diff)
+
+def validate_mutation(proposed_code, target_file_path):
+    """
+    Validate a proposed code mutation before applying it.
+    
+    Args:
+        proposed_code (str): The new code to be written to the target file
+        target_file_path (str): Relative path from repo root to the target file
+        
+    Returns:
+        dict: Structured result with keys:
+            - success (bool): True if validation passes
+            - error_type (str or None): Type of error if validation fails
+            - error_message (str or None): Error message if validation fails
+    """
+    # Create a temporary directory for validation
+    temp_dir = tempfile.mkdtemp(prefix="mutation_validation_")
+    
+    try:
+        # Step 1: Write proposed code to a temp file in the isolated directory
+        temp_file_path = os.path.join(temp_dir, os.path.basename(target_file_path))
+        with open(temp_file_path, "w", encoding="utf-8") as f:
+            f.write(proposed_code)
+        
+        # Step 2: Attempt to compile the code using ast.parse()
+        try:
+            ast.parse(proposed_code, filename=target_file_path)
+        except SyntaxError as e:
+            return {
+                "success": False,
+                "error_type": "SyntaxError",
+                "error_message": f"Syntax error in proposed code: {str(e)}"
+            }
+        
+        # Step 3: Attempt to import the module in a subprocess
+        # Create a temporary module name based on the target file
+        module_name = os.path.splitext(os.path.basename(target_file_path))[0]
+        
+        # Copy the repo to temp for proper import context
+        temp_repo = _copy_repo_to_temp()
+        
+        try:
+            # Write the proposed code to the target location in the temp repo
+            target_full_path = os.path.join(temp_repo, target_file_path)
+            os.makedirs(os.path.dirname(target_full_path), exist_ok=True)
+            with open(target_full_path, "w", encoding="utf-8") as f:
+                f.write(proposed_code)
+            
+            # Attempt to import the module in a subprocess
+            import_command = f"import {module_name}"
+            result = subprocess.run(
+                [sys.executable, "-c", import_command],
+                capture_output=True,
+                text=True,
+                cwd=temp_repo,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                error_output = result.stderr.strip()
+                if "ImportError" in error_output:
+                    return {
+                        "success": False,
+                        "error_type": "ImportError",
+                        "error_message": error_output
+                    }
+                elif "NameError" in error_output:
+                    return {
+                        "success": False,
+                        "error_type": "NameError",
+                        "error_message": error_output
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error_type": "ImportError",
+                        "error_message": error_output
+                    }
+            
+            # If we get here, validation passed
+            return {
+                "success": True,
+                "error_type": None,
+                "error_message": None
+            }
+            
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "error_type": "TimeoutError",
+                "error_message": "Module import timed out (30 seconds)"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error_type": "RuntimeError",
+                "error_message": f"Unexpected error during import: {str(e)}"
+            }
+        finally:
+            # Clean up the temp repo copy
+            shutil.rmtree(temp_repo, ignore_errors=True)
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "error_type": "RuntimeError",
+            "error_message": f"Unexpected error during validation: {str(e)}"
+        }
+    finally:
+        # Clean up temp files
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 def run_mutation(params):
     """
@@ -180,6 +292,20 @@ def handle_request(request):
         return {"jsonrpc": "2.0", "id": req_id, "result": result}
     elif method == "run_test":
         result = run_test(params)
+        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+    elif method == "validate_mutation":
+        proposed_code = params.get("proposed_code")
+        target_file_path = params.get("target_file_path")
+        if not proposed_code or not target_file_path:
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {
+                    "code": -32602,
+                    "message": "Missing required parameters: proposed_code, target_file_path"
+                }
+            }
+        result = validate_mutation(proposed_code, target_file_path)
         return {"jsonrpc": "2.0", "id": req_id, "result": result}
     else:
         return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}

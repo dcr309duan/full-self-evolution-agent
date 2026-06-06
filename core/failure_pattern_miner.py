@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timedelta
 import re
 import hashlib
+from core.failure_pattern_ban_list import FailurePatternBanList
 
 
 class ConflictType(Enum):
@@ -48,6 +49,7 @@ class FailurePatternMiner:
         self._last_fix_suggestions: Dict[Tuple[str, str], str] = {}
         self._lessons_learned: Dict = {}  # Lessons learned data
         self._capability_list: List[str] = []  # Capability list for duplication detection
+        self._ban_list: FailurePatternBanList = FailurePatternBanList()  # Ban list for tracking failure patterns
 
     def record_failure(
         self,
@@ -118,6 +120,15 @@ class FailurePatternMiner:
             "timestamp": datetime.now().isoformat(),
             "error_message": metadata.get("error_message", "") if metadata else ""
         })
+
+        # Feed failure data into the ban list for tracking
+        self._ban_list.record_failure(
+            module_a=module_a,
+            module_b=module_b,
+            conflict_type=conflict_type.value,
+            error_type=self._classify_failure(conflict_type),
+            metadata=metadata
+        )
 
     def _classify_failure(self, conflict_type: ConflictType) -> str:
         """Classify failure based on conflict type."""
@@ -226,13 +237,17 @@ class FailurePatternMiner:
         # Sort by risk score descending
         module_pair_risk.sort(key=lambda x: x["risk_score"], reverse=True)
 
+        # Include ban list data for more accurate domain tracking
+        ban_list_data = self._ban_list.get_ban_list_data()
+
         return {
             "total_rollbacks": self._total_rollbacks,
             "unique_patterns": len(self._patterns),
             "high_risk_patterns": len(high_risk),
             "conflict_type_distribution": conflict_distribution,
             "module_pair_risk": module_pair_risk[:10],  # Top 10 riskiest pairs
-            "recommendations": self._generate_recommendations(high_risk)
+            "recommendations": self._generate_recommendations(high_risk),
+            "ban_list_data": ban_list_data  # Include ban list data for comprehensive tracking
         }
 
     def _generate_recommendations(self, high_risk_patterns: List[FailurePattern]) -> List[str]:
@@ -285,7 +300,8 @@ class FailurePatternMiner:
                 }
                 for pattern in self._patterns.values()
             ],
-            "statistics": self.get_meta_mutation_data()
+            "statistics": self.get_meta_mutation_data(),
+            "ban_list_data": self._ban_list.get_ban_list_data()
         }
 
         with open(filepath, 'w') as f:
@@ -316,6 +332,10 @@ class FailurePatternMiner:
             self._conflict_type_counts[conflict_type] += pattern.rollback_count
             self._total_rollbacks += pattern.rollback_count
 
+        # Import ban list data if available
+        if "ban_list_data" in data:
+            self._ban_list.import_data(data["ban_list_data"])
+
     def clear(self) -> None:
         """Clear all recorded patterns and statistics."""
         self._patterns.clear()
@@ -329,6 +349,7 @@ class FailurePatternMiner:
         self._lessons_learned.clear()
         self._cycle_count = 0
         self._capability_list.clear()
+        self._ban_list.clear()
 
     def increment_cycle(self) -> None:
         """Increment the cycle counter and run failure log analysis every 10 cycles."""
@@ -601,3 +622,21 @@ class FailurePatternMiner:
             "duplications": duplication_data["duplications"],
             "fix_suggestions": duplication_data["fix_suggestions"]
         }
+
+    def get_ban_list(self) -> FailurePatternBanList:
+        """
+        Get the ban list instance for direct access.
+
+        Returns:
+            The FailurePatternBanList instance
+        """
+        return self._ban_list
+
+    def get_ban_list_data(self) -> Dict:
+        """
+        Get the ban list data for external use.
+
+        Returns:
+            Dictionary with ban list data
+        """
+        return self._ban_list.get_ban_list_data()

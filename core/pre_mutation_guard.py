@@ -140,6 +140,52 @@ def resolve_import_path(import_name: str, base_path: Optional[str] = None) -> Op
     return None
 
 
+def resolve_relative_import(module: str, base_path: str, filename: str) -> Optional[str]:
+    """
+    Resolve a relative import (e.g., 'from . import something' or 'from ..other import thing').
+    Returns the resolved file path if found, None otherwise.
+    """
+    # Count leading dots to determine relative depth
+    level = 0
+    while module.startswith('.'):
+        level += 1
+        module = module[1:]
+    
+    if level == 0:
+        return None  # Not a relative import
+    
+    # Get the directory of the current file
+    current_dir = os.path.dirname(os.path.abspath(filename))
+    
+    # Navigate up the directory tree based on level
+    target_dir = current_dir
+    for _ in range(level - 1):
+        target_dir = os.path.dirname(target_dir)
+        if not target_dir or target_dir == os.path.dirname(target_dir):
+            return None  # Reached root without finding
+    
+    # If no module name after dots, it's importing from the package itself
+    if not module:
+        init_file = os.path.join(target_dir, '__init__.py')
+        if os.path.isfile(init_file):
+            return init_file
+        return None
+    
+    # Try to resolve the module relative to the target directory
+    parts = module.split('.')
+    # Try as a file
+    file_candidate = os.path.join(target_dir, *parts) + '.py'
+    if os.path.isfile(file_candidate):
+        return file_candidate
+    # Try as a package
+    dir_candidate = os.path.join(target_dir, *parts)
+    init_candidate = os.path.join(dir_candidate, '__init__.py')
+    if os.path.isdir(dir_candidate) and os.path.isfile(init_candidate):
+        return init_candidate
+    
+    return None
+
+
 def validate_imports(
     code: str,
     filename: str = "<unknown>",
@@ -175,7 +221,32 @@ def validate_imports(
         elif isinstance(node, ast.ImportFrom):
             if node.module is None:
                 # Relative import (e.g., 'from . import something')
-                # We skip relative imports for simplicity; they are harder to resolve.
+                # Resolve relative imports by checking filesystem paths
+                if base_path:
+                    resolved = resolve_relative_import('.', base_path, filename)
+                    if resolved is None:
+                        record = _create_error_record(
+                            error_type="ImportError",
+                            file=filename,
+                            line=node.lineno,
+                            message="Cannot resolve relative import '.'",
+                        )
+                        errors.append(record)
+                        _append_failure_log(record)
+                continue
+            if node.module.startswith('.'):
+                # Relative import with module name (e.g., 'from .module import something')
+                if base_path:
+                    resolved = resolve_relative_import(node.module, base_path, filename)
+                    if resolved is None:
+                        record = _create_error_record(
+                            error_type="ImportError",
+                            file=filename,
+                            line=node.lineno,
+                            message=f"Cannot resolve relative import '{node.module}'",
+                        )
+                        errors.append(record)
+                        _append_failure_log(record)
                 continue
             import_name = node.module
             resolved = resolve_import_path(import_name, base_path)
@@ -269,3 +340,15 @@ def pre_mutation_guard(
 
     is_valid = len(all_errors) == 0
     return is_valid, all_errors
+
+
+validate = pre_mutation_guard
+
+
+class PreMutationGuard:
+    """Compatibility wrapper for agent-generated code expecting a class interface."""
+    def __init__(self, base_path=None):
+        self.base_path = base_path
+
+    def validate(self, code, filename="<unknown>", required_modules=None):
+        return pre_mutation_guard(code, filename, self.base_path, required_modules)

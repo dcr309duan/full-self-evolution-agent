@@ -1,13 +1,8 @@
 {
-  "cycle_count": 440,
-  "current_generation": 140,
-  "last_evolution_time": 1780723690.6713393,
+  "cycle_count": 444,
+  "current_generation": 141,
+  "last_evolution_time": 1780724477.3549051,
   "capabilities": [
-    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
-    "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements",
-    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
-    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
-    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
@@ -52,39 +47,14 @@
     "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jac",
     "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or g",
     "Build a 'failure pattern miner' that runs every 10 cycles: it parses the failure log (accumulated er",
-    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test "
+    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
+    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
+    "Implement a 'pre-mutation validation guard' that, before generating any code change, checks the targ",
+    "Implement a 'mutation pre-validation sandbox' that, before accepting any new code mutation, writes t",
+    "Create a 'reflection-to-action bridge' that modifies the reflection engine's output schema: every re",
+    "Add a 'failure pattern ban list' to the mutation engine: maintain a dictionary tracking the last 20 "
   ],
   "history": [
-    {
-      "cycle": 339,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780701796.4703624
-    },
-    {
-      "cycle": 340,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780702168.3399987
-    },
-    {
-      "cycle": 341,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780702304.462968
-    },
-    {
-      "cycle": 342,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780702558.2739596
-    },
-    {
-      "cycle": 343,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780702834.0867858
-    },
     {
       "cycle": 344,
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -654,6 +624,36 @@
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "success": false,
       "timestamp": 1780723660.669051
+    },
+    {
+      "cycle": 440,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": true,
+      "timestamp": 1780723944.454066
+    },
+    {
+      "cycle": 441,
+      "goal": "Implement a 'pre-mutation validation guard' that, before generating any code change, checks the target file(s) for syntax validity, resolves all import paths against the current filesystem, and verifies that required modules (e.g., numpy, random) are available. If validation fails, the mutation is aborted and a structured error record (error type, file, line) is appended to a failure log. This directly reduces the ~40% failure rate from syntax/import errors and provides a clean error signature for future learning.",
+      "success": true,
+      "timestamp": 1780724087.400966
+    },
+    {
+      "cycle": 442,
+      "goal": "Implement a 'mutation pre-validation sandbox' that, before accepting any new code mutation, writes the proposed code to a temporary file and attempts to compile/import it in an isolated Python subprocess. Only if the sandbox reports success (no SyntaxError, ImportError, or NameError) is the mutation committed. This directly addresses the root cause of the 62+ repetitive failures in GAME_THEORY and ECOLOGY mutations by catching errors before they pollute the codebase.",
+      "success": true,
+      "timestamp": 1780724272.114233
+    },
+    {
+      "cycle": 443,
+      "goal": "Create a 'reflection-to-action bridge' that modifies the reflection engine's output schema: every reflection must include a field 'concrete_mutation_spec' containing a single, valid Python mutation (file path, change type, code diff). If the reflection engine outputs only analytical text without this field, the system automatically generates a simple fallback mutation (e.g., add a docstring, fix a typo, or delete an unused import). This enforces the meta-insight that reflection must produce behavioral change, not just narrative.",
+      "success": true,
+      "timestamp": 1780724447.3528817
+    },
+    {
+      "cycle": 444,
+      "goal": "Add a 'failure pattern ban list' to the mutation engine: maintain a dictionary tracking the last 20 mutation failure types (by domain, e.g., GAME_THEORY, ECOLOGY). If a domain fails 3+ times consecutively, it is temporarily banned for the next 5 mutation cycles. After the ban expires, the domain is re-allowed but with a reduced probability (50% of normal). This breaks the local optimum loop of repeatedly attempting the same failing mutations.",
+      "success": true,
+      "timestamp": 1780724577.9025145
     }
   ],
   "status": "evolving"

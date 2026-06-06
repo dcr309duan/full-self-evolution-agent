@@ -79,18 +79,21 @@ class MutationPipeline:
         mutation_id = str(uuid.uuid4())
         target_line = mutation_proposal.get("target_line", 0)
 
-        # Step 1: Pre-mutation validation
-        validation_result = self.guard.validate(mutation_proposal)
-        if not validation_result.is_valid:
-            record = self._build_failure_record(
-                error_type="pre_mutation_validation_failed",
-                file_path=file_path,
-                line=target_line,
-                mutation_id=mutation_id,
-                details=validation_result.error_message,
-            )
-            self._append_failure_record(record)
-            return None
+        # Step 1: Pre-mutation validation on all target files
+        # Validate the proposal against all files that would be affected
+        target_files = mutation_proposal.get("target_files", [file_path])
+        for target_file in target_files:
+            validation_result = self.guard.validate(mutation_proposal, target_file)
+            if not validation_result.is_valid:
+                record = self._build_failure_record(
+                    error_type="pre_mutation_validation_failed",
+                    file_path=target_file,
+                    line=target_line,
+                    mutation_id=mutation_id,
+                    details=validation_result.error_message,
+                )
+                self._append_failure_record(record)
+                return None
 
         # Step 2: Quality gate check
         quality_result = self.quality_gate.evaluate(

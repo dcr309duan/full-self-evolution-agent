@@ -663,5 +663,8 @@ def run_test_mode():
             os.remove(f)
 
 
+NashDetector = NashEquilibriumDetector
+nash_detector = NashEquilibriumDetector
+
 if __name__ == "__main__":
     run_test_mode()
