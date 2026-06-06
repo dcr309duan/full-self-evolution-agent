@@ -19,7 +19,8 @@
       "description": "Build a 'failure pattern miner' that runs every 10 cycles: it parses the failure log (accumulated error records), clusters them by error type and module (e.g., 'import error on ECOLOGY'), and generates a short textual fix suggestion (e.g., 'add __init__.py to ecology/'). The suggestion is stored in a 'lessons learned' knowledge base, and the mutation engine is modified to query this KB before generating code for any module with a known failure pattern. This breaks the cycle of repeating the same errors and leverages existing insights to prevent future failures.",
       "priority": 9,
       "status": "pending",
-      "created_at": 1780721743.3697023
+      "created_at": 1780721743.3697023,
+      "consecutive_failures": 1
     },
     {
       "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
@@ -34,12 +35,6 @@
       "status": "pending",
       "created_at": 1780655268.6256523,
       "consecutive_failures": 3
-    },
-    {
-      "description": "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or goal-generation actions (no successful code mutation), the system automatically triggers a 'radical mutation' that randomly selects one of the novel ideas (e.g., ecosystem simulation, symbolic regression on failures) and generates a minimal but executable implementation, bypassing the usual mutation pipeline. This forces a break from self-referential stagnation and tests high-risk, high-reward ideas that could unlock architectural self-modification.",
-      "priority": 8,
-      "status": "pending",
-      "created_at": 1780721743.3738909
     }
   ],
   "completed_goals": [
@@ -1384,6 +1379,13 @@
       "status": "completed",
       "created_at": 1780721174.2023327,
       "completed_at": 1780721688.9539874
+    },
+    {
+      "description": "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or goal-generation actions (no successful code mutation), the system automatically triggers a 'radical mutation' that randomly selects one of the novel ideas (e.g., ecosystem simulation, symbolic regression on failures) and generates a minimal but executable implementation, bypassing the usual mutation pipeline. This forces a break from self-referential stagnation and tests high-risk, high-reward ideas that could unlock architectural self-modification.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780721743.3738909,
+      "completed_at": 1780722313.8322074
     }
   ],
   "generated_goals": []

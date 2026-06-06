@@ -1,9 +1,8 @@
 {
-  "cycle_count": 430,
-  "current_generation": 138,
-  "last_evolution_time": 1780721725.8731515,
+  "cycle_count": 432,
+  "current_generation": 139,
+  "last_evolution_time": 1780722163.9087853,
   "capabilities": [
-    "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of",
     "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
@@ -52,27 +51,10 @@
     "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (",
     "Add a 'mutation diversity tracker' that records the feature vector of every mutation attempt (comple",
     "Implement a 'syntax and import pre-validation harness' that, for any mutation involving new code, ru",
-    "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jac"
+    "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jac",
+    "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or g"
   ],
   "history": [
-    {
-      "cycle": 329,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780699168.0658062
-    },
-    {
-      "cycle": 330,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780699574.292383
-    },
-    {
-      "cycle": 331,
-      "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "success": false,
-      "timestamp": 1780699831.8371828
-    },
     {
       "cycle": 332,
       "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
@@ -654,6 +636,24 @@
       "goal": "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jaccard similarity between the new goal's keywords and all existing pending goals. If similarity > 0.7, the goals are merged into one with a combined priority score (max of the two) and a consolidated description. This prevents the accumulation of near-identical goals that dilute focus.",
       "success": true,
       "timestamp": 1780721688.9677804
+    },
+    {
+      "cycle": 430,
+      "goal": "Implement a 'pre-mutation validation guard' that, before generating any code change, checks the target file(s) for syntax validity, resolves all import paths against the current filesystem, and verifies that required modules (e.g., numpy, random) are available. If validation fails, the mutation is aborted and a structured error record (error type, file, line) is appended to a failure log. This directly reduces the ~40% failure rate from syntax/import errors and provides a clean error signature for future learning.",
+      "success": false,
+      "timestamp": 1780721978.5653336
+    },
+    {
+      "cycle": 431,
+      "goal": "Build a 'failure pattern miner' that runs every 10 cycles: it parses the failure log (accumulated error records), clusters them by error type and module (e.g., 'import error on ECOLOGY'), and generates a short textual fix suggestion (e.g., 'add __init__.py to ecology/'). The suggestion is stored in a 'lessons learned' knowledge base, and the mutation engine is modified to query this KB before generating code for any module with a known failure pattern. This breaks the cycle of repeating the same errors and leverages existing insights to prevent future failures.",
+      "success": false,
+      "timestamp": 1780722133.9067976
+    },
+    {
+      "cycle": 432,
+      "goal": "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or goal-generation actions (no successful code mutation), the system automatically triggers a 'radical mutation' that randomly selects one of the novel ideas (e.g., ecosystem simulation, symbolic regression on failures) and generates a minimal but executable implementation, bypassing the usual mutation pipeline. This forces a break from self-referential stagnation and tests high-risk, high-reward ideas that could unlock architectural self-modification.",
+      "success": true,
+      "timestamp": 1780722313.8462658
     }
   ],
   "status": "evolving"

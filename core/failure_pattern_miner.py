@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 import json
 from datetime import datetime, timedelta
+import re
 
 
 class ConflictType(Enum):
@@ -40,6 +41,11 @@ class FailurePatternMiner:
         self._conflict_type_counts: Dict[ConflictType, int] = defaultdict(int)
         self._total_rollbacks: int = 0
         self._failure_events: List[Dict] = []  # For health dashboard
+        self._cycle_count: int = 0
+        self._failure_log: List[Dict] = []  # Accumulated error records
+        self._error_records: List[Dict] = []  # Shared error log for clustering
+        self._last_fix_suggestions: Dict[Tuple[str, str], str] = {}
+        self._lessons_learned: Dict = {}  # Lessons learned data
 
     def record_failure(
         self,
@@ -90,6 +96,26 @@ class FailurePatternMiner:
             "rollback_count": self._patterns[pattern_key].rollback_count
         }
         self._failure_events.append(failure_event)
+        
+        # Add to failure log for analysis
+        self._failure_log.append({
+            "module_a": module_a,
+            "module_b": module_b,
+            "conflict_type": conflict_type.value,
+            "error_type": self._classify_failure(conflict_type),
+            "timestamp": datetime.now().isoformat(),
+            "error_message": metadata.get("error_message", "") if metadata else ""
+        })
+        
+        # Add to shared error records
+        self._error_records.append({
+            "module_a": module_a,
+            "module_b": module_b,
+            "conflict_type": conflict_type.value,
+            "error_type": self._classify_failure(conflict_type),
+            "timestamp": datetime.now().isoformat(),
+            "error_message": metadata.get("error_message", "") if metadata else ""
+        })
 
     def _classify_failure(self, conflict_type: ConflictType) -> str:
         """Classify failure based on conflict type."""
@@ -295,3 +321,150 @@ class FailurePatternMiner:
         self._conflict_type_counts.clear()
         self._total_rollbacks = 0
         self._failure_events.clear()
+        self._failure_log.clear()
+        self._error_records.clear()
+        self._last_fix_suggestions.clear()
+        self._lessons_learned.clear()
+        self._cycle_count = 0
+
+    def increment_cycle(self) -> None:
+        """Increment the cycle counter and run failure log analysis every 10 cycles."""
+        self._cycle_count += 1
+        if self._cycle_count % 10 == 0:
+            self._run_miner()
+
+    def _run_miner(self) -> None:
+        """
+        Main miner execution: reads error records, runs clustering, generates suggestions,
+        updates lessons_learned.json, and flags critical patterns.
+        """
+        if not self._error_records:
+            return
+
+        # Cluster errors by error type and module
+        error_clusters = defaultdict(list)
+        for record in self._error_records:
+            error_type = record.get("error_type", "unknown")
+            module = record.get("module_a", "unknown")
+            error_clusters[(error_type, module)].append(record)
+            
+            module_b = record.get("module_b", "unknown")
+            if module_b != module:
+                error_clusters[(error_type, module_b)].append(record)
+
+        # Generate fix suggestions and track pattern counts
+        fix_suggestions: Dict[Tuple[str, str], str] = {}
+        pattern_counts: Dict[Tuple[str, str], int] = defaultdict(int)
+        
+        for (error_type, module), records in error_clusters.items():
+            count = len(records)
+            pattern_counts[(error_type, module)] = count
+            
+            # Generate appropriate fix suggestion based on error type and module
+            if error_type == "import error" or "import" in error_type.lower():
+                error_messages = [r.get("error_message", "") for r in records]
+                import_errors = [msg for msg in error_messages if "import" in msg.lower()]
+                
+                if import_errors:
+                    module_names = set()
+                    for msg in import_errors:
+                        matches = re.findall(r"'(.*?)'", msg)
+                        module_names.update(matches)
+                    
+                    if module_names:
+                        fix_suggestions[(error_type, module)] = (
+                            f"check import paths in {module}/ for modules: {', '.join(sorted(module_names))}"
+                        )
+                    else:
+                        fix_suggestions[(error_type, module)] = (
+                            f"check import paths in {module}/"
+                        )
+                else:
+                    fix_suggestions[(error_type, module)] = (
+                        f"check import paths in {module}/"
+                    )
+                    
+            elif error_type == "syntax error" or "syntax" in error_type.lower():
+                fix_suggestions[(error_type, module)] = (
+                    f"fix syntax errors in {module}/"
+                )
+                
+            elif error_type == "dependency":
+                conflicting_modules = set()
+                for r in records:
+                    conflicting_modules.add(r.get("module_b", ""))
+                conflicting_modules.discard(module)
+                
+                if conflicting_modules:
+                    fix_suggestions[(error_type, module)] = (
+                        f"resolve dependency conflicts between {module} and {', '.join(sorted(conflicting_modules))}"
+                    )
+                else:
+                    fix_suggestions[(error_type, module)] = (
+                        f"review dependencies in {module}/"
+                    )
+                    
+            elif error_type == "sandbox":
+                fix_suggestions[(error_type, module)] = (
+                    f"refactor overlapping code in {module}/"
+                )
+                
+            elif error_type == "rollback":
+                fix_suggestions[(error_type, module)] = (
+                    f"standardize interfaces in {module}/"
+                )
+                
+            else:
+                fix_suggestions[(error_type, module)] = (
+                    f"investigate {error_type} errors in {module}/"
+                )
+
+        self._last_fix_suggestions = fix_suggestions
+
+        # Build lessons learned data with critical flagging
+        lessons = {}
+        for (error_type, module), count in pattern_counts.items():
+            suggestion = fix_suggestions.get((error_type, module), "")
+            is_critical = count > 3
+            lessons[f"{error_type}_{module}"] = {
+                "error_type": error_type,
+                "module": module,
+                "occurrence_count": count,
+                "is_critical": is_critical,
+                "suggestion": suggestion,
+                "last_updated": datetime.now().isoformat()
+            }
+
+        # Update internal lessons learned
+        self._lessons_learned = lessons
+
+        # Export to lessons_learned.json
+        try:
+            with open("lessons_learned.json", "w") as f:
+                json.dump(lessons, f, indent=2)
+        except IOError:
+            pass  # Silently handle file write errors
+
+        # Clear error records after processing to avoid reprocessing
+        self._error_records.clear()
+
+    def get_fix_suggestions(self) -> Dict[Tuple[str, str], str]:
+        """
+        Get the most recent fix suggestions from failure log analysis.
+
+        Returns:
+            Dictionary mapping (error_type, module) -> fix_suggestion
+        """
+        return self._last_fix_suggestions
+
+    def get_cycle_count(self) -> int:
+        """Get the current cycle count."""
+        return self._cycle_count
+
+    def get_lessons_learned(self) -> Dict:
+        """Get the current lessons learned data."""
+        return self._lessons_learned
+
+    def add_error_record(self, record: Dict) -> None:
+        """Add an error record to the shared error log."""
+        self._error_records.append(record)

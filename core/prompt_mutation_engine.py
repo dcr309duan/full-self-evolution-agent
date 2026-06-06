@@ -16,6 +16,7 @@ class PromptMutationEngine:
         self.current_prompt = initial_prompt
         self.constraints: List[str] = []
         self.failure_memory = failure_memory
+        self.lessons_learned_path = "knowledge/lessons_learned.json"
         self._parse_constraints()
         
     def _parse_constraints(self) -> None:
@@ -332,3 +333,168 @@ class PromptMutationEngine:
         
     def __repr__(self) -> str:
         return f"PromptMutationEngine(constraints={len(self.constraints)}, history={len(self.mutation_history)})"
+        
+    def _load_lessons_learned(self) -> Dict[str, Any]:
+        """
+        Load the lessons_learned.json knowledge base.
+        
+        Returns:
+            Dictionary containing lessons learned data, or empty dict if file not found
+        """
+        try:
+            with open(self.lessons_learned_path, 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+    
+    def _get_module_from_proposal(self, proposal: str) -> Optional[str]:
+        """
+        Extract the target module name from a mutation proposal.
+        
+        Args:
+            proposal: The mutation proposal string
+            
+        Returns:
+            The module name if found, None otherwise
+        """
+        # Look for common patterns like "module: X", "in module X", "file: X.py"
+        patterns = [
+            r'(?:module|file|target)\s*[:=]\s*([\w./]+)',
+            r'(?:in|for|of)\s+(?:the\s+)?(?:module|file)\s+[\"\'`]?([\w./]+)[\"\'`]?',
+            r'([\w./]+\.py)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, proposal, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        # Fallback: try to find any path-like string
+        path_match = re.search(r'[\w./]+/\w+', proposal)
+        if path_match:
+            return path_match.group(0)
+        
+        return None
+    
+    def _query_lessons_for_module(self, module: str) -> List[Dict[str, Any]]:
+        """
+        Query lessons_learned.json for known failure patterns for a specific module.
+        
+        Args:
+            module: The module name to query
+            
+        Returns:
+            List of failure patterns found for the module
+        """
+        lessons = self._load_lessons_learned()
+        if not lessons:
+            return []
+        
+        # Normalize module name for comparison
+        module_lower = module.lower()
+        module_clean = module_lower.replace('.py', '').replace('/', '.').replace('\\', '.')
+        
+        matching_lessons = []
+        
+        # Check for module-specific entries
+        if 'modules' in lessons and module_clean in lessons['modules']:
+            module_lessons = lessons['modules'][module_clean]
+            if isinstance(module_lessons, list):
+                matching_lessons.extend(module_lessons)
+            elif isinstance(module_lessons, dict):
+                matching_lessons.append(module_lessons)
+        
+        # Check for general failure patterns that might apply
+        if 'failures' in lessons:
+            for failure in lessons['failures']:
+                if isinstance(failure, dict):
+                    failure_module = failure.get('module', '').lower().replace('.py', '').replace('/', '.').replace('\\', '.')
+                    if module_clean in failure_module or failure_module in module_clean:
+                        matching_lessons.append(failure)
+        
+        # Check for patterns that mention the module
+        if 'patterns' in lessons:
+            for pattern in lessons['patterns']:
+                if isinstance(pattern, dict):
+                    pattern_text = pattern.get('pattern', '').lower()
+                    if module_clean in pattern_text:
+                        matching_lessons.append(pattern)
+        
+        return matching_lessons
+    
+    def _format_lesson_warning(self, lesson: Dict[str, Any]) -> str:
+        """
+        Format a lesson into a warning string for the prompt context.
+        
+        Args:
+            lesson: The lesson dictionary
+            
+        Returns:
+            Formatted warning string
+        """
+        pattern = lesson.get('pattern', lesson.get('failure', 'Unknown failure pattern'))
+        fix = lesson.get('fix', lesson.get('suggestion', 'No fix suggestion available'))
+        module = lesson.get('module', 'unknown')
+        
+        return (
+            f"KNOWN FAILURE PATTERN - AVOID THIS APPROACH\n"
+            f"Module: {module}\n"
+            f"Pattern: {pattern}\n"
+            f"Suggested Fix: {fix}\n"
+        )
+    
+    def apply_pre_generation_hook(self, proposal: str) -> str:
+        """
+        Apply the pre-generation hook to check lessons_learned KB before generating code.
+        
+        Args:
+            proposal: The mutation proposal string
+            
+        Returns:
+            The prompt context with any relevant warnings prepended
+        """
+        # Step 1: Identify the target module from the mutation proposal
+        target_module = self._get_module_from_proposal(proposal)
+        
+        if not target_module:
+            # No module identified, return current prompt as-is
+            return self.current_prompt
+        
+        # Step 2: Check lessons_learned.json for known failure patterns for that module
+        matching_lessons = self._query_lessons_for_module(target_module)
+        
+        if not matching_lessons:
+            # No matching lessons found, return current prompt as-is
+            return self.current_prompt
+        
+        # Step 3: If found, prepend a warning with the fix suggestion to the prompt context
+        warnings = []
+        for lesson in matching_lessons:
+            warning = self._format_lesson_warning(lesson)
+            warnings.append(warning)
+        
+        warning_section = "\n\n".join(warnings)
+        
+        # Prepend the warning to the current prompt
+        if self.current_prompt:
+            modified_prompt = f"{warning_section}\n\n{self.current_prompt}"
+        else:
+            modified_prompt = warning_section
+        
+        # Log the hook application
+        self._log_mutation("pre_generation_hook", {
+            "target_module": target_module,
+            "lessons_found": len(matching_lessons),
+            "warnings_applied": True
+        })
+        
+        return modified_prompt
+    
+    def set_lessons_learned_path(self, path: str) -> None:
+        """
+        Set the path to the lessons_learned.json file.
+        
+        Args:
+            path: The file path to the lessons learned knowledge base
+        """
+        self.lessons_learned_path = path

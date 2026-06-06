@@ -1,0 +1,41 @@
+{
+  "failure_patterns": [
+    {
+      "error_type": "ImportError",
+      "module": "failure_aware_selector.py",
+      "fix_suggestion": "Ensure all dependencies are installed and module path is correct; verify __init__.py exists in package.",
+      "first_seen_cycle": 1,
+      "last_seen_cycle": 3,
+      "frequency": 3
+    },
+    {
+      "error_type": "SyntaxError",
+      "module": "core/prompt_mutation_engine.py",
+      "fix_suggestion": "Check for unclosed parentheses, brackets, or string literals; validate indentation.",
+      "first_seen_cycle": 4,
+      "last_seen_cycle": 4,
+      "frequency": 1
+    },
+    {
+      "error_type": "KeyError",
+      "module": "core/nash_detector_and_forcer.py",
+      "fix_suggestion": "Add default dict or .get() method for dictionary access; ensure keys exist before access.",
+      "first_seen_cycle": 5,
+      "last_seen_cycle": 5,
+      "frequency": 1
+    },
+    {
+      "error_type": "TypeError",
+      "module": "core/failure_pattern_miner.py",
+      "fix_suggestion": "Verify function argument types and return types; add type checking or conversion.",
+      "first_seen_cycle": 6,
+      "last_seen_cycle": 6,
+      "frequency": 1
+    }
+  ],
+  "meta": {
+    "description": "Persistent knowledge base of mined failure patterns to prevent error repetition",
+    "version": "1.0",
+    "last_updated_cycle": 6
+  }
+}
