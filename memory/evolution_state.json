@@ -1,9 +1,8 @@
 {
   "cycle_count": 420,
-  "current_generation": 134,
+  "current_generation": 135,
   "last_evolution_time": 1780719683.3613772,
   "capabilities": [
-    "Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub reposito",
     "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa",
     "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the",
     "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements",
@@ -52,15 +51,10 @@
     "Implement a 'pre-mutation validation harness' that, before any mutation is applied, statically check",
     "Build a 'grounding test suite integrator' that, after any capability is accepted, automatically gene",
     "Create a 'capability deduplication and pruning agent' that runs every cycle: it hashes capability de",
-    "Create a 'reflection engine self-modification' module that allows the agent to rewrite its own refle"
+    "Create a 'reflection engine self-modification' module that allows the agent to rewrite its own refle",
+    "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all"
   ],
   "history": [
-    {
-      "cycle": 319,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780696657.9213486
-    },
     {
       "cycle": 320,
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -654,6 +648,12 @@
       "goal": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
       "success": false,
       "timestamp": 1780719653.3531916
+    },
+    {
+      "cycle": 420,
+      "goal": "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all existing capability modules using a text similarity metric (e.g., TF-IDF cosine similarity on docstrings and function signatures) plus a structural similarity score (e.g., number of functions, imports, lines of code). Modules with similarity >0.85 are merged into a single module that combines their unique test cases and keeps only the most general implementation. Modules with zero test passes in the last 20 cycles are archived. This reduces noise, prevents near-identical capabilities from accumulating, and frees cognitive resources for higher-level innovation.",
+      "success": true,
+      "timestamp": 1780720026.875331
     }
   ],
   "status": "evolving"
