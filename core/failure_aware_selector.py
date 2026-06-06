@@ -17,6 +17,53 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class FeatureVectorExtractor:
+    """Computes feature vectors from mutation context."""
+
+    def __init__(self):
+        self._feature_dim = 3
+
+    def extract(self, context: Dict[str, Any]) -> Tuple[float, float, float]:
+        """Extract feature vector from mutation context.
+        
+        Args:
+            context: Dictionary containing mutation context with keys:
+                - 'code': The source code string
+                - 'imports': List of import statements
+                - 'files': List of file paths involved
+        
+        Returns:
+            Tuple of (complexity, import_count, file_count)
+        """
+        code = context.get('code', '')
+        imports = context.get('imports', [])
+        files = context.get('files', [])
+
+        # Compute complexity as lines of code
+        if isinstance(code, str):
+            complexity = float(len(code.splitlines()))
+        else:
+            complexity = 0.0
+
+        # Count imports
+        if isinstance(imports, list):
+            import_count = float(len(imports))
+        else:
+            import_count = 0.0
+
+        # Count files
+        if isinstance(files, list):
+            file_count = float(len(files))
+        else:
+            file_count = 0.0
+
+        return (complexity, import_count, file_count)
+
+    def get_feature_dim(self) -> int:
+        """Return the dimension of the feature vector."""
+        return self._feature_dim
+
+
 class FailureLogger:
     """Records mutation attempts with error type, feature vector, and outcome."""
 
@@ -208,8 +255,8 @@ class LightweightClassifier:
                 )
 
 
-class MutationSelector:
-    """Selects mutations based on predicted success probability."""
+class FailureAwareSelector:
+    """Selects mutations based on predicted success probability using failure history."""
 
     def __init__(
         self,
@@ -231,6 +278,7 @@ class MutationSelector:
         self.classifier = classifier or LightweightClassifier()
         self.logger = logger_instance or FailureLogger()
         self.config_path = config_path
+        self.feature_extractor = FeatureVectorExtractor()
 
         # Load config if path provided
         if config_path and os.path.exists(config_path):
@@ -262,15 +310,26 @@ class MutationSelector:
         except Exception as e:
             logger.warning(f"Failed to save config to {save_path}: {e}")
 
-    def evaluate_mutation(
+    def predict_success(
         self,
-        feature_vector: Tuple[float, float, float],
+        context: Dict[str, Any],
         error_type: str = "integration"
-    ) -> Tuple[bool, float]:
+    ) -> float:
+        """Predict probability of success for a mutation given its context.
+        
+        Args:
+            context: Dictionary containing mutation context with keys:
+                - 'code': The source code string
+                - 'imports': List of import statements
+                - 'files': List of file paths involved
+            error_type: Type of error to check for
+        
+        Returns:
+            Probability of success (0.0 to 1.0)
         """
-        Evaluate whether a mutation should be applied.
-        Returns (accepted, probability).
-        """
+        # Extract features from context
+        feature_vector = self.feature_extractor.extract(context)
+
         # Train classifier on recent failures if not trained
         if not self.classifier.is_trained():
             X, y = self.logger.get_training_data(n=50)
@@ -280,23 +339,41 @@ class MutationSelector:
         # Get success probability
         prob = self.classifier.predict_proba(feature_vector)
 
-        # Decision
+        logger.debug(
+            f"Success prediction: prob={prob:.3f}, threshold={self.threshold}, "
+            f"features={feature_vector}, error_type={error_type}"
+        )
+
+        return prob
+
+    def evaluate_mutation(
+        self,
+        context: Dict[str, Any],
+        error_type: str = "integration"
+    ) -> Tuple[bool, float]:
+        """
+        Evaluate whether a mutation should be applied.
+        Returns (accepted, probability).
+        """
+        prob = self.predict_success(context, error_type)
+
+        # Decision based on threshold
         accepted = prob >= self.threshold
 
         logger.debug(
             f"Mutation evaluation: prob={prob:.3f}, threshold={self.threshold}, "
-            f"accepted={accepted}, features={feature_vector}"
+            f"accepted={accepted}"
         )
 
         return accepted, prob
 
     def select_mutation(
         self,
-        mutations: List[Tuple[str, Tuple[float, float, float]]],
+        mutations: List[Tuple[str, Dict[str, Any]]],
         error_type: str = "integration"
     ) -> Optional[Tuple[str, float]]:
         """
-        Select the best mutation from a list of (description, feature_vector) pairs.
+        Select the best mutation from a list of (description, context) pairs.
         Returns (description, probability) of the best accepted mutation, or None.
         """
         if not mutations:
@@ -305,8 +382,8 @@ class MutationSelector:
         best_mutation = None
         best_prob = -1.0
 
-        for description, feature_vector in mutations:
-            accepted, prob = self.evaluate_mutation(feature_vector, error_type)
+        for description, context in mutations:
+            accepted, prob = self.evaluate_mutation(context, error_type)
             if accepted and prob > best_prob:
                 best_prob = prob
                 best_mutation = (description, prob)
@@ -314,19 +391,24 @@ class MutationSelector:
         # If no mutation accepted, fall back to simplest (lowest complexity)
         if best_mutation is None:
             logger.info("No mutation accepted, falling back to simplest alternative")
-            simplest = min(mutations, key=lambda m: m[1][0])  # Minimize complexity
+            # Find mutation with lowest complexity
+            simplest = min(
+                mutations,
+                key=lambda m: self.feature_extractor.extract(m[1])[0]
+            )
             best_mutation = (simplest[0], 0.0)
 
         return best_mutation
 
     def get_simpler_alternative(
         self,
-        feature_vector: Tuple[float, float, float]
-    ) -> Tuple[float, float, float]:
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
-        Generate a simpler alternative feature vector by reducing complexity.
-        Returns reduced feature vector.
+        Generate a simpler alternative context by reducing complexity.
+        Returns modified context with reduced features.
         """
+        feature_vector = self.feature_extractor.extract(context)
         complexity, import_count, file_count = feature_vector
 
         # Reduce complexity by 50%, reduce imports by 30%, keep file count same
@@ -334,7 +416,22 @@ class MutationSelector:
         reduced_imports = max(int(import_count * 0.7), 1)
         reduced_files = max(file_count, 1)
 
-        return (reduced_complexity, float(reduced_imports), float(reduced_files))
+        # Create a modified context with reduced features
+        modified_context = dict(context)
+        if 'code' in modified_context and isinstance(modified_context['code'], str):
+            # Reduce code to approximately reduced_complexity lines
+            lines = modified_context['code'].splitlines()
+            target_lines = max(int(reduced_complexity), 1)
+            if len(lines) > target_lines:
+                modified_context['code'] = '\n'.join(lines[:target_lines])
+        
+        if 'imports' in modified_context and isinstance(modified_context['imports'], list):
+            modified_context['imports'] = modified_context['imports'][:int(reduced_imports)]
+        
+        if 'files' in modified_context and isinstance(modified_context['files'], list):
+            modified_context['files'] = modified_context['files'][:int(reduced_files)]
+
+        return modified_context
 
     def set_threshold(self, threshold: float) -> None:
         """Update the selection threshold."""
@@ -350,11 +447,12 @@ class MutationSelector:
     def record_outcome(
         self,
         error_type: str,
-        feature_vector: Tuple[float, float, float],
+        context: Dict[str, Any],
         success: bool,
         metadata: Optional[Dict] = None
     ) -> None:
         """Record the outcome of a mutation attempt."""
+        feature_vector = self.feature_extractor.extract(context)
         self.logger.log_attempt(error_type, feature_vector, success, metadata)
 
         # Retrain classifier if we have new data
@@ -383,11 +481,11 @@ class MutationSelector:
 def create_default_selector(
     threshold: Optional[float] = None,
     config_path: Optional[str] = None
-) -> MutationSelector:
-    """Create a MutationSelector with default components."""
+) -> FailureAwareSelector:
+    """Create a FailureAwareSelector with default components."""
     logger_instance = FailureLogger()
     classifier = LightweightClassifier()
-    return MutationSelector(
+    return FailureAwareSelector(
         threshold=threshold,
         classifier=classifier,
         logger_instance=logger_instance,

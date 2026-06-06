@@ -1,31 +1,6 @@
 {
   "insights": [
     {
-      "content": "Successfully modified core/nash_config.py to: Create a minimal config file with Nash equilibrium parameters: EQUILIBRIUM_WINDOW=5 (consecutive attempts), IMPROVEMENT_THRESHOLD=0.01 (1%), COORDINATED_IMPROVEMENT_THRESHOLD=0.02 (2%), MAX_BUNDLE_SIZE=3 modules, HISTORY_LENGTH=20 cycles. Keep it simple and self-contained.",
-      "timestamp": 1780712138.1654737,
-      "cycle": 384
-    },
-    {
-      "content": "Successfully modified core/nash_detector_and_forcer.py to: Read current Nash detector implementation to understand its API and existing capabilities",
-      "timestamp": 1780712273.9298565,
-      "cycle": 385
-    },
-    {
-      "content": "Successfully modified core/evolution_orchestrator.py to: Read evolution orchestrator to find where to inject Nash equilibrium detection hook",
-      "timestamp": 1780712317.426257,
-      "cycle": 385
-    },
-    {
-      "content": "Successfully modified core/multi_module_mutation_orchestrator.py to: Read existing multi-module orchestrator to understand coordination interface",
-      "timestamp": 1780712341.0781171,
-      "cycle": 385
-    },
-    {
-      "content": "Successfully modified core/evolution_orchestrator.py to: Add Nash equilibrium detection call after mutation evaluation phase: after each cycle's mutations are evaluated, call nash_detector_and_forcer.check_equilibrium() with current module states and success rates. If equilibrium detected, trigger multi_module_mutation_orchestrator with the forced changeset from the detector.",
-      "timestamp": 1780712387.8571386,
-      "cycle": 385
-    },
-    {
       "content": "Successfully modified tests/test_nash_integration.py to: Create integration test that: (1) Simulates a Nash equilibrium by setting up modules with stable failure/success patterns, (2) Verifies detector identifies equilibrium, (3) Verifies multi-module plan is generated, (4) Verifies plan involves changes to 3+ modules, (5) Verifies no single-module change would produce the same improvement.",
       "timestamp": 1780712467.4380906,
       "cycle": 385
@@ -999,20 +974,35 @@
       "content": "[研究] Self-Healing Code Repair: Using AST rewriting and mutation engine to automatically fix recurring modification failures: Current state-of-the-art in self-healing code repair combines AST-level transformations with learned",
       "timestamp": 1780720019.4748445,
       "cycle": 420
+    },
+    {
+      "content": "Self-reflection: The evolution process has developed a sophisticated ability to reflect on itself, producing increasingly deep meta-cognitive analyses, but these analyses are themselves part of a self-justifying feedb",
+      "timestamp": 1780720078.4357271,
+      "cycle": 421
+    },
+    {
+      "content": "Successfully modified core/failure_aware_selector.py to: Complete the failure_aware_selector.py module. Add: 1) FeatureVectorExtractor class that computes complexity (lines of code), import count, and file count from mutation context. 2) LightweightClassifier class using sklearn LogisticRegression (or fallback DecisionTree) that trains on last 50 logged failures. 3) FailureAwareSelector class with predict_success() method returning probability. 4) Configurable threshold (default 0.3) for rejection. 5) Integrate with existing FailureLogger. Ensure no syntax errors - use careful string handling.",
+      "timestamp": 1780720110.608533,
+      "cycle": 421
+    },
+    {
+      "content": "Successfully modified tests/test_failure_aware_selector.py to: Create comprehensive tests: 1) Test that classifier trains on sample failure data. 2) Test that predict_success returns float between 0 and 1. 3) Test that threshold rejection works correctly. 4) Test feature vector extraction with mock mutation context. 5) Test edge cases: empty training data, single class, all successes.",
+      "timestamp": 1780720169.2217882,
+      "cycle": 421
+    },
+    {
+      "content": "Successfully modified config/evolution_config.py to: Add configuration parameters: FAILURE_AWARE_SELECTOR_ENABLED (bool), FAILURE_AWARE_THRESHOLD (float, default 0.3), FAILURE_AWARE_TRAINING_SIZE (int, default 50), FAILURE_AWARE_CLASSIFIER_TYPE (str, 'logistic_regression' or 'decision_tree').",
+      "timestamp": 1780720173.7300677,
+      "cycle": 421
+    },
+    {
+      "content": "Successfully modified core/mutation_quality_gate.py to: Enhance the mutation quality gate to also log feature vectors (complexity, import count, file count) for each mutation attempt, feeding into the failure_aware_selector's training data.",
+      "timestamp": 1780720204.684863,
+      "cycle": 421
     }
   ],
   "learned_patterns": [],
   "failed_approaches": [
-    {
-      "approach": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "reason": "Code generated but 1 file(s) failed import: test_nash_coordinated.py",
-      "timestamp": 1780691117.1582656
-    },
-    {
-      "approach": "modify core/multi_module_forcer.py: Update to import from nash_detector_and_forcer and implement: (1) A function to generate coordinated mutation proposals involving 3+ modules (2) A validation step that simulates the combined effect before applying (3) Integration with the orchestrator's cycle loop",
-      "reason": "Syntax error: unterminated triple-quoted string literal (detected at line 973) (<unknown>, line 972)",
-      "timestamp": 1780691528.54435
-    },
     {
       "approach": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "reason": "Code generated but 2 file(s) failed import: evolution_orchestrator.py, test_nash_coordinated.py",
@@ -2502,34 +2492,19 @@
       "approach": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
       "reason": "Code generated but 1 file(s) failed import: failure_aware_selector.py",
       "timestamp": 1780719653.3006444
+    },
+    {
+      "approach": "modify core/evolution_orchestrator.py: Integrate the FailureAwareSelector into the mutation selection loop in evolution_orchestrator.py. Before executing any mutation, call selector.predict_success(). If probability < threshold, log the rejection and select a simpler alternative mutation from a pool of 'safe' mutations (e.g., comment additions, docstring improvements). Add import for failure_aware_selector module.",
+      "reason": "Syntax error: unterminated string literal (detected at line 872) (<unknown>, line 872)",
+      "timestamp": 1780720150.183406
+    },
+    {
+      "approach": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
+      "reason": "Code generated but 1 file(s) failed import: failure_aware_selector.py",
+      "timestamp": 1780720206.0791283
     }
   ],
   "successful_strategies": [
-    {
-      "strategy": "modify core/evolution_orchestrator.py: Add integration hook that calls nash_detector_and_forcer after each evolution cycle, and when equilibrium is detected, triggers coordinated multi-module mutation instead of single-module changes",
-      "outcome": "Applied successfully",
-      "timestamp": 1780696888.8320243
-    },
-    {
-      "strategy": "modify tests/test_nash_equilibrium.py: Create minimal test that imports only from core/nash_detector_and_forcer.py and validates: (1) equilibrium detection with mock module interactions, (2) coordinated change generation produces multi-module mutations",
-      "outcome": "Applied successfully",
-      "timestamp": 1780696903.9324205
-    },
-    {
-      "strategy": "modify core/goal_generator.py: Add goal prioritization that favors coordinated multi-module goals when Nash equilibrium is detected, reducing single-module optimization attempts",
-      "outcome": "Applied successfully",
-      "timestamp": 1780696957.1947927
-    },
-    {
-      "strategy": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "outcome": "4/4 steps succeeded",
-      "timestamp": 1780696957.2275336
-    },
-    {
-      "strategy": "modify core/nash_detector_and_forcer.py: Add a coordinated multi-module mutation forcer that: (1) Identifies modules stuck in Nash equilibrium, (2) Generates a set of coordinated changes across 2-3 modules that would shift the equilibrium, (3) Uses the atomic multi-module mutation orchestrator pattern from the existing codebase to apply these changes simultaneously.",
-      "outcome": "Applied successfully",
-      "timestamp": 1780697099.6273832
-    },
     {
       "strategy": "modify core/orchestrator_config.py: Add configuration parameters for Nash detection: (1) nash_detection_window (number of cycles to analyze), (2) nash_equilibrium_threshold (minimum cycles without improvement), (3) coordinated_mutation_batch_size (number of modules to change simultaneously). Ensure this file has proper imports and is importable.",
       "outcome": "Applied successfully",
@@ -5004,6 +4979,31 @@
       "strategy": "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all existing capability modules using a text similarity metric (e.g., TF-IDF cosine similarity on docstrings and function signatures) plus a structural similarity score (e.g., number of functions, imports, lines of code). Modules with similarity >0.85 are merged into a single module that combines their unique test cases and keeps only the most general implementation. Modules with zero test passes in the last 20 cycles are archived. This reduces noise, prevents near-identical capabilities from accumulating, and frees cognitive resources for higher-level innovation.",
       "outcome": "7/9 steps succeeded",
       "timestamp": 1780719987.7756808
+    },
+    {
+      "strategy": "modify core/failure_aware_selector.py: Complete the failure_aware_selector.py module. Add: 1) FeatureVectorExtractor class that computes complexity (lines of code), import count, and file count from mutation context. 2) LightweightClassifier class using sklearn LogisticRegression (or fallback DecisionTree) that trains on last 50 logged failures. 3) FailureAwareSelector class with predict_success() method returning probability. 4) Configurable threshold (default 0.3) for rejection. 5) Integrate with existing FailureLogger. Ensure no syntax errors - use careful string handling.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780720110.5930057
+    },
+    {
+      "strategy": "modify tests/test_failure_aware_selector.py: Create comprehensive tests: 1) Test that classifier trains on sample failure data. 2) Test that predict_success returns float between 0 and 1. 3) Test that threshold rejection works correctly. 4) Test feature vector extraction with mock mutation context. 5) Test edge cases: empty training data, single class, all successes.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780720169.205963
+    },
+    {
+      "strategy": "modify config/evolution_config.py: Add configuration parameters: FAILURE_AWARE_SELECTOR_ENABLED (bool), FAILURE_AWARE_THRESHOLD (float, default 0.3), FAILURE_AWARE_TRAINING_SIZE (int, default 50), FAILURE_AWARE_CLASSIFIER_TYPE (str, 'logistic_regression' or 'decision_tree').",
+      "outcome": "Applied successfully",
+      "timestamp": 1780720173.7136834
+    },
+    {
+      "strategy": "modify core/mutation_quality_gate.py: Enhance the mutation quality gate to also log feature vectors (complexity, import count, file count) for each mutation attempt, feeding into the failure_aware_selector's training data.",
+      "outcome": "Applied successfully",
+      "timestamp": 1780720204.6689615
+    },
+    {
+      "strategy": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
+      "outcome": "4/5 steps succeeded",
+      "timestamp": 1780720204.7035737
     }
   ],
   "capabilities_developed": []

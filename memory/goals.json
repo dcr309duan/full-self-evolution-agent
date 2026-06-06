@@ -13,7 +13,7 @@
       "priority": 9,
       "status": "pending",
       "created_at": 1780719312.6871266,
-      "consecutive_failures": 1
+      "consecutive_failures": 2
     },
     {
       "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",

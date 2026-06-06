@@ -1,22 +1,22 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-06 12:26:59
+> Generated: 2026-06-06 12:30:06
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 420 |
-| Generation | 134 |
-| Last Activity | 2026-06-06 12:21:23 |
-| Speed | ~15.7 cycles/hour |
+| Current Cycle | 421 |
+| Generation | 135 |
+| Last Activity | 2026-06-06 12:27:43 |
+| Speed | ~15.6 cycles/hour |
 
 ## Performance
 
 | Metric | Value |
 |--------|-------|
-| Total Success Rate | 28.0% (28/100) |
+| Total Success Rate | 29.0% (29/100) |
 | Recent Success Rate (last 20) | 50.0% (10/20) |
 | Capabilities Developed | 50 |
 | Goals Completed | 179 |
@@ -24,56 +24,56 @@
 
 ## Capabilities Acquired
 
-1. Add an external knowledge injection hook that, once per 20 cycles, scrapes the top 3 GitHub reposito
-2. Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa
-3. Integrate failure pattern analysis directly into mutation selection: before each mutation, query the
-4. Add a 'dependency graph validator' that runs before any mutation: parse all module import statements
-5. Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, ident
-6. Create a performance monitoring and optimization system
-7. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-8. Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of
-9. Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation
-10. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-11. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-12. Add a 'dependency graph validator' that runs before any mutation: parse all module import statements
-13. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+1. Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa
+2. Integrate failure pattern analysis directly into mutation selection: before each mutation, query the
+3. Add a 'dependency graph validator' that runs before any mutation: parse all module import statements
+4. Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, ident
+5. Create a performance monitoring and optimization system
+6. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+7. Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of
+8. Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation
+9. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+10. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+11. Add a 'dependency graph validator' that runs before any mutation: parse all module import statements
+12. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+13. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 14. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-15. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-16. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-17. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+15. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+16. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+17. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 18. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 19. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-20. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+20. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 21. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 22. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-23. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-24. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-25. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-26. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+23. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+24. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+25. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+26. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 27. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-28. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-29. 实现每日自动报告生成: 创建一个模块，每天自动汇总当日的进化状态(成功/失败目标、新能力、cycle数)并写入 reports/daily/ 目录。报告应包含: 1)当日完成的目标 2)失败分析 3)
-30. 实现音视频技术深度研究能力: 创建一个研究模块，能够从知识库和代码分析中深入研究一个音视频底层技术原理(如回声消除AEC、噪声抑制ANS、编解码器原理、RTP/RTCP协议栈等)，并将研究成果写入 r
+28. 实现每日自动报告生成: 创建一个模块，每天自动汇总当日的进化状态(成功/失败目标、新能力、cycle数)并写入 reports/daily/ 目录。报告应包含: 1)当日完成的目标 2)失败分析 3)
+29. 实现音视频技术深度研究能力: 创建一个研究模块，能够从知识库和代码分析中深入研究一个音视频底层技术原理(如回声消除AEC、噪声抑制ANS、编解码器原理、RTP/RTCP协议栈等)，并将研究成果写入 r
+30. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 31. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 32. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 33. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-34. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+34. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 35. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 36. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
 37. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-38. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+38. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 39. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 40. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 41. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
 42. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-43. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-44. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
-45. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
-46. Implement a 'mutation quality gate' that runs syntax checking, static analysis (e.g., mypy), and a m
-47. Implement a 'pre-mutation validation harness' that, before any mutation is applied, statically check
-48. Build a 'grounding test suite integrator' that, after any capability is accepted, automatically gene
-49. Create a 'capability deduplication and pruning agent' that runs every cycle: it hashes capability de
-50. Create a 'reflection engine self-modification' module that allows the agent to rewrite its own refle
+43. [ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test 
+44. [GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr
+45. Implement a 'mutation quality gate' that runs syntax checking, static analysis (e.g., mypy), and a m
+46. Implement a 'pre-mutation validation harness' that, before any mutation is applied, statically check
+47. Build a 'grounding test suite integrator' that, after any capability is accepted, automatically gene
+48. Create a 'capability deduplication and pruning agent' that runs every cycle: it hashes capability de
+49. Create a 'reflection engine self-modification' module that allows the agent to rewrite its own refle
+50. Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all
 
 ## Current Goals (Pending)
 
@@ -107,17 +107,16 @@
 
 ### Recent Insights
 
-- [06-06 12:25] Successfully modified core/capability_consolidator.py to: Add archiving logic: scan test pass history for each module, i
-- [06-06 12:25] Successfully modified core/capability_consolidator.py to: Add scheduler integration: check cycle number modulo 30, if cy
-- [06-06 12:26] Successfully modified core/capability_consolidator.py to: Add test suite for the consolidator: (1) test TF-IDF similarit
-- [06-06 12:26] [研究] Meta-Reasoning for Goal Generation: Automatically inferring and generating new goal types from failure patterns: Cu
-- [06-06 12:26] [研究] Self-Healing Code Repair: Using AST rewriting and mutation engine to automatically fix recurring modification failu
+- [06-06 12:27] Self-reflection: The evolution process has developed a sophisticated ability to reflect on itself, producing increasingl
+- [06-06 12:28] Successfully modified core/failure_aware_selector.py to: Complete the failure_aware_selector.py module. Add: 1) FeatureV
+- [06-06 12:29] Successfully modified tests/test_failure_aware_selector.py to: Create comprehensive tests: 1) Test that classifier train
+- [06-06 12:29] Successfully modified config/evolution_config.py to: Add configuration parameters: FAILURE_AWARE_SELECTOR_ENABLED (bool)
+- [06-06 12:30] Successfully modified core/mutation_quality_gate.py to: Enhance the mutation quality gate to also log feature vectors (c
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 410 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 411 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 412 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 413 | [GAME_THEORY] Detect when module interactions reach a Nash e | SUCCESS |
@@ -127,6 +126,7 @@
 | 417 | Create a 'capability deduplication and pruning agent' that r | SUCCESS |
 | 418 | Create a 'reflection engine self-modification' module that a | SUCCESS |
 | 419 | Implement a 'failure-aware mutation selector' that logs each | FAILED |
+| 420 | Build a 'capability consolidation and deduplication pass' th | SUCCESS |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_
