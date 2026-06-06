@@ -5,7 +5,7 @@
       "cron": "*/10 * * * *",
       "prompt": "Monitor the self-evolution agent at /root/full-self-evolution-agent. Do the following:\n\n1. Check if the process is still running: `ps aux | grep main.py | grep -v grep`\n2. Read the last 30 lines of /root/full-self-evolution-agent/logs/evolution.log to see recent activity\n3. Read /root/full-self-evolution-agent/memory/evolution_state.json to check cycle_count and current_generation\n4. If the process is NOT running, restart it with: `cd /root/full-self-evolution-agent && python3 main.py 1000 &` (run in background)\n5. If the process IS running but appears stalled (no new log entries in last 15 minutes), check for errors and report\n6. Report a brief status summary: current cycle, generation, last goal attempted, success/failure streak\n\nIf there are issues (process crashed, repeated failures, stagnation), take corrective action:\n- If crashed: restart and report\n- If stalled: check for lock file issues, clear lock if needed, restart\n- If repeated failures: read the knowledge base and suggest/generate new goals to break the cycle",
       "createdAt": 1780638043435,
-      "lastFiredAt": 1780715416285,
+      "lastFiredAt": 1780716016042,
       "recurring": true
     }
   ]

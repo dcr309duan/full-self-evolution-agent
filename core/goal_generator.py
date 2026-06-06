@@ -112,6 +112,9 @@ game_theory_active: bool = False  # Whether a GAME_THEORY goal is active
 game_theory_description: str = ""  # Description of the active GAME_THEORY goal
 game_theory_completed: bool = False  # Whether the GAME_THEORY goal has been completed
 
+# Evolution cycle counter for Nash equilibrium detection
+evolution_cycle_counter: int = 0  # Counter for evolution cycles, used to trigger Nash detection every 10 cycles
+
 
 def add_external_goal(goal: Goal) -> bool:
     """Add an external goal to the goal queue after validation.
@@ -899,8 +902,3 @@ def generate_nash_equilibrium_detection_goal(stuck_modules: List[str], nash_anal
         A Goal object with type 'nash_equilibrium_detection' that specifies the
         detected equilibrium and the modules involved.
     """
-    if not stuck_modules:
-        logger.warning("generate_nash_equilibrium_detection_goal called with empty stuck_modules list")
-        return None
-
-    modules

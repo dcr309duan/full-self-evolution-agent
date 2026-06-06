@@ -9,3 +9,7 @@ from core import av_research_engine
 
 # Export nash_detector_and_forcer for evolution_orchestrator
 from core import nash_detector_and_forcer
+
+# Export NashDetectorAndForcer and EvolutionOrchestrator for easy import by other modules
+from core.nash_detector_and_forcer import NashDetectorAndForcer
+from core.evolution_orchestrator import EvolutionOrchestrator
