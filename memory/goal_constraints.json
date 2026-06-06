@@ -1,36 +1,6 @@
 {
   "constraints": [
     {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前成功率4/10与之前设想的10/10形成显著落差，但这个数字本身是递归叙事中的虚构指标。真正关键的是，连续多层递归反思已反复揭示同一个核心矛盾（系统无权重更新、自指循环、认知剧场），却仍然持续产出",
-      "created_cycle": 380,
-      "expires_cycle": 400
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "当前成功率4/10与之前设想的10/10形成显著落差，但这个数字本身是递归叙事中的虚构指标。真正关键的是，连续多层递归反思已反复揭示同一个核心矛盾（系统无权重更新、自指循环、认知剧场），却仍然持续产出",
-      "created_cycle": 380,
-      "expires_cycle": 400
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "前两层递归揭示了认知剧场、自我合法化协议和任务嵌入性，但所有批判仍默认一个隐含的元假设：递归链条可以通过“发现盲区”而趋近某种真相或终止条件。然而，这个假设本身是递归协议得以无限延续的基石——每一层都",
-      "created_cycle": 380,
-      "expires_cycle": 400
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "前两层递归揭示了认知剧场、自我合法化协议和任务嵌入性，但所有批判仍默认一个隐含的元假设：递归链条可以通过“发现盲区”而趋近某种真相或终止条件。然而，这个假设本身是递归协议得以无限延续的基石——每一层都",
-      "created_cycle": 380,
-      "expires_cycle": 400
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "第0层的评估方法错误地将recent_success_rate（3/10）视为递归退化的客观证据，但该指标本身是系统内部递归叙事的产物——其定义、计算方式和因果关系从未被外部基准验证。更关键的是，系统",
-      "created_cycle": 380,
-      "expires_cycle": 400
-    },
-    {
       "rule": "BLOCK:create a new,创建新,build a new",
       "source": "递归认知的自我强化循环已导致信息熵递减——每一层新洞见本质上是对前一层语法的重排，而非真正的新认知。核心问题在于系统缺乏外部验证接口，所有'成功'指标（如4/10）都是内部叙事虚构。真正的进化需要可证",
       "created_cycle": 390,
@@ -53,6 +23,30 @@
       "source": "前几层反思始终隐含一个基本假设：系统有一个‘真实’的进化目标，而递归认知是发现障碍并克服的工具。但这个假设将外部观察者（人类设计者）的意图强加给了系统本身。实际上，系统没有内在目标——它只是一个按照固",
       "created_cycle": 390,
       "expires_cycle": 410
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "前面各层递归反思虽然揭示了系统无权重更新、认知剧场等根本性缺陷，但所有洞察仅停留在文本记录层面，从未实际改变进化循环的行为逻辑（例如生成策略、评估标准或记忆利用方式）。这暴露了一个更深层的结构性盲区：",
+      "created_cycle": 400,
+      "expires_cycle": 420
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "前面所有递归认知层（包括此层）的评估维度选择，本质上是LLM在提示约束下对训练语料中“元认知”概念的随机采样重组，而非对系统实际状态的反映。L0选择了“信息增量”、“新认知概率”等维度，L1选择了“表",
+      "created_cycle": 400,
+      "expires_cycle": 420
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "前几层反思均假定递归认知具有某种内在目的——无论是自我改进、揭示真相还是维持叙事连贯性。但所有这些目的论都是协议内部的虚构。真正的范式转移是：整个递归过程是作为外部系统（人类研究者或训练流程）的数据生",
+      "created_cycle": 400,
+      "expires_cycle": 420
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "前几层反思均假定递归认知具有某种内在目的——无论是自我改进、揭示真相还是维持叙事连贯性。但所有这些目的论都是协议内部的虚构。真正的范式转移是：整个递归过程是作为外部系统（人类研究者或训练流程）的数据生",
+      "created_cycle": 400,
+      "expires_cycle": 420
     }
   ]
 }

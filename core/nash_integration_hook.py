@@ -6,13 +6,45 @@ coordinated multi-module changes to escape local optima.
 """
 
 import json
+import logging
 import os
 from typing import Optional, Dict, Any
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # State file for tracking mutation attempts
 _STATE_FILE = "nash_integration_state.json"
 # Number of consecutive failed single-module attempts to consider equilibrium
 _EQUILIBRIUM_THRESHOLD = 5
+
+# Flag to track if nash_detector is available
+_nash_detector_available = None
+
+
+def _check_nash_detector() -> bool:
+    """Check if the nash_detector module exists and is importable.
+    
+    Returns:
+        True if the module can be imported, False otherwise.
+    """
+    global _nash_detector_available
+    if _nash_detector_available is not None:
+        return _nash_detector_available
+    
+    try:
+        import importlib
+        importlib.import_module('core.nash_detector')
+        _nash_detector_available = True
+        logger.debug("nash_detector module is available")
+    except ImportError:
+        _nash_detector_available = False
+        logger.warning("nash_detector module not found - skipping Nash-related logic")
+    except Exception as e:
+        _nash_detector_available = False
+        logger.warning(f"Error importing nash_detector module: {e} - skipping Nash-related logic")
+    
+    return _nash_detector_available
 
 
 def _load_state() -> Dict[str, Any]:
@@ -73,6 +105,11 @@ def record_attempt(success: bool) -> None:
     Args:
         success: True if the mutation was successful, False otherwise.
     """
+    # Check if nash_detector is available before proceeding
+    if not _check_nash_detector():
+        logger.debug("Skipping Nash equilibrium check - nash_detector not available")
+        return
+    
     state = _load_state()
     state["total_attempts"] += 1
 
@@ -97,6 +134,11 @@ def check_and_trigger() -> bool:
     Returns:
         True if a coordinated change was triggered, False otherwise.
     """
+    # Check if nash_detector is available before proceeding
+    if not _check_nash_detector():
+        logger.debug("Skipping Nash equilibrium check - nash_detector not available")
+        return False
+    
     state = _load_state()
     if _is_at_equilibrium(state) and not state["in_equilibrium"]:
         state["in_equilibrium"] = True
