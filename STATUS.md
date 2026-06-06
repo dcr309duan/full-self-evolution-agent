@@ -1,15 +1,15 @@
 # Self-Evolution Agent - Status Report
 
-> Generated: 2026-06-06 12:30:06
+> Generated: 2026-06-06 12:33:39
 
 ## Overview
 
 | Metric | Value |
 |--------|-------|
 | Status | **evolving** |
-| Current Cycle | 421 |
-| Generation | 135 |
-| Last Activity | 2026-06-06 12:27:43 |
+| Current Cycle | 422 |
+| Generation | 136 |
+| Last Activity | 2026-06-06 12:30:42 |
 | Speed | ~15.6 cycles/hour |
 
 ## Performance
@@ -107,17 +107,16 @@
 
 ### Recent Insights
 
-- [06-06 12:27] Self-reflection: The evolution process has developed a sophisticated ability to reflect on itself, producing increasingl
-- [06-06 12:28] Successfully modified core/failure_aware_selector.py to: Complete the failure_aware_selector.py module. Add: 1) FeatureV
-- [06-06 12:29] Successfully modified tests/test_failure_aware_selector.py to: Create comprehensive tests: 1) Test that classifier train
-- [06-06 12:29] Successfully modified config/evolution_config.py to: Add configuration parameters: FAILURE_AWARE_SELECTOR_ENABLED (bool)
-- [06-06 12:30] Successfully modified core/mutation_quality_gate.py to: Enhance the mutation quality gate to also log feature vectors (c
+- [06-06 12:31] Successfully modified core/failure_aware_selector.py to: Add a lightweight decision tree classifier (using sklearn's Dec
+- [06-06 12:32] Successfully modified core/simpler_mutation_generator.py to: Create a fallback mutation generator that produces simpler 
+- [06-06 12:32] Successfully modified core/config.py to: Add configuration parameters: FAILURE_AWARE_THRESHOLD (default 0.3), MIN_TRAINI
+- [06-06 12:33] Successfully modified tests/test_failure_aware_selector.py to: Create unit tests for the selector: 1) Test training on s
+- [06-06 12:33] Successfully modified core/mutation_quality_gate.py to: Update the quality gate to pass error categorization results to 
 
 ## Recent Activity (Last 10 Cycles)
 
 | Cycle | Goal | Result |
 |-------|------|--------|
-| 411 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 412 | [GAME_THEORY] Detect when module interactions reach a Nash e | FAILED |
 | 413 | [GAME_THEORY] Detect when module interactions reach a Nash e | SUCCESS |
 | 414 | Implement a 'mutation quality gate' that runs syntax checkin | SUCCESS |
@@ -127,6 +126,7 @@
 | 418 | Create a 'reflection engine self-modification' module that a | SUCCESS |
 | 419 | Implement a 'failure-aware mutation selector' that logs each | FAILED |
 | 420 | Build a 'capability consolidation and deduplication pass' th | SUCCESS |
+| 421 | Implement a 'failure-aware mutation selector' that logs each | FAILED |
 
 ---
 _This report auto-updates every 5 evolution cycles. View live log: `tail -f /root/full-self-evolution-agent/logs/evolution.log`_

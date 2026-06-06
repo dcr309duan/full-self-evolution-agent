@@ -21,9 +21,9 @@ class FeatureVectorExtractor:
     """Computes feature vectors from mutation context."""
 
     def __init__(self):
-        self._feature_dim = 3
+        self._feature_dim = 4  # Now includes error_type_encoded
 
-    def extract(self, context: Dict[str, Any]) -> Tuple[float, float, float]:
+    def extract(self, context: Dict[str, Any], error_type: str = "integration") -> Tuple[float, float, float, float]:
         """Extract feature vector from mutation context.
         
         Args:
@@ -31,9 +31,10 @@ class FeatureVectorExtractor:
                 - 'code': The source code string
                 - 'imports': List of import statements
                 - 'files': List of file paths involved
+            error_type: Type of error to encode (import, syntax, integration)
         
         Returns:
-            Tuple of (complexity, import_count, file_count)
+            Tuple of (complexity, import_count, file_count, error_type_encoded)
         """
         code = context.get('code', '')
         imports = context.get('imports', [])
@@ -57,7 +58,11 @@ class FeatureVectorExtractor:
         else:
             file_count = 0.0
 
-        return (complexity, import_count, file_count)
+        # Encode error type: import=0, syntax=1, integration=2
+        error_type_map = {"import": 0.0, "syntax": 1.0, "integration": 2.0}
+        error_type_encoded = error_type_map.get(error_type, 2.0)
+
+        return (complexity, import_count, file_count, error_type_encoded)
 
     def get_feature_dim(self) -> int:
         """Return the dimension of the feature vector."""
@@ -72,12 +77,12 @@ class FailureLogger:
     def __init__(self, max_records: int = 200):
         self.max_records = max_records
         self.records: List[Dict[str, Any]] = []
-        self._feature_dim = 3  # complexity, import_count, file_count
+        self._feature_dim = 4  # complexity, import_count, file_count, error_type_encoded
 
     def log_attempt(
         self,
         error_type: str,
-        feature_vector: Tuple[float, float, float],
+        feature_vector: Tuple[float, float, float, float],
         success: bool,
         metadata: Optional[Dict] = None
     ) -> None:
@@ -144,7 +149,7 @@ class LightweightClassifier:
         self.model_type = model_type
         self.max_samples = max_samples
         self._model = None
-        self._feature_dim = 3
+        self._feature_dim = 4  # Updated to include error_type_encoded
         self._is_trained = False
 
         if SKLEARN_AVAILABLE:
@@ -190,9 +195,9 @@ class LightweightClassifier:
             # Fallback: simple heuristic based on success rate
             self._is_trained = True
             self._fallback_success_rate = float(np.mean(y))
-            self._fallback_feature_weights = np.array([0.3, 0.3, 0.4])  # complexity, imports, files
+            self._fallback_feature_weights = np.array([0.25, 0.25, 0.25, 0.25])  # Updated for 4 features
 
-    def predict_proba(self, feature_vector: Tuple[float, float, float]) -> float:
+    def predict_proba(self, feature_vector: Tuple[float, float, float, float]) -> float:
         """Predict probability of success for a given feature vector."""
         if len(feature_vector) != self._feature_dim:
             raise ValueError(f"Feature vector must have {self._feature_dim} elements")
@@ -215,17 +220,19 @@ class LightweightClassifier:
                 return 0.5
         else:
             # Fallback heuristic
-            complexity, import_count, file_count = feature_vector
+            complexity, import_count, file_count, error_type_encoded = feature_vector
             # Normalize features (rough estimates)
             norm_complexity = min(complexity / 10.0, 1.0)
             norm_imports = min(import_count / 20.0, 1.0)
             norm_files = min(file_count / 10.0, 1.0)
+            norm_error_type = min(error_type_encoded / 2.0, 1.0)
 
             # Weighted combination
             risk_score = (
                 self._fallback_feature_weights[0] * norm_complexity +
                 self._fallback_feature_weights[1] * norm_imports +
-                self._fallback_feature_weights[2] * norm_files
+                self._fallback_feature_weights[2] * norm_files +
+                self._fallback_feature_weights[3] * norm_error_type
             )
 
             # Adjust base success rate by risk
@@ -255,6 +262,89 @@ class LightweightClassifier:
                 )
 
 
+class DecisionTreeMutationSelector:
+    """Lightweight decision tree classifier for mutation selection with fallback."""
+
+    def __init__(self, threshold: float = 0.3, min_training_samples: int = 2):
+        self.threshold = threshold
+        self.min_training_samples = min_training_samples
+        self._classifier = None
+        self._is_trained = False
+        self._feature_dim = 4
+
+        if SKLEARN_AVAILABLE:
+            self._classifier = DecisionTreeClassifier(
+                max_depth=3,
+                random_state=42,
+                class_weight="balanced"
+            )
+        else:
+            logger.warning("scikit-learn not available; decision tree will use fallback")
+
+    def train(self, X: np.ndarray, y: np.ndarray) -> None:
+        """Train the decision tree classifier on given data."""
+        if len(X) < self.min_training_samples:
+            logger.warning(f"Insufficient training data (need at least {self.min_training_samples} samples)")
+            self._is_trained = False
+            return
+
+        if X.shape[1] != self._feature_dim:
+            raise ValueError(f"Expected {self._feature_dim} features, got {X.shape[1]}")
+
+        if SKLEARN_AVAILABLE and self._classifier is not None:
+            try:
+                self._classifier.fit(X, y)
+                self._is_trained = True
+                logger.debug(f"Decision tree trained on {len(X)} samples")
+            except Exception as e:
+                logger.warning(f"Decision tree training failed: {e}")
+                self._is_trained = False
+        else:
+            # Fallback: simple heuristic based on success rate
+            self._is_trained = True
+            self._fallback_success_rate = float(np.mean(y))
+
+    def predict_success_probability(self, feature_vector: Tuple[float, float, float, float]) -> float:
+        """Predict probability of success for a given feature vector."""
+        if len(feature_vector) != self._feature_dim:
+            raise ValueError(f"Feature vector must have {self._feature_dim} elements")
+
+        if not self._is_trained:
+            return 0.5  # Default probability when untrained
+
+        X = np.array([feature_vector])
+
+        if SKLEARN_AVAILABLE and self._classifier is not None:
+            try:
+                proba = self._classifier.predict_proba(X)
+                # Return probability of class 1 (success)
+                if proba.shape[1] > 1:
+                    return float(proba[0][1])
+                else:
+                    return float(proba[0][0])
+            except Exception as e:
+                logger.warning(f"Decision tree prediction failed: {e}")
+                return 0.5
+        else:
+            # Fallback: return base success rate
+            return self._fallback_success_rate
+
+    def is_trained(self) -> bool:
+        """Check if classifier has been trained."""
+        return self._is_trained
+
+    def reset(self) -> None:
+        """Reset the classifier."""
+        self._classifier = None
+        self._is_trained = False
+        if SKLEARN_AVAILABLE:
+            self._classifier = DecisionTreeClassifier(
+                max_depth=3,
+                random_state=42,
+                class_weight="balanced"
+            )
+
+
 class FailureAwareSelector:
     """Selects mutations based on predicted success probability using failure history."""
 
@@ -263,7 +353,8 @@ class FailureAwareSelector:
         threshold: Optional[float] = None,
         classifier: Optional[LightweightClassifier] = None,
         logger_instance: Optional[FailureLogger] = None,
-        config_path: Optional[str] = None
+        config_path: Optional[str] = None,
+        decision_tree_selector: Optional[DecisionTreeMutationSelector] = None
     ):
         # Load threshold from env, config, or default
         if threshold is not None:
@@ -279,6 +370,7 @@ class FailureAwareSelector:
         self.logger = logger_instance or FailureLogger()
         self.config_path = config_path
         self.feature_extractor = FeatureVectorExtractor()
+        self.decision_tree_selector = decision_tree_selector or DecisionTreeMutationSelector(threshold=self.threshold)
 
         # Load config if path provided
         if config_path and os.path.exists(config_path):
@@ -291,6 +383,7 @@ class FailureAwareSelector:
                 config = json.load(f)
             if "threshold" in config:
                 self.threshold = float(config["threshold"])
+                self.decision_tree_selector.threshold = self.threshold
             logger.info(f"Loaded config from {path}, threshold={self.threshold}")
         except Exception as e:
             logger.warning(f"Failed to load config from {path}: {e}")
@@ -327,17 +420,23 @@ class FailureAwareSelector:
         Returns:
             Probability of success (0.0 to 1.0)
         """
-        # Extract features from context
-        feature_vector = self.feature_extractor.extract(context)
+        # Extract features from context (now includes error_type)
+        feature_vector = self.feature_extractor.extract(context, error_type)
 
-        # Train classifier on recent failures if not trained
-        if not self.classifier.is_trained():
+        # Train classifiers on recent failures if not trained
+        if not self.classifier.is_trained() or not self.decision_tree_selector.is_trained():
             X, y = self.logger.get_training_data(n=50)
             if len(X) >= 2:
                 self.classifier.train(X, y)
+                self.decision_tree_selector.train(X, y)
 
-        # Get success probability
-        prob = self.classifier.predict_proba(feature_vector)
+        # Get success probability from decision tree (primary) with fallback to logistic
+        if self.decision_tree_selector.is_trained():
+            prob = self.decision_tree_selector.predict_success_probability(feature_vector)
+        elif self.classifier.is_trained():
+            prob = self.classifier.predict_proba(feature_vector)
+        else:
+            prob = 0.5  # Default when no classifier is trained
 
         logger.debug(
             f"Success prediction: prob={prob:.3f}, threshold={self.threshold}, "
@@ -388,15 +487,13 @@ class FailureAwareSelector:
                 best_prob = prob
                 best_mutation = (description, prob)
 
-        # If no mutation accepted, fall back to simplest (lowest complexity)
+        # If no mutation accepted, fall back to random selection
         if best_mutation is None:
-            logger.info("No mutation accepted, falling back to simplest alternative")
-            # Find mutation with lowest complexity
-            simplest = min(
-                mutations,
-                key=lambda m: self.feature_extractor.extract(m[1])[0]
-            )
-            best_mutation = (simplest[0], 0.0)
+            logger.info("No mutation accepted, falling back to random selection")
+            # Randomly select one mutation
+            import random
+            idx = random.randint(0, len(mutations) - 1)
+            best_mutation = (mutations[idx][0], 0.0)
 
         return best_mutation
 
@@ -409,7 +506,7 @@ class FailureAwareSelector:
         Returns modified context with reduced features.
         """
         feature_vector = self.feature_extractor.extract(context)
-        complexity, import_count, file_count = feature_vector
+        complexity, import_count, file_count, error_type_encoded = feature_vector
 
         # Reduce complexity by 50%, reduce imports by 30%, keep file count same
         reduced_complexity = max(complexity * 0.5, 1.0)
@@ -438,6 +535,7 @@ class FailureAwareSelector:
         if not 0.0 <= threshold <= 1.0:
             raise ValueError(f"Threshold must be between 0.0 and 1.0, got {threshold}")
         self.threshold = threshold
+        self.decision_tree_selector.threshold = threshold
         logger.info(f"Threshold updated to {threshold}")
 
     def get_threshold(self) -> float:
@@ -452,13 +550,14 @@ class FailureAwareSelector:
         metadata: Optional[Dict] = None
     ) -> None:
         """Record the outcome of a mutation attempt."""
-        feature_vector = self.feature_extractor.extract(context)
+        feature_vector = self.feature_extractor.extract(context, error_type)
         self.logger.log_attempt(error_type, feature_vector, success, metadata)
 
-        # Retrain classifier if we have new data
+        # Retrain classifiers if we have new data
         X, y = self.logger.get_training_data(n=50)
         if len(X) >= 2:
             self.classifier.train(X, y)
+            self.decision_tree_selector.train(X, y)
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about selection performance."""
@@ -473,7 +572,9 @@ class FailureAwareSelector:
             "success_rate": successes / total if total > 0 else 0.0,
             "threshold": self.threshold,
             "classifier_trained": self.classifier.is_trained(),
-            "classifier_type": self.classifier.model_type if hasattr(self.classifier, 'model_type') else "unknown"
+            "classifier_type": self.classifier.model_type if hasattr(self.classifier, 'model_type') else "unknown",
+            "decision_tree_trained": self.decision_tree_selector.is_trained(),
+            "decision_tree_threshold": self.decision_tree_selector.threshold
         }
 
 
@@ -485,9 +586,11 @@ def create_default_selector(
     """Create a FailureAwareSelector with default components."""
     logger_instance = FailureLogger()
     classifier = LightweightClassifier()
+    decision_tree_selector = DecisionTreeMutationSelector(threshold=threshold or 0.3)
     return FailureAwareSelector(
         threshold=threshold,
         classifier=classifier,
         logger_instance=logger_instance,
-        config_path=config_path
+        config_path=config_path,
+        decision_tree_selector=decision_tree_selector
     )

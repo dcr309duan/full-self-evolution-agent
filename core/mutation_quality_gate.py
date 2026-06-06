@@ -480,3 +480,11 @@ class MutationQualityGate:
             requires_review=requires_review,
             feature_vectors=list(self.feature_vectors)
         )
+
+    def get_error_categorization_for_selector(self) -> List[Dict[str, Any]]:
+        """
+        Returns the error categorization results (feature vectors) for the failure_aware_selector.
+        This method provides real-time feedback on mutation outcomes by returning the collected
+        feature vectors with error categories, which can be used for training the selector.
+        """
+        return list(self.feature_vectors)

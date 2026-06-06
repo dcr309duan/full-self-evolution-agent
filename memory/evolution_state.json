@@ -1,7 +1,7 @@
 {
-  "cycle_count": 421,
-  "current_generation": 136,
-  "last_evolution_time": 1780720063.1466787,
+  "cycle_count": 422,
+  "current_generation": 137,
+  "last_evolution_time": 1780720242.4080718,
   "capabilities": [
     "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa",
     "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the",
@@ -55,12 +55,6 @@
     "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all"
   ],
   "history": [
-    {
-      "cycle": 321,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780697172.9665875
-    },
     {
       "cycle": 322,
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -654,6 +648,12 @@
       "goal": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
       "success": false,
       "timestamp": 1780720206.1029932
+    },
+    {
+      "cycle": 422,
+      "goal": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
+      "success": false,
+      "timestamp": 1780720419.2863529
     }
   ],
   "status": "evolving"
