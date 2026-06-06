@@ -9,20 +9,6 @@
       "consecutive_failures": 3
     },
     {
-      "description": "实现每日自动报告生成: 创建一个模块，每天自动汇总当日的进化状态(成功/失败目标、新能力、cycle数)并写入 reports/daily/ 目录。报告应包含: 1)当日完成的目标 2)失败分析 3)新发现的洞察 4)下一步计划。必须能实际运行并产出文件。",
-      "priority": 10,
-      "status": "pending",
-      "created_at": 1780709682.1905375,
-      "consecutive_failures": 1
-    },
-    {
-      "description": "实现音视频技术深度研究能力: 创建一个研究模块，能够从知识库和代码分析中深入研究一个音视频底层技术原理(如回声消除AEC、噪声抑制ANS、编解码器原理、RTP/RTCP协议栈等)，并将研究成果写入 reports/av-research/ 目录。报告需包含技术原理、算法细节和实际应用场景。",
-      "priority": 10,
-      "status": "pending",
-      "created_at": 1780709682.1948385,
-      "consecutive_failures": 1
-    },
-    {
       "description": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
       "priority": 9,
       "status": "pending",
@@ -37,25 +23,11 @@
       "consecutive_failures": 1
     },
     {
-      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780687738.4282672,
-      "consecutive_failures": 3
-    },
-    {
       "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "priority": 9,
       "status": "pending",
       "created_at": 1780687738.4316509,
       "consecutive_failures": 1
-    },
-    {
-      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780691612.309459,
-      "consecutive_failures": 3
     },
     {
       "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -65,25 +37,11 @@
       "consecutive_failures": 1
     },
     {
-      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780695653.5935507,
-      "consecutive_failures": 3
-    },
-    {
       "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
       "priority": 9,
       "status": "pending",
       "created_at": 1780695653.5969079,
       "consecutive_failures": 1
-    },
-    {
-      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780699567.1243818,
-      "consecutive_failures": 3
     },
     {
       "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -1234,6 +1192,54 @@
       "created_at": 1780680557.5369098,
       "consecutive_failures": 1,
       "completed_at": 1780709218.4903836
+    },
+    {
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780687738.4282672,
+      "consecutive_failures": 3,
+      "completed_at": 1780710558.9884186
+    },
+    {
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780691612.309459,
+      "consecutive_failures": 3,
+      "completed_at": 1780710567.6404696
+    },
+    {
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780695653.5935507,
+      "consecutive_failures": 3,
+      "completed_at": 1780710816.4887516
+    },
+    {
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780699567.1243818,
+      "consecutive_failures": 3,
+      "completed_at": 1780710847.1604836
+    },
+    {
+      "description": "实现每日自动报告生成: 创建一个模块，每天自动汇总当日的进化状态(成功/失败目标、新能力、cycle数)并写入 reports/daily/ 目录。报告应包含: 1)当日完成的目标 2)失败分析 3)新发现的洞察 4)下一步计划。必须能实际运行并产出文件。 模块必须能实际运行(run)并通过import验证。",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780709682.1905375,
+      "consecutive_failures": 1,
+      "completed_at": 1780711009.7123108
+    },
+    {
+      "description": "实现音视频技术深度研究能力: 创建一个研究模块，能够从知识库和代码分析中深入研究一个音视频底层技术原理(如回声消除AEC、噪声抑制ANS、编解码器原理、RTP/RTCP协议栈等)，并将研究成果写入 reports/av-research/ 目录。报告需包含技术原理、算法细节和实际应用场景。 模块必须能实际import并执行(run)验证。",
+      "priority": 10,
+      "status": "completed",
+      "created_at": 1780709682.1948385,
+      "consecutive_failures": 1,
+      "completed_at": 1780711198.3977923
     }
   ],
   "generated_goals": []

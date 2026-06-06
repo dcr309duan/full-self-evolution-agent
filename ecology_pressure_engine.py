@@ -13,6 +13,10 @@ import hashlib
 import math
 import random
 import time
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # ---------------------------------------------------------------------------
@@ -402,6 +406,7 @@ def generate_novel_test_suite(
     existing_suite: Dict[str, Any],
     num_tests: int = 3,
     uniqueness_threshold: float = 0.3,
+    output_dir: Optional[str] = None,
 ) -> List[str]:
     """
     Create new test files with unique assertions not present in the current test suite.
@@ -412,6 +417,8 @@ def generate_novel_test_suite(
         existing_suite: Dict representing the current test suite state.
         num_tests: Number of novel test files to generate.
         uniqueness_threshold: Minimum difference score to consider a test unique.
+        output_dir: Optional directory to write the generated test files. If None,
+                    files are not written to disk.
 
     Returns:
         List of test file contents (strings) that are novel relative to existing_suite.
@@ -430,6 +437,17 @@ def generate_novel_test_suite(
         if _is_unique_assertion_set(new_assertions, existing_assertions, uniqueness_threshold):
             novel_tests.append(test_content)
             existing_assertions.update(new_assertions)
+    
+    # Write to disk if output_dir is provided
+    if output_dir is not None:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        for i, test_content in enumerate(novel_tests):
+            filename = f"novel_test_{timestamp}_{i:03d}.py"
+            filepath = output_path / filename
+            with open(filepath, 'w') as f:
+                f.write(test_content)
     
     return novel_tests
 
@@ -902,81 +920,82 @@ if __name__ == '__main__':
 
 
 # ---------------------------------------------------------------------------
-# Utility: Create a default test suite profile
+# New Method: inject_test_into_existing_suite
 # ---------------------------------------------------------------------------
 
-def create_default_test_suite() -> Dict[str, Any]:
+def inject_test_into_existing_suite(
+    test_file_path: str,
+    num_tests: int = 1,
+    uniqueness_threshold: float = 0.3,
+) -> List[str]:
     """
-    Create a default test suite dict with typical keys.
-    Useful for testing or as a starting point.
+    Append new test functions (with unique assertions) to an existing test file
+    instead of creating a new file. This bypasses the import failure issue by
+    reusing the existing module's imports and class structure.
+
+    Args:
+        test_file_path: Path to an existing test file to modify.
+        num_tests: Number of new test methods to add.
+        uniqueness_threshold: Minimum difference score to consider a test unique.
+
+    Returns:
+        List of new test method code strings that were added.
     """
-    return {
-        "coverage": 0.0,
-        "mutation_score": 0.0,
-        "avg_test_time": 10.0,
-        "max_test_time": 10.0,
-        "edge_case_count": 0,
-        "total_edge_cases": 10,
-        "regression_test_count": 0,
-        "test_count": 0,
-        "pass_rate": 1.0,
-        "test_files": [],
-    }
-
-
-# ---------------------------------------------------------------------------
-# Utility: Generate a unique pressure ID (for tracking)
-# ---------------------------------------------------------------------------
-
-def generate_pressure_id(pressure_name: str, seed: Optional[str] = None) -> str:
-    """Generate a deterministic unique ID for a pressure instance."""
-    raw = f"{pressure_name}:{seed or str(time.time())}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:12]
-
-
-# ---------------------------------------------------------------------------
-# Self-test (if run directly)
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    print("Ecology Pressure Engine Self-Test")
-    print("=" * 40)
-
-    # List registered pressures
-    print(f"Registered pressures: {list_pressures()}")
-
-    # Create a default test suite
-    suite = create_default_test_suite()
-    print(f"Default suite: {suite}")
-
-    # Evaluate
-    overall, scores = evaluate_test_suite_weighted(suite)
-    print(f"Weighted score: {overall:.3f}")
-    for name, score in scores.items():
-        print(f"  {name}: {score:.3f}")
-
-    # Generate missing templates
-    templates = generate_missing_pressure_templates(suite, threshold=0.5, max_templates=3)
-    print(f"\nGenerated {len(templates)} missing pressure templates:")
-    for name, desc, code in templates:
-        print(f"\n--- {name}: {desc} ---")
-        print(code[:200] + "...")
+    # Read the existing test file
+    filepath = Path(test_file_path)
+    if not filepath.exists():
+        raise FileNotFoundError(f"Test file not found: {test_file_path}")
     
-    # Test novel test suite generation
-    print("\n" + "=" * 40)
-    print("Testing Novel Test Suite Generation (ECOLOGY mechanism)")
-    print("=" * 40)
+    with open(filepath, 'r') as f:
+        original_content = f.read()
     
-    novel_tests = generate_novel_test_suite(suite, num_tests=2)
-    print(f"\nGenerated {len(novel_tests)} novel test files:")
-    for i, test_content in enumerate(novel_tests, 1):
-        print(f"\n--- Novel Test {i} ---")
-        print(test_content[:300] + "...")
+    # Extract existing assertions from the file
+    existing_assertions = _extract_assertions_from_content(original_content)
     
-    # Test introduce_novel_constraint
-    print("\n" + "=" * 40)
-    print("Testing introduce_novel_constraint")
-    print("=" * 40)
-    novel_constraint = introduce_novel_constraint()
-    print(f"\nGenerated novel constraint test file:")
-    print(novel_constraint[:500] + "...")
+    # Generate new test methods
+    new_methods = []
+    for _ in range(num_tests * 3):  # Generate extra to filter for uniqueness
+        if len(new_methods) >= num_tests:
+            break
+        
+        # Generate a unique test method
+        method_code = _generate_unique_test_method(existing_assertions, uniqueness_threshold)
+        method_assertions = _extract_assertions_from_content(method_code)
+        
+        # Check uniqueness
+        if _is_unique_assertion_set(method_assertions, existing_assertions, uniqueness_threshold):
+            new_methods.append(method_code)
+            existing_assertions.update(method_assertions)
+    
+    # Append new methods to the file
+    if new_methods:
+        with open(filepath, 'a') as f:
+            f.write("\n\n")
+            for method in new_methods:
+                f.write(method)
+                f.write("\n")
+    
+    return new_methods
+
+
+def _generate_unique_test_method(
+    existing_assertions: set,
+    uniqueness_threshold: float,
+) -> str:
+    """
+    Generate a single unique test method with assertions not present in existing_assertions.
+    """
+    # Define all possible assertion types
+    all_assertions = [
+        "assertEqual", "assertNotEqual", "assertTrue", "assertFalse",
+        "assertIs", "assertIsNot", "assertIsNone", "assertIsNotNone",
+        "assertIn", "assertNotIn", "assertIsInstance", "assertNotIsInstance",
+        "assertRaises", "assertRaisesRegex", "assertWarns", "assertWarnsRegex",
+        "assertAlmostEqual", "assertNotAlmostEqual", "assertGreater",
+        "assertGreaterEqual", "assertLess", "assertLessEqual",
+        "assertRegex", "assertNotRegex", "assertCountEqual",
+        "assertMultiLineEqual", "assertSequenceEqual", "assertListEqual",
+        "assertTupleEqual", "assertSetEqual", "assertDictEqual",
+    ]
+    
+    # Find

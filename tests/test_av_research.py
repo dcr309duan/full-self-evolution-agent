@@ -283,6 +283,77 @@ class TestAVResearchIntegration:
             if item.endswith('.md'):
                 assert item.startswith('av-research/'), f"Report {item} created outside av-research directory"
 
+    def test_module_imports_correctly(self):
+        """Test that the module imports correctly and produces expected output."""
+        # Verify that the core modules can be imported
+        from core.goal_generator import GoalGenerator
+        from core.av_research_engine import AVResearchEngine
+        from core.evolution_state import EvolutionState
+        
+        # Verify that the imported classes are callable
+        assert callable(GoalGenerator), "GoalGenerator is not callable"
+        assert callable(AVResearchEngine), "AVResearchEngine is not callable"
+        assert callable(EvolutionState), "EvolutionState is not callable"
+        
+        # Verify that the modules have expected attributes
+        assert hasattr(GoalGenerator, 'generate_goal'), "GoalGenerator missing generate_goal method"
+        assert hasattr(AVResearchEngine, 'execute_research'), "AVResearchEngine missing execute_research method"
+        assert hasattr(AVResearchEngine, 'scan_knowledge_base'), "AVResearchEngine missing scan_knowledge_base method"
+        assert hasattr(EvolutionState, 'project_dir'), "EvolutionState missing project_dir attribute"
+        assert hasattr(EvolutionState, 'knowledge_base_path'), "EvolutionState missing knowledge_base_path attribute"
+        assert hasattr(EvolutionState, 'reports_dir'), "EvolutionState missing reports_dir attribute"
+        assert hasattr(EvolutionState, 'av_research_dir'), "EvolutionState missing av_research_dir attribute"
+        
+        # Verify that the module can produce expected output
+        # Create a minimal EvolutionState instance
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Create necessary directories
+            os.makedirs(os.path.join(temp_dir, 'reports', 'av-research'), exist_ok=True)
+            os.makedirs(os.path.join(temp_dir, 'knowledge'), exist_ok=True)
+            os.makedirs(os.path.join(temp_dir, 'core'), exist_ok=True)
+            
+            # Create a minimal knowledge base
+            knowledge_file = os.path.join(temp_dir, 'knowledge', 'knowledge_base.json')
+            with open(knowledge_file, 'w') as f:
+                json.dump({"TestTopic": {"summary": "Test summary", "sections": {}, "last_updated": "2024-01-01"}}, f)
+            
+            # Create EvolutionState instance
+            state = EvolutionState()
+            state.project_dir = temp_dir
+            state.knowledge_base_path = knowledge_file
+            state.reports_dir = os.path.join(temp_dir, 'reports')
+            state.av_research_dir = os.path.join(temp_dir, 'reports', 'av-research')
+            
+            # Create GoalGenerator and AVResearchEngine instances
+            goal_gen = GoalGenerator(state)
+            research_eng = AVResearchEngine(state)
+            
+            # Generate a goal and execute research
+            goal = goal_gen.generate_goal("AV_RESEARCH", topic="TestTopic")
+            assert goal is not None, "Goal generation failed"
+            assert goal["type"] == "AV_RESEARCH", f"Unexpected goal type: {goal['type']}"
+            assert goal["topic"] == "TestTopic", f"Unexpected topic: {goal['topic']}"
+            
+            result = research_eng.execute_research(goal)
+            assert result is not None, "Research execution failed"
+            assert "status" in result, "Result missing status"
+            assert "topic" in result, "Result missing topic"
+            assert "timestamp" in result, "Result missing timestamp"
+            
+            # Verify report file was created
+            report_path = os.path.join(temp_dir, 'reports', 'av-research', 'TestTopic_report.md')
+            assert os.path.exists(report_path), "Report file not created"
+            
+            # Verify report content
+            with open(report_path, 'r') as f:
+                report_content = f.read()
+            assert len(report_content) > 0, "Report is empty"
+            assert "TestTopic" in report_content, "Report missing topic content"
+            
+        finally:
+            shutil.rmtree(temp_dir)
+
 
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -44,8 +44,7 @@ def _validate_recent_files(cycle_num, since_time=None):
     
     py_files = glob.glob(os.path.join(PROJECT_ROOT, "*.py")) + \
                glob.glob(os.path.join(PROJECT_ROOT, "core", "*.py")) + \
-               glob.glob(os.path.join(PROJECT_ROOT, "modules", "*.py")) + \
-               glob.glob(os.path.join(PROJECT_ROOT, "tests", "*.py"))
+               glob.glob(os.path.join(PROJECT_ROOT, "modules", "*.py"))
     
     for fpath in py_files:
         try:

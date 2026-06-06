@@ -59,6 +59,16 @@ class TestDailyReporterIntegration(unittest.TestCase):
         )
         return reporter
 
+    def test_generate_daily_report_creates_file(self):
+        """Test that generate_daily_report creates a file in reports/daily/."""
+        reporter = self._create_reporter()
+        report_path = reporter.generate_daily_report()
+        
+        # Verify file exists
+        self.assertTrue(os.path.exists(report_path), "Report file was not created")
+        self.assertTrue(report_path.startswith(self.reports_dir), 
+                       f"Report path {report_path} is not in reports/daily/ directory")
+
     def test_report_creation_and_file_exists(self):
         """Test that generate_report creates a file in reports/daily/."""
         reporter = self._create_reporter()

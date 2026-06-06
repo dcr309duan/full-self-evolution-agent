@@ -14,6 +14,7 @@ After each reflection cycle, this module:
 10. Analyzes accumulated knowledge base to autonomously generate new sub-goals.
 11. Meta-insight analyzer that parses knowledge for key insights and converts to concrete goals.
 12. Generates 'complexity reduction' goals when triggered by rollback events.
+13. Generates 'ECOLOGY_NOVEL_TEST' goals that create tests for capabilities the agent doesn't yet have.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -23,6 +24,7 @@ import json
 import logging
 from datetime import datetime
 import random
+import re
 
 # Assuming ReflectionParser is defined elsewhere; adjust import as needed.
 # For demonstration, we define a minimal ReflectionParser here.
@@ -679,6 +681,7 @@ class GoalGenerator:
     Includes autonomous goal generation from knowledge base analysis.
     Includes meta-insight analyzer for extracting architectural insights.
     Includes complexity reduction goal generation triggered by rollback events.
+    Includes ECOLOGY_NOVEL_TEST goal generation for testing novel capabilities.
     """
 
     def __init__(self, parser: Optional[ReflectionParser] = None, feasibility_check: bool = True):
@@ -697,6 +700,7 @@ class GoalGenerator:
         self.autonomous_analyzer = AutonomousGoalAnalyzer(self.knowledge_base)  # Initialize analyzer
         self.meta_insight_analyzer = MetaInsightAnalyzer(self.knowledge_base)  # Initialize meta-insight analyzer
         self.rollback_events: List[Dict[str, Any]] = []  # Track rollback events for complexity reduction
+        self.known_capabilities: List[str] = []  # Track known capabilities for ECOLOGY_NOVEL_TEST
         self.logger = logging.getLogger(__name__)
         
         # Core files list for priority scoring
@@ -775,137 +779,80 @@ class GoalGenerator:
         # Check for rollback events and generate complexity reduction goals
         self._check_rollback_events(reflection_text)
         
+        # Generate ECOLOGY_NOVEL_TEST goals
+        self._generate_ecology_novel_test_goals(reflection_text)
+        
         summary = self._generate_summary(parsed)
         self._record_feedback(parsed, summary)
         return summary
 
-    def _check_rollback_events(self, reflection_text: str) -> None:
+    def _generate_ecology_novel_test_goals(self, reflection_text: str) -> None:
         """
-        Check reflection text for rollback events and generate complexity reduction goals.
+        Generate ECOLOGY_NOVEL_TEST goals that create tests for capabilities the agent doesn't yet have.
+        This ensures the agent is constantly pushed toward novel functionality rather than optimizing for existing tests.
         
         Args:
-            reflection_text: The reflection text to analyze
+            reflection_text: The reflection text to analyze for capability gaps
         """
-        # Keywords indicating a rollback event
-        rollback_keywords = [
-            "rollback", "revert", "undo", "backout", "back out",
-            "failed change", "breaking change", "regression",
-            "reverted", "rolled back", "undone"
+        # Detect capabilities mentioned in the reflection text
+        capability_patterns = [
+            r'\bcapability\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
+            r'\bability\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
+            r'\bfunctionality\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
+            r'\bfeature\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
+            r'\bnew\s+(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b',
+            r'\bmissing\s+(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b',
+            r'\bnovel\s+(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b'
         ]
         
-        reflection_lower = reflection_text.lower()
+        detected_capabilities = []
+        for pattern in capability_patterns:
+            matches = re.findall(pattern, reflection_text, re.IGNORECASE)
+            detected_capabilities.extend(matches)
         
-        # Check if any rollback keywords are present
-        has_rollback = any(keyword in reflection_lower for keyword in rollback_keywords)
+        # Also check for explicit mentions of "test" and "capability" together
+        test_capability_pattern = r'\btest\s+(?:for\s+)?(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b'
+        test_capability_matches = re.findall(test_capability_pattern, reflection_text, re.IGNORECASE)
+        detected_capabilities.extend(test_capability_matches)
         
-        if not has_rollback:
+        # Filter out capabilities that are already known
+        new_capabilities = [cap for cap in detected_capabilities if cap.lower() not in [k.lower() for k in self.known_capabilities]]
+        
+        if not new_capabilities:
+            # If no specific capabilities detected, generate a generic novel test goal
+            generic_novel_goal = Goal(
+                description="Create a test that validates a capability the agent doesn't yet possess, forcing novel functionality development",
+                priority=2,
+                source="ecology_novel_test",
+                last_selected=datetime.now(),
+                rationale="ECOLOGY_NOVEL_TEST: Generate test for unknown capability to push toward novel functionality"
+            )
+            
+            # Perform feasibility check if enabled
+            if self.feasibility_check:
+                feasibility_result = self.feasibility_estimator.estimate(generic_novel_goal.description, self.current_assessment)
+                if feasibility_result == FeasibilityResult.BLOCK:
+                    self.logger.info(f"Feasibility check blocked ECOLOGY_NOVEL_TEST goal: '{generic_novel_goal.description}'")
+                    self.blocked_goals.append({
+                        "description": generic_novel_goal.description,
+                        "reason": "Feasibility check blocked ECOLOGY_NOVEL_TEST goal",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    return
+                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
+                    generic_novel_goal.description = self._simplify_goal(generic_novel_goal.description)
+                    self.logger.info(f"Feasibility check adjusted ECOLOGY_NOVEL_TEST goal: '{generic_novel_goal.description}'")
+            
+            self.goals.insert(0, generic_novel_goal)
+            self.logger.info(f"Generated generic ECOLOGY_NOVEL_TEST goal with high priority")
             return
         
-        # Extract the module that caused the failure
-        # Look for file names or module names in the reflection text
-        module_patterns = [
-            r'\b(\w+\.py)\b',  # Python files
-            r'\bmodule\s+(\w+)\b',  # Module references
-            r'\b(\w+_engine)\b',  # Engine modules
-            r'\b(\w+_orchestrator)\b',  # Orchestrator modules
-        ]
-        
-        import re
-        failed_module = None
-        
-        for pattern in module_patterns:
-            matches = re.findall(pattern, reflection_lower)
-            if matches:
-                # Use the first match as the failed module
-                failed_module = matches[0]
-                break
-        
-        if not failed_module:
-            # Default to generic module if none found
-            failed_module = "unknown_module"
-        
-        # Record the rollback event
-        rollback_event = {
-            "timestamp": datetime.now().isoformat(),
-            "module": failed_module,
-            "reflection_text": reflection_text,
-            "processed": False
-        }
-        self.rollback_events.append(rollback_event)
-        
-        # Generate complexity reduction goal
-        complexity_goal = self._generate_complexity_reduction_goal(failed_module)
-        
-        if complexity_goal:
-            # Add the goal with high priority
-            self.goals.insert(0, complexity_goal)  # Insert at beginning for highest priority
-            self.logger.info(f"Generated complexity reduction goal for module '{failed_module}' with high priority")
+        # Generate specific ECOLOGY_NOVEL_TEST goals for each new capability
+        for capability in new_capabilities:
+            # Normalize capability name
+            capability_clean = capability.strip().lower().replace(" ", "_")
             
-            # Mark rollback event as processed
-            rollback_event["processed"] = True
-
-    def _generate_complexity_reduction_goal(self, module_name: str) -> Optional[Goal]:
-        """
-        Generate a complexity reduction goal for a specific module.
-        
-        Args:
-            module_name: The name of the module that caused the failure
+            # Create goal description
+            goal_description = f"Create a test that validates the '{capability_clean}' capability which the agent doesn't yet possess"
             
-        Returns:
-            Goal object with high priority, or None if generation fails
-        """
-        # Generate goal description based on module name
-        if module_name.endswith('.py'):
-            module_display = module_name
-        else:
-            module_display = f"{module_name}.py"
-        
-        # Create goal description
-        goal_description = f"Reduce LOC in {module_display} by removing dead code"
-        
-        # Create the goal with high priority (priority 1 = highest)
-        goal = Goal(
-            description=goal_description,
-            priority=1,  # High priority
-            source="complexity_reduction",
-            last_selected=datetime.now(),
-            rationale=f"Rollback event detected involving module '{module_name}'. Reducing complexity to prevent future failures.",
-            target_module=module_name
-        )
-        
-        # Perform feasibility check if enabled
-        if self.feasibility_check:
-            feasibility_result = self.feasibility_estimator.estimate(goal_description, self.current_assessment)
-            
-            if feasibility_result == FeasibilityResult.BLOCK:
-                self.logger.info(f"Feasibility check blocked complexity reduction goal: '{goal_description}'")
-                self.blocked_goals.append({
-                    "description": goal_description,
-                    "reason": "Feasibility check blocked complexity reduction goal",
-                    "timestamp": datetime.now().isoformat()
-                })
-                return None
-            elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                goal.description = self._simplify_goal(goal_description)
-                self.logger.info(f"Feasibility check adjusted complexity reduction goal: '{goal.description}'")
-        
-        return goal
-
-    def _simplify_goal(self, goal_description: str) -> str:
-        """
-        Simplify a goal description to make it more feasible.
-        
-        Args:
-            goal_description: The original goal description
-            
-        Returns:
-            Simplified goal description
-        """
-        # Remove complexity indicators
-        complexity_indicators = [
-            "all", "everything", "complete", "full", "entire",
-            "multiple", "several", "many", "various", "numerous",
-            "large", "massive", "extensive", "comprehensive"
-        ]
-        
-       
+            # Create the goal with high
