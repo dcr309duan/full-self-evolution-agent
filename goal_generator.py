@@ -15,6 +15,8 @@ After each reflection cycle, this module:
 11. Meta-insight analyzer that parses knowledge for key insights and converts to concrete goals.
 12. Generates 'complexity reduction' goals when triggered by rollback events.
 13. Generates 'ECOLOGY_NOVEL_TEST' goals that create tests for capabilities the agent doesn't yet have.
+14. Generates 'ecology_pressure' goals based on ecology_metrics data to increase test coverage or add edge case tests.
+15. Generates 'ECOLOGY' goals that reference newly created test files to close the loop.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -682,6 +684,8 @@ class GoalGenerator:
     Includes meta-insight analyzer for extracting architectural insights.
     Includes complexity reduction goal generation triggered by rollback events.
     Includes ECOLOGY_NOVEL_TEST goal generation for testing novel capabilities.
+    Includes ecology_pressure goal generation based on ecology_metrics data.
+    Includes ECOLOGY goal generation that references newly created test files.
     """
 
     def __init__(self, parser: Optional[ReflectionParser] = None, feasibility_check: bool = True):
@@ -701,6 +705,8 @@ class GoalGenerator:
         self.meta_insight_analyzer = MetaInsightAnalyzer(self.knowledge_base)  # Initialize meta-insight analyzer
         self.rollback_events: List[Dict[str, Any]] = []  # Track rollback events for complexity reduction
         self.known_capabilities: List[str] = []  # Track known capabilities for ECOLOGY_NOVEL_TEST
+        self.ecology_metrics: Dict[str, Any] = {}  # Store ecology metrics for pressure generation
+        self.created_test_files: List[str] = []  # Track newly created test files for ECOLOGY goals
         self.logger = logging.getLogger(__name__)
         
         # Core files list for priority scoring
@@ -782,6 +788,12 @@ class GoalGenerator:
         # Generate ECOLOGY_NOVEL_TEST goals
         self._generate_ecology_novel_test_goals(reflection_text)
         
+        # Generate ecology_pressure goals based on ecology_metrics
+        self._generate_ecology_pressure_goals()
+        
+        # Generate ECOLOGY goals that reference newly created test files
+        self._generate_ecology_goals_for_new_tests(reflection_text)
+        
         summary = self._generate_summary(parsed)
         self._record_feedback(parsed, summary)
         return summary
@@ -840,19 +852,4 @@ class GoalGenerator:
                     })
                     return
                 elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                    generic_novel_goal.description = self._simplify_goal(generic_novel_goal.description)
-                    self.logger.info(f"Feasibility check adjusted ECOLOGY_NOVEL_TEST goal: '{generic_novel_goal.description}'")
-            
-            self.goals.insert(0, generic_novel_goal)
-            self.logger.info(f"Generated generic ECOLOGY_NOVEL_TEST goal with high priority")
-            return
-        
-        # Generate specific ECOLOGY_NOVEL_TEST goals for each new capability
-        for capability in new_capabilities:
-            # Normalize capability name
-            capability_clean = capability.strip().lower().replace(" ", "_")
-            
-            # Create goal description
-            goal_description = f"Create a test that validates the '{capability_clean}' capability which the agent doesn't yet possess"
-            
-            # Create the goal with high
+                    generic_novel

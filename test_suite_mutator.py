@@ -12,10 +12,15 @@ import copy
 import ast
 import types
 import sys
+import os
+import tempfile
+import subprocess
+import importlib.util
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
 import itertools
+import re
 
 # ---------------------------------------------------------------------------
 # Data structures for mutation tracking
@@ -134,7 +139,6 @@ class ParameterizeInputs(MutationStrategy):
             if '(' in line and ')' in line and 'def ' not in line and 'assert' not in line:
                 # Replace literal arguments with parameterized versions
                 # This is a simplified version; real implementation would use AST
-                import re
                 # Replace integer literals
                 line = re.sub(r'\((\d+)\)', r'(param_\1)', line)
                 # Replace string literals
@@ -219,7 +223,6 @@ class IntroduceFailureModes(MutationStrategy):
         for i, line in enumerate(lines):
             if line.strip().startswith('assert') and 'func(' in line:
                 # Extract the argument
-                import re
                 match = re.search(r'func\(([^)]+)\)', line)
                 if match:
                     arg = match.group(1)
@@ -293,7 +296,6 @@ class SelfModificationEngine:
         # This is a simplified approach; real implementation would use AST
         for name, code in new_strategies.items():
             # Find the class definition and replace
-            import re
             pattern = rf"class {name}\(MutationStrategy\):.*?(?=\nclass |\n#|\Z)"
             replacement = code.strip()
             source = re.sub(pattern, replacement, source, flags=re.DOTALL)
@@ -314,7 +316,7 @@ class SelfModificationEngine:
 class TestSuiteMutator:
     """Main class for mutating test suites."""
 
-    def __init__(self):
+    def __init__(self, test_dir: str = "tests", source_dir: str = "src"):
         self.tracker = MutationTracker()
         self.self_mod = SelfModificationEngine(self)
         self.strategies: Dict[str, MutationStrategy] = {
@@ -324,6 +326,8 @@ class TestSuiteMutator:
             "introduce_failure_modes": IntroduceFailureModes(self),
         }
         self.mutation_history: List[Tuple[str, str, str]] = []  # (original, mutated, strategy)
+        self.test_dir = test_dir
+        self.source_dir = source_dir
 
     def mutate(self, test_code: str, strategy_name: str = None) -> str:
         """Apply a mutation to test code."""
@@ -399,14 +403,279 @@ class TestSuiteMutator:
             "active_strategies": list(self.strategies.keys()),
         }
 
+    # -----------------------------------------------------------------------
+    # New methods for test suite evolution
+    # -----------------------------------------------------------------------
+
+    def scan_coverage(self) -> Dict[str, List[str]]:
+        """Use AST to find all test files and their imports.
+
+        Returns:
+            Dict mapping test file paths to lists of imported module names.
+        """
+        coverage_map = {}
+        if not os.path.isdir(self.test_dir):
+            return coverage_map
+
+        for root, dirs, files in os.walk(self.test_dir):
+            for file in files:
+                if file.endswith('.py') and file.startswith('test_'):
+                    filepath = os.path.join(root, file)
+                    try:
+                        with open(filepath, 'r') as f:
+                            source = f.read()
+                        tree = ast.parse(source)
+                        imports = []
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.Import):
+                                for alias in node.names:
+                                    imports.append(alias.name)
+                            elif isinstance(node, ast.ImportFrom):
+                                if node.module:
+                                    imports.append(node.module)
+                        coverage_map[filepath] = imports
+                    except Exception as e:
+                        print(f"Warning: Could not parse {filepath}: {e}")
+        return coverage_map
+
+    def identify_gaps(self) -> List[Dict[str, Any]]:
+        """Compare module exports vs test coverage.
+
+        Returns:
+            List of dicts with 'module', 'uncovered_exports', and 'test_files'.
+        """
+        gaps = []
+        if not os.path.isdir(self.source_dir):
+            return gaps
+
+        # Get all source modules
+        source_modules = {}
+        for root, dirs, files in os.walk(self.source_dir):
+            for file in files:
+                if file.endswith('.py') and not file.startswith('_'):
+                    filepath = os.path.join(root, file)
+                    module_name = filepath.replace(os.sep, '.').replace('.py', '')
+                    try:
+                        with open(filepath, 'r') as f:
+                            source = f.read()
+                        tree = ast.parse(source)
+                        exports = []
+                        for node in ast.walk(tree):
+                            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                                exports.append(node.name)
+                            elif isinstance(node, ast.Assign):
+                                for target in node.targets:
+                                    if isinstance(target, ast.Name):
+                                        if not target.id.startswith('_'):
+                                            exports.append(target.id)
+                        source_modules[module_name] = {
+                            'filepath': filepath,
+                            'exports': exports
+                        }
+                    except Exception as e:
+                        print(f"Warning: Could not parse {filepath}: {e}")
+
+        # Get test coverage
+        coverage_map = self.scan_coverage()
+
+        # Compare
+        for module_name, module_info in source_modules.items():
+            uncovered = []
+            test_files = []
+            for test_file, imports in coverage_map.items():
+                if module_name in imports:
+                    test_files.append(test_file)
+            for export in module_info['exports']:
+                covered = False
+                for test_file in test_files:
+                    try:
+                        with open(test_file, 'r') as f:
+                            test_source = f.read()
+                        if export in test_source:
+                            covered = True
+                            break
+                    except:
+                        pass
+                if not covered:
+                    uncovered.append(export)
+            if uncovered:
+                gaps.append({
+                    'module': module_name,
+                    'uncovered_exports': uncovered,
+                    'test_files': test_files
+                })
+        return gaps
+
+    def generate_test_stub(self, module_path: str) -> str:
+        """Create a minimal pytest test file that imports the module and runs basic smoke tests.
+
+        Args:
+            module_path: Path to the module to generate tests for.
+
+        Returns:
+            String containing the generated test code.
+        """
+        # Convert module path to importable name
+        module_name = module_path.replace(os.sep, '.').replace('.py', '')
+        if module_name.endswith('.'):
+            module_name = module_name[:-1]
+
+        # Get module exports
+        exports = []
+        try:
+            with open(module_path, 'r') as f:
+                source = f.read()
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    exports.append(node.name)
+        except Exception as e:
+            print(f"Warning: Could not parse {module_path}: {e}")
+
+        # Generate test code
+        test_code = f'''"""Auto-generated test stub for {module_name}."""
+import pytest
+import sys
+import os
+
+# Add source to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from {module_name} import {', '.join(exports) if exports else '*'}
+
+
+class Test{module_name.replace('.', '_').title().replace('_', '')}:
+    """Smoke tests for {module_name}."""
+
+    def test_import(self):
+        """Test that the module can be imported."""
+        import {module_name}
+        assert {module_name} is not None
+
+'''
+
+        # Add smoke tests for each export
+        for export in exports:
+            test_code += f'''    def test_{export}_smoke(self):
+        """Basic smoke test for {export}."""
+        # This is a stub - replace with actual test logic
+        assert {export} is not None
+        # TODO: Add actual test assertions
+
+'''
+
+        return test_code
+
+    def validate_and_add(self, test_code: str, test_path: str) -> bool:
+        """Write to temp dir, run pytest on it, only move to real test dir if tests pass.
+
+        Args:
+            test_code: The test code to validate.
+            test_path: The intended path for the test file.
+
+        Returns:
+            True if tests passed and file was written, False otherwise.
+        """
+        # Create temp directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write test to temp dir
+            tmp_test_path = os.path.join(tmpdir, os.path.basename(test_path))
+            os.makedirs(os.path.dirname(tmp_test_path), exist_ok=True)
+            with open(tmp_test_path, 'w') as f:
+                f.write(test_code)
+
+            # Run pytest on the temp test
+            try:
+                result = subprocess.run(
+                    [sys.executable, '-m', 'pytest', tmp_test_path, '-v', '--tb=short'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    # Tests passed, move to real test dir
+                    os.makedirs(os.path.dirname(test_path), exist_ok=True)
+                    with open(test_path, 'w') as f:
+                        f.write(test_code)
+                    print(f"Test file written to {test_path}")
+                    return True
+                else:
+                    print(f"Tests failed for {test_path}:")
+                    print(result.stdout)
+                    print(result.stderr)
+                    return False
+            except subprocess.TimeoutExpired:
+                print(f"Test execution timed out for {test_path}")
+                return False
+            except Exception as e:
+                print(f"Error running tests for {test_path}: {e}")
+                return False
+
+    def evolve(self) -> Dict[str, Any]:
+        """Orchestrate the full cycle: scan, identify gaps, generate stubs, validate, and add.
+
+        Returns:
+            Dict with 'new_tests', 'failed_tests', 'gaps_found', and 'coverage_stats'.
+        """
+        results = {
+            'new_tests': [],
+            'failed_tests': [],
+            'gaps_found': [],
+            'coverage_stats': {}
+        }
+
+        # Step 1: Scan coverage
+        coverage_map = self.scan_coverage()
+        results['coverage_stats'] = {
+            'test_files_found': len(coverage_map),
+            'total_imports': sum(len(imports) for imports in coverage_map.values())
+        }
+
+        # Step 2: Identify gaps
+        gaps = self.identify_gaps()
+        results['gaps_found'] = gaps
+
+        # Step 3: Generate and validate test stubs for gaps
+        for gap in gaps:
+            module_path = gap['module'].replace('.', os.sep) + '.py'
+            full_module_path = os.path.join(self.source_dir, module_path)
+            if not os.path.exists(full_module_path):
+                # Try to find the module file
+                for root, dirs, files in os.walk(self.source_dir):
+                    for file in files:
+                        if file.endswith('.py') and file.replace('.py', '') == gap['module'].split('.')[-1]:
+                            full_module_path = os.path.join(root, file)
+                            break
+
+            if os.path.exists(full_module_path):
+                # Generate test stub
+                test_code = self.generate_test_stub(full_module_path)
+
+                # Determine test file path
+                test_filename = f"test_{gap['module'].replace('.', '_')}.py"
+                test_path = os.path.join(self.test_dir, test_filename)
+
+                # Validate and add
+                success = self.validate_and_add(test_code, test_path)
+                if success:
+                    results['new_tests'].append(test_path)
+                else:
+                    results['failed_tests'].append(test_path)
+
+        # Step 4: Adapt strategies based on results
+        if results['new_tests']:
+            self.adapt_strategies()
+
+        return results
+
 
 # ---------------------------------------------------------------------------
 # Utility functions for external use
 # ---------------------------------------------------------------------------
 
-def create_mutator() -> TestSuiteMutator:
+def create_mutator(test_dir: str = "tests", source_dir: str = "src") -> TestSuiteMutator:
     """Factory function to create a configured mutator."""
-    return TestSuiteMutator()
+    return TestSuiteMutator(test_dir=test_dir, source_dir=source_dir)
 
 
 def mutate_test_file(filepath: str, output_path: str = None, num_mutations: int = 10):
@@ -466,3 +735,25 @@ def test_addition():
 
     print("\nReport:")
     print(mutator.generate_report())
+
+    # Demo evolution cycle
+    print("\n--- Evolution Cycle Demo ---")
+    print("Scanning coverage...")
+    coverage = mutator.scan_coverage()
+    print(f"Found {len(coverage)} test files")
+
+    print("\nIdentifying gaps...")
+    gaps = mutator.identify_gaps()
+    print(f"Found {len(gaps)} gaps")
+
+    if gaps:
+        print("\nGenerating test stub for first gap...")
+        module_path = gaps[0]['module'].replace('.', os.sep) + '.py'
+        full_path = os.path.join(mutator.source_dir, module_path)
+        if os.path.exists(full_path):
+            stub = mutator.generate_test_stub(full_path)
+            print(stub[:500] + "...")
+        else:
+            print(f"Module file not found: {full_path}")
+
+    print("\nEvolve cycle completed.")

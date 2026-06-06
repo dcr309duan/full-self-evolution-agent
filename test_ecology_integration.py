@@ -73,6 +73,11 @@ def load_tests(loader, tests, pattern):
         self.assertIsInstance(test_suite, list)
         self.assertGreater(len(test_suite), 0)
         
+        # Verify at least one new test file was created (not just the original test_sample.py)
+        original_tests = ['test_sample.py', 'test_suite.py']
+        new_test_files = [f for f in test_suite if os.path.basename(f) not in original_tests]
+        self.assertGreater(len(new_test_files), 0, "No new test files were created")
+        
         # Verify test suite contains valid test files
         for test_file in test_suite:
             self.assertTrue(os.path.exists(test_file))
@@ -182,6 +187,61 @@ def load_tests(loader, tests, pattern):
         
         # Verify generation counter increases
         self.assertGreater(result3['generation'], result2['generation'])
+
+    def test_new_test_file_creation_and_execution(self):
+        """Integration test that validates the complete ECOLOGY loop:
+        (1) runs the full pipeline: scan tests -> analyze coverage -> generate pressures -> mutate test suite,
+        (2) verifies at least one new test file was created,
+        (3) runs the new test file and checks it passes.
+        """
+        # Step 1: Initialize the ecology engine
+        engine_state = initialize_ecology_engine()
+        self.assertTrue(engine_state['initialized'])
+        
+        # Step 2: Run the full pipeline (scan tests -> analyze coverage -> generate pressures -> mutate test suite)
+        result = evolve_fitness_landscape()
+        
+        # Verify the pipeline produced output
+        self.assertIn('test_suite', result)
+        self.assertIn('fitness_scores', result)
+        self.assertIn('population', result)
+        self.assertIn('generation', result)
+        
+        # Step 3: Verify at least one new test file was created
+        test_suite = result['test_suite']
+        original_tests = ['test_sample.py', 'test_suite.py']
+        new_test_files = [f for f in test_suite if os.path.basename(f) not in original_tests]
+        self.assertGreater(len(new_test_files), 0, "No new test files were created by the pipeline")
+        
+        # Step 4: Run the new test file and check it passes
+        for new_test_file in new_test_files:
+            self.assertTrue(os.path.exists(new_test_file), f"New test file {new_test_file} does not exist")
+            
+            # Load and run the new test file
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    os.path.basename(new_test_file).replace('.py', ''),
+                    new_test_file
+                )
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                
+                # Load tests from the module
+                test_loader = unittest.TestLoader()
+                tests = test_loader.loadTestsFromModule(module)
+                
+                # Run the tests
+                test_runner = unittest.TextTestRunner(verbosity=0)
+                test_result = test_runner.run(tests)
+                
+                # Verify the tests passed
+                self.assertTrue(test_result.wasSuccessful(), 
+                                f"New test file {new_test_file} did not pass: {len(test_result.failures)} failures, {len(test_result.errors)} errors")
+                self.assertGreater(test_result.testsRun, 0, 
+                                   f"No tests were executed from {new_test_file}")
+                
+            except Exception as e:
+                self.fail(f"Failed to load or run new test file {new_test_file}: {e}")
 
 if __name__ == '__main__':
     unittest.main()

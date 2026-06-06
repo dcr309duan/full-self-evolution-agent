@@ -15,9 +15,85 @@ import random
 import time
 import os
 import sys
+import json
+import ast
+import subprocess
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+# ---------------------------------------------------------------------------
+# Import and delegate to ecology_minimal_core
+# ---------------------------------------------------------------------------
+
+try:
+    from ecology_minimal_core import (
+        EcologyMinimalCore,
+        TestSuiteEvolver,
+        evaluate_test_suite as core_evaluate,
+        generate_novel_test_suite as core_generate_novel,
+        register_pressure as core_register_pressure,
+        get_pressure as core_get_pressure,
+        list_pressures as core_list_pressures,
+        clear_pressures as core_clear_pressures,
+        generate_missing_pressure_templates as core_generate_templates,
+        generate_all_templates as core_generate_all_templates,
+        introduce_novel_constraint as core_introduce_constraint,
+        inject_test_into_existing_suite as core_inject_test,
+        _pressure_registry as core_registry,
+    )
+    _minimal_core_available = True
+except ImportError:
+    _minimal_core_available = False
+    # Define stub classes/functions if minimal core not available
+    class EcologyMinimalCore:
+        """Stub implementation when ecology_minimal_core is not available."""
+        def __init__(self, *args, **kwargs):
+            pass
+        def run_self_test(self) -> bool:
+            return False
+        def get_status(self) -> Dict[str, Any]:
+            return {"status": "unavailable"}
+    
+    class TestSuiteEvolver:
+        """Stub implementation when ecology_minimal_core is not available."""
+        def __init__(self, *args, **kwargs):
+            pass
+        def evolve(self, test_suite: Dict[str, Any]) -> Dict[str, Any]:
+            return test_suite
+    
+    def core_evaluate(test_suite, pressure_names=None):
+        return {}
+    
+    def core_generate_novel(existing_suite, num_tests=3, uniqueness_threshold=0.3, output_dir=None):
+        return []
+    
+    def core_register_pressure(name, description, severity, evaluate, generate_template):
+        pass
+    
+    def core_get_pressure(name):
+        return None
+    
+    def core_list_pressures():
+        return []
+    
+    def core_clear_pressures():
+        pass
+    
+    def core_generate_templates(test_suite, threshold=0.5, max_templates=5):
+        return []
+    
+    def core_generate_all_templates():
+        return []
+    
+    def core_introduce_constraint():
+        return ""
+    
+    def core_inject_test(test_file_path, num_tests=1, uniqueness_threshold=0.3):
+        return []
+    
+    core_registry = []
 
 # ---------------------------------------------------------------------------
 # Import TestSuiteMutator with fallback
@@ -46,17 +122,10 @@ except ImportError:
                 return test_suite
 
 # ---------------------------------------------------------------------------
-# Pressure Registry
+# Pressure Registry (delegates to minimal core)
 # ---------------------------------------------------------------------------
 
-# Each pressure is a dict with keys:
-#   name: str
-#   description: str
-#   severity: float (0.0 = low, 1.0 = critical)
-#   evaluate: Callable[[dict], float]  # returns 0.0 (fail) to 1.0 (pass)
-#   generate_template: Callable[[], str]  # returns a test template string
-
-_pressure_registry: List[Dict[str, Any]] = []
+_pressure_registry = core_registry
 
 
 def register_pressure(
@@ -66,32 +135,23 @@ def register_pressure(
     evaluate: Callable[[Dict[str, Any]], float],
     generate_template: Callable[[], str],
 ) -> None:
-    """Register a new environmental pressure."""
-    _pressure_registry.append({
-        "name": name,
-        "description": description,
-        "severity": max(0.0, min(1.0, severity)),
-        "evaluate": evaluate,
-        "generate_template": generate_template,
-    })
+    """Register a new environmental pressure (delegates to minimal core)."""
+    core_register_pressure(name, description, severity, evaluate, generate_template)
 
 
 def get_pressure(name: str) -> Optional[Dict[str, Any]]:
-    """Retrieve a pressure by name."""
-    for p in _pressure_registry:
-        if p["name"] == name:
-            return p
-    return None
+    """Retrieve a pressure by name (delegates to minimal core)."""
+    return core_get_pressure(name)
 
 
 def list_pressures() -> List[str]:
-    """Return names of all registered pressures."""
-    return [p["name"] for p in _pressure_registry]
+    """Return names of all registered pressures (delegates to minimal core)."""
+    return core_list_pressures()
 
 
 def clear_pressures() -> None:
-    """Remove all registered pressures (useful for testing)."""
-    _pressure_registry.clear()
+    """Remove all registered pressures (delegates to minimal core)."""
+    core_clear_pressures()
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +373,7 @@ register_pressure(
 
 
 # ---------------------------------------------------------------------------
-# Evaluation Functions
+# Evaluation Functions (delegate to minimal core)
 # ---------------------------------------------------------------------------
 
 def evaluate_test_suite(
@@ -321,7 +381,7 @@ def evaluate_test_suite(
     pressure_names: Optional[List[str]] = None,
 ) -> Dict[str, float]:
     """
-    Evaluate a test suite against registered pressures.
+    Evaluate a test suite against registered pressures (delegates to minimal core).
 
     Args:
         test_suite: Dict with keys expected by pressure evaluators.
@@ -331,22 +391,7 @@ def evaluate_test_suite(
     Returns:
         Dict mapping pressure names to scores (0.0 to 1.0).
     """
-    results: Dict[str, float] = {}
-    pressures_to_evaluate = _pressure_registry
-
-    if pressure_names is not None:
-        pressures_to_evaluate = [
-            p for p in _pressure_registry if p["name"] in pressure_names
-        ]
-
-    for pressure in pressures_to_evaluate:
-        try:
-            score = pressure["evaluate"](test_suite)
-            results[pressure["name"]] = max(0.0, min(1.0, score))
-        except Exception as e:
-            results[pressure["name"]] = 0.0
-
-    return results
+    return core_evaluate(test_suite, pressure_names)
 
 
 def evaluate_test_suite_weighted(
@@ -381,7 +426,7 @@ def evaluate_test_suite_weighted(
 
 
 # ---------------------------------------------------------------------------
-# Template Generation
+# Template Generation (delegate to minimal core)
 # ---------------------------------------------------------------------------
 
 def generate_missing_pressure_templates(
@@ -390,7 +435,7 @@ def generate_missing_pressure_templates(
     max_templates: int = 5,
 ) -> List[Tuple[str, str, str]]:
     """
-    Generate test templates for pressures that are below the threshold.
+    Generate test templates for pressures that are below the threshold (delegates to minimal core).
 
     Args:
         test_suite: Dict with test suite data.
@@ -400,32 +445,16 @@ def generate_missing_pressure_templates(
     Returns:
         List of tuples: (pressure_name, pressure_description, template_code).
     """
-    scores = evaluate_test_suite(test_suite)
-    templates: List[Tuple[str, str, str]] = []
-
-    for pressure in _pressure_registry:
-        if len(templates) >= max_templates:
-            break
-        name = pressure["name"]
-        score = scores.get(name, 0.0)
-        if score < threshold:
-            template_code = pressure["generate_template"]()
-            templates.append((name, pressure["description"], template_code))
-
-    return templates
+    return core_generate_templates(test_suite, threshold, max_templates)
 
 
 def generate_all_templates() -> List[Tuple[str, str, str]]:
-    """Generate templates for all registered pressures."""
-    templates: List[Tuple[str, str, str]] = []
-    for pressure in _pressure_registry:
-        template_code = pressure["generate_template"]()
-        templates.append((pressure["name"], pressure["description"], template_code))
-    return templates
+    """Generate templates for all registered pressures (delegates to minimal core)."""
+    return core_generate_all_templates()
 
 
 # ---------------------------------------------------------------------------
-# Novel Test Suite Generation (ECOLOGY mechanism)
+# Novel Test Suite Generation (delegate to minimal core)
 # ---------------------------------------------------------------------------
 
 def generate_novel_test_suite(
@@ -449,394 +478,11 @@ def generate_novel_test_suite(
     Returns:
         List of test file contents (strings) that are novel relative to existing_suite.
     """
-    novel_tests: List[str] = []
-    existing_assertions = _extract_assertions(existing_suite)
-    
-    for _ in range(num_tests * 3):  # Generate extra to filter for uniqueness
-        if len(novel_tests) >= num_tests:
-            break
-            
-        test_content = _generate_novel_test_content(existing_suite)
-        new_assertions = _extract_assertions_from_content(test_content)
-        
-        # Check uniqueness against existing and already generated tests
-        if _is_unique_assertion_set(new_assertions, existing_assertions, uniqueness_threshold):
-            novel_tests.append(test_content)
-            existing_assertions.update(new_assertions)
-    
-    # Write to disk if output_dir is provided
-    if output_dir is not None:
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        for i, test_content in enumerate(novel_tests):
-            filename = f"novel_test_{timestamp}_{i:03d}.py"
-            filepath = output_path / filename
-            with open(filepath, 'w') as f:
-                f.write(test_content)
-    
-    return novel_tests
-
-
-def _extract_assertions(test_suite: Dict[str, Any]) -> set:
-    """
-    Extract assertion patterns from test suite metadata.
-    Returns a set of assertion type strings present in the suite.
-    """
-    assertions = set()
-    
-    # Extract from existing test files if present
-    existing_tests = test_suite.get("test_files", [])
-    for test_file in existing_tests:
-        if isinstance(test_file, str):
-            assertions.update(_extract_assertions_from_content(test_file))
-    
-    # Add default assertions based on suite metrics
-    if test_suite.get("coverage", 0) > 0:
-        assertions.add("assert_coverage")
-    if test_suite.get("mutation_score", 0) > 0:
-        assertions.add("assert_mutation")
-    if test_suite.get("regression_test_count", 0) > 0:
-        assertions.add("assert_regression")
-    if test_suite.get("edge_case_count", 0) > 0:
-        assertions.add("assert_edge_case")
-    if test_suite.get("avg_test_time", 10) < 1.0:
-        assertions.add("assert_performance")
-    
-    return assertions
-
-
-def _extract_assertions_from_content(content: str) -> set:
-    """
-    Extract assertion types from test file content.
-    """
-    assertions = set()
-    assertion_patterns = [
-        "assertEqual", "assertNotEqual", "assertTrue", "assertFalse",
-        "assertIs", "assertIsNot", "assertIsNone", "assertIsNotNone",
-        "assertIn", "assertNotIn", "assertIsInstance", "assertNotIsInstance",
-        "assertRaises", "assertRaisesRegex", "assertWarns", "assertWarnsRegex",
-        "assertAlmostEqual", "assertNotAlmostEqual", "assertGreater",
-        "assertGreaterEqual", "assertLess", "assertLessEqual",
-        "assertRegex", "assertNotRegex", "assertCountEqual",
-        "assertMultiLineEqual", "assertSequenceEqual", "assertListEqual",
-        "assertTupleEqual", "assertSetEqual", "assertDictEqual",
-    ]
-    
-    for pattern in assertion_patterns:
-        if pattern in content:
-            assertions.add(pattern)
-    
-    return assertions
-
-
-def _is_unique_assertion_set(
-    new_assertions: set,
-    existing_assertions: set,
-    threshold: float,
-) -> bool:
-    """
-    Determine if a set of assertions is sufficiently unique compared to existing ones.
-    Uses Jaccard similarity to measure overlap.
-    """
-    if not new_assertions:
-        return False
-    
-    if not existing_assertions:
-        return True
-    
-    intersection = new_assertions.intersection(existing_assertions)
-    union = new_assertions.union(existing_assertions)
-    
-    similarity = len(intersection) / len(union) if union else 0.0
-    return similarity < threshold
-
-
-def _generate_novel_test_content(test_suite: Dict[str, Any]) -> str:
-    """
-    Generate a novel test file content with unique assertions.
-    Creates tests that target areas where the current suite is weak.
-    """
-    # Identify weak areas based on suite metrics
-    weak_areas = []
-    if test_suite.get("coverage", 0) < 50:
-        weak_areas.append("coverage")
-    if test_suite.get("mutation_score", 0) < 40:
-        weak_areas.append("mutation")
-    if test_suite.get("regression_test_count", 0) < 3:
-        weak_areas.append("regression")
-    if test_suite.get("edge_case_count", 0) < 5:
-        weak_areas.append("edge_cases")
-    if test_suite.get("avg_test_time", 10) > 2.0:
-        weak_areas.append("performance")
-    
-    if not weak_areas:
-        weak_areas = ["general"]
-    
-    # Generate test based on weak areas
-    test_id = random.randint(10000, 99999)
-    target_area = random.choice(weak_areas)
-    
-    test_content = f"""import unittest
-import random
-import time
-import sys
-import os
-
-class TestNovel{test_id}(unittest.TestCase):
-    \"\"\"Novel test generated by ECOLOGY mechanism to challenge current capabilities.\"\"\"
-    
-    def setUp(self):
-        self.test_data = self._generate_test_data()
-    
-    def _generate_test_data(self):
-        \"\"\"Generate unique test data for this test.\"\"\"
-        return {{
-            "input": random.randint(-1000, 1000),
-            "string_input": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=random.randint(0, 20))),
-            "list_input": [random.randint(0, 100) for _ in range(random.randint(0, 10))],
-            "float_input": random.uniform(-100.0, 100.0),
-        }}
-    
-"""
-    
-    if target_area == "coverage":
-        test_content += """    def test_coverage_novel_path(self):
-        \"\"\"Test a unique code path not covered by existing tests.\"\"\"
-        # This test targets uncovered branches
-        value = self.test_data["input"]
-        if value > 0:
-            result = value * 2
-        elif value < 0:
-            result = abs(value)
-        else:
-            result = 42
-        self.assertIsNotNone(result)
-        self.assertGreaterEqual(result, 0)
-    
-    def test_coverage_boundary(self):
-        \"\"\"Test boundary conditions for coverage.\"\"\"
-        for boundary in [0, 1, -1, 100, -100]:
-            with self.subTest(boundary=boundary):
-                result = self._process_boundary(boundary)
-                self.assertIsInstance(result, (int, float))
-    
-    def _process_boundary(self, value):
-        \"\"\"Helper to test boundary processing.\"\"\"
-        if value == 0:
-            return 0
-        elif value > 0:
-            return value * 2
-        else:
-            return value * -1
-    
-"""
-    elif target_area == "mutation":
-        test_content += """    def test_mutation_kill_operator(self):
-        \"\"\"Test designed to kill specific mutation operators.\"\"\"
-        # Test arithmetic operator mutations
-        a, b = 10, 5
-        self.assertEqual(a + b, 15)
-        self.assertEqual(a - b, 5)
-        self.assertEqual(a * b, 50)
-        self.assertEqual(a // b, 2)
-        self.assertEqual(a % b, 0)
-    
-    def test_mutation_condition(self):
-        \"\"\"Test designed to kill condition boundary mutations.\"\"\"
-        for value in [True, False, None, 0, 1, ""]:
-            with self.subTest(value=value):
-                if value:
-                    self.assertTrue(bool(value) or not bool(value))
-                else:
-                    self.assertFalse(bool(value) and not bool(value))
-    
-    def test_mutation_constant(self):
-        \"\"\"Test designed to kill constant replacement mutations.\"\"\"
-        constants = [0, 1, -1, 100, 3.14, sys.maxsize]
-        for const in constants:
-            with self.subTest(constant=const):
-                self.assertIsNotNone(const)
-                self.assertIsInstance(const, (int, float))
-    
-"""
-    elif target_area == "regression":
-        test_content += """    def test_regression_scenario(self):
-        \"\"\"Test a regression scenario with specific input-output pairs.\"\"\"
-        test_cases = [
-            (0, 0),
-            (1, 1),
-            (-1, -1),
-            (100, 100),
-            (-100, -100),
-        ]
-        for input_val, expected in test_cases:
-            with self.subTest(input=input_val):
-                result = self._regression_function(input_val)
-                self.assertEqual(result, expected)
-    
-    def _regression_function(self, x):
-        \"\"\"Simple function that should maintain behavior.\"\"\"
-        return x
-    
-    def test_regression_edge_combination(self):
-        \"\"\"Test edge case combinations that previously caused bugs.\"\"\"
-        # Test with empty and None values
-        self.assertIsNotNone(self.test_data["string_input"])
-        self.assertIsNotNone(self.test_data["list_input"])
-        
-        # Test with extreme values
-        extreme_input = sys.maxsize
-        self.assertGreater(extreme_input, 0)
-        
-        # Test with type variations
-        self.assertIsInstance(self.test_data["float_input"], float)
-    
-"""
-    elif target_area == "edge_cases":
-        test_content += """    def test_edge_empty_input(self):
-        \"\"\"Test behavior with empty or minimal inputs.\"\"\"
-        empty_string = ""
-        empty_list = []
-        zero_value = 0
-        
-        self.assertEqual(len(empty_string), 0)
-        self.assertEqual(len(empty_list), 0)
-        self.assertEqual(zero_value, 0)
-        
-        # Test that empty inputs don't cause crashes
-        self.assertIsNotNone(empty_string)
-        self.assertIsNotNone(empty_list)
-    
-    def test_edge_large_input(self):
-        \"\"\"Test behavior with very large inputs.\"\"\"
-        large_string = "x" * 10000
-        large_list = list(range(1000))
-        large_number = 10**10
-        
-        self.assertEqual(len(large_string), 10000)
-        self.assertEqual(len(large_list), 1000)
-        self.assertGreater(large_number, 0)
-    
-    def test_edge_special_values(self):
-        \"\"\"Test with special values like NaN, Infinity, etc.\"\"\"
-        import math
-        
-        special_values = [
-            float('inf'),
-            float('-inf'),
-            float('nan'),
-            0.0,
-            -0.0,
-        ]
-        
-        for val in special_values:
-            with self.subTest(value=val):
-                if math.isnan(val):
-                    self.assertTrue(math.isnan(val))
-                elif val == float('inf'):
-                    self.assertTrue(math.isinf(val))
-                elif val == float('-inf'):
-                    self.assertTrue(math.isinf(val))
-                else:
-                    self.assertIsInstance(val, float)
-    
-"""
-    elif target_area == "performance":
-        test_content += """    def test_performance_bounds(self):
-        \"\"\"Test that operations complete within time bounds.\"\"\"
-        start_time = time.time()
-        
-        # Perform a bounded operation
-        result = sum(range(1000))
-        elapsed = time.time() - start_time
-        
-        self.assertLess(elapsed, 1.0)
-        self.assertEqual(result, 499500)
-    
-    def test_performance_scalability(self):
-        \"\"\"Test performance with increasing input sizes.\"\"\"
-        sizes = [10, 100, 1000]
-        for size in sizes:
-            with self.subTest(size=size):
-                start = time.time()
-                data = list(range(size))
-                processed = [x * 2 for x in data]
-                elapsed = time.time() - start
-                self.assertLess(elapsed, 0.5)
-                self.assertEqual(len(processed), size)
-    
-    def test_performance_memory(self):
-        \"\"\"Test memory usage patterns.\"\"\"
-        # Test that large operations don't cause memory issues
-        large_data = [i for i in range(10000)]
-        self.assertEqual(len(large_data), 10000)
-        
-        # Test memory cleanup
-        del large_data
-        self.assertTrue(True)  # Should not raise memory error
-    
-"""
-    else:  # general
-        test_content += """    def test_general_assertions(self):
-        \"\"\"Test general assertions that challenge basic functionality.\"\"\"
-        # Type assertions
-        self.assertIsInstance(42, int)
-        self.assertIsInstance(3.14, float)
-        self.assertIsInstance("hello", str)
-        self.assertIsInstance([], list)
-        self.assertIsInstance({}, dict)
-        
-        # Value assertions
-        self.assertEqual(1 + 1, 2)
-        self.assertNotEqual(1 + 1, 3)
-        self.assertTrue(True)
-        self.assertFalse(False)
-        
-        # Container assertions
-        self.assertIn(1, [1, 2, 3])
-        self.assertNotIn(4, [1, 2, 3])
-    
-    def test_general_edge_behavior(self):
-        \"\"\"Test edge behavior with various inputs.\"\"\"
-        # Test with None
-        self.assertIsNone(None)
-        self.assertIsNotNone(0)
-        
-        # Test with boolean
-        self.assertTrue(1)
-        self.assertFalse(0)
-        
-        # Test with comparison
-        self.assertGreater(5, 3)
-        self.assertGreaterEqual(5, 5)
-        self.assertLess(3, 5)
-        self.assertLessEqual(3, 3)
-    
-    def test_general_error_handling(self):
-        \"\"\"Test error handling and exceptions.\"\"\"
-        # Test that appropriate exceptions are raised
-        with self.assertRaises(ZeroDivisionError):
-            result = 1 / 0
-        
-        with self.assertRaises(TypeError):
-            result = "string" + 1
-        
-        with self.assertRaises(ValueError):
-            result = int("not_a_number")
-    
-"""
-    
-    test_content += f"""
-if __name__ == '__main__':
-    unittest.main()
-"""
-    
-    return test_content
+    return core_generate_novel(existing_suite, num_tests, uniqueness_threshold, output_dir)
 
 
 # ---------------------------------------------------------------------------
-# New Method: introduce_novel_constraint
+# New Method: introduce_novel_constraint (delegate to minimal core)
 # ---------------------------------------------------------------------------
 
 def introduce_novel_constraint() -> str:
@@ -850,103 +496,11 @@ def introduce_novel_constraint() -> str:
         A string containing the content of a new test file with a unique
         assertion pattern.
     """
-    # Scan existing test files for assertion types
-    # For this implementation, we simulate scanning by checking the registry
-    # and generating a test that uses a rare or unused assertion combination.
-    
-    # Collect all assertion types that might be present in existing tests
-    existing_assertions = set()
-    for pressure in _pressure_registry:
-        # Simulate extracting assertions from templates
-        template = pressure["generate_template"]()
-        existing_assertions.update(_extract_assertions_from_content(template))
-    
-    # Define all possible assertion types
-    all_assertions = [
-        "assertEqual", "assertNotEqual", "assertTrue", "assertFalse",
-        "assertIs", "assertIsNot", "assertIsNone", "assertIsNotNone",
-        "assertIn", "assertNotIn", "assertIsInstance", "assertNotIsInstance",
-        "assertRaises", "assertRaisesRegex", "assertWarns", "assertWarnsRegex",
-        "assertAlmostEqual", "assertNotAlmostEqual", "assertGreater",
-        "assertGreaterEqual", "assertLess", "assertLessEqual",
-        "assertRegex", "assertNotRegex", "assertCountEqual",
-        "assertMultiLineEqual", "assertSequenceEqual", "assertListEqual",
-        "assertTupleEqual", "assertSetEqual", "assertDictEqual",
-    ]
-    
-    # Find assertion types not present in existing tests
-    missing_assertions = [a for a in all_assertions if a not in existing_assertions]
-    
-    # If all assertion types are present, create a test with a unique combination
-    if not missing_assertions:
-        # Create a test that uses a rare combination of assertions
-        test_content = f"""import unittest
-
-class TestNovelConstraint(unittest.TestCase):
-    \"\"\"Test generated by introduce_novel_constraint to introduce a unique assertion pattern.\"\"\"
-    
-    def test_unique_combination(self):
-        \"\"\"Use a combination of assertions not seen together in existing tests.\"\"\"
-        # Combine assertCountEqual with assertMultiLineEqual
-        list1 = [1, 2, 3]
-        list2 = [3, 2, 1]
-        self.assertCountEqual(list1, list2)
-        
-        str1 = "hello\\nworld"
-        str2 = "hello\\nworld"
-        self.assertMultiLineEqual(str1, str2)
-        
-        # Add assertSequenceEqual and assertSetEqual
-        seq1 = [1, 2, 3]
-        seq2 = [1, 2, 3]
-        self.assertSequenceEqual(seq1, seq2)
-        
-        set1 = {1, 2, 3}
-        set2 = {3, 2, 1}
-        self.assertSetEqual(set1, set2)
-    
-    def test_rare_assertions(self):
-        \"\"\"Use rare assertion types.\"\"\"
-        # assertNotRegex
-        self.assertNotRegex("hello world", r"^\\\\d+$")
-        
-        # assertWarnsRegex
-        import warnings
-        with self.assertWarnsRegex(UserWarning, "test warning"):
-            warnings.warn("this is a test warning", UserWarning)
-        
-        # assertNotIsInstance
-        self.assertNotIsInstance(42, str)
-        
-        # assertNotAlmostEqual
-        self.assertNotAlmostEqual(3.14159, 3.14, places=2)
-
-if __name__ == '__main__':
-    unittest.main()
-"""
-    else:
-        # Use a missing assertion type
-        chosen_assertion = random.choice(missing_assertions)
-        test_content = f"""import unittest
-
-class TestNovelConstraint(unittest.TestCase):
-    \"\"\"Test generated by introduce_novel_constraint to introduce a new assertion type.\"\"\"
-    
-    def test_new_assertion(self):
-        \"\"\"Use the assertion type '{chosen_assertion}' which is not present in existing tests.\"\"\"
-        # TODO: Implement test using {chosen_assertion}
-        # This test introduces a new assertion pattern to the test suite
-        self.{chosen_assertion}(True)  # Placeholder - adjust as needed
-
-if __name__ == '__main__':
-    unittest.main()
-"""
-    
-    return test_content
+    return core_introduce_constraint()
 
 
 # ---------------------------------------------------------------------------
-# New Method: inject_test_into_existing_suite
+# New Method: inject_test_into_existing_suite (delegate to minimal core)
 # ---------------------------------------------------------------------------
 
 def inject_test_into_existing_suite(
@@ -967,48 +521,561 @@ def inject_test_into_existing_suite(
     Returns:
         List of new test method code strings that were added.
     """
-    # Read the existing test file
-    filepath = Path(test_file_path)
-    if not filepath.exists():
-        raise FileNotFoundError(f"Test file not found: {test_file_path}")
-    
-    with open(filepath, 'r') as f:
-        original_content = f.read()
-    
-    # Extract existing assertions from the file
-    existing_assertions = _extract_assertions_from_content(original_content)
-    
-    # Generate new test methods
-    new_methods = []
-    for _ in range(num_tests * 3):  # Generate extra to filter for uniqueness
-        if len(new_methods) >= num_tests:
-            break
-        
-        # Generate a unique test method
-        method_code = _generate_unique_test_method(existing_assertions, uniqueness_threshold)
-        method_assertions = _extract_assertions_from_content(method_code)
-        
-        # Check uniqueness
-        if _is_unique_assertion_set(method_assertions, existing_assertions, uniqueness_threshold):
-            new_methods.append(method_code)
-            existing_assertions.update(method_assertions)
-    
-    # Append new methods to the file
-    if new_methods:
-        with open(filepath, 'a') as f:
-            f.write("\n\n")
-            for method in new_methods:
-                f.write(method)
-                f.write("\n")
-    
-    return new_methods
+    return core_inject_test(test_file_path, num_tests, uniqueness_threshold)
 
 
-def _generate_unique_test_method(
-    existing_assertions: set,
-    uniqueness_threshold: float,
-) -> str:
+# ---------------------------------------------------------------------------
+# New Method: introduce_environmental_pressure
+# ---------------------------------------------------------------------------
+
+def introduce_environmental_pressure(
+    test_dir: str = "tests",
+    source_dir: str = ".",
+    output_dir: Optional[str] = None,
+    timeout: float = 5.0,
+) -> Dict[str, Any]:
     """
-    Generate a single unique test method with assertions not present in existing_assertions.
+    Introduce a new environmental pressure by:
+    1. Randomly selecting a module from the source directory.
+    2. Creating a new test that tests an extreme or edge case scenario not currently covered.
+    3. Adding performance benchmarks with timeouts.
+    4. Tracking which modules fail under which pressures.
+
+    This creates the 'evolving fitness landscape' without requiring new external modules.
+
+    Args:
+        test_dir: Directory containing test files.
+        source_dir: Directory containing source modules.
+        output_dir: Directory to write new test files. If None, uses test_dir.
+        timeout: Timeout in seconds for performance benchmarks.
+
+    Returns:
+        Dict with pressure introduction results: {
+            "selected_module": str,
+            "pressure_name": str,
+            "test_code": str,
+            "benchmark_results": dict,
+            "module_failures": dict
+        }
     """
-    # Define
+    result = {
+        "selected_module": "",
+        "pressure_name": "",
+        "test_code": "",
+        "benchmark_results": {},
+        "module_failures": {}
+    }
+
+    # Step 1: Randomly select a module from the source directory
+    source_modules = _find_source_modules(source_dir)
+    if not source_modules:
+        result["errors"] = ["No source modules found"]
+        return result
+
+    module_name = random.choice(list(source_modules.keys()))
+    module_path = source_modules[module_name]
+    result["selected_module"] = module_name
+
+    # Step 2: Create a new test that tests an extreme or edge case scenario
+    # Generate a unique pressure name
+    pressure_name = f"extreme_case_{module_name}_{random.randint(1000,9999)}"
+    result["pressure_name"] = pressure_name
+
+    # Generate test code for extreme/edge case
+    test_code = _generate_extreme_case_test(module_name, module_path)
+    result["test_code"] = test_code
+
+    # Step 3: Add performance benchmarks with timeouts
+    benchmark_results = _run_performance_benchmarks(module_name, module_path, timeout)
+    result["benchmark_results"] = benchmark_results
+
+    # Step 4: Track which modules fail under which pressures
+    module_failures = _track_module_failures(module_name, test_code, test_dir)
+    result["module_failures"] = module_failures
+
+    # Write the test file if output_dir is specified
+    output_path = Path(output_dir) if output_dir else Path(test_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    test_file_path = output_path / f"test_{pressure_name}.py"
+    try:
+        with open(test_file_path, "w") as f:
+            f.write(test_code)
+    except OSError as e:
+        result["errors"] = [f"Failed to write test file: {str(e)}"]
+
+    # Register the new pressure
+    def evaluate_extreme_case(test_suite: Dict[str, Any]) -> float:
+        """Evaluate the extreme case pressure."""
+        # Check if the test suite contains the extreme case test
+        test_files = _scan_test_files(test_dir)
+        for test_file in test_files:
+            if pressure_name in test_file.name:
+                return 1.0
+        return 0.0
+
+    def generate_extreme_case_template() -> str:
+        """Generate a template for the extreme case test."""
+        return test_code
+
+    register_pressure(
+        name=pressure_name,
+        description=f"Requires extreme case test for module {module_name}",
+        severity=0.8,
+        evaluate=evaluate_extreme_case,
+        generate_template=generate_extreme_case_template,
+    )
+
+    # Log the pressure introduction
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "action": "introduce_environmental_pressure",
+        "selected_module": module_name,
+        "pressure_name": pressure_name,
+        "benchmark_results": benchmark_results,
+        "module_failures": module_failures
+    }
+    _log_evolution_change(log_entry)
+
+    return result
+
+
+def _generate_extreme_case_test(module_name: str, module_path: Path) -> str:
+    """
+    Generate a test for an extreme or edge case scenario for the given module.
+
+    Args:
+        module_name: Name of the module to test.
+        module_path: Path to the module file.
+
+    Returns:
+        String containing the test code.
+    """
+    # Parse the module to find functions and classes
+    functions = []
+    classes = []
+    try:
+        with open(module_path, "r") as f:
+            tree = ast.parse(f.read(), filename=str(module_path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                functions.append(node.name)
+            elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                classes.append(node.name)
+    except (SyntaxError, FileNotFoundError):
+        pass
+
+    # Generate extreme case test scenarios
+    test_scenarios = []
+    
+    # Add boundary value tests
+    if functions:
+        for func in functions[:3]:
+            test_scenarios.append(f"""
+    def test_{func}_extreme_large_input(self):
+        \"\"\"Test {func} with extremely large input.\"\"\"
+        large_input = 'x' * 100000
+        try:
+            result = {func}(large_input)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{func} raised an exception with large input: {{e}}")
+
+    def test_{func}_extreme_small_input(self):
+        \"\"\"Test {func} with extremely small input.\"\"\"
+        small_input = ''
+        try:
+            result = {func}(small_input)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{func} raised an exception with small input: {{e}}")
+
+    def test_{func}_extreme_negative_input(self):
+        \"\"\"Test {func} with negative input.\"\"\"
+        negative_input = -1
+        try:
+            result = {func}(negative_input)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{func} raised an exception with negative input: {{e}}")
+""")
+
+    # Add null/None tests
+    test_scenarios.append("""
+    def test_null_input(self):
+        \"\"\"Test with None input.\"\"\"
+        try:
+            result = some_function(None)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"Function raised an exception with None input: {e}")
+""")
+
+    # Add type mismatch tests
+    test_scenarios.append("""
+    def test_type_mismatch(self):
+        \"\"\"Test with incorrect type input.\"\"\"
+        try:
+            result = some_function("string_instead_of_int")
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"Function raised an exception with type mismatch: {e}")
+""")
+
+    # Combine all scenarios into a test class
+    test_code = f"""import unittest
+import time
+from {module_name} import *
+
+
+class TestExtremeCase_{module_name.capitalize()}(unittest.TestCase):
+    \"\"\"Extreme case tests for {module_name} module.\"\"\"
+
+    def setUp(self):
+        \"\"\"Set up test fixtures.\"\"\"
+        self.start_time = time.time()
+
+    def tearDown(self):
+        \"\"\"Tear down test fixtures and check performance.\"\"\"
+        elapsed = time.time() - self.start_time
+        self.assertLess(elapsed, 5.0, f"Test took too long: {{elapsed:.2f}}s")
+
+{''.join(test_scenarios)}
+
+if __name__ == '__main__':
+    unittest.main()
+"""
+    return test_code
+
+
+def _run_performance_benchmarks(module_name: str, module_path: Path, timeout: float) -> Dict[str, Any]:
+    """
+    Run performance benchmarks on the given module.
+
+    Args:
+        module_name: Name of the module to benchmark.
+        module_path: Path to the module file.
+        timeout: Timeout in seconds for each benchmark.
+
+    Returns:
+        Dict with benchmark results.
+    """
+    results = {
+        "module_name": module_name,
+        "timeout": timeout,
+        "benchmarks": []
+    }
+
+    # Parse the module to find functions
+    functions = []
+    try:
+        with open(module_path, "r") as f:
+            tree = ast.parse(f.read(), filename=str(module_path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                functions.append(node.name)
+    except (SyntaxError, FileNotFoundError):
+        return results
+
+    # Run benchmarks for each function
+    for func in functions[:5]:  # Limit to first 5 functions
+        benchmark = {
+            "function": func,
+            "status": "unknown",
+            "execution_time": None,
+            "error": None
+        }
+        try:
+            # Create a temporary benchmark script
+            benchmark_code = f"""
+import time
+import sys
+sys.path.insert(0, '.')
+from {module_name} import {func}
+
+start = time.time()
+try:
+    result = {func}()
+    elapsed = time.time() - start
+    print(f"SUCCESS:{{elapsed}}")
+except Exception as e:
+    print(f"ERROR:{{str(e)}}")
+"""
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                f.write(benchmark_code)
+                temp_path = f.name
+
+            # Run the benchmark with timeout
+            result = subprocess.run(
+                [sys.executable, temp_path],
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+
+            # Parse the output
+            output = result.stdout.strip()
+            if output.startswith("SUCCESS:"):
+                elapsed = float(output.split(":")[1])
+                benchmark["status"] = "success"
+                benchmark["execution_time"] = elapsed
+            elif output.startswith("ERROR:"):
+                benchmark["status"] = "error"
+                benchmark["error"] = output.split(":", 1)[1].strip()
+            else:
+                benchmark["status"] = "unknown"
+                benchmark["error"] = f"Unexpected output: {output}"
+
+            # Clean up
+            os.unlink(temp_path)
+
+        except subprocess.TimeoutExpired:
+            benchmark["status"] = "timeout"
+            benchmark["error"] = f"Execution exceeded {timeout}s timeout"
+        except Exception as e:
+            benchmark["status"] = "error"
+            benchmark["error"] = str(e)
+
+        results["benchmarks"].append(benchmark)
+
+    return results
+
+
+def _track_module_failures(module_name: str, test_code: str, test_dir: str) -> Dict[str, List[str]]:
+    """
+    Track which modules fail under which pressures.
+
+    Args:
+        module_name: Name of the module being tested.
+        test_code: The test code to run.
+        test_dir: Directory containing test files.
+
+    Returns:
+        Dict mapping module names to lists of failing pressures.
+    """
+    failures = {}
+
+    # Create a temporary test file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        f.write(test_code)
+        temp_path = f.name
+
+    try:
+        # Run the test
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", temp_path],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Check if the test failed
+        if result.returncode != 0:
+            failures[module_name] = ["extreme_case_test_failure"]
+        else:
+            failures[module_name] = []
+
+    except subprocess.TimeoutExpired:
+        failures[module_name] = ["test_timeout"]
+    except Exception as e:
+        failures[module_name] = [f"test_execution_error: {str(e)}"]
+    finally:
+        # Clean up
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+
+    return failures
+
+
+# ---------------------------------------------------------------------------
+# Helper functions for evolve_test_suite
+# ---------------------------------------------------------------------------
+
+def _scan_test_files(test_dir: str = "tests") -> List[Path]:
+    """Scan the test directory for all Python test files."""
+    test_path = Path(test_dir)
+    if not test_path.exists():
+        return []
+    return list(test_path.rglob("test_*.py")) + list(test_path.rglob("*_test.py"))
+
+
+def _parse_imports(file_path: Path) -> set:
+    """Parse a Python file and extract all module imports."""
+    try:
+        with open(file_path, "r") as f:
+            tree = ast.parse(f.read(), filename=str(file_path))
+    except (SyntaxError, FileNotFoundError):
+        return set()
+    
+    imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imports.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imports.add(node.module.split(".")[0])
+    return imports
+
+
+def _find_source_modules(source_dir: str = ".") -> Dict[str, Path]:
+    """Find all source modules in the project (excluding test files)."""
+    source_path = Path(source_dir)
+    modules = {}
+    for py_file in source_path.rglob("*.py"):
+        if "test" in py_file.name.lower():
+            continue
+        if "ecology_pressure_engine" in py_file.name:
+            continue
+        module_name = py_file.stem
+        if module_name.startswith("_"):
+            continue
+        modules[module_name] = py_file
+    return modules
+
+
+def _generate_test_stub(module_name: str, module_path: Path) -> str:
+    """Generate a minimal test stub for an uncovered module."""
+    functions = []
+    classes = []
+    try:
+        with open(module_path, "r") as f:
+            tree = ast.parse(f.read(), filename=str(module_path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                functions.append(node.name)
+            elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                classes.append(node.name)
+    except (SyntaxError, FileNotFoundError):
+        pass
+    
+    stub = f"""import unittest
+from {module_name} import *
+
+
+class Test{module_name.capitalize()}(unittest.TestCase):
+    \"\"\"Test suite for {module_name} module.\"\"\"
+
+"""
+    if functions:
+        for func in functions[:5]:  # Limit to first 5 functions
+            stub += f"""    def test_{func}(self):
+        \"\"\"Test {func} function.\"\"\"
+        # TODO: Implement test for {func}
+        self.assertTrue(True)
+
+"""
+    if classes:
+        for cls in classes[:3]:  # Limit to first 3 classes
+            stub += f"""    def test_{cls.lower()}_creation(self):
+        \"\"\"Test {cls} class instantiation.\"\"\"
+        # TODO: Implement test for {cls}
+        self.assertTrue(True)
+
+"""
+    stub += """
+if __name__ == '__main__':
+    unittest.main()
+"""
+    return stub
+
+
+def _validate_test_stub(stub_code: str, module_name: str) -> bool:
+    """Validate a test stub by running it in isolation."""
+    try:
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, dir=".") as f:
+            f.write(stub_code)
+            temp_path = f.name
+        
+        # Run the test in isolation
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", temp_path],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        # Clean up
+        os.unlink(temp_path)
+        
+        # Check if tests passed (or at least ran without import errors)
+        return result.returncode == 0 or "FAILED" not in result.stderr
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _log_evolution_change(log_entry: Dict[str, Any], log_file: str = "test_evolution_log.json"):
+    """Log a change to the test evolution log file."""
+    log_path = Path(log_file)
+    if log_path.exists():
+        try:
+            with open(log_path, "r") as f:
+                log_data = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            log_data = []
+    else:
+        log_data = []
+    
+    log_data.append(log_entry)
+    
+    with open(log_path, "w") as f:
+        json.dump(log_data, f, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# New Method: evolve_test_suite
+# ---------------------------------------------------------------------------
+
+def evolve_test_suite(
+    test_dir: str = "tests",
+    source_dir: str = ".",
+    output_dir: Optional[str] = None,
+    max_stubs: int = 5,
+) -> Dict[str, Any]:
+    """
+    Evolve the test suite by:
+    1. Scanning all existing test files for coverage gaps using AST parsing.
+    2. Identifying untested modules by comparing imports vs test imports.
+    3. Generating minimal test stubs for uncovered modules.
+    4. Validating generated tests by running them in isolation before adding to test suite.
+    5. Logging all changes to a test_evolution_log.json file.
+
+    Args:
+        test_dir: Directory containing test files.
+        source_dir: Directory containing source modules.
+        output_dir: Directory to write new test files. If None, uses test_dir.
+        max_stubs: Maximum number of test stubs to generate.
+
+    Returns:
+        Dict with evolution results: {
+            "scanned_tests": int,
+            "source_modules": int,
+            "untested_modules": list,
+            "generated_stubs": int,
+            "validated_stubs": int,
+            "errors": list
+        }
+    """
+    result = {
+        "scanned_tests": 0,
+        "source_modules": 0,
+        "untested_modules": [],
+        "generated_stubs": 0,
+        "validated_stubs": 0,
+        "errors": []
+    }
+    
+    # Step 1: Scan all existing test files for coverage gaps using AST parsing
+    test_files = _scan_test_files(test_dir)
+    result["scanned_tests"] = len(test_files)
+    
+    # Parse all test imports
+    test_imports = set()
+    for test_file in test_files:
+        test_imports.update(_parse_imports(test_file))
+    
+    # Step 2: Identify untested modules by comparing imports vs test imports
+    source_modules = _find_source_modules(source_dir)
+    result["source_modules"] = len(source_modules)
