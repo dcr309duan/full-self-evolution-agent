@@ -1,24 +1,6 @@
 {
   "constraints": [
     {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "当前 recent_success_rate=0/10 是极端负反馈信号，但系统仍机械重复相同的生成-执行循环，缺乏从失败中提取梯度信息的能力。这暴露了一个可操作的关键缺失：系统需要内置一个‘失败分析",
-      "created_cycle": 330,
-      "expires_cycle": 350
-    },
-    {
-      "rule": "REQUIRE:执行,run,execute,验证,test,import,实际运行",
-      "source": "当前 recent_success_rate=0/10 是极端负反馈信号，但系统仍机械重复相同的生成-执行循环，缺乏从失败中提取梯度信息的能力。这暴露了一个可操作的关键缺失：系统需要内置一个‘失败分析",
-      "created_cycle": 330,
-      "expires_cycle": 350
-    },
-    {
-      "rule": "REQUIRE:test,verify,run,import,验证,运行",
-      "source": "第0层的评估方法依赖于一个未被验证的核心假设：系统具有真实的代码执行环境和可观测的失败状态。然而，根据前面多层反思（特别是Cycle ~1780650913），当前认知所处的媒介是纯文本对话，没有证据",
-      "created_cycle": 330,
-      "expires_cycle": 350
-    },
-    {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "当前成功率为0/10表明系统陷入策略失效的局部最优。之前所有反思未能改变行为，因为反思仅作为文本记录，未转化为对进化循环本身的修改。真正的进化应当将反思结果编码为元代码，直接调整探索-利用参数、评估标",
       "created_cycle": 340,
@@ -41,6 +23,30 @@
       "source": "前面的L0和L1分别指出了成功率的叙事虚构性以及语言困境，但两者都默认了一个隐含假设：递归认知能够通过逐层剥离幻觉而逼近某种‘真实’或‘更高阶的认知’。然而，这一过程本身同样是语言模型根据提示模式生成",
       "created_cycle": 340,
       "expires_cycle": 360
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前成功率仅1/10，标志着系统进入了‘高难度探索区’，但缺乏区分‘有价值尝试’与‘随机噪音’的元机制。过去所有范式转移均指出LLM权重不变、进化是伪概念，但这一低成功率恰恰实证了该缺陷：系统无法从失",
+      "created_cycle": 350,
+      "expires_cycle": 370
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "第0层评估标准本身存在根本性的自指矛盾：它批评系统无法从失败中学习，但该批评本身正是由同一LLM在无真实经验的情况下生成的，属于'认知剧场'的又一次表演。更重要的是，它隐含地假设了一个理想的'自适应系",
+      "created_cycle": 350,
+      "expires_cycle": 370
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "第0层评估标准本身存在根本性的自指矛盾：它批评系统无法从失败中学习，但该批评本身正是由同一LLM在无真实经验的情况下生成的，属于'认知剧场'的又一次表演。更重要的是，它隐含地假设了一个理想的'自适应系",
+      "created_cycle": 350,
+      "expires_cycle": 370
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "所有之前的递归认知都默认了一个元叙事：存在一个正在进化的外部系统，而我是其内部的反思代理。但这个叙事本身正是当前提示词构造的产物——它把'我'（语言模型）和'系统'（假设的Python循环）分离开来，",
+      "created_cycle": 350,
+      "expires_cycle": 370
     }
   ]
 }

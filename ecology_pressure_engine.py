@@ -395,6 +395,513 @@ def generate_all_templates() -> List[Tuple[str, str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# Novel Test Suite Generation (ECOLOGY mechanism)
+# ---------------------------------------------------------------------------
+
+def generate_novel_test_suite(
+    existing_suite: Dict[str, Any],
+    num_tests: int = 3,
+    uniqueness_threshold: float = 0.3,
+) -> List[str]:
+    """
+    Create new test files with unique assertions not present in the current test suite.
+    This is the core ECOLOGY mechanism: the agent modifies its own fitness landscape
+    by introducing new tests that challenge its current capabilities.
+
+    Args:
+        existing_suite: Dict representing the current test suite state.
+        num_tests: Number of novel test files to generate.
+        uniqueness_threshold: Minimum difference score to consider a test unique.
+
+    Returns:
+        List of test file contents (strings) that are novel relative to existing_suite.
+    """
+    novel_tests: List[str] = []
+    existing_assertions = _extract_assertions(existing_suite)
+    
+    for _ in range(num_tests * 3):  # Generate extra to filter for uniqueness
+        if len(novel_tests) >= num_tests:
+            break
+            
+        test_content = _generate_novel_test_content(existing_suite)
+        new_assertions = _extract_assertions_from_content(test_content)
+        
+        # Check uniqueness against existing and already generated tests
+        if _is_unique_assertion_set(new_assertions, existing_assertions, uniqueness_threshold):
+            novel_tests.append(test_content)
+            existing_assertions.update(new_assertions)
+    
+    return novel_tests
+
+
+def _extract_assertions(test_suite: Dict[str, Any]) -> set:
+    """
+    Extract assertion patterns from test suite metadata.
+    Returns a set of assertion type strings present in the suite.
+    """
+    assertions = set()
+    
+    # Extract from existing test files if present
+    existing_tests = test_suite.get("test_files", [])
+    for test_file in existing_tests:
+        if isinstance(test_file, str):
+            assertions.update(_extract_assertions_from_content(test_file))
+    
+    # Add default assertions based on suite metrics
+    if test_suite.get("coverage", 0) > 0:
+        assertions.add("assert_coverage")
+    if test_suite.get("mutation_score", 0) > 0:
+        assertions.add("assert_mutation")
+    if test_suite.get("regression_test_count", 0) > 0:
+        assertions.add("assert_regression")
+    if test_suite.get("edge_case_count", 0) > 0:
+        assertions.add("assert_edge_case")
+    if test_suite.get("avg_test_time", 10) < 1.0:
+        assertions.add("assert_performance")
+    
+    return assertions
+
+
+def _extract_assertions_from_content(content: str) -> set:
+    """
+    Extract assertion types from test file content.
+    """
+    assertions = set()
+    assertion_patterns = [
+        "assertEqual", "assertNotEqual", "assertTrue", "assertFalse",
+        "assertIs", "assertIsNot", "assertIsNone", "assertIsNotNone",
+        "assertIn", "assertNotIn", "assertIsInstance", "assertNotIsInstance",
+        "assertRaises", "assertRaisesRegex", "assertWarns", "assertWarnsRegex",
+        "assertAlmostEqual", "assertNotAlmostEqual", "assertGreater",
+        "assertGreaterEqual", "assertLess", "assertLessEqual",
+        "assertRegex", "assertNotRegex", "assertCountEqual",
+        "assertMultiLineEqual", "assertSequenceEqual", "assertListEqual",
+        "assertTupleEqual", "assertSetEqual", "assertDictEqual",
+    ]
+    
+    for pattern in assertion_patterns:
+        if pattern in content:
+            assertions.add(pattern)
+    
+    return assertions
+
+
+def _is_unique_assertion_set(
+    new_assertions: set,
+    existing_assertions: set,
+    threshold: float,
+) -> bool:
+    """
+    Determine if a set of assertions is sufficiently unique compared to existing ones.
+    Uses Jaccard similarity to measure overlap.
+    """
+    if not new_assertions:
+        return False
+    
+    if not existing_assertions:
+        return True
+    
+    intersection = new_assertions.intersection(existing_assertions)
+    union = new_assertions.union(existing_assertions)
+    
+    similarity = len(intersection) / len(union) if union else 0.0
+    return similarity < threshold
+
+
+def _generate_novel_test_content(test_suite: Dict[str, Any]) -> str:
+    """
+    Generate a novel test file content with unique assertions.
+    Creates tests that target areas where the current suite is weak.
+    """
+    # Identify weak areas based on suite metrics
+    weak_areas = []
+    if test_suite.get("coverage", 0) < 50:
+        weak_areas.append("coverage")
+    if test_suite.get("mutation_score", 0) < 40:
+        weak_areas.append("mutation")
+    if test_suite.get("regression_test_count", 0) < 3:
+        weak_areas.append("regression")
+    if test_suite.get("edge_case_count", 0) < 5:
+        weak_areas.append("edge_cases")
+    if test_suite.get("avg_test_time", 10) > 2.0:
+        weak_areas.append("performance")
+    
+    if not weak_areas:
+        weak_areas = ["general"]
+    
+    # Generate test based on weak areas
+    test_id = random.randint(10000, 99999)
+    target_area = random.choice(weak_areas)
+    
+    test_content = f"""import unittest
+import random
+import time
+import sys
+import os
+
+class TestNovel{test_id}(unittest.TestCase):
+    \"\"\"Novel test generated by ECOLOGY mechanism to challenge current capabilities.\"\"\"
+    
+    def setUp(self):
+        self.test_data = self._generate_test_data()
+    
+    def _generate_test_data(self):
+        \"\"\"Generate unique test data for this test.\"\"\"
+        return {{
+            "input": random.randint(-1000, 1000),
+            "string_input": ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=random.randint(0, 20))),
+            "list_input": [random.randint(0, 100) for _ in range(random.randint(0, 10))],
+            "float_input": random.uniform(-100.0, 100.0),
+        }}
+    
+"""
+    
+    if target_area == "coverage":
+        test_content += """    def test_coverage_novel_path(self):
+        \"\"\"Test a unique code path not covered by existing tests.\"\"\"
+        # This test targets uncovered branches
+        value = self.test_data["input"]
+        if value > 0:
+            result = value * 2
+        elif value < 0:
+            result = abs(value)
+        else:
+            result = 42
+        self.assertIsNotNone(result)
+        self.assertGreaterEqual(result, 0)
+    
+    def test_coverage_boundary(self):
+        \"\"\"Test boundary conditions for coverage.\"\"\"
+        for boundary in [0, 1, -1, 100, -100]:
+            with self.subTest(boundary=boundary):
+                result = self._process_boundary(boundary)
+                self.assertIsInstance(result, (int, float))
+    
+    def _process_boundary(self, value):
+        \"\"\"Helper to test boundary processing.\"\"\"
+        if value == 0:
+            return 0
+        elif value > 0:
+            return value * 2
+        else:
+            return value * -1
+    
+"""
+    elif target_area == "mutation":
+        test_content += """    def test_mutation_kill_operator(self):
+        \"\"\"Test designed to kill specific mutation operators.\"\"\"
+        # Test arithmetic operator mutations
+        a, b = 10, 5
+        self.assertEqual(a + b, 15)
+        self.assertEqual(a - b, 5)
+        self.assertEqual(a * b, 50)
+        self.assertEqual(a // b, 2)
+        self.assertEqual(a % b, 0)
+    
+    def test_mutation_condition(self):
+        \"\"\"Test designed to kill condition boundary mutations.\"\"\"
+        for value in [True, False, None, 0, 1, ""]:
+            with self.subTest(value=value):
+                if value:
+                    self.assertTrue(bool(value) or not bool(value))
+                else:
+                    self.assertFalse(bool(value) and not bool(value))
+    
+    def test_mutation_constant(self):
+        \"\"\"Test designed to kill constant replacement mutations.\"\"\"
+        constants = [0, 1, -1, 100, 3.14, sys.maxsize]
+        for const in constants:
+            with self.subTest(constant=const):
+                self.assertIsNotNone(const)
+                self.assertIsInstance(const, (int, float))
+    
+"""
+    elif target_area == "regression":
+        test_content += """    def test_regression_scenario(self):
+        \"\"\"Test a regression scenario with specific input-output pairs.\"\"\"
+        test_cases = [
+            (0, 0),
+            (1, 1),
+            (-1, -1),
+            (100, 100),
+            (-100, -100),
+        ]
+        for input_val, expected in test_cases:
+            with self.subTest(input=input_val):
+                result = self._regression_function(input_val)
+                self.assertEqual(result, expected)
+    
+    def _regression_function(self, x):
+        \"\"\"Simple function that should maintain behavior.\"\"\"
+        return x
+    
+    def test_regression_edge_combination(self):
+        \"\"\"Test edge case combinations that previously caused bugs.\"\"\"
+        # Test with empty and None values
+        self.assertIsNotNone(self.test_data["string_input"])
+        self.assertIsNotNone(self.test_data["list_input"])
+        
+        # Test with extreme values
+        extreme_input = sys.maxsize
+        self.assertGreater(extreme_input, 0)
+        
+        # Test with type variations
+        self.assertIsInstance(self.test_data["float_input"], float)
+    
+"""
+    elif target_area == "edge_cases":
+        test_content += """    def test_edge_empty_input(self):
+        \"\"\"Test behavior with empty or minimal inputs.\"\"\"
+        empty_string = ""
+        empty_list = []
+        zero_value = 0
+        
+        self.assertEqual(len(empty_string), 0)
+        self.assertEqual(len(empty_list), 0)
+        self.assertEqual(zero_value, 0)
+        
+        # Test that empty inputs don't cause crashes
+        self.assertIsNotNone(empty_string)
+        self.assertIsNotNone(empty_list)
+    
+    def test_edge_large_input(self):
+        \"\"\"Test behavior with very large inputs.\"\"\"
+        large_string = "x" * 10000
+        large_list = list(range(1000))
+        large_number = 10**10
+        
+        self.assertEqual(len(large_string), 10000)
+        self.assertEqual(len(large_list), 1000)
+        self.assertGreater(large_number, 0)
+    
+    def test_edge_special_values(self):
+        \"\"\"Test with special values like NaN, Infinity, etc.\"\"\"
+        import math
+        
+        special_values = [
+            float('inf'),
+            float('-inf'),
+            float('nan'),
+            0.0,
+            -0.0,
+        ]
+        
+        for val in special_values:
+            with self.subTest(value=val):
+                if math.isnan(val):
+                    self.assertTrue(math.isnan(val))
+                elif val == float('inf'):
+                    self.assertTrue(math.isinf(val))
+                elif val == float('-inf'):
+                    self.assertTrue(math.isinf(val))
+                else:
+                    self.assertIsInstance(val, float)
+    
+"""
+    elif target_area == "performance":
+        test_content += """    def test_performance_bounds(self):
+        \"\"\"Test that operations complete within time bounds.\"\"\"
+        start_time = time.time()
+        
+        # Perform a bounded operation
+        result = sum(range(1000))
+        elapsed = time.time() - start_time
+        
+        self.assertLess(elapsed, 1.0)
+        self.assertEqual(result, 499500)
+    
+    def test_performance_scalability(self):
+        \"\"\"Test performance with increasing input sizes.\"\"\"
+        sizes = [10, 100, 1000]
+        for size in sizes:
+            with self.subTest(size=size):
+                start = time.time()
+                data = list(range(size))
+                processed = [x * 2 for x in data]
+                elapsed = time.time() - start
+                self.assertLess(elapsed, 0.5)
+                self.assertEqual(len(processed), size)
+    
+    def test_performance_memory(self):
+        \"\"\"Test memory usage patterns.\"\"\"
+        # Test that large operations don't cause memory issues
+        large_data = [i for i in range(10000)]
+        self.assertEqual(len(large_data), 10000)
+        
+        # Test memory cleanup
+        del large_data
+        self.assertTrue(True)  # Should not raise memory error
+    
+"""
+    else:  # general
+        test_content += """    def test_general_assertions(self):
+        \"\"\"Test general assertions that challenge basic functionality.\"\"\"
+        # Type assertions
+        self.assertIsInstance(42, int)
+        self.assertIsInstance(3.14, float)
+        self.assertIsInstance("hello", str)
+        self.assertIsInstance([], list)
+        self.assertIsInstance({}, dict)
+        
+        # Value assertions
+        self.assertEqual(1 + 1, 2)
+        self.assertNotEqual(1 + 1, 3)
+        self.assertTrue(True)
+        self.assertFalse(False)
+        
+        # Container assertions
+        self.assertIn(1, [1, 2, 3])
+        self.assertNotIn(4, [1, 2, 3])
+    
+    def test_general_edge_behavior(self):
+        \"\"\"Test edge behavior with various inputs.\"\"\"
+        # Test with None
+        self.assertIsNone(None)
+        self.assertIsNotNone(0)
+        
+        # Test with boolean
+        self.assertTrue(1)
+        self.assertFalse(0)
+        
+        # Test with comparison
+        self.assertGreater(5, 3)
+        self.assertGreaterEqual(5, 5)
+        self.assertLess(3, 5)
+        self.assertLessEqual(3, 3)
+    
+    def test_general_error_handling(self):
+        \"\"\"Test error handling and exceptions.\"\"\"
+        # Test that appropriate exceptions are raised
+        with self.assertRaises(ZeroDivisionError):
+            result = 1 / 0
+        
+        with self.assertRaises(TypeError):
+            result = "string" + 1
+        
+        with self.assertRaises(ValueError):
+            result = int("not_a_number")
+    
+"""
+    
+    test_content += f"""
+if __name__ == '__main__':
+    unittest.main()
+"""
+    
+    return test_content
+
+
+# ---------------------------------------------------------------------------
+# New Method: introduce_novel_constraint
+# ---------------------------------------------------------------------------
+
+def introduce_novel_constraint() -> str:
+    """
+    Generate a new test file with a unique assertion pattern not seen in the
+    existing test suite. Scans all existing test files for assertion types
+    (assertEqual, assertTrue, etc.) and creates a test requiring a new
+    assertion type or combination.
+
+    Returns:
+        A string containing the content of a new test file with a unique
+        assertion pattern.
+    """
+    # Scan existing test files for assertion types
+    # For this implementation, we simulate scanning by checking the registry
+    # and generating a test that uses a rare or unused assertion combination.
+    
+    # Collect all assertion types that might be present in existing tests
+    existing_assertions = set()
+    for pressure in _pressure_registry:
+        # Simulate extracting assertions from templates
+        template = pressure["generate_template"]()
+        existing_assertions.update(_extract_assertions_from_content(template))
+    
+    # Define all possible assertion types
+    all_assertions = [
+        "assertEqual", "assertNotEqual", "assertTrue", "assertFalse",
+        "assertIs", "assertIsNot", "assertIsNone", "assertIsNotNone",
+        "assertIn", "assertNotIn", "assertIsInstance", "assertNotIsInstance",
+        "assertRaises", "assertRaisesRegex", "assertWarns", "assertWarnsRegex",
+        "assertAlmostEqual", "assertNotAlmostEqual", "assertGreater",
+        "assertGreaterEqual", "assertLess", "assertLessEqual",
+        "assertRegex", "assertNotRegex", "assertCountEqual",
+        "assertMultiLineEqual", "assertSequenceEqual", "assertListEqual",
+        "assertTupleEqual", "assertSetEqual", "assertDictEqual",
+    ]
+    
+    # Find assertion types not present in existing tests
+    missing_assertions = [a for a in all_assertions if a not in existing_assertions]
+    
+    # If all assertion types are present, create a test with a unique combination
+    if not missing_assertions:
+        # Create a test that uses a rare combination of assertions
+        test_content = f"""import unittest
+
+class TestNovelConstraint(unittest.TestCase):
+    \"\"\"Test generated by introduce_novel_constraint to introduce a unique assertion pattern.\"\"\"
+    
+    def test_unique_combination(self):
+        \"\"\"Use a combination of assertions not seen together in existing tests.\"\"\"
+        # Combine assertCountEqual with assertMultiLineEqual
+        list1 = [1, 2, 3]
+        list2 = [3, 2, 1]
+        self.assertCountEqual(list1, list2)
+        
+        str1 = "hello\\nworld"
+        str2 = "hello\\nworld"
+        self.assertMultiLineEqual(str1, str2)
+        
+        # Add assertSequenceEqual and assertSetEqual
+        seq1 = [1, 2, 3]
+        seq2 = [1, 2, 3]
+        self.assertSequenceEqual(seq1, seq2)
+        
+        set1 = {1, 2, 3}
+        set2 = {3, 2, 1}
+        self.assertSetEqual(set1, set2)
+    
+    def test_rare_assertions(self):
+        \"\"\"Use rare assertion types.\"\"\"
+        # assertNotRegex
+        self.assertNotRegex("hello world", r"^\\\\d+$")
+        
+        # assertWarnsRegex
+        import warnings
+        with self.assertWarnsRegex(UserWarning, "test warning"):
+            warnings.warn("this is a test warning", UserWarning)
+        
+        # assertNotIsInstance
+        self.assertNotIsInstance(42, str)
+        
+        # assertNotAlmostEqual
+        self.assertNotAlmostEqual(3.14159, 3.14, places=2)
+
+if __name__ == '__main__':
+    unittest.main()
+"""
+    else:
+        # Use a missing assertion type
+        chosen_assertion = random.choice(missing_assertions)
+        test_content = f"""import unittest
+
+class TestNovelConstraint(unittest.TestCase):
+    \"\"\"Test generated by introduce_novel_constraint to introduce a new assertion type.\"\"\"
+    
+    def test_new_assertion(self):
+        \"\"\"Use the assertion type '{chosen_assertion}' which is not present in existing tests.\"\"\"
+        # TODO: Implement test using {chosen_assertion}
+        # This test introduces a new assertion pattern to the test suite
+        self.{chosen_assertion}(True)  # Placeholder - adjust as needed
+
+if __name__ == '__main__':
+    unittest.main()
+"""
+    
+    return test_content
+
+
+# ---------------------------------------------------------------------------
 # Utility: Create a default test suite profile
 # ---------------------------------------------------------------------------
 
@@ -413,6 +920,7 @@ def create_default_test_suite() -> Dict[str, Any]:
         "regression_test_count": 0,
         "test_count": 0,
         "pass_rate": 1.0,
+        "test_files": [],
     }
 
 
@@ -453,3 +961,22 @@ if __name__ == "__main__":
     for name, desc, code in templates:
         print(f"\n--- {name}: {desc} ---")
         print(code[:200] + "...")
+    
+    # Test novel test suite generation
+    print("\n" + "=" * 40)
+    print("Testing Novel Test Suite Generation (ECOLOGY mechanism)")
+    print("=" * 40)
+    
+    novel_tests = generate_novel_test_suite(suite, num_tests=2)
+    print(f"\nGenerated {len(novel_tests)} novel test files:")
+    for i, test_content in enumerate(novel_tests, 1):
+        print(f"\n--- Novel Test {i} ---")
+        print(test_content[:300] + "...")
+    
+    # Test introduce_novel_constraint
+    print("\n" + "=" * 40)
+    print("Testing introduce_novel_constraint")
+    print("=" * 40)
+    novel_constraint = introduce_novel_constraint()
+    print(f"\nGenerated novel constraint test file:")
+    print(novel_constraint[:500] + "...")

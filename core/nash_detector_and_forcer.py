@@ -588,6 +588,9 @@ class NashDetectorAndForcer:
         
         self.equilibrium_pairs = []
         self.breakout_opportunities = {}
+        
+        self.last_mutation_plan = None
+        self.last_mutation_success = None
 
     def set_dependency_matrix(self, matrix):
         if len(matrix) != self.num_modules:
