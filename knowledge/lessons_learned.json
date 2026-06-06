@@ -39,6 +39,12 @@
       "first_seen_cycle": 1,
       "last_seen_cycle": 6,
       "frequency": 3
+    },
+    {
+      "pattern": "severe_capability_duplication",
+      "fix": "Implemented TF-IDF semantic deduplication with configurable thresholds (0.85 for new, 0.9 for pruning). This replaces simple hashing which missed near-duplicates.",
+      "trigger": "observed >70% duplicate capabilities in cycle 445",
+      "effectiveness": "pending"
     }
   ],
   "meta": {

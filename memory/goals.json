@@ -9,6 +9,13 @@
       "consecutive_failures": 3
     },
     {
+      "description": "Implement a semantic deduplication filter for capability generation: before storing a new capability description, compute its embedding via a simple TF-IDF vectorizer and cosine similarity against all stored descriptions. If similarity > 0.85, reject the new description and log a deduplication event. Run this filter at the start of each cycle to prune existing near-duplicates below a configurable threshold (e.g., 0.9). This directly addresses the severe duplication problem and forces the system to generate more diverse capabilities.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780724640.8486469,
+      "consecutive_failures": 1
+    },
+    {
       "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
       "priority": 8,
       "status": "pending",
@@ -21,6 +28,18 @@
       "status": "pending",
       "created_at": 1780655268.6256523,
       "consecutive_failures": 3
+    },
+    {
+      "description": "Implement a 'meta-cognition action constraint' that limits reflection depth to 3 recursive levels and then forces a concrete action (e.g., a code mutation, test generation, or error correction). If the reflection engine produces more than 3 nested self-references, it is automatically truncated and the last valid action is executed. This breaks the infinite self-analysis loop and converts insight into tangible change.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780724640.8532898
+    },
+    {
+      "description": "Build a 'corrective mutation generator' that parses the failure pattern ban list (e.g., missing import, syntax error) and automatically generates a mutation that fixes the underlying error for the most common failure type. For example, if 'ImportError: No module named numpy' appears frequently, generate a mutation that adds 'import numpy' to the relevant file. This turns failure logs into actionable repairs and reduces the 40-60% failure rate.",
+      "priority": 7,
+      "status": "pending",
+      "created_at": 1780724640.857444
     }
   ],
   "completed_goals": [
