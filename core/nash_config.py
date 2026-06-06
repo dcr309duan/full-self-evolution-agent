@@ -32,3 +32,19 @@ min_cycles_for_equilibrium = 5
 # Maximum number of attempts for multi-module coordination
 # Limits retries to prevent infinite loops in coordination attempts
 max_multi_module_attempts = 3
+
+# Nash equilibrium parameters
+# Number of consecutive attempts to check for equilibrium
+EQUILIBRIUM_WINDOW = 5
+
+# Minimum improvement threshold (1%) to consider a module's performance as changed
+IMPROVEMENT_THRESHOLD = 0.01
+
+# Coordinated improvement threshold (2%) for multi-module coordination
+COORDINATED_IMPROVEMENT_THRESHOLD = 0.02
+
+# Maximum number of modules in a coordinated bundle
+MAX_BUNDLE_SIZE = 3
+
+# Number of historical cycles to track for analysis
+HISTORY_LENGTH = 20

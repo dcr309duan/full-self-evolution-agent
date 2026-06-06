@@ -16,51 +16,12 @@ from unittest.mock import Mock, patch, MagicMock
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Conditional imports with local stubs
+# Dynamic import with try/except for ecology_pressure_engine
 try:
-    from ecology.agent import Agent
-except ImportError:
-    class Agent:
-        """Stub Agent class."""
-        def adapt(self, test, context=None):
-            return True
-        def generate_test(self):
-            return "def test_new_feature():\n    assert True"
-
-try:
-    from ecology.test_generator import TestGenerator
-except ImportError:
-    class TestGenerator:
-        """Stub TestGenerator class."""
-        def generate(self):
-            return "def test_generated():\n    assert 1 + 1 == 2"
-
-try:
-    from ecology.test_suite import TestSuite
-except ImportError:
-    class TestSuite:
-        """Stub TestSuite class."""
-        def __init__(self):
-            self.tests = []
-        def run(self):
-            return {"passed": 5, "failed": 0, "total": 5}
-        def add_test(self, test):
-            self.tests.append(test)
-            return True
-        def contains(self, test):
-            return test in self.tests
-
-try:
-    from ecology.environment import Environment
-except ImportError:
-    class Environment:
-        """Stub Environment class."""
-        def step(self, action):
-            return {"reward": 1.0, "done": False}
-
-try:
-    from ecology.ecology_pressure_engine import EcologyPressureEngine
-except ImportError:
+    import importlib
+    ecology_pressure_engine = importlib.import_module('ecology.ecology_pressure_engine')
+    EcologyPressureEngine = ecology_pressure_engine.EcologyPressureEngine
+except (ImportError, AttributeError):
     class EcologyPressureEngine:
         """Stub EcologyPressureEngine class."""
         def __init__(self):
@@ -269,6 +230,48 @@ def test_novel_{test_id}():
                             if stripped.startswith('assert '):
                                 all_assertions.add(stripped)
             return all_assertions
+
+# Conditional imports with local stubs
+try:
+    from ecology.agent import Agent
+except ImportError:
+    class Agent:
+        """Stub Agent class."""
+        def adapt(self, test, context=None):
+            return True
+        def generate_test(self):
+            return "def test_new_feature():\n    assert True"
+
+try:
+    from ecology.test_generator import TestGenerator
+except ImportError:
+    class TestGenerator:
+        """Stub TestGenerator class."""
+        def generate(self):
+            return "def test_generated():\n    assert 1 + 1 == 2"
+
+try:
+    from ecology.test_suite import TestSuite
+except ImportError:
+    class TestSuite:
+        """Stub TestSuite class."""
+        def __init__(self):
+            self.tests = []
+        def run(self):
+            return {"passed": 5, "failed": 0, "total": 5}
+        def add_test(self, test):
+            self.tests.append(test)
+            return True
+        def contains(self, test):
+            return test in self.tests
+
+try:
+    from ecology.environment import Environment
+except ImportError:
+    class Environment:
+        """Stub Environment class."""
+        def step(self, action):
+            return {"reward": 1.0, "done": False}
 
 
 class TestEcologySelfModification(unittest.TestCase):

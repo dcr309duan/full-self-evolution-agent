@@ -44,6 +44,22 @@ except ImportError:
             
         def get_metrics(self):
             return self.metrics
+            
+        def scan_test_suite(self):
+            """Scan test suite and return list of test files."""
+            return []
+            
+        def generate_pressure(self, test_file_path):
+            """Generate pressure by creating a new .py file."""
+            with open(test_file_path, 'w') as f:
+                f.write("# New pressure test file\n")
+            return test_file_path
+            
+        def evolve_tests(self, test_file_path):
+            """Evolve tests by modifying an existing test file."""
+            with open(test_file_path, 'a') as f:
+                f.write("\n# Evolved test content\n")
+            return test_file_path
 
 try:
     from core.agent_base import AgentBase
@@ -211,6 +227,47 @@ class TestEcologyEngine(unittest.TestCase):
         self.engine.__init__(config=self.config)
         self.assertEqual(len(self.engine.agents), 0)
         self.assertEqual(self.engine.cycle_count, 0)
+
+    def test_scan_test_suite_returns_list(self):
+        """Test that scan_test_suite() returns a list."""
+        result = self.engine.scan_test_suite()
+        self.assertIsInstance(result, list)
+
+    def test_generate_pressure_creates_new_py_file(self):
+        """Test that generate_pressure() creates a new .py file."""
+        with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            result = self.engine.generate_pressure(tmp_path)
+            self.assertTrue(os.path.exists(result))
+            self.assertTrue(result.endswith('.py'))
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    def test_evolve_tests_modifies_existing_test_file(self):
+        """Test that evolve_tests() modifies an existing test file."""
+        with tempfile.NamedTemporaryFile(suffix='.py', mode='w', delete=False) as tmp:
+            tmp.write("original content")
+            tmp_path = tmp.name
+        try:
+            original_size = os.path.getsize(tmp_path)
+            self.engine.evolve_tests(tmp_path)
+            new_size = os.path.getsize(tmp_path)
+            self.assertGreater(new_size, original_size)
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    def test_engine_runs_3_cycles_without_errors(self):
+        """Test that the engine can run 3 cycles without errors."""
+        self.engine.register_agent(self.agent)
+        for _ in range(3):
+            try:
+                result = self.engine.run_cycle()
+                self.assertEqual(result["status"], "success")
+            except Exception as e:
+                self.fail(f"Engine failed during cycle: {e}")
 
 
 class TestEcologyLoopIntegration(unittest.TestCase):

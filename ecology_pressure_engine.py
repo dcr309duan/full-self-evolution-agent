@@ -20,6 +20,32 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # ---------------------------------------------------------------------------
+# Import TestSuiteMutator with fallback
+# ---------------------------------------------------------------------------
+
+try:
+    from test_suite_evolution import TestSuiteMutator
+except ImportError:
+    try:
+        # Fallback import path
+        from core.test_suite_evolution import TestSuiteMutator
+    except ImportError:
+        # Simple stub if import fails
+        class TestSuiteMutator:
+            """Stub implementation when TestSuiteMutator is not available."""
+            
+            def __init__(self, *args, **kwargs):
+                pass
+            
+            def mutate(self, test_suite: Dict[str, Any]) -> Dict[str, Any]:
+                """Return the test suite unchanged."""
+                return test_suite
+            
+            def evolve(self, test_suite: Dict[str, Any]) -> Dict[str, Any]:
+                """Return the test suite unchanged."""
+                return test_suite
+
+# ---------------------------------------------------------------------------
 # Pressure Registry
 # ---------------------------------------------------------------------------
 
@@ -985,17 +1011,4 @@ def _generate_unique_test_method(
     """
     Generate a single unique test method with assertions not present in existing_assertions.
     """
-    # Define all possible assertion types
-    all_assertions = [
-        "assertEqual", "assertNotEqual", "assertTrue", "assertFalse",
-        "assertIs", "assertIsNot", "assertIsNone", "assertIsNotNone",
-        "assertIn", "assertNotIn", "assertIsInstance", "assertNotIsInstance",
-        "assertRaises", "assertRaisesRegex", "assertWarns", "assertWarnsRegex",
-        "assertAlmostEqual", "assertNotAlmostEqual", "assertGreater",
-        "assertGreaterEqual", "assertLess", "assertLessEqual",
-        "assertRegex", "assertNotRegex", "assertCountEqual",
-        "assertMultiLineEqual", "assertSequenceEqual", "assertListEqual",
-        "assertTupleEqual", "assertSetEqual", "assertDictEqual",
-    ]
-    
-    # Find
+    # Define

@@ -45,7 +45,7 @@ if __name__ == "__main__":
         # Insert before the last line of the file
         lines = source.split('\n')
         for i in range(len(lines) - 1, -1, -1):
-            if lines[i].strip() == "if __name__ == \"__main__\":":
+            if lines[i].strip() == "if __name__ == \"__main__\"":
                 lines.insert(i, new_method)
                 break
         else:

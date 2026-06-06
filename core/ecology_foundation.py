@@ -2,7 +2,7 @@
 core/ecology_foundation.py - Foundation module for ecology-based test suite management.
 
 Provides base classes and a registry for managing ecological pressures on test suites.
-Uses defensive imports and fallbacks for all dependencies.
+Uses only standard library imports (os, json, hashlib) with zero external dependencies.
 """
 
 import os
@@ -11,58 +11,11 @@ import json
 import copy
 import random
 import logging
+import hashlib
 from typing import Dict, List, Optional, Any, Tuple, Callable
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
-
-# ---------------------------------------------------------------------------
-# Defensive imports with fallbacks
-# ---------------------------------------------------------------------------
-
-# Try to import numpy; fallback to a minimal stub
-try:
-    import numpy as np
-    _HAS_NUMPY = True
-except ImportError:
-    _HAS_NUMPY = False
-    # Minimal stub for basic array-like operations
-    class _NumpyStub:
-        @staticmethod
-        def array(data, dtype=None):
-            return data
-        @staticmethod
-        def mean(a):
-            if isinstance(a, (list, tuple)):
-                return sum(a) / len(a) if a else 0.0
-            return a
-        @staticmethod
-        def std(a):
-            if isinstance(a, (list, tuple)):
-                m = _NumpyStub.mean(a)
-                variance = sum((x - m) ** 2 for x in a) / len(a) if a else 0.0
-                return variance ** 0.5
-            return 0.0
-        @staticmethod
-        def random():
-            return random.random()
-    np = _NumpyStub()
-
-# Try to import pandas; fallback to None
-try:
-    import pandas as pd
-    _HAS_PANDAS = True
-except ImportError:
-    pd = None
-    _HAS_PANDAS = False
-
-# Try to import networkx; fallback to None
-try:
-    import networkx as nx
-    _HAS_NETWORKX = True
-except ImportError:
-    nx = None
-    _HAS_NETWORKX = False
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -318,7 +271,407 @@ class TestSuiteRegistry:
 
 
 # ---------------------------------------------------------------------------
-# Ecology Engine
+# TestSuiteEvolver class
+# ---------------------------------------------------------------------------
+
+class TestSuiteEvolver:
+    """
+    Scans test files and evolves test suites based on ecological pressures.
+    Uses only standard library imports.
+    """
+    
+    def __init__(self, registry: Optional[TestSuiteRegistry] = None):
+        self.registry = registry or TestSuiteRegistry()
+        self._scan_cache: Dict[str, Dict[str, Any]] = {}
+    
+    def scan_test_file(self, file_path: str) -> Dict[str, Any]:
+        """
+        Scan a test file and extract metadata.
+        
+        Args:
+            file_path: Path to the test file.
+            
+        Returns:
+            Dictionary with file metadata (test_count, functions, classes, etc.)
+        """
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return {'error': f"File not found: {file_path}"}
+        
+        # Use file hash as cache key
+        file_hash = self._compute_file_hash(file_path)
+        if file_path in self._scan_cache and self._scan_cache[file_path].get('hash') == file_hash:
+            return self._scan_cache[file_path]
+        
+        try:
+            with open(file_path, 'r') as f:
+                content = f.read()
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            return {'error': str(e)}
+        
+        # Simple parsing to count test functions and classes
+        lines = content.split('\n')
+        test_functions = []
+        test_classes = []
+        imports = []
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # Detect test functions
+            if stripped.startswith('def test_') or stripped.startswith('def _test_'):
+                func_name = stripped.split('(')[0].replace('def ', '').strip()
+                test_functions.append({'name': func_name, 'line': i + 1})
+            # Detect test classes
+            if stripped.startswith('class Test') or stripped.startswith('class _Test'):
+                class_name = stripped.split(':')[0].replace('class ', '').strip().split('(')[0].strip()
+                test_classes.append({'name': class_name, 'line': i + 1})
+            # Detect imports
+            if stripped.startswith('import ') or stripped.startswith('from '):
+                imports.append(stripped)
+        
+        result = {
+            'hash': file_hash,
+            'file_path': file_path,
+            'file_size': os.path.getsize(file_path),
+            'test_count': len(test_functions),
+            'test_functions': test_functions,
+            'test_classes': test_classes,
+            'imports': imports,
+            'line_count': len(lines)
+        }
+        
+        self._scan_cache[file_path] = result
+        return result
+    
+    def scan_directory(self, directory_path: str, pattern: str = "test_*.py") -> List[Dict[str, Any]]:
+        """
+        Scan a directory for test files matching a pattern.
+        
+        Args:
+            directory_path: Path to the directory.
+            pattern: Glob pattern for test files.
+            
+        Returns:
+            List of scan results for each matching file.
+        """
+        if not os.path.isdir(directory_path):
+            logger.error(f"Directory not found: {directory_path}")
+            return []
+        
+        results = []
+        for root, dirs, files in os.walk(directory_path):
+            for file in files:
+                if file.startswith('test_') and file.endswith('.py'):
+                    file_path = os.path.join(root, file)
+                    scan_result = self.scan_test_file(file_path)
+                    if 'error' not in scan_result:
+                        results.append(scan_result)
+        
+        return results
+    
+    def evolve_suite(self, suite_name: str, pressure: Optional[EcologyPressure] = None) -> Dict[str, Any]:
+        """
+        Evolve a test suite by applying ecological pressure.
+        
+        Args:
+            suite_name: Name of the registered test suite.
+            pressure: Optional pressure to apply.
+            
+        Returns:
+            Dictionary with evolution results.
+        """
+        suite = self.registry.get(suite_name)
+        if not suite:
+            return {'success': False, 'error': f"Suite '{suite_name}' not found"}
+        
+        # Scan the suite's test files
+        scan_results = self.scan_directory(suite.path) if os.path.isdir(suite.path) else []
+        if not scan_results:
+            scan_results = [self.scan_test_file(suite.path)] if os.path.isfile(suite.path) else []
+        
+        # Apply pressure effects
+        if pressure:
+            impact = pressure.severity * 0.3
+            suite.fitness_score = max(0.0, min(1.0, suite.fitness_score - impact))
+            suite.last_pressure = pressure
+        
+        return {
+            'success': True,
+            'suite_name': suite_name,
+            'fitness_score': suite.fitness_score,
+            'test_files_scanned': len(scan_results),
+            'total_tests': sum(r.get('test_count', 0) for r in scan_results)
+        }
+    
+    def _compute_file_hash(self, file_path: str) -> str:
+        """Compute SHA256 hash of a file."""
+        hasher = hashlib.sha256()
+        try:
+            with open(file_path, 'rb') as f:
+                for chunk in iter(lambda: f.read(4096), b''):
+                    hasher.update(chunk)
+        except Exception:
+            return ""
+        return hasher.hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# PressureGenerator class
+# ---------------------------------------------------------------------------
+
+class PressureGenerator:
+    """
+    Creates new test scenarios and generates ecological pressures.
+    Uses only standard library imports.
+    """
+    
+    def __init__(self, seed: Optional[int] = None):
+        self._rng = random.Random(seed) if seed is not None else random.Random()
+        self._generated_pressures: List[EcologyPressure] = []
+    
+    def generate_pressure(self, 
+                          pressure_type: Optional[PressureType] = None,
+                          severity: Optional[float] = None,
+                          target_metric: Optional[str] = None) -> EcologyPressure:
+        """
+        Generate a new ecological pressure.
+        
+        Args:
+            pressure_type: Optional specific type. If None, random.
+            severity: Optional specific severity. If None, random.
+            target_metric: Optional specific metric. If None, random.
+            
+        Returns:
+            A new EcologyPressure instance.
+        """
+        if pressure_type is None:
+            pressure_type = self._rng.choice(list(PressureType))
+        
+        if severity is None:
+            severity = self._rng.uniform(0.1, 1.0)
+        
+        if target_metric is None:
+            metrics = ['coverage', 'execution_time', 'memory_usage', 'complexity', 'stability']
+            target_metric = self._rng.choice(metrics)
+        
+        pressure = EcologyPressure(
+            type=pressure_type,
+            severity=severity,
+            target_metric=target_metric,
+            description=f"Generated pressure: {pressure_type.value} on {target_metric}",
+            parameters={'generated': True, 'seed': self._rng.random()}
+        )
+        
+        self._generated_pressures.append(pressure)
+        return pressure
+    
+    def generate_test_scenario(self, base_path: str, scenario_name: str) -> Dict[str, Any]:
+        """
+        Generate a new test scenario file.
+        
+        Args:
+            base_path: Directory where the scenario file will be created.
+            scenario_name: Name of the scenario.
+            
+        Returns:
+            Dictionary with scenario generation results.
+        """
+        os.makedirs(base_path, exist_ok=True)
+        file_path = os.path.join(base_path, f"scenario_{scenario_name}.py")
+        
+        # Generate a simple test scenario
+        test_code = f'''"""
+Auto-generated test scenario: {scenario_name}
+"""
+import unittest
+
+class TestScenario{scenario_name.capitalize()}(unittest.TestCase):
+    """Test scenario generated by PressureGenerator."""
+    
+    def test_scenario_basic(self):
+        """Basic test for scenario {scenario_name}."""
+        self.assertTrue(True)
+    
+    def test_scenario_edge_case(self):
+        """Edge case test for scenario {scenario_name}."""
+        self.assertIsNotNone(None)
+    
+    def test_scenario_performance(self):
+        """Performance test for scenario {scenario_name}."""
+        result = sum(range(1000))
+        self.assertEqual(result, 499500)
+
+if __name__ == '__main__':
+    unittest.main()
+'''
+        
+        try:
+            with open(file_path, 'w') as f:
+                f.write(test_code)
+            logger.info(f"Generated test scenario: {file_path}")
+            return {
+                'success': True,
+                'file_path': file_path,
+                'scenario_name': scenario_name
+            }
+        except Exception as e:
+            logger.error(f"Failed to generate scenario: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def generate_pressure_batch(self, count: int = 5) -> List[EcologyPressure]:
+        """
+        Generate a batch of random pressures.
+        
+        Args:
+            count: Number of pressures to generate.
+            
+        Returns:
+            List of EcologyPressure instances.
+        """
+        return [self.generate_pressure() for _ in range(count)]
+    
+    def get_generated_pressures(self) -> List[EcologyPressure]:
+        """Get list of all pressures generated by this instance."""
+        return list(self._generated_pressures)
+    
+    def clear_generated(self) -> None:
+        """Clear the list of generated pressures."""
+        self._generated_pressures.clear()
+
+
+# ---------------------------------------------------------------------------
+# FitnessLandscapeModifier class
+# ---------------------------------------------------------------------------
+
+class FitnessLandscapeModifier:
+    """
+    Adds or removes test requirements and modifies the fitness landscape.
+    Uses only standard library imports.
+    """
+    
+    def __init__(self, registry: Optional[TestSuiteRegistry] = None):
+        self.registry = registry or TestSuiteRegistry()
+        self._landscapes: Dict[str, FitnessLandscape] = {}
+        self._requirements: Dict[str, List[str]] = {}
+    
+    def add_requirement(self, suite_name: str, requirement: str) -> bool:
+        """
+        Add a requirement to a test suite.
+        
+        Args:
+            suite_name: Name of the registered test suite.
+            requirement: Requirement string to add.
+            
+        Returns:
+            True if requirement was added successfully.
+        """
+        suite = self.registry.get(suite_name)
+        if not suite:
+            logger.error(f"Suite '{suite_name}' not found")
+            return False
+        
+        if suite_name not in self._requirements:
+            self._requirements[suite_name] = []
+        
+        if requirement not in self._requirements[suite_name]:
+            self._requirements[suite_name].append(requirement)
+            logger.info(f"Added requirement '{requirement}' to suite '{suite_name}'")
+            
+            # Update fitness landscape
+            landscape = self._landscapes.get(suite_name, FitnessLandscape())
+            if 'requirements' not in landscape.dimension_names:
+                landscape.dimension_names.append('requirements')
+            landscape.dimension_values['requirements'] = len(self._requirements[suite_name])
+            self._landscapes[suite_name] = landscape
+        
+        return True
+    
+    def remove_requirement(self, suite_name: str, requirement: str) -> bool:
+        """
+        Remove a requirement from a test suite.
+        
+        Args:
+            suite_name: Name of the registered test suite.
+            requirement: Requirement string to remove.
+            
+        Returns:
+            True if requirement was removed successfully.
+        """
+        if suite_name not in self._requirements:
+            logger.warning(f"No requirements found for suite '{suite_name}'")
+            return False
+        
+        if requirement in self._requirements[suite_name]:
+            self._requirements[suite_name].remove(requirement)
+            logger.info(f"Removed requirement '{requirement}' from suite '{suite_name}'")
+            
+            # Update fitness landscape
+            landscape = self._landscapes.get(suite_name, FitnessLandscape())
+            landscape.dimension_values['requirements'] = len(self._requirements[suite_name])
+            self._landscapes[suite_name] = landscape
+            return True
+        
+        return False
+    
+    def get_requirements(self, suite_name: str) -> List[str]:
+        """Get all requirements for a test suite."""
+        return list(self._requirements.get(suite_name, []))
+    
+    def modify_fitness_landscape(self, suite_name: str, 
+                                  dimension: str, 
+                                  value: float) -> bool:
+        """
+        Modify a dimension of the fitness landscape for a test suite.
+        
+        Args:
+            suite_name: Name of the registered test suite.
+            dimension: Dimension name to modify.
+            value: New value for the dimension.
+            
+        Returns:
+            True if modification was successful.
+        """
+        suite = self.registry.get(suite_name)
+        if not suite:
+            logger.error(f"Suite '{suite_name}' not found")
+            return False
+        
+        landscape = self._landscapes.get(suite_name, FitnessLandscape())
+        
+        if dimension not in landscape.dimension_names:
+            landscape.dimension_names.append(dimension)
+        
+        landscape.dimension_values[dimension] = value
+        landscape.timestamp = time.time() if 'time' in sys.modules else 0.0
+        
+        self._landscapes[suite_name] = landscape
+        
+        # Update suite fitness based on landscape changes
+        avg_value = sum(landscape.dimension_values.values()) / max(len(landscape.dimension_values), 1)
+        suite.fitness_score = max(0.0, min(1.0, avg_value))
+        
+        logger.info(f"Modified landscape dimension '{dimension}' for suite '{suite_name}' to {value}")
+        return True
+    
+    def get_landscape(self, suite_name: str) -> Optional[FitnessLandscape]:
+        """Get the fitness landscape for a test suite."""
+        return self._landscapes.get(suite_name)
+    
+    def list_landscapes(self) -> List[str]:
+        """List all suite names with landscapes."""
+        return list(self._landscapes.keys())
+    
+    def clear_landscape(self, suite_name: str) -> bool:
+        """Clear the fitness landscape for a test suite."""
+        if suite_name in self._landscapes:
+            del self._landscapes[suite_name]
+            return True
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Ecology Engine (updated to use new classes)
 # ---------------------------------------------------------------------------
 
 class EcologyEngine:
@@ -340,6 +693,9 @@ class EcologyEngine:
             'selection_pressure': 0.3,
             'max_history': 1000
         }
+        self.evolver = TestSuiteEvolver(registry)
+        self.pressure_generator = PressureGenerator()
+        self.landscape_modifier = FitnessLandscapeModifier(registry)
     
     def configure(self, **kwargs) -> None:
         """Update engine configuration."""
@@ -510,4 +866,46 @@ class EcologyEngine:
             
             # Update fitness landscape
             landscape = self._fitness_landscapes.get(suite.name, FitnessLandscape())
-            landscape.fitness
+            landscape.fitness_scores.append(new_fitness)
+            landscape.timestamp = time.time() if 'time' in sys.modules else 0.0
+            self._fitness_landscapes[suite.name] = landscape
+            
+            # Update suite fitness
+            suite.fitness_score = new_fitness
+            
+            results.append({
+                'suite_name': suite.name,
+                'old_fitness': suite.fitness_score,
+                'new_fitness': new_fitness,
+                'mutation': mutation,
+                'selection_probability': selection_prob
+            })
+        
+        return {
+            'success': True,
+            'evolved_suites': len(results),
+            'details': results
+        }
+    
+    def _record_history(self, suite_name: str, pressures: List[EcologyPressure],
+                        total_impact: float, new_fitness: float) -> None:
+        """Record an event in the engine history."""
+        import time
+        record = {
+            'timestamp': time.time(),
+            'suite_name': suite_name,
+            'pressures': [p.to_dict() for p in pressures],
+            'total_impact': total_impact,
+            'new_fitness': new_fitness
+        }
+        self._history.append(record)
+        if len(self._history) > self._config['max_history']:
+            self._history.pop(0)
+    
+    def get_history(self) -> List[Dict[str, Any]]:
+        """Get the engine's history of events."""
+        return list(self._history)
+    
+    def clear_history(self) -> None:
+        """Clear the engine's history."""
+        self._history.clear()
