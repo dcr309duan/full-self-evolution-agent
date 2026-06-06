@@ -289,6 +289,188 @@ class MultiModuleMutator:
         return self.apply_atomic_mutation(plan, module_sources)
 
 
+class MultiModuleMutationExecutor:
+    """
+    Lightweight multi-module mutation executor that:
+    1) Takes a multi-module plan from the detector,
+    2) Executes mutations across specified modules in a coordinated transaction,
+    3) Validates that all modules still work together after changes,
+    4) Rolls back all changes if any single module fails,
+    5) Reports success/failure metrics back to the detector.
+    """
+    
+    def __init__(self, max_targets: int = 3):
+        self.max_targets = max_targets
+        self.mutator = MultiModuleMutator(max_targets=max_targets)
+        self.execution_history: List[Dict[str, Any]] = []
+    
+    def execute_multi_module_plan(self, plan: Dict[str, Any], module_sources: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Execute a multi-module mutation plan from the detector.
+        Returns a report dict with success/failure metrics.
+        """
+        report = {
+            'success': False,
+            'error': None,
+            'modules_affected': [],
+            'changes_applied': 0,
+            'changes_rolled_back': 0,
+            'validation_passed': False,
+            'execution_time': 0.0
+        }
+        
+        import time
+        start_time = time.time()
+        
+        # Extract plan details
+        target_modules = plan.get('modules', [])
+        mutations = plan.get('mutations', [])
+        change_description = plan.get('change_description', '')
+        
+        if not target_modules or not mutations:
+            report['error'] = "Invalid plan: missing modules or mutations"
+            report['execution_time'] = time.time() - start_time
+            self.execution_history.append(report)
+            return report
+        
+        # Validate plan consistency
+        valid, error = self.mutator.validate_mutation_consistency(plan)
+        if not valid:
+            report['error'] = f"Plan validation failed: {error}"
+            report['execution_time'] = time.time() - start_time
+            self.execution_history.append(report)
+            return report
+        
+        # Backup original sources for rollback
+        original_sources = {}
+        for module_name in target_modules:
+            if module_name in module_sources:
+                original_sources[module_name] = module_sources[module_name]
+        
+        # Execute mutations in a coordinated transaction
+        try:
+            success, error, updated_sources = self.mutator.apply_atomic_mutation(plan, module_sources)
+            
+            if not success:
+                report['error'] = f"Mutation execution failed: {error}"
+                report['execution_time'] = time.time() - start_time
+                self.execution_history.append(report)
+                return report
+            
+            # Validate that all modules still work together
+            validation_passed, validation_error = self._validate_cross_module_integration(updated_sources, target_modules)
+            
+            if not validation_passed:
+                # Rollback all changes
+                for module_name in target_modules:
+                    if module_name in original_sources:
+                        updated_sources[module_name] = original_sources[module_name]
+                
+                report['error'] = f"Cross-module validation failed: {validation_error}"
+                report['changes_rolled_back'] = len(target_modules)
+                report['execution_time'] = time.time() - start_time
+                self.execution_history.append(report)
+                return report
+            
+            # Success - commit changes
+            report['success'] = True
+            report['modules_affected'] = target_modules
+            report['changes_applied'] = len(target_modules)
+            report['validation_passed'] = True
+            report['execution_time'] = time.time() - start_time
+            
+            # Store updated sources in report
+            report['updated_sources'] = updated_sources
+            
+        except Exception as e:
+            # Rollback on any exception
+            for module_name in target_modules:
+                if module_name in original_sources:
+                    module_sources[module_name] = original_sources[module_name]
+            
+            report['error'] = f"Unexpected error during execution: {str(e)}"
+            report['changes_rolled_back'] = len(target_modules)
+            report['execution_time'] = time.time() - start_time
+        
+        self.execution_history.append(report)
+        return report
+    
+    def _validate_cross_module_integration(self, module_sources: Dict[str, str], target_modules: List[str]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate that all modules still work together after changes.
+        Checks for:
+        - Consistent function signatures across modules
+        - No import conflicts
+        - No syntax errors
+        """
+        # Check for syntax errors in all modules
+        for module_name, source in module_sources.items():
+            try:
+                ast.parse(source)
+            except SyntaxError as e:
+                return False, f"Syntax error in {module_name}: {e}"
+        
+        # Check for consistent function signatures across target modules
+        function_signatures: Dict[str, List[str]] = {}
+        for module_name in target_modules:
+            if module_name in module_sources:
+                try:
+                    tree = ast.parse(module_sources[module_name])
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.FunctionDef):
+                            func_name = node.name
+                            # Extract parameter names and defaults
+                            params = [arg.arg for arg in node.args.args]
+                            defaults = [ast.unparse(d) if isinstance(d, ast.AST) else str(d) for d in node.args.defaults]
+                            signature = f"{func_name}({', '.join(params)})"
+                            if func_name not in function_signatures:
+                                function_signatures[func_name] = []
+                            function_signatures[func_name].append((module_name, signature))
+                except Exception:
+                    continue
+        
+        # Check for signature conflicts (same function name, different signatures)
+        for func_name, signatures in function_signatures.items():
+            if len(signatures) > 1:
+                # Check if all signatures are the same
+                first_sig = signatures[0][1]
+                for module_name, sig in signatures[1:]:
+                    if sig != first_sig:
+                        return False, f"Inconsistent signature for '{func_name}' between {signatures[0][0]} and {module_name}"
+        
+        return True, None
+    
+    def get_execution_metrics(self) -> Dict[str, Any]:
+        """
+        Report success/failure metrics back to the detector.
+        """
+        total_executions = len(self.execution_history)
+        successful = sum(1 for r in self.execution_history if r.get('success'))
+        failed = total_executions - successful
+        
+        metrics = {
+            'total_executions': total_executions,
+            'successful_executions': successful,
+            'failed_executions': failed,
+            'success_rate': (successful / total_executions * 100) if total_executions > 0 else 0.0,
+            'total_changes_applied': sum(r.get('changes_applied', 0) for r in self.execution_history),
+            'total_changes_rolled_back': sum(r.get('changes_rolled_back', 0) for r in self.execution_history),
+            'average_execution_time': sum(r.get('execution_time', 0.0) for r in self.execution_history) / total_executions if total_executions > 0 else 0.0,
+            'last_execution': self.execution_history[-1] if self.execution_history else None
+        }
+        
+        return metrics
+    
+    def clear_history(self) -> None:
+        """Clear execution history."""
+        self.execution_history = []
+
+
 def create_multi_module_mutator(max_targets: int = 3) -> MultiModuleMutator:
     """Factory function to create a MultiModuleMutator instance."""
     return MultiModuleMutator(max_targets=max_targets)
+
+
+def create_multi_module_executor(max_targets: int = 3) -> MultiModuleMutationExecutor:
+    """Factory function to create a MultiModuleMutationExecutor instance."""
+    return MultiModuleMutationExecutor(max_targets=max_targets)
