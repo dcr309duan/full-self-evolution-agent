@@ -1,9 +1,8 @@
 {
-  "cycle_count": 422,
+  "cycle_count": 425,
   "current_generation": 137,
-  "last_evolution_time": 1780720242.4080718,
+  "last_evolution_time": 1780720887.2597046,
   "capabilities": [
-    "Implement a 'capability bankruptcy and consolidation' protocol: scan all capabilities, compute a usa",
     "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the",
     "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements",
     "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, ident",
@@ -52,21 +51,10 @@
     "Build a 'grounding test suite integrator' that, after any capability is accepted, automatically gene",
     "Create a 'capability deduplication and pruning agent' that runs every cycle: it hashes capability de",
     "Create a 'reflection engine self-modification' module that allows the agent to rewrite its own refle",
-    "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all"
+    "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all",
+    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test "
   ],
   "history": [
-    {
-      "cycle": 322,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780697465.5113206
-    },
-    {
-      "cycle": 323,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780697648.8826602
-    },
     {
       "cycle": 324,
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -654,6 +642,18 @@
       "goal": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
       "success": false,
       "timestamp": 1780720419.2863529
+    },
+    {
+      "cycle": 423,
+      "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "success": false,
+      "timestamp": 1780720604.322408
+    },
+    {
+      "cycle": 424,
+      "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "success": true,
+      "timestamp": 1780720857.2577658
     }
   ],
   "status": "evolving"

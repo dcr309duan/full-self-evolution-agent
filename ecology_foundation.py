@@ -785,7 +785,86 @@ class Test{description.replace(" ", "").replace("-", "_").replace(".", "_")}:
         return generated
 
 
-# Convenience function to create a full foundation with defaults
+class TestSuiteEvolver:
+    """Minimal test suite evolver that applies environmental pressures to evolve the test suite."""
+    
+    def __init__(self, manifest=None, analyzer=None, registry=None, mutator=None):
+        """Initialize with optional components.
+        
+        Args:
+            manifest: TestSuiteManifest instance
+            analyzer: CoverageAnalyzer instance
+            registry: PressureRegistry instance
+            mutator: TestSuiteMutator instance
+        """
+        self.manifest = manifest or TestSuiteManifest()
+        self.analyzer = analyzer or CoverageAnalyzer()
+        self.registry = registry or PressureRegistry()
+        self.mutator = mutator or TestSuiteMutator(self.manifest)
+        self.mutator.set_registry(self.registry)
+        self.evolution_history = []
+        
+    def evolve(self, root_dir="."):
+        """Run one evolution cycle: scan, analyze, generate pressures, and create tests.
+        
+        Args:
+            root_dir: Root directory to scan for tests
+            
+        Returns:
+            Dictionary with evolution results
+        """
+        # Step 1: Scan for existing test files
+        self.manifest.root_dir = Path(root_dir).resolve()
+        test_files = self.manifest.scan()
+        
+        # Step 2: Analyze coverage
+        self.analyzer.manifest = self.manifest.get_manifest()
+        coverage_data = self.analyzer.analyze_all()
+        coverage_report = self.analyzer.get_coverage_report()
+        
+        # Step 3: Generate environmental pressures
+        generator = EnvironmentalPressureGenerator(
+            manifest=self.manifest,
+            analyzer=self.analyzer,
+            registry=self.registry
+        )
+        new_pressures = generator.generate_all_pressures()
+        
+        # Step 4: Generate test files from pressures
+        generated_tests = []
+        for pressure in self.registry.get_pressures():
+            test_path = self.mutator.generate_test_file(pressure["id"])
+            if test_path:
+                generated_tests.append(str(test_path))
+        
+        # Record evolution
+        evolution_record = {
+            "test_files_found": len(test_files),
+            "coverage_files_analyzed": coverage_report["total_files"],
+            "total_test_functions": coverage_report["total_test_functions"],
+            "pressures_generated": len(new_pressures),
+            "tests_generated": len(generated_tests),
+            "generated_test_paths": generated_tests
+        }
+        self.evolution_history.append(evolution_record)
+        
+        return evolution_record
+    
+    def get_evolution_history(self):
+        """Return the history of all evolution cycles."""
+        return self.evolution_history
+    
+    def get_current_state(self):
+        """Return the current state of the test suite evolver."""
+        return {
+            "manifest": self.manifest.get_manifest(),
+            "coverage_report": self.analyzer.get_coverage_report(),
+            "registry_pressures": self.registry.get_pressures(),
+            "evolution_cycles": len(self.evolution_history)
+        }
+
+
+# Convenience function to create a default foundation with the evolver
 def create_default_foundation(root_dir="."):
     """Create a default ecology foundation with all components initialized."""
     manifest = TestSuiteManifest(root_dir)
@@ -854,3 +933,15 @@ if __name__ == "__main__":
     # Save generated pressures
     generator.save_generated_pressures()
     print("Saved generated pressures to generated_pressures.json")
+    
+    # Test the TestSuiteEvolver
+    print("\nTesting TestSuiteEvolver...")
+    evolver = TestSuiteEvolver(
+        manifest=foundation["manifest"],
+        analyzer=foundation["analyzer"],
+        registry=foundation["registry"],
+        mutator=mutator
+    )
+    evolution_result = evolver.evolve()
+    print(f"Evolution cycle completed: {evolution_result}")
+    print(f"Evolution history: {evolver.get_evolution_history()}")

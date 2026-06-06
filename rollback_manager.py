@@ -7,7 +7,7 @@ if integration tests fail after application.
 import ast
 import logging
 import time
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Set
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -25,10 +25,13 @@ class MutationRecord:
 class RollbackManager:
     """Manages automatic rollback of mutations on integration test failure."""
 
-    def __init__(self, max_history: int = 100):
+    def __init__(self, max_history: int = 100, diversity_threshold: float = 0.3):
         self._mutation_stack: List[MutationRecord] = []
         self._max_history = max_history
         self._test_runner = None  # Callable to run integration tests
+        self._diversity_threshold = diversity_threshold
+        self._unique_test_patterns: Set[str] = set()
+        self._diversity_scores: List[float] = []
 
     def set_test_runner(self, runner):
         """Set the callable that runs integration tests and returns bool."""
@@ -70,6 +73,10 @@ class RollbackManager:
                 success = True
                 record.rollback_status = False
                 logger.info(f"Mutation applied successfully to {module}")
+                # Track unique test patterns from successful mutations
+                pattern_hash = hash(mutated_content[:100])  # Use first 100 chars as pattern identifier
+                self._unique_test_patterns.add(str(pattern_hash))
+                self._update_diversity_metric()
             else:
                 self._rollback(record)
                 record.rollback_status = True
@@ -123,9 +130,56 @@ class RollbackManager:
     def clear_history(self) -> None:
         """Clear mutation history."""
         self._mutation_stack.clear()
+        self._unique_test_patterns.clear()
+        self._diversity_scores.clear()
         logger.info("Mutation history cleared")
 
     @property
     def mutation_count(self) -> int:
         """Number of mutations in history."""
         return len(self._mutation_stack)
+
+    def _update_diversity_metric(self) -> None:
+        """Update diversity metric and trigger new test types if needed."""
+        total_mutations = len(self._mutation_stack)
+        if total_mutations == 0:
+            diversity_score = 0.0
+        else:
+            diversity_score = len(self._unique_test_patterns) / total_mutations
+        
+        self._diversity_scores.append(diversity_score)
+        logger.info(f"Test suite diversity score: {diversity_score:.3f} (unique patterns: {len(self._unique_test_patterns)}, total mutations: {total_mutations})")
+        
+        if diversity_score < self._diversity_threshold:
+            logger.warning(f"Diversity score {diversity_score:.3f} below threshold {self._diversity_threshold}. Triggering generation of new test types.")
+            self._trigger_new_test_types()
+
+    def _trigger_new_test_types(self) -> None:
+        """Trigger generation of new test types to increase diversity."""
+        insight = {
+            "event": "low_diversity",
+            "diversity_score": self._diversity_scores[-1] if self._diversity_scores else 0.0,
+            "threshold": self._diversity_threshold,
+            "unique_patterns": len(self._unique_test_patterns),
+            "total_mutations": len(self._mutation_stack),
+            "priority": "high"
+        }
+        logger.critical(f"Test suite stagnation detected: {insight}")
+        # In a real system, this would trigger the goal generator to create new test types
+        # For now, we log it prominently
+
+    def test_suite_diversity_metric(self) -> dict:
+        """Get the current test suite diversity metric."""
+        total_mutations = len(self._mutation_stack)
+        if total_mutations == 0:
+            diversity_score = 0.0
+        else:
+            diversity_score = len(self._unique_test_patterns) / total_mutations
+        
+        return {
+            "diversity_score": diversity_score,
+            "unique_patterns": len(self._unique_test_patterns),
+            "total_mutations": total_mutations,
+            "threshold": self._diversity_threshold,
+            "diversity_scores": self._diversity_scores.copy()
+        }

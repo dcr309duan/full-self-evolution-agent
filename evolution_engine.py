@@ -3,6 +3,8 @@ evolution_engine.py - Main evolution engine with integrated meta-evaluation loop
 """
 
 import logging
+import os
+import ast
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -349,3 +351,169 @@ class EvolutionEngine:
         self.cycle_history = []
         self.enabled_operators = ['add_capability', 'refactor_architecture', 'delete_dead_code']
         logger.info("Evolution engine reset to initial state")
+
+    def ecological_pressure(self) -> None:
+        """
+        Scan the current test suite files in tests/ directory, identify untested edge cases
+        (empty inputs, boundary values, concurrent access, resource exhaustion), generate new
+        test functions that test these edge cases, and write them to a new file
+        tests/generated_ecology_tests.py with proper imports.
+        """
+        tests_dir = "tests"
+        if not os.path.isdir(tests_dir):
+            logger.warning("Tests directory '%s' does not exist. Skipping ecological pressure.", tests_dir)
+            return
+
+        # Scan all Python test files in the tests directory
+        test_files = [f for f in os.listdir(tests_dir) if f.endswith('.py') and f != '__init__.py']
+        if not test_files:
+            logger.info("No test files found in '%s'. Skipping ecological pressure.", tests_dir)
+            return
+
+        # Analyze each test file for existing test functions and edge case coverage
+        existing_tests = {}
+        for test_file in test_files:
+            filepath = os.path.join(tests_dir, test_file)
+            try:
+                with open(filepath, 'r') as f:
+                    tree = ast.parse(f.read(), filename=filepath)
+                test_functions = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name.startswith('test_'):
+                        test_functions.append(node.name)
+                existing_tests[test_file] = test_functions
+            except (SyntaxError, IOError) as e:
+                logger.warning("Could not parse test file '%s': %s", test_file, e)
+
+        # Identify untested edge cases based on analysis of existing tests
+        edge_cases_to_test = []
+        edge_case_patterns = {
+            'empty_input': ['test_empty', 'test_no_input', 'test_zero'],
+            'boundary_value': ['test_boundary', 'test_edge', 'test_min', 'test_max'],
+            'concurrent_access': ['test_concurrent', 'test_thread', 'test_parallel', 'test_race'],
+            'resource_exhaustion': ['test_memory', 'test_timeout', 'test_exhaustion', 'test_overflow']
+        }
+
+        for test_file, test_funcs in existing_tests.items():
+            for edge_type, patterns in edge_case_patterns.items():
+                has_edge_test = any(
+                    any(pattern in func_name for pattern in patterns)
+                    for func_name in test_funcs
+                )
+                if not has_edge_test:
+                    edge_cases_to_test.append((test_file, edge_type))
+
+        if not edge_cases_to_test:
+            logger.info("All edge cases appear to be covered. No new tests generated.")
+            return
+
+        # Generate new test functions for each missing edge case
+        generated_tests = []
+        for test_file, edge_type in edge_cases_to_test:
+            test_module = test_file.replace('.py', '')
+            test_func_name = f"test_{test_module}_{edge_type}"
+
+            if edge_type == 'empty_input':
+                test_body = f"""
+    def {test_func_name}(self):
+        \"\"\"Test {test_module} with empty input.\"\"\"
+        # TODO: Implement actual test logic for {test_module}
+        # This test verifies behavior when empty input is provided
+        try:
+            # Example: result = {test_module}.process_empty_input()
+            pass
+        except Exception as e:
+            self.fail(f"Empty input handling failed: {{e}}")
+"""
+            elif edge_type == 'boundary_value':
+                test_body = f"""
+    def {test_func_name}(self):
+        \"\"\"Test {test_module} with boundary values.\"\"\"
+        # TODO: Implement actual test logic for {test_module}
+        # This test verifies behavior at boundary conditions (min/max values)
+        boundary_values = [0, 1, -1, 2**31 - 1, -2**31, float('inf'), float('-inf')]
+        for value in boundary_values:
+            try:
+                # Example: result = {test_module}.process_boundary(value)
+                pass
+            except Exception as e:
+                self.fail(f"Boundary value {{value}} failed: {{e}}")
+"""
+            elif edge_type == 'concurrent_access':
+                test_body = f"""
+    def {test_func_name}(self):
+        \"\"\"Test {test_module} with concurrent access.\"\"\"
+        # TODO: Implement actual test logic for {test_module}
+        # This test verifies thread safety and concurrent access handling
+        import threading
+        errors = []
+        def worker():
+            try:
+                # Example: result = {test_module}.concurrent_operation()
+                pass
+            except Exception as e:
+                errors.append(e)
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        if errors:
+            self.fail(f"Concurrent access failed with errors: {{errors}}")
+"""
+            elif edge_type == 'resource_exhaustion':
+                test_body = f"""
+    def {test_func_name}(self):
+        \"\"\"Test {test_module} with resource exhaustion.\"\"\"
+        # TODO: Implement actual test logic for {test_module}
+        # This test verifies behavior under resource exhaustion (memory, timeout)
+        import signal
+        class TimeoutError(Exception):
+            pass
+        def handler(signum, frame):
+            raise TimeoutError("Operation timed out")
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(5)  # 5 second timeout
+        try:
+            # Example: result = {test_module}.exhaustive_operation()
+            pass
+        except TimeoutError:
+            pass  # Expected timeout
+        except Exception as e:
+            self.fail(f"Resource exhaustion handling failed: {{e}}")
+        finally:
+            signal.alarm(0)
+"""
+            else:
+                continue
+
+            generated_tests.append(test_body)
+
+        if not generated_tests:
+            logger.info("No new edge case tests to generate.")
+            return
+
+        # Write generated tests to tests/generated_ecology_tests.py
+        output_file = os.path.join(tests_dir, "generated_ecology_tests.py")
+        try:
+            with open(output_file, 'w') as f:
+                f.write('"""\n')
+                f.write('Auto-generated ecology tests for edge case coverage.\n')
+                f.write('Generated by EvolutionEngine.ecological_pressure()\n')
+                f.write('"""\n\n')
+                f.write('import unittest\n')
+                f.write('import sys\n')
+                f.write('import os\n\n')
+                f.write('sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))\n\n\n')
+                f.write('class GeneratedEcologyTests(unittest.TestCase):\n')
+                f.write('    """Test suite for edge cases identified by ecological pressure."""\n\n')
+                for test_body in generated_tests:
+                    f.write(test_body)
+                    f.write('\n')
+                f.write('\nif __name__ == "__main__":\n')
+                f.write('    unittest.main()\n')
+
+            logger.info("Generated ecology tests written to '%s' with %d test functions.",
+                       output_file, len(generated_tests))
+        except IOError as e:
+            logger.error("Failed to write generated tests to '%s': %s", output_file, e)
