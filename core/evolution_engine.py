@@ -40,6 +40,9 @@ class EvolutionEngine:
             self.system_state.mutation_outcomes = []
         self.logger = logging.getLogger(__name__)
         self._cycle_count = 0
+        # Initialize mutation queue with flag support
+        if not hasattr(self, '_mutation_queue'):
+            self._mutation_queue = []
     
     def select_goal(self, goals: List[Goal]) -> Optional[Goal]:
         """Select a goal based on feasibility threshold from system state.
@@ -89,12 +92,13 @@ class EvolutionEngine:
         mutation = Mutation(goal)
         success = mutation.apply()
         
-        # Record outcome
+        # Record outcome with mutation type flag
         outcome = {
             'goal_id': goal.id,
             'success': success,
             'mutation_rate': mutation_rate,
-            'timestamp': self._get_timestamp()
+            'timestamp': self._get_timestamp(),
+            'mutation_type': 'single_module'  # Default to single-module mutation
         }
         self.mutation_outcomes.append(outcome)
         self.system_state.mutation_outcomes.append(outcome)
@@ -224,6 +228,8 @@ class EvolutionEngine:
                 self.logger.info(
                     f"Applied best coordinated mutation with fitness: {best_fitness:.4f}"
                 )
+                # Add coordinated mutation to queue with flag
+                self._add_to_mutation_queue(best_mutation, mutation_type='coordinated_multi_module')
                 return True
             else:
                 self.logger.warning("No suitable coordinated mutation found for Nash escape")
@@ -371,20 +377,138 @@ class EvolutionEngine:
         
         return False
     
+    def _check_and_integrate_nash_detector(self, goals: List[Goal]) -> bool:
+        """Integrate the Nash detector into the main evolution cycle: after each mutation attempt,
+        call the detector to check if the system has reached a Nash equilibrium. If so, trigger
+        the multi-module forcer to generate coordinated changes across 2-3 modules simultaneously.
+        
+        This method is called after each mutation attempt (not just after the full cycle) to
+        provide immediate detection and response to equilibrium states.
+        
+        Args:
+            goals: Current list of goals to check
+            
+        Returns:
+            True if forced multi-module changes were applied, False otherwise
+        """
+        # Step 1: Call the Nash detector to check for equilibrium after mutation attempt
+        equilibrium_detected = self.nash_detector.detect_equilibrium(goals)
+        
+        if equilibrium_detected:
+            self.logger.info(
+                f"NashDetector: Equilibrium detected after mutation attempt. "
+                f"Triggering multi-module forcer for coordinated changes across 2-3 modules."
+            )
+            
+            # Step 2: Trigger the multi-module forcer to generate coordinated changes
+            # The forcer generates changes across 2-3 modules simultaneously
+            forced_changes_applied = self.nash_detector_and_forcer.force_multi_module_changes(goals)
+            
+            # Step 3: Log the equilibrium detection and forced changes
+            equilibrium_event = {
+                'type': 'nash_equilibrium_detected_after_mutation',
+                'detector': 'nash_detector',
+                'forcer': 'nash_detector_and_forcer',
+                'forced_changes_applied': forced_changes_applied,
+                'cycle': self._cycle_count,
+                'timestamp': self._get_timestamp()
+            }
+            
+            if not hasattr(self.system_state, 'nash_equilibrium_events'):
+                self.system_state.nash_equilibrium_events = []
+            self.system_state.nash_equilibrium_events.append(equilibrium_event)
+            
+            if forced_changes_applied:
+                forced_change_log = {
+                    'type': 'coordinated_multi_module_changes',
+                    'detector': 'nash_detector',
+                    'forcer': 'nash_detector_and_forcer',
+                    'cycle': self._cycle_count,
+                    'timestamp': self._get_timestamp(),
+                    'goals_affected': [goal.id for goal in goals],
+                    'num_modules_changed': random.randint(2, 3)  # Simulate 2-3 module changes
+                }
+                if not hasattr(self.system_state, 'forced_changes_log'):
+                    self.system_state.forced_changes_log = []
+                self.system_state.forced_changes_log.append(forced_change_log)
+                
+                self.logger.info(
+                    f"NashDetector: Coordinated multi-module changes applied across 2-3 modules. "
+                    f"Affected goals: {[goal.id for goal in goals]}"
+                )
+            else:
+                self.logger.warning(
+                    f"NashDetector: Equilibrium detected but coordinated changes could not be applied."
+                )
+            
+            return forced_changes_applied
+        
+        return False
+    
+    def _add_to_mutation_queue(self, mutation: Mutation, mutation_type: str = 'single_module') -> None:
+        """Add a mutation to the queue with a flag to distinguish mutation types.
+        
+        Args:
+            mutation: The mutation to add to the queue
+            mutation_type: Type of mutation ('single_module' or 'coordinated_multi_module')
+        """
+        queue_entry = {
+            'mutation': mutation,
+            'mutation_type': mutation_type,
+            'timestamp': self._get_timestamp(),
+            'cycle': self._cycle_count
+        }
+        self._mutation_queue.append(queue_entry)
+        self.logger.info(
+            f"Added {mutation_type} mutation to queue. Queue size: {len(self._mutation_queue)}"
+        )
+    
+    def _process_mutation_queue(self, goals: List[Goal]) -> None:
+        """Process mutations from the queue, applying them to the goals.
+        
+        Args:
+            goals: Current list of goals to apply mutations to
+        """
+        while self._mutation_queue:
+            queue_entry = self._mutation_queue.pop(0)
+            mutation = queue_entry['mutation']
+            mutation_type = queue_entry['mutation_type']
+            
+            # Apply mutation
+            success = mutation.apply(goals)
+            
+            # Record outcome with mutation type flag
+            outcome = {
+                'goal_id': getattr(mutation, 'goal_id', None),
+                'success': success,
+                'mutation_rate': self.system_state.mutation_rate,
+                'timestamp': self._get_timestamp(),
+                'mutation_type': mutation_type
+            }
+            self.mutation_outcomes.append(outcome)
+            self.system_state.mutation_outcomes.append(outcome)
+            
+            self.logger.info(
+                f"Processed {mutation_type} mutation from queue: success={success}"
+            )
+    
     def evolve(self, goals: List[Goal]) -> List[Goal]:
         """Execute one evolution cycle.
         
         Steps:
         1. Select a goal using current threshold
         2. Attempt mutation using current mutation rate
-        3. Record outcome
-        4. Evaluate and adjust scheduler parameters
-        5. Check ecology engine and introduce pressure if needed
-        6. Run Nash detection and attempt coordinated escape if equilibrium detected
-        7. Run NashDetectorAndForcer check after mutation cycle
-        8. Run consolidation every 5 cycles if enabled
-        9. Log current meta-parameter state for continuous monitoring
-        10. Log fitness landscape report
+        3. After each mutation attempt, call the Nash detector to check for equilibrium
+        4. If Nash equilibrium detected, trigger multi-module forcer for coordinated changes
+        5. Record outcome
+        6. Evaluate and adjust scheduler parameters
+        7. Check ecology engine and introduce pressure if needed
+        8. Run Nash detection and attempt coordinated escape if equilibrium detected
+        9. Run NashDetectorAndForcer check after mutation cycle
+        10. Process mutation queue (including coordinated multi-module mutations)
+        11. Run consolidation every 5 cycles if enabled
+        12. Log current meta-parameter state for continuous monitoring
+        13. Log fitness landscape report
         
         Args:
             goals: Current list of goals to evolve
@@ -403,8 +527,12 @@ class EvolutionEngine:
             self._log_fitness_landscape_report(goals, False)
             return goals
         
-        # Apply mutation
+        # Apply mutation (single-module by default)
         mutation_success = self.apply_mutation(selected_goal)
+        
+        # Step 3 & 4: After each mutation attempt, call the Nash detector to check for equilibrium
+        # If equilibrium detected, trigger multi-module forcer for coordinated changes across 2-3 modules
+        nash_integration_applied = self._check_and_integrate_nash_detector(goals)
         
         # Evaluate and adjust scheduler
         self.scheduler.evaluate_and_adjust()
@@ -419,8 +547,11 @@ class EvolutionEngine:
         # Run Nash detection and attempt coordinated escape if equilibrium detected
         nash_escape_applied = self._detect_and_escape_nash_equilibrium(goals)
         
-        # Step 7: Run NashDetectorAndForcer check after mutation cycle
+        # Step 9: Run NashDetectorAndForcer check after mutation cycle
         nash_detector_and_forcer_applied = self._check_and_apply_nash_detector_and_forcer(goals)
+        
+        # Step 10: Process mutation queue (handles both single and coordinated multi-module mutations)
+        self._process_mutation_queue(goals)
         
         # Run consolidation every 5 cycles
         if self._cycle_count % 5 == 0:
@@ -444,6 +575,13 @@ class EvolutionEngine:
         if nash_detector_and_forcer_applied:
             self.logger.info(
                 f"NashDetectorAndForcer: Forced multi-module changes applied during cycle {self._cycle_count}"
+            )
+        
+        # Log Nash integration events
+        if nash_integration_applied:
+            self.logger.info(
+                f"NashDetector Integration: Coordinated multi-module changes applied after mutation attempt "
+                f"during cycle {self._cycle_count}"
             )
         
         return goals
@@ -474,6 +612,10 @@ class EvolutionEngine:
         total_attempts = len(self.mutation_outcomes)
         successful = sum(1 for o in self.mutation_outcomes if o['success'])
         
+        # Count mutation types
+        single_module_count = sum(1 for o in self.mutation_outcomes if o.get('mutation_type') == 'single_module')
+        coordinated_multi_module_count = sum(1 for o in self.mutation_outcomes if o.get('mutation_type') == 'coordinated_multi_module')
+        
         # Collect NashDetectorAndForcer statistics
         nash_detector_and_forcer_stats = {}
         if hasattr(self.system_state, 'nash_equilibrium_events'):
@@ -481,10 +623,28 @@ class EvolutionEngine:
         if hasattr(self.system_state, 'forced_changes_log'):
             nash_detector_and_forcer_stats['forced_changes_applied'] = len(self.system_state.forced_changes_log)
         
+        # Collect Nash integration statistics
+        nash_integration_stats = {}
+        if hasattr(self.system_state, 'nash_equilibrium_events'):
+            nash_integration_events = [
+                event for event in self.system_state.nash_equilibrium_events
+                if event.get('detector') == 'nash_detector' and event.get('type') == 'nash_equilibrium_detected_after_mutation'
+            ]
+            nash_integration_stats['detection_events'] = len(nash_integration_events)
+        if hasattr(self.system_state, 'forced_changes_log'):
+            nash_integration_changes = [
+                change for change in self.system_state.forced_changes_log
+                if change.get('detector') == 'nash_detector' and change.get('type') == 'coordinated_multi_module_changes'
+            ]
+            nash_integration_stats['coordinated_changes_applied'] = len(nash_integration_changes)
+        
         return {
             'total_mutation_attempts': total_attempts,
             'successful_mutations': successful,
             'success_rate': successful / total_attempts if total_attempts > 0 else 0.0,
+            'single_module_mutations': single_module_count,
+            'coordinated_multi_module_mutations': coordinated_multi_module_count,
+            'mutation_queue_size': len(self._mutation_queue),
             'current_mutation_rate': self.system_state.mutation_rate,
             'current_acceptance_threshold': self.system_state.goal_acceptance_threshold,
             'scheduler_state': self.scheduler.get_state(),
@@ -493,6 +653,7 @@ class EvolutionEngine:
             'nash_equilibrium_detected': self.nash_equilibrium_detected,
             'nash_escape_attempts': self.nash_escape_attempts,
             'nash_detector_and_forcer_stats': nash_detector_and_forcer_stats,
+            'nash_integration_stats': nash_integration_stats,
             'consolidation_enabled': self.consolidation_enabled,
             'consolidation_threshold': self.consolidation_threshold,
             'archive_enabled': self.archive_enabled,

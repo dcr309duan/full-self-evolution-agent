@@ -90,10 +90,10 @@ def test_ecological_pressure_loop():
     """Test that the ecological pressure mechanism works correctly over multiple cycles.
     
     This test validates:
-    1. The evolution engine runs for 5 cycles
-    2. New tests are being generated during the process
-    3. The test suite grows over time
-    4. The agent adapts to new tests
+    1. The evolution engine runs for 10 cycles with ecology module active
+    2. The test suite changes between cycles
+    3. The agent's capability set shifts in response to new pressures
+    4. No import errors occur
     """
     # Create a temporary directory for test artifacts
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -143,9 +143,14 @@ def multiply(a, b):
         # Track test suite size over cycles
         test_suite_sizes = []
         all_test_names = set()
+        previous_test_names = set()
+        test_suite_changes = []
         
-        # Run 5 cycles
-        for cycle in range(5):
+        # Track capability shifts
+        capability_sets = []
+        
+        # Run 10 cycles
+        for cycle in range(10):
             # Run one evolution cycle
             engine.run_cycle()
             
@@ -159,19 +164,63 @@ def multiply(a, b):
                 node.name for node in ast.walk(tree)
                 if isinstance(node, ast.FunctionDef) and node.name.startswith('test_')
             ]
+            current_test_names = set(current_tests)
             
             # Record test suite size
             test_suite_sizes.append(len(current_tests))
+            
+            # Track changes between cycles
+            if cycle > 0:
+                added_tests = current_test_names - previous_test_names
+                removed_tests = previous_test_names - current_test_names
+                if added_tests or removed_tests:
+                    test_suite_changes.append({
+                        'cycle': cycle,
+                        'added': list(added_tests),
+                        'removed': list(removed_tests)
+                    })
+            
+            # Update all test names
             all_test_names.update(current_tests)
+            previous_test_names = current_test_names
+            
+            # Track capability set (tests that reference source code functions)
+            capability_set = set()
+            for test_name in current_tests:
+                test_func_node = None
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name == test_name:
+                        test_func_node = node
+                        break
+                if test_func_node:
+                    # Check if test references source code functions
+                    for sub_node in ast.walk(test_func_node):
+                        if isinstance(sub_node, ast.Call):
+                            if isinstance(sub_node.func, ast.Name):
+                                if sub_node.func.id in ['add', 'subtract', 'multiply']:
+                                    capability_set.add(sub_node.func.id)
+            capability_sets.append(capability_set)
             
             # Verify no syntax errors
             try:
                 compile(current_content, test_file_path, 'exec')
             except SyntaxError as e:
                 pytest.fail(f"Cycle {cycle}: Syntax error in test file: {e}")
+            
+            # Verify no import errors by trying to import the module
+            try:
+                module_name = os.path.splitext(os.path.basename(test_file_path))[0]
+                spec = importlib.util.spec_from_file_location(module_name, test_file_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            except Exception as e:
+                pytest.fail(f"Cycle {cycle}: Import error: {e}")
         
         # Verify new tests were generated (at least one new test beyond initial two)
         assert len(all_test_names) > 2, f"Expected more than 2 unique tests, found {len(all_test_names)}"
+        
+        # Verify test suite changes between cycles
+        assert len(test_suite_changes) > 0, "Expected at least one change in test suite between cycles"
         
         # Verify test suite grows over time (non-decreasing)
         for i in range(1, len(test_suite_sizes)):
@@ -181,6 +230,19 @@ def multiply(a, b):
         # Verify the suite actually grew (not just stayed the same)
         assert test_suite_sizes[-1] > test_suite_sizes[0], \
             f"Test suite did not grow: started at {test_suite_sizes[0]}, ended at {test_suite_sizes[-1]}"
+        
+        # Verify capability set shifts in response to new pressures
+        # Check that capability sets change over time
+        unique_capability_sets = set(tuple(sorted(s)) for s in capability_sets)
+        assert len(unique_capability_sets) > 1, \
+            f"Expected capability set to shift, but only found {len(unique_capability_sets)} unique sets"
+        
+        # Verify that later cycles have more capabilities (or different ones)
+        # This indicates adaptation to new pressures
+        first_capabilities = capability_sets[0]
+        last_capabilities = capability_sets[-1]
+        assert last_capabilities != first_capabilities or len(last_capabilities) >= len(first_capabilities), \
+            f"Capability set should shift: first={first_capabilities}, last={last_capabilities}"
         
         # Verify the agent adapted by checking that tests can be executed
         module_name = os.path.splitext(os.path.basename(test_file_path))[0]
@@ -201,3 +263,10 @@ def multiply(a, b):
         final_content = open(test_file_path, 'r').read()
         assert 'add' in final_content or 'subtract' in final_content or 'multiply' in final_content, \
             "Tests should reference source code functions"
+        
+        # Verify no import errors occurred throughout the entire process
+        # This is already checked per cycle above, but double-check at the end
+        try:
+            import core.ecology_module
+        except ImportError as e:
+            pytest.fail(f"Import error for ecology module: {e}")

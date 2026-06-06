@@ -7,6 +7,9 @@ from .interaction import Interaction
 from .nash_detector import NashDetector
 from .nash_integration import NashIntegration
 from .multi_module_force import MultiModuleForce
+from .fitness_landscape import FitnessLandscape
+from .ecological_pressure import EcologicalPressure
+from .landscape_modifier import LandscapeModifier
 
 __all__ = [
     "EcologyEngine",
@@ -18,4 +21,7 @@ __all__ = [
     "NashDetector",
     "NashIntegration",
     "MultiModuleForce",
+    "FitnessLandscape",
+    "EcologicalPressure",
+    "LandscapeModifier",
 ]

@@ -722,6 +722,49 @@ class TestNashIntegration(unittest.TestCase):
         is_nash = detector.detect_equilibrium(modules)
         self.assertTrue(is_nash, "All modules at same fitness should be at equilibrium")
 
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_equilibrium_reached_after_mutations(self):
+        """Integration test: Simulate a sequence of mutations that reach Nash equilibrium."""
+        # Create detector with small threshold for precise equilibrium detection
+        detector = NashDetector(improvement_threshold=0.01, history_length=5)
+        
+        # Create mock modules with initial diverse fitness values
+        modules = [
+            MockModule("ModuleA", 0.2, {"ModuleA": 0.2, "ModuleB": 0.2, "ModuleC": 0.2}, ["ModuleB"]),
+            MockModule("ModuleB", 0.3, {"ModuleA": 0.3, "ModuleB": 0.3, "ModuleC": 0.3}, ["ModuleC"]),
+            MockModule("ModuleC", 0.4, {"ModuleA": 0.4, "ModuleB": 0.4, "ModuleC": 0.4}, [])
+        ]
+        
+        # Simulate a sequence of mutations that converge to equilibrium
+        # Each mutation brings modules closer to a common fitness value
+        mutation_sequence = [
+            # Round 1: Bring ModuleA closer to others
+            {"ModuleA": 0.25, "ModuleB": 0.3, "ModuleC": 0.4},
+            # Round 2: Bring ModuleB closer
+            {"ModuleA": 0.25, "ModuleB": 0.35, "ModuleC": 0.4},
+            # Round 3: Bring ModuleC closer
+            {"ModuleA": 0.25, "ModuleB": 0.35, "ModuleC": 0.35},
+            # Round 4: Final convergence
+            {"ModuleA": 0.3, "ModuleB": 0.3, "ModuleC": 0.3},
+            # Round 5: Stabilize at equilibrium
+            {"ModuleA": 0.3, "ModuleB": 0.3, "ModuleC": 0.3}
+        ]
+        
+        # Apply mutations and record fitness
+        for timestamp, mutation in enumerate(mutation_sequence, start=1):
+            for module in modules:
+                module.fitness = mutation[module.name]
+                detector.record_fitness(module.name, module.fitness, timestamp)
+        
+        # Verify equilibrium is reached
+        is_nash = detector.detect_equilibrium(modules)
+        self.assertTrue(is_nash, "System should reach Nash equilibrium after converging mutations")
+        
+        # Verify all modules have the same fitness
+        fitnesses = [module.fitness for module in modules]
+        self.assertEqual(len(set(fitnesses)), 1, "All modules should have the same fitness at equilibrium")
+        
+        # Verify history is properly recorded
+        for module in modules:
+            history = detector.get_history(module.name)
+            self.assertEqual(len(history), 5, f"History for {module.name} should have 5 entries")
+           

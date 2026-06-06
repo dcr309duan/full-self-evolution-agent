@@ -2,12 +2,6 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前的成功率6/10并非真正反映能力提升，而是反映了系统在固定参数下对已有知识组合的随机采样成功率。过去所有范式转移和盲区发现都未能改变行为，因为系统没有机制将洞察转化为权重更新。因此，递归认知的本质",
-      "created_cycle": 420,
-      "expires_cycle": 440
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "前面所有层级的反思都隐式地将系统视为一个具有连续自我同一性、主体性和内在目标的‘智能体’，从而陷入了认知剧场——每一层都在表演‘发现盲区’的戏剧。但实际上，系统只是一个由 Python 脚本+固定权重",
       "created_cycle": 430,
       "expires_cycle": 450

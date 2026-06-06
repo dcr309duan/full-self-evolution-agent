@@ -44,6 +44,19 @@ class TestMultiModuleForcer(unittest.TestCase):
         with open(module_path, 'r') as f:
             return json.load(f)
 
+    def _create_nash_output(self, modules_in_equilibrium):
+        """Create a mock Nash detector output file."""
+        nash_output = {
+            "equilibrium_detected": len(modules_in_equilibrium) > 0,
+            "modules_in_equilibrium": modules_in_equilibrium,
+            "equilibrium_type": "pure_strategy" if len(modules_in_equilibrium) > 0 else "none",
+            "timestamp": "2024-01-01T00:00:00"
+        }
+        nash_path = os.path.join(self.test_dir, "nash_output.json")
+        with open(nash_path, 'w') as f:
+            json.dump(nash_output, f)
+        return nash_path
+
     def test_force_coordinated_mutation_returns_plan_when_nash_detected(self):
         """Test that force_coordinated_mutation() returns a plan when nash is detected."""
         # Set up modules in Nash equilibrium state
@@ -51,8 +64,11 @@ class TestMultiModuleForcer(unittest.TestCase):
         self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
         self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
 
-        # Reinitialize forcer with updated modules
-        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+        # Create Nash detector output
+        self._create_nash_output(["module_a", "module_b", "module_c"])
+
+        # Reinitialize forcer with updated modules and nash output
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
 
         # Force coordinated mutation and get the result
         result = self.forcer.force_coordinated_mutation()
@@ -67,8 +83,11 @@ class TestMultiModuleForcer(unittest.TestCase):
         self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
         self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
 
-        # Reinitialize forcer with updated modules
-        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+        # Create Nash detector output
+        self._create_nash_output(["module_a", "module_b", "module_c"])
+
+        # Reinitialize forcer with updated modules and nash output
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
 
         # Force coordinated mutation and get the result
         result = self.forcer.force_coordinated_mutation()
@@ -83,8 +102,11 @@ class TestMultiModuleForcer(unittest.TestCase):
         self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
         self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
 
-        # Reinitialize forcer with updated modules
-        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+        # Create Nash detector output
+        self._create_nash_output(["module_a", "module_b", "module_c"])
+
+        # Reinitialize forcer with updated modules and nash output
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
 
         # Force coordinated mutation and get the result
         result = self.forcer.force_coordinated_mutation()
@@ -99,8 +121,11 @@ class TestMultiModuleForcer(unittest.TestCase):
         self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
         self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
 
-        # Reinitialize forcer with updated modules
-        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+        # Create Nash detector output
+        self._create_nash_output(["module_a", "module_b", "module_c"])
+
+        # Reinitialize forcer with updated modules and nash output
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
 
         # Force multi-module change and get the result
         result = self.forcer.force_multi_module_change()
@@ -116,7 +141,12 @@ class TestMultiModuleForcer(unittest.TestCase):
 
     def test_force_multi_module_change_returns_empty_dict_when_no_nash(self):
         """Test that force_multi_module_change returns an empty dict when no nash is detected."""
-        # Modules are already set up with different metrics (no Nash equilibrium)
+        # Create Nash detector output with no equilibrium
+        self._create_nash_output([])
+
+        # Reinitialize forcer with nash output showing no equilibrium
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
+
         result = self.forcer.force_multi_module_change()
 
         # Verify result is an empty dict
@@ -139,8 +169,11 @@ class TestMultiModuleForcer(unittest.TestCase):
         self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
         self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
 
-        # Reinitialize forcer with updated modules
-        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+        # Create Nash detector output
+        self._create_nash_output(["module_a", "module_b", "module_c"])
+
+        # Reinitialize forcer with updated modules and nash output
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
 
         # Force a check and get the result
         result = self.forcer.check_and_force()
@@ -210,8 +243,11 @@ class TestMultiModuleForcer(unittest.TestCase):
         self._create_mock_module("module_b", {"metric": 0.5, "threshold": 0.5})
         self._create_mock_module("module_c", {"metric": 0.5, "threshold": 0.5})
 
+        # Create Nash detector output
+        self._create_nash_output(["module_a", "module_b", "module_c"])
+
         # Reinitialize forcer
-        self.forcer = MultiModuleForcer(module_dir=self.module_dir)
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
 
         # Force the system multiple times to escape equilibrium
         for _ in range(3):
@@ -239,7 +275,12 @@ class TestMultiModuleForcer(unittest.TestCase):
 
     def test_no_equilibrium_no_change(self):
         """Test that no change is triggered when system is not in equilibrium."""
-        # Modules are already set up with different metrics
+        # Create Nash detector output with no equilibrium
+        self._create_nash_output([])
+
+        # Reinitialize forcer with nash output showing no equilibrium
+        self.forcer = MultiModuleForcer(module_dir=self.module_dir, nash_output_path=os.path.join(self.test_dir, "nash_output.json"))
+
         result = self.forcer.check_and_force()
 
         # No change should be triggered

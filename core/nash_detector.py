@@ -227,6 +227,214 @@ class NashEquilibriumDetector:
                 print(f"Warning: Could not remove state file {self.state_file}: {e}")
 
 
+class ModuleInteractionTracker:
+    """
+    Tracks pairwise interaction scores between modules.
+    Records performance metrics for each module pair and provides
+    interaction score data for Nash equilibrium analysis.
+    """
+
+    def __init__(self, state_file="interaction_scores.json"):
+        """
+        Initialize the interaction tracker.
+        
+        Args:
+            state_file: Path to JSON file for state persistence
+        """
+        self.state_file = state_file
+        self.interaction_scores = defaultdict(lambda: defaultdict(float))
+        self.interaction_counts = defaultdict(lambda: defaultdict(int))
+        self.load_state()
+
+    def record_interaction(self, module_a, module_b, score):
+        """
+        Record an interaction score between two modules.
+        
+        Args:
+            module_a: Name of the first module
+            module_b: Name of the second module
+            score: Performance score for this interaction (0.0 to 1.0)
+        """
+        key_a, key_b = sorted([module_a, module_b])
+        self.interaction_scores[key_a][key_b] = (
+            (self.interaction_scores[key_a][key_b] * self.interaction_counts[key_a][key_b] + score) /
+            (self.interaction_counts[key_a][key_b] + 1)
+        )
+        self.interaction_counts[key_a][key_b] += 1
+        self.save_state()
+
+    def get_interaction_score(self, module_a, module_b):
+        """
+        Get the interaction score between two modules.
+        
+        Args:
+            module_a: Name of the first module
+            module_b: Name of the second module
+            
+        Returns:
+            Float score between 0.0 and 1.0, or 0.0 if no data
+        """
+        key_a, key_b = sorted([module_a, module_b])
+        return self.interaction_scores.get(key_a, {}).get(key_b, 0.0)
+
+    def get_all_interaction_scores(self):
+        """
+        Get all recorded interaction scores.
+        
+        Returns:
+            Dictionary mapping module pairs to their scores
+        """
+        result = {}
+        for module_a in self.interaction_scores:
+            for module_b, score in self.interaction_scores[module_a].items():
+                result[f"{module_a}-{module_b}"] = score
+        return result
+
+    def get_module_pairwise_scores(self, module_name):
+        """
+        Get all interaction scores involving a specific module.
+        
+        Args:
+            module_name: Name of the module to query
+            
+        Returns:
+            Dictionary mapping partner module names to scores
+        """
+        scores = {}
+        for other_module in self.interaction_scores:
+            if other_module == module_name:
+                for partner, score in self.interaction_scores[other_module].items():
+                    scores[partner] = score
+            elif module_name in self.interaction_scores.get(other_module, {}):
+                scores[other_module] = self.interaction_scores[other_module][module_name]
+        return scores
+
+    def save_state(self):
+        """Save the current state to a JSON file."""
+        state = {
+            'interaction_scores': {k: dict(v) for k, v in self.interaction_scores.items()},
+            'interaction_counts': {k: dict(v) for k, v in self.interaction_counts.items()}
+        }
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+        except (IOError, OSError) as e:
+            print(f"Warning: Could not save interaction scores to {self.state_file}: {e}")
+
+    def load_state(self):
+        """Load the state from a JSON file if it exists."""
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                scores_data = state.get('interaction_scores', {})
+                for module_a, partners in scores_data.items():
+                    for module_b, score in partners.items():
+                        self.interaction_scores[module_a][module_b] = score
+                counts_data = state.get('interaction_counts', {})
+                for module_a, partners in counts_data.items():
+                    for module_b, count in partners.items():
+                        self.interaction_counts[module_a][module_b] = count
+            except (json.JSONDecodeError, IOError, OSError) as e:
+                print(f"Warning: Could not load interaction scores from {self.state_file}: {e}")
+
+    def reset(self):
+        """Reset all tracking data and clear the state file."""
+        self.interaction_scores.clear()
+        self.interaction_counts.clear()
+        if os.path.exists(self.state_file):
+            try:
+                os.remove(self.state_file)
+            except OSError as e:
+                print(f"Warning: Could not remove state file {self.state_file}: {e}")
+
+
+class NashEquilibriumLogger:
+    """
+    Logs Nash equilibrium states for later multi-module forcing.
+    Stores equilibrium snapshots with timestamps and module interaction data.
+    """
+
+    def __init__(self, log_file="nash_equilibrium_log.json"):
+        """
+        Initialize the logger.
+        
+        Args:
+            log_file: Path to JSON file for log persistence
+        """
+        self.log_file = log_file
+        self.equilibrium_states = []
+        self.load_log()
+
+    def log_equilibrium_state(self, detector_state, interaction_scores=None):
+        """
+        Log a detected Nash equilibrium state.
+        
+        Args:
+            detector_state: Dictionary from NashEquilibriumDetector.get_nash_state()
+            interaction_scores: Optional dictionary of interaction scores
+        """
+        entry = {
+            'timestamp': datetime.now().isoformat(),
+            'detector_state': detector_state,
+            'interaction_scores': interaction_scores or {}
+        }
+        self.equilibrium_states.append(entry)
+        self.save_log()
+
+    def get_equilibrium_states(self, limit=None):
+        """
+        Get logged equilibrium states.
+        
+        Args:
+            limit: Optional maximum number of states to return (most recent first)
+            
+        Returns:
+            List of equilibrium state dictionaries
+        """
+        states = list(self.equilibrium_states)
+        if limit:
+            states = states[-limit:]
+        return states
+
+    def get_latest_equilibrium(self):
+        """
+        Get the most recent equilibrium state.
+        
+        Returns:
+            Dictionary of the latest equilibrium state, or None if no states logged
+        """
+        if self.equilibrium_states:
+            return self.equilibrium_states[-1]
+        return None
+
+    def clear_log(self):
+        """Clear all logged equilibrium states."""
+        self.equilibrium_states = []
+        self.save_log()
+
+    def save_log(self):
+        """Save the log to a JSON file."""
+        state = {
+            'equilibrium_states': self.equilibrium_states
+        }
+        try:
+            with open(self.log_file, 'w') as f:
+                json.dump(state, f, indent=2)
+        except (IOError, OSError) as e:
+            print(f"Warning: Could not save equilibrium log to {self.log_file}: {e}")
+
+    def load_log(self):
+        """Load the log from a JSON file if it exists."""
+        if os.path.exists(self.log_file):
+            try:
+                with open(self.log_file, 'r') as f:
+                    state = json.load(f)
+                self.equilibrium_states = state.get('equilibrium_states', [])
+            except (json.JSONDecodeError, IOError, OSError) as e:
+                print(f"Warning: Could not load equilibrium log from {self.log_file}: {e}")
+
+
 def scan_core_modules():
     """
     Scan all module files in the core/ directory for recent modification times and sizes.
@@ -316,6 +524,8 @@ def run_test_mode():
     print("Running NashEquilibriumDetector in test mode...")
     
     detector = NashEquilibriumDetector(state_file="test_nash_state.json")
+    interaction_tracker = ModuleInteractionTracker(state_file="test_interaction_scores.json")
+    logger = NashEquilibriumLogger(log_file="test_nash_log.json")
     
     print("\nTest 1: Create test data")
     detector.add_module("module_a")
@@ -417,7 +627,23 @@ def run_test_mode():
     assert isinstance(stable, list), "Should return a list"
     print("  PASSED")
     
-    print("\nTest 10: Test reset clears everything")
+    print("\nTest 10: Test interaction tracker")
+    interaction_tracker.record_interaction("module_a", "module_b", 0.8)
+    interaction_tracker.record_interaction("module_a", "module_c", 0.6)
+    interaction_tracker.record_interaction("module_b", "module_c", 0.9)
+    print(f"  Interaction scores: {interaction_tracker.get_all_interaction_scores()}")
+    assert interaction_tracker.get_interaction_score("module_a", "module_b") == 0.8
+    print("  PASSED")
+    
+    print("\nTest 11: Test Nash equilibrium logger")
+    detector_state = detector.get_nash_state()
+    logger.log_equilibrium_state(detector_state, interaction_tracker.get_all_interaction_scores())
+    latest = logger.get_latest_equilibrium()
+    print(f"  Latest equilibrium logged: {latest['timestamp']}")
+    assert latest is not None, "Should have logged an equilibrium state"
+    print("  PASSED")
+    
+    print("\nTest 12: Test reset clears everything")
     detector.reset()
     is_nash = detector.is_at_nash()
     stable_modules = detector.get_stable_modules()
@@ -431,9 +657,10 @@ def run_test_mode():
     
     print("\nAll tests passed!")
     
-    # Clean up test file
-    if os.path.exists("test_nash_state.json"):
-        os.remove("test_nash_state.json")
+    # Clean up test files
+    for f in ["test_nash_state.json", "test_interaction_scores.json", "test_nash_log.json"]:
+        if os.path.exists(f):
+            os.remove(f)
 
 
 if __name__ == "__main__":

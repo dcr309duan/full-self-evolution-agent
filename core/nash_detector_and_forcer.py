@@ -1,7 +1,7 @@
-import json
 import collections
 import itertools
 import random
+import math
 
 
 class ModuleInteractionGraph:
@@ -58,15 +58,17 @@ class ModuleInteractionGraph:
         self.history = {i: [] for i in range(self.num_modules)}
 
 
-class NashDetector:
+class NashEquilibriumDetector:
     """
-    Tracks module interaction payoffs and detects Nash equilibrium.
-    Uses only standard library.
+    Tracks module performance metrics and detects when no single-module mutation improves the system.
+    Uses a sliding window of recent mutation outcomes per module.
     """
     
-    def __init__(self, graph: ModuleInteractionGraph, improvement_threshold: float = 0.05):
+    def __init__(self, graph: ModuleInteractionGraph, improvement_threshold: float = 0.05, window_size: int = 10):
         self.graph = graph
         self.improvement_threshold = improvement_threshold
+        self.window_size = window_size
+        self.mutation_outcomes: dict[int, list[bool]] = {i: [] for i in range(graph.num_modules)}
         self.consecutive_no_improvement = 0
         self.plateau_threshold = 10
         self._random_seed = 123456789
@@ -100,6 +102,21 @@ class NashDetector:
         
         return new_score
     
+    def record_mutation_outcome(self, module_idx: int, improved: bool) -> None:
+        """Record the outcome of a mutation for a module."""
+        if module_idx in self.mutation_outcomes:
+            self.mutation_outcomes[module_idx].append(improved)
+            # Keep only the sliding window
+            if len(self.mutation_outcomes[module_idx]) > self.window_size:
+                self.mutation_outcomes[module_idx] = self.mutation_outcomes[module_idx][-self.window_size:]
+    
+    def get_module_improvement_rate(self, module_idx: int) -> float:
+        """Get the improvement rate for a module over the sliding window."""
+        if module_idx not in self.mutation_outcomes or not self.mutation_outcomes[module_idx]:
+            return 0.0
+        outcomes = self.mutation_outcomes[module_idx]
+        return sum(outcomes) / len(outcomes)
+    
     def check_improvement(self) -> tuple[bool, list[dict]]:
         """
         Check if any single-module change improves the system score.
@@ -112,7 +129,10 @@ class NashDetector:
             original_score = self.graph.performance_scores[module_idx]
             new_score = self._simulate_single_change(module_idx)
             
-            if new_score > original_score * (1 + self.improvement_threshold):
+            improved = new_score > original_score * (1 + self.improvement_threshold)
+            self.record_mutation_outcome(module_idx, improved)
+            
+            if improved:
                 improvement_found = True
                 improvement_details.append({
                     'module': module_idx,
@@ -138,16 +158,17 @@ class NashDetector:
     def reset(self) -> None:
         """Reset detector state."""
         self.consecutive_no_improvement = 0
+        self.mutation_outcomes = {i: [] for i in range(self.graph.num_modules)}
         self._random_seed = 123456789
 
 
 class MultiModuleForcer:
     """
-    Generates coordinated changes across 3+ modules that wouldn't be found by single-module optimization.
+    Generates coordinated mutation proposals across 2-3 modules simultaneously.
     Uses only standard library.
     """
     
-    def __init__(self, graph: ModuleInteractionGraph, detector: NashDetector):
+    def __init__(self, graph: ModuleInteractionGraph, detector: NashEquilibriumDetector):
         self.graph = graph
         self.detector = detector
         self._random_seed = 987654321
@@ -175,7 +196,7 @@ class MultiModuleForcer:
     
     def _identify_modules(self) -> list[int]:
         """
-        Identify 3+ modules with complementary patterns for coordinated change.
+        Identify 2-3 modules with complementary patterns for coordinated change.
         """
         num_modules = self.graph.num_modules
         averages = self.graph.get_all_averages()
@@ -183,15 +204,15 @@ class MultiModuleForcer:
         # Find low performers
         low_performers = [i for i in range(num_modules) if averages.get(i, 0.0) < 0.5]
         
-        if len(low_performers) >= 3:
-            num_to_select = min(3 + int(self._random() * 2), len(low_performers))
+        if len(low_performers) >= 2:
+            num_to_select = min(2 + int(self._random() * 2), len(low_performers))
             selected = random.sample(low_performers, num_to_select)
             return selected
         else:
             # Fallback: select modules with lowest performance scores
             modules_with_scores = [(i, self.graph.performance_scores[i]) for i in range(num_modules)]
             modules_with_scores.sort(key=lambda x: x[1])
-            num_to_select = min(3 + int(self._random() * 2), num_modules)
+            num_to_select = min(2 + int(self._random() * 2), num_modules)
             return [m[0] for m in modules_with_scores[:num_to_select]]
     
     def _generate_swap_change(self, module_idx: int) -> dict:
@@ -253,7 +274,7 @@ class MultiModuleForcer:
     
     def force_changes(self) -> list[dict]:
         """
-        Generate and apply coordinated multi-module changes across 3+ modules.
+        Generate and apply coordinated multi-module changes across 2-3 modules.
         Returns list of change proposals.
         """
         self._save_state()
@@ -378,13 +399,13 @@ class InMemoryStateTracker:
 
 class NashDetectorAndForcer:
     """
-    Combined class integrating ModuleInteractionGraph, NashDetector, MultiModuleForcer, and InMemoryStateTracker.
+    Combined class integrating ModuleInteractionGraph, NashEquilibriumDetector, MultiModuleForcer, and InMemoryStateTracker.
     Fully self-contained with zero external dependencies.
     """
     
     def __init__(self, num_modules: int = 5, improvement_threshold: float = 0.05, plateau_threshold: int = 10):
         self.graph = ModuleInteractionGraph(num_modules)
-        self.detector = NashDetector(self.graph, improvement_threshold)
+        self.detector = NashEquilibriumDetector(self.graph, improvement_threshold)
         self.detector.plateau_threshold = plateau_threshold
         self.forcer = MultiModuleForcer(self.graph, self.detector)
         self.state_tracker = InMemoryStateTracker()
@@ -417,7 +438,7 @@ class NashDetectorAndForcer:
     
     def force_multi_module_changes(self, state: dict) -> list[dict]:
         """
-        Generate coordinated multi-module change proposals across 3+ modules.
+        Generate coordinated multi-module change proposals across 2-3 modules.
         Returns list of change proposals.
         """
         if 'performance_scores' in state:
@@ -439,7 +460,8 @@ class NashDetectorAndForcer:
             'plateau_detected': self.detector.consecutive_no_improvement >= self.detector.plateau_threshold,
             'improvement_threshold': self.detector.improvement_threshold,
             'plateau_threshold': self.detector.plateau_threshold,
-            'performance_history': self.graph.get_all_averages()
+            'performance_history': self.graph.get_all_averages(),
+            'mutation_outcomes': {k: v[:] for k, v in self.detector.mutation_outcomes.items()}
         }
     
     def reset(self) -> None:
@@ -535,13 +557,13 @@ def run_tests() -> bool:
         proposals = detector.force_multi_module_changes(state)
         
         assert isinstance(proposals, list)
-        assert len(proposals) >= 3
+        assert len(proposals) >= 2
         for proposal in proposals:
             assert 'module' in proposal
             assert 'type' in proposal
             assert 'details' in proposal
             assert 'rationale' in proposal
-        print("  [PASS] Test 6: force_multi_module_changes API (3+ proposals)")
+        print("  [PASS] Test 6: force_multi_module_changes API (2+ proposals)")
     except Exception as e:
         print(f"  [FAIL] Test 6: force_multi_module_changes API - {e}")
         all_passed = False
@@ -600,6 +622,7 @@ def run_tests() -> bool:
         assert 'improvement_threshold' in state
         assert 'plateau_threshold' in state
         assert 'performance_history' in state
+        assert 'mutation_outcomes' in state
         print("  [PASS] Test 9: System state reporting")
     except Exception as e:
         print(f"  [FAIL] Test 9: System state reporting - {e}")
@@ -631,7 +654,7 @@ def run_tests() -> bool:
         state = detector.get_system_state()
         proposals = detector.force_multi_module_changes(state)
         
-        assert len(proposals) >= 3
+        assert len(proposals) >= 2
         print("  [PASS] Test 11: Complementary module identification")
     except Exception as e:
         print(f"  [FAIL] Test 11: Complementary module identification - {e}")
@@ -662,6 +685,31 @@ def run_tests() -> bool:
         print("  [PASS] Test 13: State tracker integration")
     except Exception as e:
         print(f"  [FAIL] Test 13: State tracker integration - {e}")
+        all_passed = False
+    
+    # Test 14: Mutation outcome tracking
+    try:
+        detector = NashDetectorAndForcer(num_modules=3)
+        detector.detector.record_mutation_outcome(0, True)
+        detector.detector.record_mutation_outcome(0, False)
+        detector.detector.record_mutation_outcome(0, True)
+        rate = detector.detector.get_module_improvement_rate(0)
+        assert rate == 2/3
+        print("  [PASS] Test 14: Mutation outcome tracking")
+    except Exception as e:
+        print(f"  [FAIL] Test 14: Mutation outcome tracking - {e}")
+        all_passed = False
+    
+    # Test 15: Sliding window behavior
+    try:
+        detector = NashDetectorAndForcer(num_modules=3)
+        detector.detector.window_size = 5
+        for i in range(10):
+            detector.detector.record_mutation_outcome(0, True)
+        assert len(detector.detector.mutation_outcomes[0]) == 5
+        print("  [PASS] Test 15: Sliding window behavior")
+    except Exception as e:
+        print(f"  [FAIL] Test 15: Sliding window behavior - {e}")
         all_passed = False
     
     return all_passed

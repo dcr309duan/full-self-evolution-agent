@@ -1,10 +1,8 @@
 {
-  "cycle_count": 435,
+  "cycle_count": 440,
   "current_generation": 140,
-  "last_evolution_time": 1780722678.212914,
+  "last_evolution_time": 1780723690.6713393,
   "capabilities": [
-    "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation",
-    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
     "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
     "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
@@ -52,39 +50,11 @@
     "Add a 'mutation diversity tracker' that records the feature vector of every mutation attempt (comple",
     "Implement a 'syntax and import pre-validation harness' that, for any mutation involving new code, ru",
     "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jac",
-    "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or g"
+    "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or g",
+    "Build a 'failure pattern miner' that runs every 10 cycles: it parses the failure log (accumulated er",
+    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test "
   ],
   "history": [
-    {
-      "cycle": 334,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780700562.3064208
-    },
-    {
-      "cycle": 335,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780700852.831919
-    },
-    {
-      "cycle": 336,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780701089.5436466
-    },
-    {
-      "cycle": 337,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780701327.05235
-    },
-    {
-      "cycle": 338,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780701593.8579695
-    },
     {
       "cycle": 339,
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -654,6 +624,36 @@
       "goal": "Implement a 'pre-mutation validation guard' that, before generating any code change, checks the target file(s) for syntax validity, resolves all import paths against the current filesystem, and verifies that required modules (e.g., numpy, random) are available. If validation fails, the mutation is aborted and a structured error record (error type, file, line) is appended to a failure log. This directly reduces the ~40% failure rate from syntax/import errors and provides a clean error signature for future learning.",
       "success": false,
       "timestamp": 1780722648.2110553
+    },
+    {
+      "cycle": 435,
+      "goal": "Build a 'failure pattern miner' that runs every 10 cycles: it parses the failure log (accumulated error records), clusters them by error type and module (e.g., 'import error on ECOLOGY'), and generates a short textual fix suggestion (e.g., 'add __init__.py to ecology/'). The suggestion is stored in a 'lessons learned' knowledge base, and the mutation engine is modified to query this KB before generating code for any module with a known failure pattern. This breaks the cycle of repeating the same errors and leverages existing insights to prevent future failures.",
+      "success": true,
+      "timestamp": 1780722851.500236
+    },
+    {
+      "cycle": 436,
+      "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "success": true,
+      "timestamp": 1780723084.9643188
+    },
+    {
+      "cycle": 437,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": false,
+      "timestamp": 1780723285.8680327
+    },
+    {
+      "cycle": 438,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": false,
+      "timestamp": 1780723454.4462256
+    },
+    {
+      "cycle": 439,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": false,
+      "timestamp": 1780723660.669051
     }
   ],
   "status": "evolving"
