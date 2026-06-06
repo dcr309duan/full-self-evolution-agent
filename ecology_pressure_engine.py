@@ -122,6 +122,49 @@ except ImportError:
                 return test_suite
 
 # ---------------------------------------------------------------------------
+# Import EcologyEngine (consolidated)
+# ---------------------------------------------------------------------------
+
+try:
+    from ecology_engine import EcologyEngine
+    _ecology_engine_available = True
+except ImportError:
+    _ecology_engine_available = False
+    # Stub for EcologyEngine if not available
+    class EcologyEngine:
+        """Stub implementation when ecology_engine is not available."""
+        def __init__(self, *args, **kwargs):
+            pass
+        def run_self_test(self) -> bool:
+            return False
+        def get_status(self) -> Dict[str, Any]:
+            return {"status": "unavailable"}
+        def evaluate_test_suite(self, test_suite: Dict[str, Any], pressure_names: Optional[List[str]] = None) -> Dict[str, float]:
+            return {}
+        def generate_novel_test_suite(self, existing_suite: Dict[str, Any], num_tests: int = 3, uniqueness_threshold: float = 0.3, output_dir: Optional[str] = None) -> List[str]:
+            return []
+        def introduce_novel_constraint(self) -> str:
+            return ""
+        def inject_test_into_existing_suite(self, test_file_path: str, num_tests: int = 1, uniqueness_threshold: float = 0.3) -> List[str]:
+            return []
+        def register_pressure(self, name: str, description: str, severity: float, evaluate: Callable[[Dict[str, Any]], float], generate_template: Callable[[], str]) -> None:
+            pass
+        def get_pressure(self, name: str) -> Optional[Dict[str, Any]]:
+            return None
+        def list_pressures(self) -> List[str]:
+            return []
+        def clear_pressures(self) -> None:
+            pass
+        def generate_missing_pressure_templates(self, test_suite: Dict[str, Any], threshold: float = 0.5, max_templates: int = 5) -> List[Tuple[str, str, str]]:
+            return []
+        def generate_all_templates(self) -> List[Tuple[str, str, str]]:
+            return []
+        def introduce_environmental_pressure(self, test_dir: str = "tests", source_dir: str = ".", output_dir: Optional[str] = None, timeout: float = 5.0) -> Dict[str, Any]:
+            return {"errors": ["EcologyEngine not available"]}
+        def evolve_test_suite(self, test_dir: str = "tests", source_dir: str = ".", output_dir: Optional[str] = None, max_stubs: int = 5) -> Dict[str, Any]:
+            return {"errors": ["EcologyEngine not available"]}
+
+# ---------------------------------------------------------------------------
 # Pressure Registry (delegates to minimal core)
 # ---------------------------------------------------------------------------
 
@@ -1006,76 +1049,3 @@ def _validate_test_stub(stub_code: str, module_name: str) -> bool:
         return False
 
 
-def _log_evolution_change(log_entry: Dict[str, Any], log_file: str = "test_evolution_log.json"):
-    """Log a change to the test evolution log file."""
-    log_path = Path(log_file)
-    if log_path.exists():
-        try:
-            with open(log_path, "r") as f:
-                log_data = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            log_data = []
-    else:
-        log_data = []
-    
-    log_data.append(log_entry)
-    
-    with open(log_path, "w") as f:
-        json.dump(log_data, f, indent=2)
-
-
-# ---------------------------------------------------------------------------
-# New Method: evolve_test_suite
-# ---------------------------------------------------------------------------
-
-def evolve_test_suite(
-    test_dir: str = "tests",
-    source_dir: str = ".",
-    output_dir: Optional[str] = None,
-    max_stubs: int = 5,
-) -> Dict[str, Any]:
-    """
-    Evolve the test suite by:
-    1. Scanning all existing test files for coverage gaps using AST parsing.
-    2. Identifying untested modules by comparing imports vs test imports.
-    3. Generating minimal test stubs for uncovered modules.
-    4. Validating generated tests by running them in isolation before adding to test suite.
-    5. Logging all changes to a test_evolution_log.json file.
-
-    Args:
-        test_dir: Directory containing test files.
-        source_dir: Directory containing source modules.
-        output_dir: Directory to write new test files. If None, uses test_dir.
-        max_stubs: Maximum number of test stubs to generate.
-
-    Returns:
-        Dict with evolution results: {
-            "scanned_tests": int,
-            "source_modules": int,
-            "untested_modules": list,
-            "generated_stubs": int,
-            "validated_stubs": int,
-            "errors": list
-        }
-    """
-    result = {
-        "scanned_tests": 0,
-        "source_modules": 0,
-        "untested_modules": [],
-        "generated_stubs": 0,
-        "validated_stubs": 0,
-        "errors": []
-    }
-    
-    # Step 1: Scan all existing test files for coverage gaps using AST parsing
-    test_files = _scan_test_files(test_dir)
-    result["scanned_tests"] = len(test_files)
-    
-    # Parse all test imports
-    test_imports = set()
-    for test_file in test_files:
-        test_imports.update(_parse_imports(test_file))
-    
-    # Step 2: Identify untested modules by comparing imports vs test imports
-    source_modules = _find_source_modules(source_dir)
-    result["source_modules"] = len(source_modules)

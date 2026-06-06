@@ -281,20 +281,95 @@ class PressureRegistry:
 class EnvironmentalPressureGenerator:
     """Analyzes current test suite coverage gaps and generates new environmental pressures."""
     
-    def __init__(self, manifest, analyzer, registry):
-        """Initialize with TestSuiteManifest, CoverageAnalyzer, and PressureRegistry instances."""
+    def __init__(self, manifest=None, analyzer=None, registry=None):
+        """Initialize with optional TestSuiteManifest, CoverageAnalyzer, and PressureRegistry instances."""
         self.manifest = manifest
         self.analyzer = analyzer
         self.registry = registry
         self.generated_pressures = []
         
+    def generate_pressure(self):
+        """Create a new test file with a basic passing test.
+        
+        Returns:
+            Path to the generated test file.
+        """
+        test_content = '''"""Basic test for EnvironmentalPressureGenerator."""
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from ecology_foundation import EnvironmentalPressureGenerator
+
+
+class TestEnvironmentalPressureGenerator:
+    """Test class for EnvironmentalPressureGenerator."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.generator = EnvironmentalPressureGenerator()
+    
+    def test_generator_creation(self):
+        """Test that the generator can be created."""
+        assert self.generator is not None
+        assert isinstance(self.generator, EnvironmentalPressureGenerator)
+    
+    def test_generate_pressure(self):
+        """Test that generate_pressure creates a test file."""
+        result = self.generator.generate_pressure()
+        assert result is not None
+        assert Path(result).exists()
+        # Clean up
+        Path(result).unlink()
+    
+    def test_scan_coverage_gaps(self):
+        """Test that scan_coverage_gaps returns a list."""
+        gaps = self.generator.scan_coverage_gaps()
+        assert isinstance(gaps, list)
+'''
+        # Create the test file
+        test_dir = Path("test_generated")
+        test_dir.mkdir(exist_ok=True)
+        test_file = test_dir / "test_environmental_pressure_generator.py"
+        test_file.write_text(test_content, encoding="utf-8")
+        return str(test_file)
+    
+    def scan_coverage_gaps(self):
+        """Identify which modules lack tests.
+        
+        Returns:
+            List of module names that lack test coverage.
+        """
+        gaps = []
+        
+        # Define expected modules that should have tests
+        expected_modules = [
+            "TestSuiteManifest",
+            "CoverageAnalyzer", 
+            "PressureRegistry",
+            "EnvironmentalPressureGenerator",
+            "TestSuiteMutator"
+        ]
+        
+        # Check if test files exist for each module
+        for module in expected_modules:
+            test_file = Path(f"test_{module.lower()}.py")
+            if not test_file.exists():
+                gaps.append(module)
+        
+        return gaps
+    
     def analyze_coverage_gaps(self):
         """Analyze the current test suite to identify coverage gaps.
         
         Returns:
             List of dicts describing coverage gaps found.
         """
-        coverage_report = self.analyzer.get_coverage_report()
+        coverage_report = self.analyzer.get_coverage_report() if self.analyzer else {"files": {}}
         gaps = []
         
         # Check for files with no test functions
@@ -317,16 +392,17 @@ class EnvironmentalPressureGenerator:
                 })
         
         # Check for missing categories in the registry
-        existing_categories = self.registry.get_categories()
-        expected_categories = ["general", "performance", "security", "integration", "unit"]
-        for cat in expected_categories:
-            if cat not in existing_categories:
-                gaps.append({
-                    "file": "registry",
-                    "type": "missing_category",
-                    "description": f"Missing pressure category: {cat}",
-                    "severity": "low"
-                })
+        if self.registry:
+            existing_categories = self.registry.get_categories()
+            expected_categories = ["general", "performance", "security", "integration", "unit"]
+            for cat in expected_categories:
+                if cat not in existing_categories:
+                    gaps.append({
+                        "file": "registry",
+                        "type": "missing_category",
+                        "description": f"Missing pressure category: {cat}",
+                        "severity": "low"
+                    })
         
         return gaps
     
@@ -349,18 +425,20 @@ class EnvironmentalPressureGenerator:
             "category": category
         }
         
-        # Register in the PressureRegistry
-        registered = self.registry.register_pressure(
-            description=description,
-            category=category
-        )
+        # Register in the PressureRegistry if available
+        if self.registry:
+            registered = self.registry.register_pressure(
+                description=description,
+                category=category
+            )
+            # Add additional metadata to the registered pressure
+            registered["name"] = name
+            registered["severity"] = severity
+            self.generated_pressures.append(registered)
+            return registered
         
-        # Add additional metadata to the registered pressure
-        registered["name"] = name
-        registered["severity"] = severity
-        
-        self.generated_pressures.append(registered)
-        return registered
+        self.generated_pressures.append(pressure_obj)
+        return pressure_obj
     
     def generate_pressures_from_gaps(self):
         """Generate new pressures based on identified coverage gaps.
@@ -415,7 +493,7 @@ class EnvironmentalPressureGenerator:
         Returns:
             List of generated pressure objects
         """
-        manifest = self.manifest.get_manifest()
+        manifest = self.manifest.get_manifest() if self.manifest else {}
         new_pressures = []
         
         # Generate pressures for each test file found
@@ -496,7 +574,7 @@ class EnvironmentalPressureGenerator:
         ]
         
         # Only add default pressures if they don't already exist
-        existing_descriptions = {p.get("description") for p in self.registry.get_pressures()}
+        existing_descriptions = {p.get("description") for p in self.registry.get_pressures()} if self.registry else set()
         for dp in default_pressures:
             if dp["description"] not in existing_descriptions:
                 pressure = self.generate_pressure(

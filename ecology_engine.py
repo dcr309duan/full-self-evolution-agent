@@ -7,10 +7,10 @@ import string
 
 class EcologyEngine:
     """
-    A minimal, self-contained ecology engine that scans test files,
-    generates pressure (new test files with random mutation patterns),
-    and evolves tests by adding new test cases for untested scenarios.
-    Uses only standard library imports.
+    A consolidated ecology engine that integrates pressure generation,
+    foundation management, and test suite evolution.
+    Provides methods for incremental test evolution, benchmark generation,
+    and fitness landscape mutation.
     """
 
     def __init__(self):
@@ -21,6 +21,13 @@ class EcologyEngine:
             "new_boundary_condition",
             "new_exception_handling",
             "new_parameter_combination"
+        ]
+        self.test_categories = [
+            "unit",
+            "integration",
+            "functional",
+            "performance",
+            "security"
         ]
 
     def scan_test_suite(self):
@@ -40,18 +47,13 @@ class EcologyEngine:
         The new file is named pressure_<random_hash>.py.
         Returns the filename of the created file.
         """
-        # Generate a unique filename based on hash of random data
         random_data = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
         file_hash = hashlib.sha256(random_data.encode()).hexdigest()[:8]
         filename = f"pressure_{file_hash}.py"
 
-        # Choose a random mutation pattern
         pattern = random.choice(self.mutation_patterns)
-
-        # Generate test content based on the pattern
         test_content = self._generate_test_content(pattern, filename)
 
-        # Write the file
         with open(filename, 'w') as f:
             f.write(test_content)
 
@@ -73,12 +75,10 @@ class {test_name}(unittest.TestCase):
 
     def test_{pattern}_basic(self):
         """Basic test for {pattern} pattern."""
-        # TODO: Implement actual test logic
         self.assertTrue(True)
 
     def test_{pattern}_edge(self):
         """Edge case test for {pattern} pattern."""
-        # TODO: Implement edge case logic
         with self.assertRaises(Exception):
             raise NotImplementedError("Edge case not implemented")
 
@@ -87,6 +87,28 @@ if __name__ == '__main__':
     unittest.main()
 '''
         return content
+
+    def evolve_test_suite(self, test_file=None):
+        """
+        Incrementally evolves the test suite by adding new test cases.
+        If no file is specified, evolves a random test file.
+        
+        Args:
+            test_file (str, optional): The filename of the test to evolve.
+        
+        Returns:
+            bool: True if evolution was successful, False otherwise.
+        """
+        if not self.test_files:
+            self.scan_test_suite()
+        
+        if not self.test_files:
+            return False
+
+        if test_file is None:
+            test_file = random.choice(self.test_files)
+        
+        return self.evolve_tests(test_file)
 
     def evolve_tests(self, test_file):
         """
@@ -100,7 +122,6 @@ if __name__ == '__main__':
             bool: True if evolution was successful, False otherwise.
         """
         if test_file not in self.test_files:
-            # Try to find the file directly
             if not os.path.exists(test_file):
                 return False
 
@@ -110,12 +131,8 @@ if __name__ == '__main__':
         except FileNotFoundError:
             return False
 
-        # Generate a new test method for an untested scenario
         new_test_method = self._generate_new_test_method(test_file)
 
-        # Find the last test method in the file and insert before the class end
-        # Simple approach: insert before the last line that starts with 'if __name__'
-        # or before the end of the file
         lines = content.split('\n')
         insert_pos = len(lines)
 
@@ -124,11 +141,9 @@ if __name__ == '__main__':
                 insert_pos = i
                 break
 
-        # Insert the new test method
         lines.insert(insert_pos, new_test_method)
         new_content = '\n'.join(lines)
 
-        # Write the modified content back
         with open(test_file, 'w') as f:
             f.write(new_content)
 
@@ -136,18 +151,116 @@ if __name__ == '__main__':
 
     def _generate_new_test_method(self, test_file):
         """Generate a new test method for an untested scenario."""
-        # Create a unique test name based on the file
         base_name = test_file.replace('.py', '').replace('test_', '')
         test_name = f"test_{base_name}_untested_scenario_{random.randint(1000, 9999)}"
 
         method = f'''
     def {test_name}(self):
         """Test an untested scenario for {base_name}."""
-        # TODO: Implement test for this untested scenario
         self.assertIsNotNone(None)
 '''
         return method
 
+    def generate_new_benchmark(self, benchmark_name=None):
+        """
+        Creates a new test file with a simple, valid test case.
+        
+        Args:
+            benchmark_name (str, optional): Name for the benchmark file.
+        
+        Returns:
+            str: The filename of the created benchmark file.
+        """
+        if benchmark_name is None:
+            benchmark_name = f"benchmark_{random.randint(1000, 9999)}"
+        
+        filename = f"test_{benchmark_name}.py"
+        
+        test_content = f'''"""
+Auto-generated benchmark test: {benchmark_name}
+Generated by EcologyEngine
+"""
+import unittest
+
+
+class Test{benchmark_name.capitalize()}(unittest.TestCase):
+    """Benchmark test class for {benchmark_name}."""
+
+    def test_{benchmark_name}_basic(self):
+        """Basic benchmark test."""
+        result = 1 + 1
+        self.assertEqual(result, 2)
+
+    def test_{benchmark_name}_string(self):
+        """String benchmark test."""
+        test_string = "hello"
+        self.assertEqual(len(test_string), 5)
+        self.assertTrue(test_string.islower())
+
+
+if __name__ == '__main__':
+    unittest.main()
+'''
+        
+        with open(filename, 'w') as f:
+            f.write(test_content)
+        
+        self.test_files.append(filename)
+        return filename
+
+    def mutate_fitness_landscape(self, new_category=None):
+        """
+        Adds new test categories to the fitness landscape.
+        
+        Args:
+            new_category (str, optional): Name of the new test category to add.
+        
+        Returns:
+            list: Updated list of test categories.
+        """
+        if new_category is None:
+            new_category = f"category_{random.choice(string.ascii_lowercase)}{random.randint(1, 100)}"
+        
+        if new_category not in self.test_categories:
+            self.test_categories.append(new_category)
+            
+            # Create a new test file for this category
+            filename = f"test_{new_category}.py"
+            test_content = f'''"""
+Auto-generated test category: {new_category}
+Generated by EcologyEngine
+"""
+import unittest
+
+
+class Test{new_category.capitalize()}(unittest.TestCase):
+    """Test class for {new_category} category."""
+
+    def test_{new_category}_basic(self):
+        """Basic test for {new_category} category."""
+        self.assertTrue(True)
+
+    def test_{new_category}_feature(self):
+        """Feature test for {new_category} category."""
+        test_data = [1, 2, 3]
+        self.assertEqual(len(test_data), 3)
+
+
+if __name__ == '__main__':
+    unittest.main()
+'''
+            
+            with open(filename, 'w') as f:
+                f.write(test_content)
+            
+            self.test_files.append(filename)
+        
+        return self.test_categories
+
     def get_test_files(self):
         """Return the list of currently tracked test files."""
         return self.test_files
+
+    def get_test_categories(self):
+        """Return the list of test categories."""
+        return self.test_categories

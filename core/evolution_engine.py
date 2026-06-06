@@ -12,6 +12,7 @@ from core.ecology_engine import EcologyEngine
 from core.nash_detector import NashDetector
 from core.coordinated_mutator import CoordinatedMutator
 from core.consolidation_engine import ConsolidationEngine
+from core.nash_detector_and_forcer import NashDetectorAndForcer
 
 
 @dataclass
@@ -24,6 +25,7 @@ class EvolutionEngine:
     nash_detector: NashDetector
     coordinated_mutator: CoordinatedMutator
     consolidation_engine: ConsolidationEngine
+    nash_detector_and_forcer: NashDetectorAndForcer
     mutation_outcomes: List[Dict[str, Any]] = field(default_factory=list)
     consecutive_test_passes: int = 0
     nash_equilibrium_detected: bool = False
@@ -305,6 +307,70 @@ class EvolutionEngine:
             f"Pathways refactored: {len(refactored_pathways)}"
         )
     
+    def _check_and_apply_nash_detector_and_forcer(self, goals: List[Goal]) -> bool:
+        """Check for Nash equilibrium using nash_detector_and_forcer and apply forced multi-module changes if detected.
+        
+        This integrates the NashDetectorAndForcer into the evolution loop:
+        (1) After each mutation cycle, call detector to check for equilibrium
+        (2) If equilibrium detected, trigger forcer instead of normal single-module mutation
+        (3) Log equilibrium events and forced multi-module changes to system state
+        
+        Args:
+            goals: Current list of goals to check
+            
+        Returns:
+            True if forced multi-module changes were applied, False otherwise
+        """
+        # Step 1: Call detector to check for equilibrium
+        equilibrium_detected = self.nash_detector_and_forcer.detect_equilibrium(goals)
+        
+        if equilibrium_detected:
+            self.logger.info(
+                f"NashDetectorAndForcer: Equilibrium detected in system state. "
+                f"Triggering forced multi-module changes."
+            )
+            
+            # Step 2: Trigger forcer to apply multi-module changes
+            forced_changes_applied = self.nash_detector_and_forcer.force_multi_module_changes(goals)
+            
+            # Step 3: Log equilibrium events and forced changes to system state
+            equilibrium_event = {
+                'type': 'nash_equilibrium_detected',
+                'detector': 'nash_detector_and_forcer',
+                'forced_changes_applied': forced_changes_applied,
+                'cycle': self._cycle_count,
+                'timestamp': self._get_timestamp()
+            }
+            
+            if not hasattr(self.system_state, 'nash_equilibrium_events'):
+                self.system_state.nash_equilibrium_events = []
+            self.system_state.nash_equilibrium_events.append(equilibrium_event)
+            
+            if forced_changes_applied:
+                forced_change_log = {
+                    'type': 'forced_multi_module_changes',
+                    'detector': 'nash_detector_and_forcer',
+                    'cycle': self._cycle_count,
+                    'timestamp': self._get_timestamp(),
+                    'goals_affected': [goal.id for goal in goals]
+                }
+                if not hasattr(self.system_state, 'forced_changes_log'):
+                    self.system_state.forced_changes_log = []
+                self.system_state.forced_changes_log.append(forced_change_log)
+                
+                self.logger.info(
+                    f"NashDetectorAndForcer: Forced multi-module changes applied successfully. "
+                    f"Affected goals: {[goal.id for goal in goals]}"
+                )
+            else:
+                self.logger.warning(
+                    f"NashDetectorAndForcer: Equilibrium detected but forced changes could not be applied."
+                )
+            
+            return forced_changes_applied
+        
+        return False
+    
     def evolve(self, goals: List[Goal]) -> List[Goal]:
         """Execute one evolution cycle.
         
@@ -315,9 +381,10 @@ class EvolutionEngine:
         4. Evaluate and adjust scheduler parameters
         5. Check ecology engine and introduce pressure if needed
         6. Run Nash detection and attempt coordinated escape if equilibrium detected
-        7. Run consolidation every 5 cycles if enabled
-        8. Log current meta-parameter state for continuous monitoring
-        9. Log fitness landscape report
+        7. Run NashDetectorAndForcer check after mutation cycle
+        8. Run consolidation every 5 cycles if enabled
+        9. Log current meta-parameter state for continuous monitoring
+        10. Log fitness landscape report
         
         Args:
             goals: Current list of goals to evolve
@@ -352,6 +419,9 @@ class EvolutionEngine:
         # Run Nash detection and attempt coordinated escape if equilibrium detected
         nash_escape_applied = self._detect_and_escape_nash_equilibrium(goals)
         
+        # Step 7: Run NashDetectorAndForcer check after mutation cycle
+        nash_detector_and_forcer_applied = self._check_and_apply_nash_detector_and_forcer(goals)
+        
         # Run consolidation every 5 cycles
         if self._cycle_count % 5 == 0:
             self._run_consolidation(goals)
@@ -368,6 +438,12 @@ class EvolutionEngine:
                 f"Nash equilibrium state: detected=True, "
                 f"escape_attempts={self.nash_escape_attempts}, "
                 f"escape_applied={nash_escape_applied}"
+            )
+        
+        # Log NashDetectorAndForcer events
+        if nash_detector_and_forcer_applied:
+            self.logger.info(
+                f"NashDetectorAndForcer: Forced multi-module changes applied during cycle {self._cycle_count}"
             )
         
         return goals
@@ -398,6 +474,13 @@ class EvolutionEngine:
         total_attempts = len(self.mutation_outcomes)
         successful = sum(1 for o in self.mutation_outcomes if o['success'])
         
+        # Collect NashDetectorAndForcer statistics
+        nash_detector_and_forcer_stats = {}
+        if hasattr(self.system_state, 'nash_equilibrium_events'):
+            nash_detector_and_forcer_stats['equilibrium_events'] = len(self.system_state.nash_equilibrium_events)
+        if hasattr(self.system_state, 'forced_changes_log'):
+            nash_detector_and_forcer_stats['forced_changes_applied'] = len(self.system_state.forced_changes_log)
+        
         return {
             'total_mutation_attempts': total_attempts,
             'successful_mutations': successful,
@@ -409,6 +492,7 @@ class EvolutionEngine:
             'ecology_engine_state': self.ecology_engine.get_state() if hasattr(self.ecology_engine, 'get_state') else {},
             'nash_equilibrium_detected': self.nash_equilibrium_detected,
             'nash_escape_attempts': self.nash_escape_attempts,
+            'nash_detector_and_forcer_stats': nash_detector_and_forcer_stats,
             'consolidation_enabled': self.consolidation_enabled,
             'consolidation_threshold': self.consolidation_threshold,
             'archive_enabled': self.archive_enabled,
