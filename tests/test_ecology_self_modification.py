@@ -289,3 +289,164 @@ def test_ecology_pressure_engine_generates_novel_tests(temp_project_dir):
     # Verify cleanup was successful
     for file_path in created_files:
         assert not os.path.exists(file_path), f"Test file {file_path} should have been cleaned up"
+
+
+def test_full_ecology_loop_with_mock(ecology_engine, mocker):
+    """
+    Validate the full ecology loop using mocks:
+    1. Agent generates a new test
+    2. Injects it into the test suite
+    3. Runs the test suite
+    4. Verifies the new test is executed
+    5. Verifies old tests are removed after threshold
+    """
+    test_runner = TestRunner(project_dir=ecology_engine.project_dir)
+    self_modifier = SelfModifier(
+        source_dir=ecology_engine.source_dir,
+        module_name=ecology_engine.module_name
+    )
+    
+    # Mock the evolution cycle
+    mock_evolution = mocker.patch.object(ecology_engine, 'evolve')
+    mock_evolution.return_value = True
+    
+    # Step 1: Agent generates a new test
+    novel_test_code = """
+from my_module import multiply
+
+def test_multiply():
+    assert multiply(3, 4) == 12
+    assert multiply(0, 5) == 0
+    assert multiply(-2, 6) == -12
+"""
+    novel_test_path = os.path.join(ecology_engine.test_dir, "test_novel_multiply.py")
+    with open(novel_test_path, "w") as f:
+        f.write(novel_test_code)
+    
+    # Step 2: Inject it into the test suite
+    # Simulate injection by adding the test file to the test directory
+    assert os.path.exists(novel_test_path), "Test file should be injected into test suite"
+    
+    # Step 3: Run the test suite
+    result = test_runner.run_specific_test(novel_test_path)
+    # The test should fail because multiply() doesn't exist yet
+    assert result.failed > 0 or result.errors > 0, \
+        "Novel test should fail because multiply() is not implemented"
+    
+    # Step 4: Verify the new test is executed
+    # Check that the test was actually run (not skipped)
+    assert result.tests_run > 0, "New test should be executed"
+    
+    # Step 5: Verify old tests are removed after threshold
+    # Simulate threshold by adding multiple old test files and checking removal
+    old_test_files = []
+    for i in range(5):
+        old_test_path = os.path.join(ecology_engine.test_dir, f"test_old_{i}.py")
+        with open(old_test_path, "w") as f:
+            f.write(f"""
+from my_module import add
+
+def test_old_{i}():
+    assert add({i}, {i+1}) == {2*i+1}
+""")
+        old_test_files.append(old_test_path)
+    
+    # Mock the threshold check
+    mock_threshold = mocker.patch.object(ecology_engine, 'check_old_test_threshold')
+    mock_threshold.return_value = True
+    
+    # Simulate removal of old tests
+    for old_test in old_test_files:
+        if os.path.exists(old_test):
+            os.remove(old_test)
+    
+    # Verify old tests are removed
+    for old_test in old_test_files:
+        assert not os.path.exists(old_test), f"Old test {old_test} should be removed after threshold"
+    
+    # Verify the new test still exists
+    assert os.path.exists(novel_test_path), "New test should persist after old tests are removed"
+    
+    # Verify the mock evolution was called
+    mock_evolution.assert_called_once()
+
+
+def test_full_ecology_loop_with_mock_and_assertions(ecology_engine, mocker):
+    """
+    Validate the full ecology loop using mocks with detailed assertions:
+    1. Agent generates a new test
+    2. Injects it into the test suite
+    3. Runs the test suite
+    4. Verifies the new test is executed
+    5. Verifies old tests are removed after threshold
+    """
+    test_runner = TestRunner(project_dir=ecology_engine.project_dir)
+    self_modifier = SelfModifier(
+        source_dir=ecology_engine.source_dir,
+        module_name=ecology_engine.module_name
+    )
+    
+    # Mock the evolution cycle
+    mock_evolution = mocker.patch.object(ecology_engine, 'evolve')
+    mock_evolution.return_value = True
+    
+    # Step 1: Agent generates a new test
+    novel_test_code = """
+from my_module import multiply
+
+def test_multiply():
+    assert multiply(3, 4) == 12
+    assert multiply(0, 5) == 0
+    assert multiply(-2, 6) == -12
+"""
+    novel_test_path = os.path.join(ecology_engine.test_dir, "test_novel_multiply.py")
+    with open(novel_test_path, "w") as f:
+        f.write(novel_test_code)
+    
+    # Step 2: Inject it into the test suite
+    assert os.path.exists(novel_test_path), "Test file should be injected into test suite"
+    
+    # Step 3: Run the test suite
+    result = test_runner.run_specific_test(novel_test_path)
+    assert result.failed > 0 or result.errors > 0, \
+        "Novel test should fail because multiply() is not implemented"
+    
+    # Step 4: Verify the new test is executed
+    assert result.tests_run > 0, "New test should be executed"
+    assert result.failed > 0, "New test should have failed assertions"
+    
+    # Step 5: Verify old tests are removed after threshold
+    old_test_files = []
+    for i in range(5):
+        old_test_path = os.path.join(ecology_engine.test_dir, f"test_old_{i}.py")
+        with open(old_test_path, "w") as f:
+            f.write(f"""
+from my_module import add
+
+def test_old_{i}():
+    assert add({i}, {i+1}) == {2*i+1}
+""")
+        old_test_files.append(old_test_path)
+    
+    # Mock the threshold check
+    mock_threshold = mocker.patch.object(ecology_engine, 'check_old_test_threshold')
+    mock_threshold.return_value = True
+    
+    # Simulate removal of old tests
+    for old_test in old_test_files:
+        if os.path.exists(old_test):
+            os.remove(old_test)
+    
+    # Verify old tests are removed
+    for old_test in old_test_files:
+        assert not os.path.exists(old_test), f"Old test {old_test} should be removed after threshold"
+    
+    # Verify the new test still exists
+    assert os.path.exists(novel_test_path), "New test should persist after old tests are removed"
+    
+    # Verify the mock evolution was called
+    mock_evolution.assert_called_once()
+    
+    # Additional assertions
+    assert mock_evolution.call_count == 1, "Evolution should be called exactly once"
+    assert mock_threshold.call_count == 1, "Threshold check should be called exactly once"

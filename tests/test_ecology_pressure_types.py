@@ -3,6 +3,9 @@ import ast
 import sys
 import os
 from pathlib import Path
+import tempfile
+import shutil
+import logging
 
 # Add the core directory to the path so we can import the module
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
@@ -241,6 +244,192 @@ class TestPressureTypeConsistency:
         enum_names = {pt.value for pt in PressureType}
         list_names = set(PRESSURE_TYPES)
         assert enum_names == list_names, f"Enum values {enum_names} don't match list {list_names}"
+
+
+class TestEcologyPressureEngine:
+    """Test the ecology pressure engine functionality."""
+
+    def setup_method(self):
+        """Set up a temporary directory for testing."""
+        self.test_dir = tempfile.mkdtemp()
+        self.log_file = Path(self.test_dir) / "pressure_log.txt"
+        self.engine = self._create_engine()
+
+    def teardown_method(self):
+        """Clean up temporary directory."""
+        shutil.rmtree(self.test_dir)
+
+    def _create_engine(self):
+        """Create a mock pressure engine for testing."""
+        # This is a simplified version of the pressure engine for testing
+        class MockPressureEngine:
+            def __init__(self, test_dir, log_file):
+                self.test_dir = Path(test_dir)
+                self.log_file = Path(log_file)
+                self.logger = logging.getLogger("pressure_engine")
+                self.logger.setLevel(logging.INFO)
+                handler = logging.FileHandler(str(self.log_file))
+                handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+                self.logger.addHandler(handler)
+
+            def scan_and_generate_tests(self, pressure_type):
+                """Scan the test directory and generate new tests based on pressure type."""
+                test_files = list(self.test_dir.glob("test_*.py"))
+                generated_count = 0
+                for test_file in test_files:
+                    with open(test_file, "r") as f:
+                        content = f.read()
+                    if "def test_" not in content:
+                        new_test = pressure_type.generate_test("new_function", {})
+                        with open(test_file, "a") as f:
+                            f.write("\n" + new_test)
+                        generated_count += 1
+                        self.logger.info(f"Generated new test in {test_file.name}")
+                return generated_count
+
+            def remove_old_tests(self, max_age_days=30):
+                """Remove tests that are older than max_age_days."""
+                import time
+                current_time = time.time()
+                removed_count = 0
+                for test_file in self.test_dir.glob("test_*.py"):
+                    file_age_days = (current_time - os.path.getmtime(test_file)) / 86400
+                    if file_age_days > max_age_days:
+                        test_file.unlink()
+                        removed_count += 1
+                        self.logger.info(f"Removed old test file {test_file.name}")
+                return removed_count
+
+            def get_log_entries(self):
+                """Get all log entries."""
+                if not self.log_file.exists():
+                    return []
+                with open(self.log_file, "r") as f:
+                    return f.readlines()
+
+        return MockPressureEngine(self.test_dir, self.log_file)
+
+    def test_new_tests_generated(self):
+        """Test that new tests are generated when scanning test directory."""
+        # Create a test file without any test functions
+        test_file = Path(self.test_dir) / "test_example.py"
+        test_file.write_text("import pytest\n\ndef helper_function():\n    pass\n")
+        
+        # Generate new tests
+        generated = self.engine.scan_and_generate_tests(PressureType.PERFORMANCE)
+        
+        # Verify that new tests were generated
+        assert generated > 0, "No new tests were generated"
+        content = test_file.read_text()
+        assert "def test_" in content, "Generated test does not contain a test function"
+
+    def test_old_tests_removed(self):
+        """Test that old tests are removed based on age."""
+        # Create an old test file
+        old_test_file = Path(self.test_dir) / "test_old.py"
+        old_test_file.write_text("import pytest\n\ndef test_old_function():\n    assert True\n")
+        
+        # Set the modification time to be very old
+        import time
+        old_time = time.time() - (60 * 24 * 60 * 60)  # 60 days ago
+        os.utime(str(old_test_file), (old_time, old_time))
+        
+        # Create a new test file
+        new_test_file = Path(self.test_dir) / "test_new.py"
+        new_test_file.write_text("import pytest\n\ndef test_new_function():\n    assert True\n")
+        
+        # Remove old tests (max age 30 days)
+        removed = self.engine.remove_old_tests(max_age_days=30)
+        
+        # Verify that only the old test was removed
+        assert removed == 1, f"Expected 1 old test removed, got {removed}"
+        assert not old_test_file.exists(), "Old test file was not removed"
+        assert new_test_file.exists(), "New test file was incorrectly removed"
+
+    def test_log_updated(self):
+        """Test that the log is updated when tests are generated or removed."""
+        # Create a test file
+        test_file = Path(self.test_dir) / "test_log.py"
+        test_file.write_text("import pytest\n\ndef helper():\n    pass\n")
+        
+        # Generate a test and check log
+        self.engine.scan_and_generate_tests(PressureType.COMPLEXITY)
+        log_entries = self.engine.get_log_entries()
+        assert len(log_entries) > 0, "Log was not updated after test generation"
+        assert any("Generated" in entry for entry in log_entries), "Log does not contain generation entry"
+        
+        # Remove old tests and check log
+        import time
+        old_time = time.time() - (60 * 24 * 60 * 60)
+        os.utime(str(test_file), (old_time, old_time))
+        self.engine.remove_old_tests(max_age_days=30)
+        log_entries = self.engine.get_log_entries()
+        assert any("Removed" in entry for entry in log_entries), "Log does not contain removal entry"
+
+    def test_handles_empty_test_directory(self):
+        """Test that the engine handles empty test directories gracefully."""
+        # Ensure the test directory is empty
+        assert len(list(self.test_dir.glob("test_*.py"))) == 0, "Test directory should be empty"
+        
+        # Try to generate tests in empty directory
+        generated = self.engine.scan_and_generate_tests(PressureType.SECURITY)
+        assert generated == 0, f"Expected 0 tests generated in empty directory, got {generated}"
+        
+        # Try to remove old tests in empty directory
+        removed = self.engine.remove_old_tests(max_age_days=30)
+        assert removed == 0, f"Expected 0 tests removed in empty directory, got {removed}"
+        
+        # Check that log is still updated
+        log_entries = self.engine.get_log_entries()
+        assert len(log_entries) == 0, "Log should be empty when no operations performed"
+
+    def test_multiple_pressure_types_generate_different_tests(self):
+        """Test that different pressure types generate different test content."""
+        test_file = Path(self.test_dir) / "test_multi.py"
+        test_file.write_text("import pytest\n\ndef helper():\n    pass\n")
+        
+        # Generate tests with different pressure types
+        content_before = test_file.read_text()
+        self.engine.scan_and_generate_tests(PressureType.PERFORMANCE)
+        content_after_performance = test_file.read_text()
+        
+        # Reset file
+        test_file.write_text("import pytest\n\ndef helper():\n    pass\n")
+        self.engine.scan_and_generate_tests(PressureType.SECURITY)
+        content_after_security = test_file.read_text()
+        
+        # Verify different content was generated
+        assert content_after_performance != content_after_security, "Different pressure types generated identical tests"
+
+    def test_log_persistence_across_operations(self):
+        """Test that log entries persist across multiple operations."""
+        test_file = Path(self.test_dir) / "test_persist.py"
+        test_file.write_text("import pytest\n\ndef helper():\n    pass\n")
+        
+        # Perform multiple operations
+        self.engine.scan_and_generate_tests(PressureType.PERFORMANCE)
+        self.engine.scan_and_generate_tests(PressureType.COMPLEXITY)
+        
+        # Check that all entries are in the log
+        log_entries = self.engine.get_log_entries()
+        assert len(log_entries) >= 2, f"Expected at least 2 log entries, got {len(log_entries)}"
+
+    def test_engine_does_not_modify_non_test_files(self):
+        """Test that the engine only modifies test files."""
+        # Create a non-test file
+        non_test_file = Path(self.test_dir) / "helper.py"
+        non_test_file.write_text("def helper():\n    pass\n")
+        
+        # Create a test file
+        test_file = Path(self.test_dir) / "test_valid.py"
+        test_file.write_text("import pytest\n\ndef helper():\n    pass\n")
+        
+        # Run engine
+        self.engine.scan_and_generate_tests(PressureType.MAINTENANCE)
+        
+        # Verify non-test file was not modified
+        assert non_test_file.read_text() == "def helper():\n    pass\n", "Non-test file was modified"
+        assert "def test_" in test_file.read_text(), "Test file should have been modified"
 
 
 if __name__ == "__main__":

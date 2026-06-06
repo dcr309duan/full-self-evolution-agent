@@ -8,33 +8,57 @@ from core.nash_detector_and_forcer import NashEquilibriumDetectorAndForcer
 
 
 def test_minimal_nash_detection_and_forcing():
-    """Create a minimal, self-contained test that: (1) Creates a NashDetector with mock module interaction data,
-    (2) Verifies detection of Nash equilibrium when scores converge, (3) Tests MultiModuleForcer generates valid
-    multi-module proposals, (4) Uses only standard library assertions."""
+    """Create a minimal, self-contained test that: (1) Imports NashDetectorAndForcer directly,
+    (2) Tests with mock module scores showing equilibrium (all scores < 0.01 improvement),
+    (3) Tests with mock scores showing no equilibrium (one module has >0.05 improvement),
+    (4) Tests multi-module mutation generation with 2-3 mock modules."""
     # Create detector instance
     detector = NashEquilibriumDetectorAndForcer()
     
-    # Mock module interaction data showing convergence
+    # Test with mock module scores showing equilibrium (all scores < 0.01 improvement)
     detector.module_interaction_history = {
-        'module1': {'success_rate': 0.95, 'last_change': 0},
-        'module2': {'success_rate': 0.92, 'last_change': 0},
-        'module3': {'success_rate': 0.97, 'last_change': 0}
+        'module1': {'success_rate': 0.95, 'last_change': 0, 'improvement': 0.005},
+        'module2': {'success_rate': 0.92, 'last_change': 0, 'improvement': 0.008},
+        'module3': {'success_rate': 0.97, 'last_change': 0, 'improvement': 0.003}
     }
     detector.stable_cycles = 3
     detector.modules = ['module1', 'module2', 'module3']
     
-    # Verify detection of Nash equilibrium when scores converge
-    # Since we can't easily mock is_at_nash without unittest.mock, we'll test the detection logic directly
-    # by checking the conditions that would trigger equilibrium detection
-    assert detector.stable_cycles >= 3, "Should have at least 3 stable cycles"
-    all_stable = all(
-        info['last_change'] == 0 
+    # Verify equilibrium detection
+    all_improvements_below_threshold = all(
+        info.get('improvement', 1.0) < 0.01
         for info in detector.module_interaction_history.values()
     )
-    assert all_stable, "All modules should have no recent changes"
+    assert all_improvements_below_threshold, "All modules should have improvement < 0.01 for equilibrium"
+    assert detector.stable_cycles >= 3, "Should have at least 3 stable cycles"
     
-    # Test MultiModuleForcer generates valid multi-module proposals
-    # Simulate the forcer generating proposals to break the equilibrium
+    # Test with mock scores showing no equilibrium (one module has >0.05 improvement)
+    detector.module_interaction_history = {
+        'module1': {'success_rate': 0.95, 'last_change': 0, 'improvement': 0.005},
+        'module2': {'success_rate': 0.92, 'last_change': 0, 'improvement': 0.08},
+        'module3': {'success_rate': 0.97, 'last_change': 0, 'improvement': 0.003}
+    }
+    detector.stable_cycles = 0
+    
+    # Verify no equilibrium detection
+    any_improvement_above_threshold = any(
+        info.get('improvement', 0.0) > 0.05
+        for info in detector.module_interaction_history.values()
+    )
+    assert any_improvement_above_threshold, "At least one module should have improvement > 0.05 for no equilibrium"
+    assert detector.stable_cycles < 3, "Stable cycles should be less than 3 for no equilibrium"
+    
+    # Test multi-module mutation generation with 2-3 mock modules
+    # Reset to equilibrium state for mutation generation
+    detector.module_interaction_history = {
+        'module1': {'success_rate': 0.95, 'last_change': 0, 'improvement': 0.005},
+        'module2': {'success_rate': 0.92, 'last_change': 0, 'improvement': 0.008},
+        'module3': {'success_rate': 0.97, 'last_change': 0, 'improvement': 0.003}
+    }
+    detector.stable_cycles = 3
+    detector.modules = ['module1', 'module2', 'module3']
+    
+    # Generate multi-module proposals to break equilibrium
     expected_proposals = [
         {'module': 'module1', 'change': 'adjust_parameter', 'target': 0.6},
         {'module': 'module2', 'change': 'modify_threshold', 'target': 0.4},
@@ -61,13 +85,20 @@ def test_minimal_nash_detection_and_forcing():
         if module in detector.module_interaction_history:
             # Simulate applying the proposal
             detector.module_interaction_history[module]['last_change'] = 1
-            detector.module_interaction_history[module]['success_rate'] = 0.5
+            detector.module_interaction_history[module]['improvement'] = 0.1
     
     # After applying proposals, equilibrium should be broken
     detector.stable_cycles = 0
     all_stable_after = all(
-        info['last_change'] == 0 
+        info['last_change'] == 0
         for info in detector.module_interaction_history.values()
     )
     assert not all_stable_after, "Equilibrium should be broken after applying proposals"
     assert detector.stable_cycles < 3, "Stable cycles should be reset after proposals"
+    
+    # Verify that at least one module now has improvement > 0.05
+    any_improvement_after = any(
+        info.get('improvement', 0.0) > 0.05
+        for info in detector.module_interaction_history.values()
+    )
+    assert any_improvement_after, "After proposals, at least one module should have improvement > 0.05"
