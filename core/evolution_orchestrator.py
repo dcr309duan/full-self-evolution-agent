@@ -28,33 +28,8 @@ from meta_evaluation import MetaEvaluation
 from reflection_parser import ReflectionParser  # New import for reflection parsing
 from meta_goal_generator import MetaGoalGenerator  # Import for meta goal generation
 
-# Import guard for Nash equilibrium integration modules
-try:
-    from nash_detector import NashDetector
-    NASH_DETECTOR_AVAILABLE = True
-except ImportError:
-    NashDetector = None
-    NASH_DETECTOR_AVAILABLE = False
-    logger = logging.getLogger(__name__)
-    logger.warning("nash_detector module not available; Nash equilibrium detection disabled")
-
-try:
-    from multi_module_forcer import MultiModuleForcer
-    MULTI_MODULE_FORCER_AVAILABLE = True
-except ImportError:
-    MultiModuleForcer = None
-    MULTI_MODULE_FORCER_AVAILABLE = False
-    logger = logging.getLogger(__name__)
-    logger.warning("multi_module_forcer module not available; coordinated forcing disabled")
-
-try:
-    from coordinated_mutation_runner import CoordinatedMutationRunner
-    COORDINATED_MUTATION_RUNNER_AVAILABLE = True
-except ImportError:
-    CoordinatedMutationRunner = None
-    COORDINATED_MUTATION_RUNNER_AVAILABLE = False
-    logger = logging.getLogger(__name__)
-    logger.warning("coordinated_mutation_runner module not available; coordinated mutation runner disabled")
+# Import Nash equilibrium detector and forcer (only external import)
+from nash_detector_and_forcer import NashDetectorAndForcer
 
 logger = logging.getLogger(__name__)
 
@@ -86,34 +61,8 @@ class EvolutionOrchestrator:
         self.reflection_parser = ReflectionParser(self.config.get("reflection_parser", {}))  # New subsystem
         self.meta_goal_generator = MetaGoalGenerator(self.config.get("meta_goal_generator", {}))  # Meta goal generator
 
-        # Initialize Nash equilibrium integration modules if available
-        self.nash_detector = None
-        self.multi_module_forcer = None
-        self.coordinated_mutation_runner = None
-        
-        if NASH_DETECTOR_AVAILABLE:
-            try:
-                self.nash_detector = NashDetector(self.config.get("nash_detector", {}))
-                logger.info("NashDetector initialized successfully")
-            except Exception as e:
-                logger.error("Failed to initialize NashDetector: %s", e)
-                self.nash_detector = None
-        
-        if MULTI_MODULE_FORCER_AVAILABLE:
-            try:
-                self.multi_module_forcer = MultiModuleForcer(self.config.get("multi_module_forcer", {}))
-                logger.info("MultiModuleForcer initialized successfully")
-            except Exception as e:
-                logger.error("Failed to initialize MultiModuleForcer: %s", e)
-                self.multi_module_forcer = None
-        
-        if COORDINATED_MUTATION_RUNNER_AVAILABLE:
-            try:
-                self.coordinated_mutation_runner = CoordinatedMutationRunner(self.config.get("coordinated_mutation_runner", {}))
-                logger.info("CoordinatedMutationRunner initialized successfully")
-            except Exception as e:
-                logger.error("Failed to initialize CoordinatedMutationRunner: %s", e)
-                self.coordinated_mutation_runner = None
+        # Initialize Nash equilibrium detector and forcer
+        self.nash_detector_and_forcer = NashDetectorAndForcer(self.config.get("nash_detector_and_forcer", {}))
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -856,4 +805,51 @@ class EvolutionOrchestrator:
             logger.info("Fitness landscape mutation phase completed with %d new tests generated", num_tests)
             
         except Exception as e:
-            logger
+            logger.exception("Error during fitness landscape mutation: %s", e)
+
+    def _run_evolution_cycle(self):
+        """Run a single evolution cycle: generate goal, mutate modules, test, detect equilibrium, force multi-module change."""
+        logger.info("Starting evolution cycle %d", self.cycle_count)
+        
+        # Step 1: Generate goal (select subsystem to evolve)
+        subsystem_name = self.select_subsystem_to_evolve()
+        logger.info("Selected subsystem '%s' for evolution", subsystem_name)
+        
+        # Step 2: Read source code
+        source_code = self.read_subsystem_source_code(subsystem_name)
+        if source_code is None:
+            logger.error("Failed to read source code for subsystem '%s', skipping cycle", subsystem_name)
+            return
+        
+        # Step 3: Mutate modules (run sandboxed mutation)
+        strategy = "default"
+        mutated_code, sandbox_test_passed, failure_report_path = self._run_sandboxed_mutation(
+            subsystem_name, source_code, strategy
+        )
+        
+        if mutated_code is None:
+            logger.error("Sandboxed mutation failed for subsystem '%s', skipping cycle", subsystem_name)
+            return
+        
+        # Step 4: Test the mutation
+        tests_passed = self.run_tests(subsystem_name)
+        
+        # Step 5: Evaluate success
+        success = self.evaluate_success(subsystem_name, tests_passed)
+        
+        # Step 6: Update scores and log
+        old_scores = dict(self.subsystem_scores)
+        self.update_scores_and_log(subsystem_name, success)
+        new_scores = dict(self.subsystem_scores)
+        
+        # Step 7: Log evolution cycle
+        self._log_evolution_cycle(subsystem_name, strategy, success, old_scores, new_scores)
+        
+        # Step 8: Parse reflection and update strategy
+        self._parse_reflection_and_update_strategy(subsystem_name, success)
+        
+        # Step 9: Detect Nash equilibrium
+        equilibrium_detected = self.nash_detector_and_forcer.detect_equilibrium(self.subsystem_scores)
+        if equilibrium_detected:
+            logger.info("Nash equilibrium detected, forcing multi-module change")
+            #

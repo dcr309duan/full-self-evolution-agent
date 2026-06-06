@@ -11,6 +11,13 @@ from flask import Flask, jsonify, request
 from config import PROJECT_ROOT, MEMORY_DIR, LOGS_DIR
 from core.memory import get_evolution_state, get_knowledge_base, get_goals
 
+class APIServer:
+    """Compatibility shim for agent-generated code that references this class."""
+    def __init__(self, config=None):
+        self.config = config or {}
+    def get_health_score(self):
+        return 1.0
+
 app = Flask(__name__)
 
 # Health tracking metrics

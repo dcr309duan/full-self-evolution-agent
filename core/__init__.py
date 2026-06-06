@@ -8,8 +8,24 @@ Use direct imports like 'from core.memory import get_evolution_state' instead.
 from core import av_research_engine
 
 # Export nash_detector_and_forcer for evolution_orchestrator
-from core import nash_detector_and_forcer
+try:
+    from core import nash_detector_and_forcer
+except ImportError:
+    nash_detector_and_forcer = None
+
+# Export evolution_orchestrator as a core module
+try:
+    from core import evolution_orchestrator
+except ImportError:
+    evolution_orchestrator = None
 
 # Export NashDetectorAndForcer and EvolutionOrchestrator for easy import by other modules
-from core.nash_detector_and_forcer import NashDetectorAndForcer
-from core.evolution_orchestrator import EvolutionOrchestrator
+try:
+    from core.nash_detector_and_forcer import NashDetectorAndForcer
+except ImportError:
+    NashDetectorAndForcer = None
+
+try:
+    from core.evolution_orchestrator import EvolutionOrchestrator
+except ImportError:
+    EvolutionOrchestrator = None

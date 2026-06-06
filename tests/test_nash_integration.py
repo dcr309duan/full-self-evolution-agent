@@ -600,6 +600,60 @@ class TestNashIntegration(unittest.TestCase):
                     self.assertIn(dep, plan_module_names,
                                  f"Module {module_name} depends on {dep}, which must also be in the plan")
 
+    def test_empty_module_list(self):
+        """Test edge case: empty module list should not crash."""
+        detector = NashDetector()
+        is_nash = detector.detect_equilibrium([])
+        self.assertFalse(is_nash, "Empty module list should not be at equilibrium")
+
+    def test_single_module(self):
+        """Test edge case: single module should be at equilibrium."""
+        detector = NashDetector()
+        detector.record_fitness("ModuleA", 0.5, 1)
+        detector.record_fitness("ModuleA", 0.5, 2)
+        detector.record_fitness("ModuleA", 0.5, 3)
+        detector.record_fitness("ModuleA", 0.5, 4)
+        detector.record_fitness("ModuleA", 0.5, 5)
+        
+        class MockModule:
+            def __init__(self, name, fitness):
+                self.name = name
+                self.fitness = fitness
+            def get_scores(self):
+                return {"ModuleA": 0.5}
+            def mutate(self):
+                return self
+        
+        module = MockModule("ModuleA", 0.5)
+        is_nash = detector.detect_equilibrium([module])
+        self.assertTrue(is_nash, "Single module with stable fitness should be at equilibrium")
+
+    def test_all_modules_at_equilibrium(self):
+        """Test edge case: all modules at equilibrium with same fitness."""
+        detector = NashDetector()
+        modules_data = {
+            "ModuleA": {"fitness": 0.7, "dependencies": []},
+            "ModuleB": {"fitness": 0.7, "dependencies": []},
+            "ModuleC": {"fitness": 0.7, "dependencies": []}
+        }
+        
+        for module_name, module_data in modules_data.items():
+            for i in range(5):
+                detector.record_fitness(module_name, module_data["fitness"], i + 1)
+        
+        class MockModule:
+            def __init__(self, name, fitness):
+                self.name = name
+                self.fitness = fitness
+            def get_scores(self):
+                return {n: 0.7 for n in modules_data}
+            def mutate(self):
+                return self
+        
+        modules = [MockModule(name, data["fitness"]) for name, data in modules_data.items()]
+        is_nash = detector.detect_equilibrium(modules)
+        self.assertTrue(is_nash, "All modules at same fitness should be at equilibrium")
+
 
 if __name__ == '__main__':
     unittest.main()
