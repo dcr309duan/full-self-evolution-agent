@@ -2,11 +2,24 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
+      "description": "Implement a 'pre-mutation validation guard' that, before generating any code change, checks the target file(s) for syntax validity, resolves all import paths against the current filesystem, and verifies that required modules (e.g., numpy, random) are available. If validation fails, the mutation is aborted and a structured error record (error type, file, line) is appended to a failure log. This directly reduces the ~40% failure rate from syntax/import errors and provides a clean error signature for future learning.",
+      "priority": 10,
+      "status": "pending",
+      "created_at": 1780721743.3650455,
+      "consecutive_failures": 1
+    },
+    {
       "description": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
       "priority": 9,
       "status": "pending",
       "created_at": 1780719312.6871266,
       "consecutive_failures": 3
+    },
+    {
+      "description": "Build a 'failure pattern miner' that runs every 10 cycles: it parses the failure log (accumulated error records), clusters them by error type and module (e.g., 'import error on ECOLOGY'), and generates a short textual fix suggestion (e.g., 'add __init__.py to ecology/'). The suggestion is stored in a 'lessons learned' knowledge base, and the mutation engine is modified to query this KB before generating code for any module with a known failure pattern. This breaks the cycle of repeating the same errors and leverages existing insights to prevent future failures.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780721743.3697023
     },
     {
       "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",
@@ -21,6 +34,12 @@
       "status": "pending",
       "created_at": 1780655268.6256523,
       "consecutive_failures": 3
+    },
+    {
+      "description": "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or goal-generation actions (no successful code mutation), the system automatically triggers a 'radical mutation' that randomly selects one of the novel ideas (e.g., ecosystem simulation, symbolic regression on failures) and generates a minimal but executable implementation, bypassing the usual mutation pipeline. This forces a break from self-referential stagnation and tests high-risk, high-reward ideas that could unlock architectural self-modification.",
+      "priority": 8,
+      "status": "pending",
+      "created_at": 1780721743.3738909
     }
   ],
   "completed_goals": [

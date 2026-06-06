@@ -3,14 +3,18 @@ import sys
 import importlib.util
 from typing import List, Dict, Any, Tuple, Optional
 
+# Import the new robust implementation
+from core.pre_mutation_guard import PreMutationGuard
+
 class PreMutationValidator:
     """
     Validates proposed mutations before they are applied to the codebase.
-    Checks syntax, import consistency across files, and provides fallback mutations on failure.
+    This is now a thin wrapper around PreMutationGuard for backward compatibility.
     """
 
     def __init__(self):
         self.validation_errors: List[str] = []
+        self._guard = PreMutationGuard()
 
     def validate_mutation(self, mutation: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -23,61 +27,25 @@ class PreMutationValidator:
             Dict with 'passed' (bool), 'errors' (list of str), and optionally 'fallback_mutation'
         """
         self.validation_errors = []
-        files = mutation.get('files', [])
-        changes = mutation.get('changes', {})
-
-        if not files or not changes:
+        
+        # Delegate to PreMutationGuard
+        guard_result = self._guard.validate_mutation(mutation)
+        
+        # Convert guard result to legacy format if needed
+        if guard_result.get('passed'):
             return {
-                'passed': False,
-                'errors': [{'type': 'validation', 'line': 0, 'message': 'Mutation must specify files and changes'}],
-                'warnings': [],
-                'fallback_mutation': self._generate_fallback(mutation)
+                'passed': True,
+                'errors': [],
+                'warnings': []
             }
-
-        # Step 2: Parse each file's proposed code with detailed error reporting
-        parsed_files = {}
-        for file_path in files:
-            code = changes.get(file_path)
-            if code is None:
-                self.validation_errors.append({'type': 'validation', 'line': 0, 'message': f"No code provided for {file_path}"})
-                continue
-            try:
-                tree = ast.parse(code)
-                parsed_files[file_path] = tree
-            except SyntaxError as e:
-                error_detail = {
-                    'type': 'SyntaxError',
-                    'line': e.lineno if hasattr(e, 'lineno') else 0,
-                    'message': str(e)
-                }
-                if hasattr(e, 'offset'):
-                    error_detail['column'] = e.offset
-                self.validation_errors.append(error_detail)
-
-        if self.validation_errors:
+        else:
+            self.validation_errors = guard_result.get('errors', [])
             return {
                 'passed': False,
                 'errors': self.validation_errors,
-                'warnings': [],
+                'warnings': guard_result.get('warnings', []),
                 'fallback_mutation': self._generate_fallback(mutation)
             }
-
-        # Step 3: Check import consistency across files
-        import_errors = self._check_import_consistency(parsed_files)
-        if import_errors:
-            self.validation_errors.extend(import_errors)
-            return {
-                'passed': False,
-                'errors': self.validation_errors,
-                'warnings': [],
-                'fallback_mutation': self._generate_fallback(mutation)
-            }
-
-        return {
-            'passed': True,
-            'errors': [],
-            'warnings': []
-        }
 
     def _check_import_consistency(self, parsed_files: Dict[str, ast.AST]) -> List[Dict[str, Any]]:
         """
@@ -149,74 +117,8 @@ class PreMutationValidator:
         Returns:
             Dict with 'passed' (bool), 'errors' (list of dicts with 'type', 'line', 'message'), 'warnings' (list)
         """
-        result = {
-            'passed': True,
-            'errors': [],
-            'warnings': []
-        }
-
-        # Step 1: Parse the code with detailed error reporting
-        try:
-            tree = ast.parse(code_string)
-        except SyntaxError as e:
-            error_detail = {
-                'type': 'SyntaxError',
-                'line': e.lineno if hasattr(e, 'lineno') else 0,
-                'message': str(e)
-            }
-            if hasattr(e, 'offset'):
-                error_detail['column'] = e.offset
-            result['errors'].append(error_detail)
-            result['passed'] = False
-            return result
-
-        # Step 2: Parse all import statements
-        imports = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    imports.append({
-                        'type': 'import',
-                        'module': alias.name,
-                        'alias': alias.asname,
-                        'line': node.lineno
-                    })
-            elif isinstance(node, ast.ImportFrom):
-                module = node.module if node.module else ''
-                for alias in node.names:
-                    imports.append({
-                        'type': 'from_import',
-                        'module': module,
-                        'name': alias.name,
-                        'alias': alias.asname,
-                        'line': node.lineno
-                    })
-
-        # Step 3: Check each import against sys.modules and available packages
-        for imp in imports:
-            module_name = imp['module']
-            
-            # Check if module is already loaded
-            if module_name in sys.modules:
-                continue
-            
-            # Try to find the module spec
-            try:
-                spec = importlib.util.find_spec(module_name)
-                if spec is None:
-                    result['warnings'].append({
-                        'type': 'import_warning',
-                        'line': imp['line'],
-                        'message': f"Module '{module_name}' not found in sys.modules or available packages"
-                    })
-            except (ImportError, ValueError, ModuleNotFoundError) as e:
-                result['warnings'].append({
-                    'type': 'import_warning',
-                    'line': imp['line'],
-                    'message': f"Error checking module '{module_name}': {str(e)}"
-                })
-
-        return result
+        # Delegate to PreMutationGuard
+        return self._guard.validate_mutation_proposal(code_string, target_file)
 
 
 def validate_mutation(mutation: Dict[str, Any]) -> Dict[str, Any]:
