@@ -6,7 +6,9 @@ import importlib
 import sys
 import logging
 import ast
+import os
 from typing import List, Tuple, Set, Optional, Dict
+from importlib.metadata import distribution, PackageNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -33,57 +35,228 @@ THIRD_PARTY_DEPENDENCIES = [
     "networkx",
 ]
 
+# Local cache of known available packages
+_known_available_packages: Set[str] = set()
 
-def validate_import(module_name: str) -> Tuple[bool, Optional[str]]:
+# Cache for requirements files
+_requirements_cache: Optional[Dict[str, str]] = None
+_setup_py_cache: Optional[Dict[str, str]] = None
+
+
+def _update_known_available_packages():
+    """Update the local cache of known available packages."""
+    global _known_available_packages
+    try:
+        # Get all installed packages from importlib.metadata
+        import importlib.metadata as metadata
+        for dist in metadata.distributions():
+            _known_available_packages.add(dist.metadata['Name'].lower())
+    except Exception as e:
+        logger.warning(f"Failed to update known available packages: {e}")
+
+
+def _check_package_installed(package_name: str) -> bool:
+    """Check if a package is installed using importlib.metadata.
+    
+    Args:
+        package_name: Name of the package to check
+        
+    Returns:
+        True if the package is installed, False otherwise
+    """
+    try:
+        distribution(package_name)
+        return True
+    except PackageNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
+def _load_requirements_file() -> Dict[str, str]:
+    """Load and parse requirements.txt if it exists.
+    
+    Returns:
+        Dictionary mapping package names to version specifiers
+    """
+    global _requirements_cache
+    if _requirements_cache is not None:
+        return _requirements_cache
+    
+    _requirements_cache = {}
+    requirements_paths = [
+        "requirements.txt",
+        "requirements/requirements.txt",
+        "../requirements.txt",
+    ]
+    
+    for path in requirements_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and not line.startswith('-'):
+                            # Parse package name and version
+                            parts = line.split('==')
+                            if len(parts) >= 2:
+                                _requirements_cache[parts[0].strip().lower()] = parts[1].strip()
+                            elif line:
+                                _requirements_cache[line.lower()] = ""
+                break
+            except Exception as e:
+                logger.warning(f"Failed to load requirements file {path}: {e}")
+    
+    return _requirements_cache
+
+
+def _load_setup_py() -> Dict[str, str]:
+    """Load and parse setup.py if it exists.
+    
+    Returns:
+        Dictionary mapping package names to version specifiers
+    """
+    global _setup_py_cache
+    if _setup_py_cache is not None:
+        return _setup_py_cache
+    
+    _setup_py_cache = {}
+    setup_paths = [
+        "setup.py",
+        "../setup.py",
+    ]
+    
+    for path in setup_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    content = f.read()
+                # Simple parsing for install_requires
+                if 'install_requires' in content:
+                    # Extract the list between brackets
+                    start = content.find('install_requires=[')
+                    if start != -1:
+                        start = content.find('[', start) + 1
+                        end = content.find(']', start)
+                        if end != -1:
+                            requires_str = content[start:end]
+                            for req in requires_str.split(','):
+                                req = req.strip().strip("'").strip('"')
+                                if req:
+                                    parts = req.split('==')
+                                    if len(parts) >= 2:
+                                        _setup_py_cache[parts[0].strip().lower()] = parts[1].strip()
+                                    else:
+                                        _setup_py_cache[req.lower()] = ""
+                break
+            except Exception as e:
+                logger.warning(f"Failed to load setup.py {path}: {e}")
+    
+    return _setup_py_cache
+
+
+def _get_suggested_fix(module_name: str) -> str:
+    """Generate a suggested fix for a failed import.
+    
+    Args:
+        module_name: Name of the module that failed to import
+        
+    Returns:
+        Suggested fix command
+    """
+    # Check if it's a known package
+    package_name = module_name.split('.')[0].lower()
+    
+    # Check requirements files for version info
+    requirements = _load_requirements_file()
+    setup_py = _load_setup_py()
+    
+    version = None
+    if package_name in requirements:
+        version = requirements[package_name]
+    elif package_name in setup_py:
+        version = setup_py[package_name]
+    
+    if version:
+        return f"pip install {package_name}=={version}"
+    else:
+        return f"pip install {package_name}"
+
+
+def validate_import(module_name: str) -> Tuple[bool, Optional[str], Optional[str]]:
     """Validate that a module can be imported without errors.
     
     Args:
         module_name: Fully qualified module name to validate
         
     Returns:
-        Tuple of (success, error_message)
+        Tuple of (success, error_message, suggested_fix)
     """
-    try:
-        importlib.import_module(module_name)
-        return True, None
-    except ImportError as e:
-        return False, f"ImportError: {str(e)}"
-    except SyntaxError as e:
-        return False, f"SyntaxError in {module_name}: {str(e)}"
-    except Exception as e:
-        return False, f"Unexpected error importing {module_name}: {str(e)}"
+    # Update known available packages cache periodically
+    _update_known_available_packages()
+    
+    # Check if the package is known to be available
+    package_name = module_name.split('.')[0].lower()
+    if package_name in _known_available_packages:
+        try:
+            importlib.import_module(module_name)
+            return True, None, None
+        except ImportError as e:
+            return False, f"ImportError: {str(e)}", _get_suggested_fix(module_name)
+        except SyntaxError as e:
+            return False, f"SyntaxError in {module_name}: {str(e)}", None
+        except Exception as e:
+            return False, f"Unexpected error importing {module_name}: {str(e)}", None
+    
+    # Check using importlib.metadata
+    if _check_package_installed(package_name):
+        try:
+            importlib.import_module(module_name)
+            _known_available_packages.add(package_name)
+            return True, None, None
+        except ImportError as e:
+            return False, f"ImportError: {str(e)}", _get_suggested_fix(module_name)
+        except SyntaxError as e:
+            return False, f"SyntaxError in {module_name}: {str(e)}", None
+        except Exception as e:
+            return False, f"Unexpected error importing {module_name}: {str(e)}", None
+    
+    # Package not found
+    return False, f"Package '{package_name}' is not installed", _get_suggested_fix(module_name)
 
 
-def validate_dependencies(dependencies: List[str]) -> List[Tuple[str, bool, Optional[str]]]:
+def validate_dependencies(dependencies: List[str]) -> List[Tuple[str, bool, Optional[str], Optional[str]]]:
     """Validate a list of module dependencies.
     
     Args:
         dependencies: List of module names to validate
         
     Returns:
-        List of (module_name, success, error_message) tuples
+        List of (module_name, success, error_message, suggested_fix) tuples
     """
     results = []
     for module_name in dependencies:
-        success, error = validate_import(module_name)
-        results.append((module_name, success, error))
+        success, error, suggested_fix = validate_import(module_name)
+        results.append((module_name, success, error, suggested_fix))
         if success:
             logger.debug(f"✓ {module_name} validated successfully")
         else:
             logger.error(f"✗ {module_name} validation failed: {error}")
+            if suggested_fix:
+                logger.info(f"  Suggested fix: {suggested_fix}")
     return results
 
 
-def get_failed_imports(results: List[Tuple[str, bool, Optional[str]]]) -> List[Tuple[str, str]]:
+def get_failed_imports(results: List[Tuple[str, bool, Optional[str], Optional[str]]]) -> List[Tuple[str, str, Optional[str]]]:
     """Extract failed imports from validation results.
     
     Args:
         results: List of validation result tuples
         
     Returns:
-        List of (module_name, error_message) for failed imports
+        List of (module_name, error_message, suggested_fix) for failed imports
     """
-    return [(module, error) for module, success, error in results if not success]
+    return [(module, error, suggested_fix) for module, success, error, suggested_fix in results if not success]
 
 
 def run_pre_import_validation() -> bool:
@@ -93,6 +266,9 @@ def run_pre_import_validation() -> bool:
         True if all core dependencies pass validation, False otherwise
     """
     logger.info("Running pre-import dependency validation...")
+    
+    # Update known available packages
+    _update_known_available_packages()
     
     all_results = []
     
@@ -118,19 +294,25 @@ def run_pre_import_validation() -> bool:
     
     if failed_core:
         logger.error(f"CRITICAL: {len(failed_core)} core dependency/ies failed validation:")
-        for module, error in failed_core:
+        for module, error, suggested_fix in failed_core:
             logger.error(f"  - {module}: {error}")
+            if suggested_fix:
+                logger.error(f"    Suggested fix: {suggested_fix}")
         return False
     
     if failed_optional:
         logger.warning(f"WARNING: {len(failed_optional)} optional dependency/ies failed validation:")
-        for module, error in failed_optional:
+        for module, error, suggested_fix in failed_optional:
             logger.warning(f"  - {module}: {error}")
+            if suggested_fix:
+                logger.warning(f"    Suggested fix: {suggested_fix}")
     
     if failed_third_party:
         logger.warning(f"WARNING: {len(failed_third_party)} third-party dependency/ies failed validation:")
-        for module, error in failed_third_party:
+        for module, error, suggested_fix in failed_third_party:
             logger.warning(f"  - {module}: {error}")
+            if suggested_fix:
+                logger.warning(f"    Suggested fix: {suggested_fix}")
     
     logger.info("Pre-import validation completed successfully")
     return True
@@ -191,16 +373,16 @@ def get_system_dependency_report() -> dict:
     
     # Validate all dependency categories
     for module in CORE_DEPENDENCIES:
-        success, error = validate_import(module)
-        report["core"][module] = {"success": success, "error": error}
+        success, error, suggested_fix = validate_import(module)
+        report["core"][module] = {"success": success, "error": error, "suggested_fix": suggested_fix}
     
     for module in OPTIONAL_DEPENDENCIES:
-        success, error = validate_import(module)
-        report["optional"][module] = {"success": success, "error": error}
+        success, error, suggested_fix = validate_import(module)
+        report["optional"][module] = {"success": success, "error": error, "suggested_fix": suggested_fix}
     
     for module in THIRD_PARTY_DEPENDENCIES:
-        success, error = validate_import(module)
-        report["third_party"][module] = {"success": success, "error": error}
+        success, error, suggested_fix = validate_import(module)
+        report["third_party"][module] = {"success": success, "error": error, "suggested_fix": suggested_fix}
     
     # Determine overall status
     core_failures = any(not v["success"] for v in report["core"].values())
@@ -231,6 +413,13 @@ def _extract_imports_from_source(source: str, filename: str) -> List[Tuple[str, 
                 for alias in node.names:
                     full_name = f"{module}.{alias.name}" if module else alias.name
                     imports.append((full_name, alias.asname or alias.name))
+            elif isinstance(node, ast.Call):
+                # Handle dynamic imports like importlib.import_module('module_name')
+                if isinstance(node.func, ast.Attribute):
+                    if node.func.attr == 'import_module' and isinstance(node.func.value, ast.Name):
+                        if node.func.value.id == 'importlib':
+                            if node.args and isinstance(node.args[0], ast.Constant):
+                                imports.append((node.args[0].value, node.args[0].value))
     except SyntaxError:
         pass  # Will be caught by other validation
     return imports
@@ -345,6 +534,9 @@ if __name__ != "__main__":
     if not logger.handlers:
         logging.basicConfig(level=logging.INFO)
     
+    # Initialize known available packages cache
+    _update_known_available_packages()
+    
     # Automatically run validation on import
     validation_passed = run_pre_import_validation()
     if not validation_passed:
@@ -364,6 +556,8 @@ else:
         print(f"  {status} {module}")
         if info["error"]:
             print(f"    Error: {info['error']}")
+        if info["suggested_fix"]:
+            print(f"    Suggested fix: {info['suggested_fix']}")
     
     print("\nOptional Dependencies:")
     for module, info in report["optional"].items():
@@ -371,6 +565,8 @@ else:
         print(f"  {status} {module}")
         if info["error"]:
             print(f"    Error: {info['error']}")
+        if info["suggested_fix"]:
+            print(f"    Suggested fix: {info['suggested_fix']}")
     
     print("\nThird-Party Dependencies:")
     for module, info in report["third_party"].items():
@@ -378,5 +574,7 @@ else:
         print(f"  {status} {module}")
         if info["error"]:
             print(f"    Error: {info['error']}")
+        if info["suggested_fix"]:
+            print(f"    Suggested fix: {info['suggested_fix']}")
     
     sys.exit(0 if report["overall_status"] == "passed" else 1)

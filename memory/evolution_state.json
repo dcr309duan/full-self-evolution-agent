@@ -1,13 +1,8 @@
 {
-  "cycle_count": 425,
-  "current_generation": 137,
-  "last_evolution_time": 1780720887.2597046,
+  "cycle_count": 429,
+  "current_generation": 138,
+  "last_evolution_time": 1780721547.4656153,
   "capabilities": [
-    "Integrate failure pattern analysis directly into mutation selection: before each mutation, query the",
-    "Add a 'dependency graph validator' that runs before any mutation: parse all module import statements",
-    "Create a 'fragility hotspot' miner that analyzes the last 50 rollback events and failure logs, ident",
-    "Create a performance monitoring and optimization system",
-    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
     "Implement a 'simplicity cap' enforcement mechanism: after any mutation, calculate the total lines of",
     "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
@@ -52,39 +47,14 @@
     "Create a 'capability deduplication and pruning agent' that runs every cycle: it hashes capability de",
     "Create a 'reflection engine self-modification' module that allows the agent to rewrite its own refle",
     "Build a 'capability consolidation and deduplication pass' that runs every 30 cycles: it analyzes all",
-    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test "
+    "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test ",
+    "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
+    "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (",
+    "Add a 'mutation diversity tracker' that records the feature vector of every mutation attempt (comple",
+    "Implement a 'syntax and import pre-validation harness' that, for any mutation involving new code, ru",
+    "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jac"
   ],
   "history": [
-    {
-      "cycle": 324,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780697928.5547826
-    },
-    {
-      "cycle": 325,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780698209.2036443
-    },
-    {
-      "cycle": 326,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780698376.0808556
-    },
-    {
-      "cycle": 327,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780698615.5927262
-    },
-    {
-      "cycle": 328,
-      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
-      "success": false,
-      "timestamp": 1780698806.2967393
-    },
     {
       "cycle": 329,
       "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
@@ -654,6 +624,36 @@
       "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
       "success": true,
       "timestamp": 1780720857.2577658
+    },
+    {
+      "cycle": 425,
+      "goal": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "success": true,
+      "timestamp": 1780721031.3834572
+    },
+    {
+      "cycle": 426,
+      "goal": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
+      "success": true,
+      "timestamp": 1780721124.7761042
+    },
+    {
+      "cycle": 427,
+      "goal": "Add a 'mutation diversity tracker' that records the feature vector of every mutation attempt (complexity, import count, file count, goal type) and, before generating a new mutation, computes the cosine similarity to the last 20 attempts. If similarity > 0.8, force the mutation engine to sample a different goal type or inject random noise into the feature vector. This breaks the local optimum of repeated [GAME_THEORY] and [ECOLOGY] proposals.",
+      "success": true,
+      "timestamp": 1780721305.5383701
+    },
+    {
+      "cycle": 428,
+      "goal": "Implement a 'syntax and import pre-validation harness' that, for any mutation involving new code, runs the code through a static parser (e.g., ast.parse for Python) and a dependency resolver (checking that all imports exist in the current environment) before the mutation is committed. Failed pre-validation causes immediate rejection with a structured error log, preventing the 40-60% failure rate from corrupting the knowledge base.",
+      "success": true,
+      "timestamp": 1780721517.4617121
+    },
+    {
+      "cycle": 429,
+      "goal": "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jaccard similarity between the new goal's keywords and all existing pending goals. If similarity > 0.7, the goals are merged into one with a combined priority score (max of the two) and a consolidated description. This prevents the accumulation of near-identical goals that dilute focus.",
+      "success": true,
+      "timestamp": 1780721688.9677804
     }
   ],
   "status": "evolving"

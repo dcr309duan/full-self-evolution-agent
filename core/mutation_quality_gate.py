@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 import importlib.util
 import json
+from datetime import datetime
 
 
 @dataclass
@@ -24,7 +25,7 @@ class QualityGateResult:
 class MutationQualityGate:
     """
     Four-stage quality gate for mutation patches:
-    1. Syntax check via ast.parse()
+    1. Pre-mutation validation (syntax + import check) - FIRST gate
     2. Static analysis (mypy preferred, fallback to pyflakes/py_compile)
     3. Minimal integration smoke test (import patched module)
     4. Test history check (queries test registry for existing tests)
@@ -46,11 +47,11 @@ class MutationQualityGate:
     def _classify_error(self, stage: str, message: str, detail: str = "") -> str:
         """Classify an error into a category for structured feedback."""
         # Check for syntax errors
-        if stage == "syntax":
+        if stage == "syntax" or stage == "pre_mutation_syntax":
             return "syntax"
         
         # Check for import errors
-        if "ImportError" in message or "ModuleNotFoundError" in message or "import" in message.lower():
+        if "ImportError" in message or "ModuleNotFoundError" in message or "import" in message.lower() or stage == "pre_mutation_import":
             return "import"
         
         # Check for type errors
@@ -67,6 +68,38 @@ class MutationQualityGate:
         
         # Default to 'other'
         return "other"
+
+    def _determine_severity(self, stage: str, category: str, attempt: int) -> str:
+        """Determine severity level based on stage, category, and attempt number."""
+        if category == "syntax" or category == "import":
+            if attempt == 1:
+                return "critical"
+            return "error"
+        if category == "type":
+            return "error"
+        if category == "runtime":
+            if attempt >= self.MAX_RETRIES:
+                return "critical"
+            return "error"
+        if category == "test_history":
+            return "warning"
+        return "warning"
+
+    def _log_rejection(self, mutation_id: str, errors: List[Dict[str, Any]]) -> None:
+        """Log rejection details to a structured JSON file."""
+        log_dir = Path("logs/rejected_mutations")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "mutation_id": mutation_id,
+            "error_details": errors
+        }
+        
+        log_file = log_dir / f"rejection_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json"
+        with open(log_file, 'w') as f:
+            json.dump(log_entry, f, indent=2)
 
     def _extract_complexity(self, code: str) -> int:
         """Extract cyclomatic complexity from code."""
@@ -112,18 +145,54 @@ class MutationQualityGate:
         except SyntaxError:
             return 0
 
+    def _extract_goal_type(self, code: str) -> str:
+        """Extract the goal type from code comments or structure."""
+        # Look for common goal type indicators in comments
+        goal_types = {
+            "performance": ["optimize", "faster", "speed", "performance"],
+            "security": ["secure", "vulnerability", "injection", "sanitize"],
+            "readability": ["readable", "clear", "simplify", "refactor"],
+            "correctness": ["fix", "bug", "error", "correct"],
+            "feature": ["add", "implement", "new", "feature"],
+        }
+        
+        try:
+            # Check comments for goal type hints
+            for node in ast.walk(ast.parse(code)):
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    comment = node.value.value
+                    if isinstance(comment, str):
+                        for goal_type, keywords in goal_types.items():
+                            if any(keyword in comment.lower() for keyword in keywords):
+                                return goal_type
+            
+            # Check function names for goal type hints
+            for node in ast.walk(ast.parse(code)):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for goal_type, keywords in goal_types.items():
+                        if any(keyword in node.name.lower() for keyword in keywords):
+                            return goal_type
+        except SyntaxError:
+            pass
+        
+        return "unknown"
+
     def _build_feature_vector(self, stage: str, attempt: int, message: str, detail: str = "", 
                              code: str = "", line: Optional[int] = None) -> Dict[str, Any]:
         """Build a structured feature vector for a failure."""
+        category = self._classify_error(stage, message, detail)
+        severity = self._determine_severity(stage, category, attempt)
         vector = {
             "stage": stage,
             "attempt": attempt,
             "message": message,
             "detail": detail,
-            "category": self._classify_error(stage, message, detail),
+            "category": category,
+            "severity": severity,
             "complexity": self._extract_complexity(code) if code else 0,
             "import_count": self._extract_import_count(code) if code else 0,
             "file_count": self._extract_file_count(code) if code else 0,
+            "goal_type": self._extract_goal_type(code) if code else "unknown",
         }
         if line is not None:
             vector["line"] = line
@@ -132,12 +201,14 @@ class MutationQualityGate:
     def _record_error(self, stage: str, attempt: int, message: str, detail: str = "", 
                      line: Optional[int] = None, code: str = "") -> None:
         error_category = self._classify_error(stage, message, detail)
+        severity = self._determine_severity(stage, error_category, attempt)
         error_entry = {
             "stage": stage,
             "attempt": attempt,
             "message": message,
             "detail": detail,
             "category": error_category,
+            "severity": severity,
         }
         if line is not None:
             error_entry["line"] = line
@@ -155,7 +226,8 @@ class MutationQualityGate:
         for err in self.errors:
             line_info = f" (line {err['line']})" if "line" in err else ""
             category_info = f" [category: {err['category']}]" if "category" in err else ""
-            lines.append(f"  Stage '{err['stage']}' (attempt {err['attempt']}){line_info}{category_info}: {err['message']}")
+            severity_info = f" [severity: {err['severity']}]" if "severity" in err else ""
+            lines.append(f"  Stage '{err['stage']}' (attempt {err['attempt']}){line_info}{category_info}{severity_info}: {err['message']}")
             if err.get("detail"):
                 lines.append(f"    Detail: {err['detail']}")
         return "\n".join(lines)
@@ -168,7 +240,8 @@ class MutationQualityGate:
         for err in self.errors:
             line_info = f" at line {err['line']}" if "line" in err else ""
             category_info = f" [category: {err['category']}]" if "category" in err else ""
-            prompt_parts.append(f"- Stage '{err['stage']}' (attempt {err['attempt']}){line_info}{category_info}: {err['message']}")
+            severity_info = f" [severity: {err['severity']}]" if "severity" in err else ""
+            prompt_parts.append(f"- Stage '{err['stage']}' (attempt {err['attempt']}){line_info}{category_info}{severity_info}: {err['message']}")
             if err.get("detail"):
                 # Truncate long details for prompt brevity
                 detail = err["detail"]
@@ -177,7 +250,7 @@ class MutationQualityGate:
                 prompt_parts.append(f"  Detail: {detail}")
         return "\n".join(prompt_parts)
 
-    def pre_mutation_check(self, mutation_code: str) -> bool:
+    def pre_mutation_validator(self, mutation_code: str) -> bool:
         """
         Pre-mutation validation using ast.parse to validate syntax of proposed code changes.
         Also checks if all imported modules exist in the project.
@@ -413,18 +486,33 @@ class MutationQualityGate:
         # No existing test found, continue normally
         return True, False, False
 
-    def run_all_checks(self, patch_code: str, file_path: str, module_import_path: str) -> QualityGateResult:
+    def run_all_checks(self, patch_code: str, file_path: str, module_import_path: str, mutation_id: str = "unknown") -> QualityGateResult:
         """
         Run all four stages sequentially. Returns a QualityGateResult with detailed feedback.
+        Pre-mutation validation is the FIRST gate before any other checks.
         """
         self._reset_errors()
         total_retries = 0
         high_risk = False
         requires_review = False
 
-        # Stage 1
+        # Stage 0: Pre-mutation validation (FIRST gate)
+        if not self.pre_mutation_validator(patch_code):
+            total_retries += sum(1 for e in self.errors if "pre_mutation" in e["stage"])
+            # Log rejection with full error details
+            self._log_rejection(mutation_id, list(self.errors))
+            return QualityGateResult(
+                passed=False,
+                errors=list(self.errors),
+                retry_count=total_retries,
+                feedback_prompt=self._build_feedback_prompt(),
+                feature_vectors=list(self.feature_vectors)
+            )
+
+        # Stage 1: Syntax check (only if pre-mutation passed)
         if not self.check_syntax(patch_code):
             total_retries += sum(1 for e in self.errors if e["stage"] == "syntax")
+            self._log_rejection(mutation_id, list(self.errors))
             return QualityGateResult(
                 passed=False,
                 errors=list(self.errors),
@@ -433,9 +521,10 @@ class MutationQualityGate:
                 feature_vectors=list(self.feature_vectors)
             )
 
-        # Stage 2
+        # Stage 2: Static analysis (only if syntax passed)
         if not self.check_static_analysis(file_path):
             total_retries += sum(1 for e in self.errors if e["stage"] == "static_analysis")
+            self._log_rejection(mutation_id, list(self.errors))
             return QualityGateResult(
                 passed=False,
                 errors=list(self.errors),
@@ -444,9 +533,10 @@ class MutationQualityGate:
                 feature_vectors=list(self.feature_vectors)
             )
 
-        # Stage 3
+        # Stage 3: Smoke test
         if not self.check_smoke_test(module_import_path):
             total_retries += sum(1 for e in self.errors if e["stage"] == "smoke_test")
+            self._log_rejection(mutation_id, list(self.errors))
             return QualityGateResult(
                 passed=False,
                 errors=list(self.errors),
@@ -461,6 +551,7 @@ class MutationQualityGate:
             total_retries += sum(1 for e in self.errors if e["stage"] == "test_history_check")
             high_risk = test_history_high_risk
             requires_review = test_history_requires_review
+            self._log_rejection(mutation_id, list(self.errors))
             return QualityGateResult(
                 passed=False,
                 errors=list(self.errors),
@@ -486,5 +577,13 @@ class MutationQualityGate:
         Returns the error categorization results (feature vectors) for the failure_aware_selector.
         This method provides real-time feedback on mutation outcomes by returning the collected
         feature vectors with error categories, which can be used for training the selector.
+        """
+        return list(self.feature_vectors)
+
+    def get_last_feature_vectors(self) -> List[Dict[str, Any]]:
+        """
+        Returns the feature vectors from the last mutation attempt.
+        This method is called by the diversity tracker to get the feature vectors
+        for the most recent mutation attempt.
         """
         return list(self.feature_vectors)

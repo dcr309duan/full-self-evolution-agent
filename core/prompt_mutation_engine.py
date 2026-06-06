@@ -11,10 +11,11 @@ class PromptMutationEngine:
     validates syntactic correctness, and maintains a mutation history log.
     """
     
-    def __init__(self, initial_prompt: str = ""):
+    def __init__(self, initial_prompt: str = "", failure_memory=None):
         self.mutation_history: List[Dict[str, Any]] = []
         self.current_prompt = initial_prompt
         self.constraints: List[str] = []
+        self.failure_memory = failure_memory
         self._parse_constraints()
         
     def _parse_constraints(self) -> None:
@@ -183,7 +184,68 @@ class PromptMutationEngine:
         for i, constraint in enumerate(self.constraints, 1):
             numbered_constraints.append(f"{i}. {constraint}")
             
-        self.current_prompt = "\n".join(numbered_constraints)
+        base_prompt = "\n".join(numbered_constraints)
+        
+        # Append lessons learned section if failure_memory is available
+        if self.failure_memory is not None:
+            lessons = self._get_failure_lessons()
+            if lessons:
+                base_prompt += "\n\n=== LESSONS FROM RECENT FAILURES ===\n" + "\n".join(lessons)
+        
+        self.current_prompt = base_prompt
+        
+    def _get_failure_lessons(self) -> List[str]:
+        """
+        Retrieve the last 5-10 failure lessons from FailureMemory.
+        
+        Returns:
+            List of formatted failure lesson strings
+        """
+        if self.failure_memory is None:
+            return []
+        
+        try:
+            # Try to get failures from failure_memory
+            if hasattr(self.failure_memory, 'get_recent_failures'):
+                failures = self.failure_memory.get_recent_failures(10)
+            elif hasattr(self.failure_memory, 'get_failures'):
+                failures = self.failure_memory.get_failures()[-10:]
+            else:
+                # Fallback: try to access as list-like
+                failures = list(self.failure_memory)[-10:]
+            
+            if not failures:
+                return []
+            
+            # Take last 5-10 failures
+            failures = failures[-10:]
+            if len(failures) > 10:
+                failures = failures[-10:]
+            if len(failures) < 5:
+                failures = failures
+            
+            lessons = []
+            for failure in failures:
+                if isinstance(failure, dict):
+                    error_type = failure.get('error_type', 'UNKNOWN')
+                    module = failure.get('module', 'unknown')
+                    message = failure.get('message', 'No details')
+                elif hasattr(failure, 'error_type') and hasattr(failure, 'module') and hasattr(failure, 'message'):
+                    error_type = failure.error_type
+                    module = failure.module
+                    message = failure.message
+                else:
+                    error_type = 'UNKNOWN'
+                    module = 'unknown'
+                    message = str(failure)[:100]
+                
+                lesson = f"FAILURE: [{error_type}] in [{module}] - {message}"
+                lessons.append(lesson)
+            
+            return lessons
+            
+        except Exception:
+            return []
         
     def _log_mutation(self, operation: str, details: Dict[str, Any]) -> None:
         """

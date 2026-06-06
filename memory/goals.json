@@ -2,13 +2,6 @@
   "primary_goal": "Achieve full autonomous self-evolution capability",
   "sub_goals": [
     {
-      "description": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
-      "priority": 9,
-      "status": "pending",
-      "created_at": 1780655268.6303942,
-      "consecutive_failures": 3
-    },
-    {
       "description": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",
       "priority": 9,
       "status": "pending",
@@ -1343,6 +1336,35 @@
       "status": "completed",
       "created_at": 1780719988.412181,
       "completed_at": 1780721024.4603236
+    },
+    {
+      "description": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780655268.6303942,
+      "consecutive_failures": 3,
+      "completed_at": 1780721124.7627707
+    },
+    {
+      "description": "Add a 'mutation diversity tracker' that records the feature vector of every mutation attempt (complexity, import count, file count, goal type) and, before generating a new mutation, computes the cosine similarity to the last 20 attempts. If similarity > 0.8, force the mutation engine to sample a different goal type or inject random noise into the feature vector. This breaks the local optimum of repeated [GAME_THEORY] and [ECOLOGY] proposals.",
+      "priority": 9,
+      "status": "completed",
+      "created_at": 1780721174.1947553,
+      "completed_at": 1780721281.6009097
+    },
+    {
+      "description": "Implement a 'syntax and import pre-validation harness' that, for any mutation involving new code, runs the code through a static parser (e.g., ast.parse for Python) and a dependency resolver (checking that all imports exist in the current environment) before the mutation is committed. Failed pre-validation causes immediate rejection with a structured error log, preventing the 40-60% failure rate from corrupting the knowledge base.",
+      "priority": 8,
+      "status": "completed",
+      "created_at": 1780721174.198671,
+      "completed_at": 1780721517.4464886
+    },
+    {
+      "description": "Create a 'goal deduplication and merging pass' that runs before new goals are added: it computes Jaccard similarity between the new goal's keywords and all existing pending goals. If similarity > 0.7, the goals are merged into one with a combined priority score (max of the two) and a consolidated description. This prevents the accumulation of near-identical goals that dilute focus.",
+      "priority": 7,
+      "status": "completed",
+      "created_at": 1780721174.2023327,
+      "completed_at": 1780721688.9539874
     }
   ],
   "generated_goals": []

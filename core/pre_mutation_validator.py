@@ -1,5 +1,6 @@
 import ast
-import re
+import sys
+import importlib.util
 from typing import List, Dict, Any, Tuple, Optional
 
 class PreMutationValidator:
@@ -28,27 +29,36 @@ class PreMutationValidator:
         if not files or not changes:
             return {
                 'passed': False,
-                'errors': ['Mutation must specify files and changes'],
+                'errors': [{'type': 'validation', 'line': 0, 'message': 'Mutation must specify files and changes'}],
+                'warnings': [],
                 'fallback_mutation': self._generate_fallback(mutation)
             }
 
-        # Step 2: Parse each file's proposed code
+        # Step 2: Parse each file's proposed code with detailed error reporting
         parsed_files = {}
         for file_path in files:
             code = changes.get(file_path)
             if code is None:
-                self.validation_errors.append(f"No code provided for {file_path}")
+                self.validation_errors.append({'type': 'validation', 'line': 0, 'message': f"No code provided for {file_path}"})
                 continue
             try:
                 tree = ast.parse(code)
                 parsed_files[file_path] = tree
             except SyntaxError as e:
-                self.validation_errors.append(f"Syntax error in {file_path}: {e}")
+                error_detail = {
+                    'type': 'SyntaxError',
+                    'line': e.lineno if hasattr(e, 'lineno') else 0,
+                    'message': str(e)
+                }
+                if hasattr(e, 'offset'):
+                    error_detail['column'] = e.offset
+                self.validation_errors.append(error_detail)
 
         if self.validation_errors:
             return {
                 'passed': False,
                 'errors': self.validation_errors,
+                'warnings': [],
                 'fallback_mutation': self._generate_fallback(mutation)
             }
 
@@ -59,15 +69,17 @@ class PreMutationValidator:
             return {
                 'passed': False,
                 'errors': self.validation_errors,
+                'warnings': [],
                 'fallback_mutation': self._generate_fallback(mutation)
             }
 
         return {
             'passed': True,
-            'errors': []
+            'errors': [],
+            'warnings': []
         }
 
-    def _check_import_consistency(self, parsed_files: Dict[str, ast.AST]) -> List[str]:
+    def _check_import_consistency(self, parsed_files: Dict[str, ast.AST]) -> List[Dict[str, Any]]:
         """
         Check that imports across files are consistent.
         Returns list of error messages, empty if all good.
@@ -126,6 +138,86 @@ class PreMutationValidator:
             'changes': {target_file: fallback_code}
         }
 
+    def validate_mutation_proposal(self, code_string: str, target_file: str) -> Dict[str, Any]:
+        """
+        Validate a mutation proposal (code string + target file).
+        
+        Args:
+            code_string: The proposed new code as a string
+            target_file: The file path where the code will be applied
+            
+        Returns:
+            Dict with 'passed' (bool), 'errors' (list of dicts with 'type', 'line', 'message'), 'warnings' (list)
+        """
+        result = {
+            'passed': True,
+            'errors': [],
+            'warnings': []
+        }
+
+        # Step 1: Parse the code with detailed error reporting
+        try:
+            tree = ast.parse(code_string)
+        except SyntaxError as e:
+            error_detail = {
+                'type': 'SyntaxError',
+                'line': e.lineno if hasattr(e, 'lineno') else 0,
+                'message': str(e)
+            }
+            if hasattr(e, 'offset'):
+                error_detail['column'] = e.offset
+            result['errors'].append(error_detail)
+            result['passed'] = False
+            return result
+
+        # Step 2: Parse all import statements
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.append({
+                        'type': 'import',
+                        'module': alias.name,
+                        'alias': alias.asname,
+                        'line': node.lineno
+                    })
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module if node.module else ''
+                for alias in node.names:
+                    imports.append({
+                        'type': 'from_import',
+                        'module': module,
+                        'name': alias.name,
+                        'alias': alias.asname,
+                        'line': node.lineno
+                    })
+
+        # Step 3: Check each import against sys.modules and available packages
+        for imp in imports:
+            module_name = imp['module']
+            
+            # Check if module is already loaded
+            if module_name in sys.modules:
+                continue
+            
+            # Try to find the module spec
+            try:
+                spec = importlib.util.find_spec(module_name)
+                if spec is None:
+                    result['warnings'].append({
+                        'type': 'import_warning',
+                        'line': imp['line'],
+                        'message': f"Module '{module_name}' not found in sys.modules or available packages"
+                    })
+            except (ImportError, ValueError, ModuleNotFoundError) as e:
+                result['warnings'].append({
+                    'type': 'import_warning',
+                    'line': imp['line'],
+                    'message': f"Error checking module '{module_name}': {str(e)}"
+                })
+
+        return result
+
 
 def validate_mutation(mutation: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -133,3 +225,11 @@ def validate_mutation(mutation: Dict[str, Any]) -> Dict[str, Any]:
     """
     validator = PreMutationValidator()
     return validator.validate_mutation(mutation)
+
+
+def validate_mutation_proposal(code_string: str, target_file: str) -> Dict[str, Any]:
+    """
+    Convenience function to validate a mutation proposal using the PreMutationValidator.
+    """
+    validator = PreMutationValidator()
+    return validator.validate_mutation_proposal(code_string, target_file)
