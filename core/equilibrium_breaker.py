@@ -160,9 +160,48 @@ def generate_mutation_plan(stuck_capabilities: List[Tuple[str, int, List[Dict[st
     return plan
 
 
+def _generate_hybrid_capability(stuck_capability: str, other_capabilities: List[str]) -> str:
+    """
+    Generate a new capability name by combining elements from the stuck capability and two other capabilities.
+    
+    Args:
+        stuck_capability: The name of the stuck capability
+        other_capabilities: List of other capability names to combine elements from
+        
+    Returns:
+        A new hybrid capability name
+    """
+    # Extract meaningful parts from each capability name
+    parts = []
+    
+    # Split stuck capability into parts
+    stuck_parts = stuck_capability.replace('_', ' ').split()
+    if stuck_parts:
+        parts.append(stuck_parts[0])
+    
+    # Add parts from other capabilities
+    for cap in other_capabilities[:2]:  # Use at most 2 other capabilities
+        cap_parts = cap.replace('_', ' ').split()
+        if cap_parts:
+            # Take a middle or end part to create variety
+            if len(cap_parts) > 1:
+                parts.append(cap_parts[1])
+            else:
+                parts.append(cap_parts[0])
+    
+    # Add a suffix to indicate it's a hybrid
+    parts.append('hybrid')
+    
+    # Create the new capability name
+    new_capability = '_'.join(parts)
+    
+    return new_capability
+
+
 def break_equilibrium(min_occurrences: int = 3) -> Dict[str, Any]:
     """
     Main entry point: scan for duplicates, identify stuck capabilities, generate mutation plan.
+    Also identifies the most stuck capability, generates a hybrid replacement, and removes duplicates.
     
     Args:
         min_occurrences: Minimum occurrences to consider a capability stuck (default 3)
@@ -170,6 +209,8 @@ def break_equilibrium(min_occurrences: int = 3) -> Dict[str, Any]:
     Returns:
         Dictionary with scan results and mutation plan, or error message if no stuck capabilities
     """
+    global _capability_registry
+    
     duplicates = scan_for_duplicates()
     stuck = identify_stuck_capabilities(min_occurrences)
     
@@ -181,16 +222,62 @@ def break_equilibrium(min_occurrences: int = 3) -> Dict[str, Any]:
             "plan": None
         }
     
+    # Find the most stuck capability (highest occurrence count)
+    most_stuck = stuck[0]
+    most_stuck_name = most_stuck[0]
+    most_stuck_count = most_stuck[1]
+    most_stuck_occurrences = most_stuck[2]
+    
+    # Get other capabilities to combine (excluding the most stuck one)
+    other_capabilities = [name for name in _capability_registry.keys() if name != most_stuck_name]
+    
+    # Select up to 2 other capabilities for combination
+    if len(other_capabilities) >= 2:
+        selected_others = random.sample(other_capabilities, 2)
+    elif len(other_capabilities) == 1:
+        selected_others = other_capabilities
+    else:
+        selected_others = []
+    
+    # Generate hybrid capability name
+    hybrid_capability = _generate_hybrid_capability(most_stuck_name, selected_others)
+    
+    # Generate mutation plan
     plan = generate_mutation_plan(stuck)
+    
+    # Add hybrid capability information to the plan
+    plan["hybrid_capability"] = {
+        "original_stuck": most_stuck_name,
+        "sources": [most_stuck_name] + selected_others,
+        "new_name": hybrid_capability,
+        "description": f"Generated hybrid capability '{hybrid_capability}' from {most_stuck_name} and {selected_others}"
+    }
+    
+    # Remove all but one instance of the stuck capability from the registry
+    if most_stuck_name in _capability_registry:
+        # Keep only the first occurrence
+        _capability_registry[most_stuck_name] = [most_stuck_occurrences[0]]
+    
+    # Register the new hybrid capability
+    register_capability(hybrid_capability, {
+        "module": "core/equilibrium_breaker.py",
+        "generated_from": most_stuck_name,
+        "hybrid_sources": selected_others
+    })
     
     return {
         "status": "plan_generated",
-        "message": f"Generated mutation plan for {len(stuck)} stuck capabilities",
+        "message": f"Generated mutation plan for {len(stuck)} stuck capabilities. Created hybrid '{hybrid_capability}' from {most_stuck_name} and removed duplicates.",
         "duplicates_found": len(duplicates),
         "stuck_capabilities": [
             {"name": name, "occurrences": count}
             for name, count, _ in stuck
         ],
+        "most_stuck_capability": {
+            "name": most_stuck_name,
+            "occurrences": most_stuck_count,
+            "hybrid_replacement": hybrid_capability
+        },
         "plan": plan
     }
 

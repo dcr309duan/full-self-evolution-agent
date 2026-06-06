@@ -65,6 +65,26 @@ try:
 except ImportError:
     EvolutionOrchestrator = None
 
+# Export PreMutationValidator class and its key methods
+try:
+    from core.pre_mutation_validator import PreMutationValidator
+except ImportError:
+    PreMutationValidator = None
+
+try:
+    from core.pre_mutation_validator import (
+        PreMutationValidator,
+        validate_mutation,
+        get_validation_rules,
+        set_validation_rules,
+        reset_validation_state
+    )
+except ImportError:
+    validate_mutation = None
+    get_validation_rules = None
+    set_validation_rules = None
+    reset_validation_state = None
+
 # Ensure all core module exports are available
 __all__ = [
     'av_research_engine',
@@ -78,5 +98,10 @@ __all__ = [
     'detect_nash_equilibrium',
     'force_nash_equilibrium',
     'get_nash_equilibrium_state',
-    'reset_nash_equilibrium_state'
+    'reset_nash_equilibrium_state',
+    'PreMutationValidator',
+    'validate_mutation',
+    'get_validation_rules',
+    'set_validation_rules',
+    'reset_validation_state'
 ]

@@ -1,5 +1,11 @@
-import requests
-from bs4 import BeautifulSoup
+try:
+    import requests
+except ImportError:
+    requests = None
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
 from urllib.parse import urljoin
 from datetime import datetime
 from typing import List, Dict, Optional

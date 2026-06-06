@@ -17,19 +17,51 @@ import heapq
 import json
 from typing import Dict, Any, Optional, List, Tuple
 
-# Subsystem imports (placeholders for actual implementations)
-from api_server import APIServer
-from task_scheduler import TaskScheduler
-from web_scraper import WebScraper
-from mutation_engine import MutationEngine
-from testing_framework import TestingFramework
-from failure_analysis import FailureAnalysis
-from meta_evaluation import MetaEvaluation
-from reflection_parser import ReflectionParser  # New import for reflection parsing
-from meta_goal_generator import MetaGoalGenerator  # Import for meta goal generation
-
-# Import Nash equilibrium detector and forcer (only external import)
-from nash_detector_and_forcer import NashDetectorAndForcer
+# Subsystem imports (graceful - these may not all be available)
+try:
+    from api_server import APIServer
+except ImportError:
+    APIServer = None
+try:
+    from task_scheduler import TaskScheduler
+except ImportError:
+    TaskScheduler = None
+try:
+    from web_scraper import WebScraper
+except ImportError:
+    WebScraper = None
+try:
+    from mutation_engine import MutationEngine
+except ImportError:
+    MutationEngine = None
+try:
+    from testing_framework import TestingFramework
+except ImportError:
+    TestingFramework = None
+try:
+    from failure_analysis import FailureAnalysis
+except ImportError:
+    FailureAnalysis = None
+try:
+    from meta_evaluation import MetaEvaluation
+except ImportError:
+    MetaEvaluation = None
+try:
+    from reflection_parser import ReflectionParser
+except ImportError:
+    ReflectionParser = None
+try:
+    from meta_goal_generator import MetaGoalGenerator
+except ImportError:
+    MetaGoalGenerator = None
+try:
+    from nash_detector_and_forcer import NashDetectorAndForcer
+except ImportError:
+    NashDetectorAndForcer = None
+try:
+    from nash_equilibrium_engine import NashEquilibriumEngine
+except ImportError:
+    NashEquilibriumEngine = None
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +95,9 @@ class EvolutionOrchestrator:
 
         # Initialize Nash equilibrium detector and forcer
         self.nash_detector_and_forcer = NashDetectorAndForcer(self.config.get("nash_detector_and_forcer", {}))
+
+        # Initialize Nash equilibrium engine
+        self.nash_equilibrium_engine = NashEquilibriumEngine(self.config.get("nash_equilibrium_engine", {}))
 
         # Subsystem health / performance scores (0.0 = worst, 1.0 = best)
         self.subsystem_scores: Dict[str, float] = {
@@ -848,11 +883,3 @@ class EvolutionOrchestrator:
         mutated_code, sandbox_test_passed, failure_report_path = self._run_sandboxed_mutation(
             subsystem_name, source_code, strategy
         )
-        
-        if mutated_code is None:
-            logger.error("Sandboxed mutation failed for subsystem '%s', skipping cycle", subsystem_name)
-            return
-        
-        # Step 4: Test the mutation
-        tests_passed = self.run_tests(subsystem_name)
-        

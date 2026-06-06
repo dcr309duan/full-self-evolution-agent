@@ -58,9 +58,9 @@ class ModuleInteractionGraph:
         self.history = {i: [] for i in range(self.num_modules)}
 
 
-class NashEquilibriumDetector:
+class NashDetector:
     """
-    Checks if any single-module change improves system score.
+    Tracks module interaction payoffs and detects Nash equilibrium.
     Uses only standard library.
     """
     
@@ -143,11 +143,11 @@ class NashEquilibriumDetector:
 
 class MultiModuleForcer:
     """
-    Generates coordinated changes across 2-3 modules that wouldn't be found by single-module optimization.
+    Generates coordinated changes across 3+ modules that wouldn't be found by single-module optimization.
     Uses only standard library.
     """
     
-    def __init__(self, graph: ModuleInteractionGraph, detector: NashEquilibriumDetector):
+    def __init__(self, graph: ModuleInteractionGraph, detector: NashDetector):
         self.graph = graph
         self.detector = detector
         self._random_seed = 987654321
@@ -175,7 +175,7 @@ class MultiModuleForcer:
     
     def _identify_modules(self) -> list[int]:
         """
-        Identify 2-3 modules with complementary patterns for coordinated change.
+        Identify 3+ modules with complementary patterns for coordinated change.
         """
         num_modules = self.graph.num_modules
         averages = self.graph.get_all_averages()
@@ -183,15 +183,15 @@ class MultiModuleForcer:
         # Find low performers
         low_performers = [i for i in range(num_modules) if averages.get(i, 0.0) < 0.5]
         
-        if len(low_performers) >= 2:
-            num_to_select = min(2 + int(self._random() * 2), len(low_performers))
+        if len(low_performers) >= 3:
+            num_to_select = min(3 + int(self._random() * 2), len(low_performers))
             selected = random.sample(low_performers, num_to_select)
             return selected
         else:
             # Fallback: select modules with lowest performance scores
             modules_with_scores = [(i, self.graph.performance_scores[i]) for i in range(num_modules)]
             modules_with_scores.sort(key=lambda x: x[1])
-            num_to_select = min(2 + int(self._random() * 2), num_modules)
+            num_to_select = min(3 + int(self._random() * 2), num_modules)
             return [m[0] for m in modules_with_scores[:num_to_select]]
     
     def _generate_swap_change(self, module_idx: int) -> dict:
@@ -253,7 +253,7 @@ class MultiModuleForcer:
     
     def force_changes(self) -> list[dict]:
         """
-        Generate and apply coordinated multi-module changes.
+        Generate and apply coordinated multi-module changes across 3+ modules.
         Returns list of change proposals.
         """
         self._save_state()
@@ -347,17 +347,47 @@ class MultiModuleForcer:
         self._saved_performance_scores = None
 
 
+class InMemoryStateTracker:
+    """
+    Simple in-memory state tracker for module interaction data.
+    Uses only standard library.
+    """
+    
+    def __init__(self):
+        self.states: list[dict] = []
+        self.current_state: dict = {}
+        
+    def record_state(self, state: dict) -> None:
+        """Record a new state snapshot."""
+        self.current_state = state
+        self.states.append(state)
+    
+    def get_latest_state(self) -> dict:
+        """Get the most recent state."""
+        return self.current_state
+    
+    def get_state_history(self, num_states: int = 10) -> list[dict]:
+        """Get recent state history."""
+        return self.states[-num_states:]
+    
+    def clear(self) -> None:
+        """Clear all recorded states."""
+        self.states.clear()
+        self.current_state = {}
+
+
 class NashDetectorAndForcer:
     """
-    Combined class integrating ModuleInteractionGraph, NashEquilibriumDetector, and MultiModuleForcer.
+    Combined class integrating ModuleInteractionGraph, NashDetector, MultiModuleForcer, and InMemoryStateTracker.
     Fully self-contained with zero external dependencies.
     """
     
     def __init__(self, num_modules: int = 5, improvement_threshold: float = 0.05, plateau_threshold: int = 10):
         self.graph = ModuleInteractionGraph(num_modules)
-        self.detector = NashEquilibriumDetector(self.graph, improvement_threshold)
+        self.detector = NashDetector(self.graph, improvement_threshold)
         self.detector.plateau_threshold = plateau_threshold
         self.forcer = MultiModuleForcer(self.graph, self.detector)
+        self.state_tracker = InMemoryStateTracker()
         
     def set_module_metrics(self, module_idx: int, success_rate: float,
                           dependency_count: int, response_time: float = 0.0) -> None:
@@ -381,11 +411,13 @@ class NashDetectorAndForcer:
         if 'dependency_matrix' in state:
             self.graph.dependency_matrix = state['dependency_matrix']
         
-        return self.detector.is_nash()
+        result = self.detector.is_nash()
+        self.state_tracker.record_state(self.get_system_state())
+        return result
     
     def force_multi_module_changes(self, state: dict) -> list[dict]:
         """
-        Generate coordinated multi-module change proposals.
+        Generate coordinated multi-module change proposals across 3+ modules.
         Returns list of change proposals.
         """
         if 'performance_scores' in state:
@@ -393,7 +425,9 @@ class NashDetectorAndForcer:
         if 'dependency_matrix' in state:
             self.graph.dependency_matrix = state['dependency_matrix']
         
-        return self.forcer.force_changes()
+        proposals = self.forcer.force_changes()
+        self.state_tracker.record_state(self.get_system_state())
+        return proposals
     
     def get_system_state(self) -> dict:
         """Return current system state."""
@@ -413,6 +447,7 @@ class NashDetectorAndForcer:
         self.graph.reset()
         self.detector.reset()
         self.forcer.reset()
+        self.state_tracker.clear()
 
 
 def run_tests() -> bool:
@@ -500,14 +535,13 @@ def run_tests() -> bool:
         proposals = detector.force_multi_module_changes(state)
         
         assert isinstance(proposals, list)
-        assert len(proposals) >= 2
-        assert len(proposals) <= 3
+        assert len(proposals) >= 3
         for proposal in proposals:
             assert 'module' in proposal
             assert 'type' in proposal
             assert 'details' in proposal
             assert 'rationale' in proposal
-        print("  [PASS] Test 6: force_multi_module_changes API (2-3 proposals)")
+        print("  [PASS] Test 6: force_multi_module_changes API (3+ proposals)")
     except Exception as e:
         print(f"  [FAIL] Test 6: force_multi_module_changes API - {e}")
         all_passed = False
@@ -597,10 +631,37 @@ def run_tests() -> bool:
         state = detector.get_system_state()
         proposals = detector.force_multi_module_changes(state)
         
-        assert len(proposals) >= 2
+        assert len(proposals) >= 3
         print("  [PASS] Test 11: Complementary module identification")
     except Exception as e:
         print(f"  [FAIL] Test 11: Complementary module identification - {e}")
+        all_passed = False
+    
+    # Test 12: InMemoryStateTracker functionality
+    try:
+        tracker = InMemoryStateTracker()
+        state1 = {'test': 1}
+        state2 = {'test': 2}
+        tracker.record_state(state1)
+        tracker.record_state(state2)
+        assert tracker.get_latest_state() == state2
+        assert len(tracker.get_state_history(2)) == 2
+        tracker.clear()
+        assert tracker.get_latest_state() == {}
+        print("  [PASS] Test 12: InMemoryStateTracker functionality")
+    except Exception as e:
+        print(f"  [FAIL] Test 12: InMemoryStateTracker functionality - {e}")
+        all_passed = False
+    
+    # Test 13: State tracker integration
+    try:
+        detector = NashDetectorAndForcer(num_modules=3)
+        state = detector.get_system_state()
+        detector.detect_nash(state)
+        assert len(detector.state_tracker.states) > 0
+        print("  [PASS] Test 13: State tracker integration")
+    except Exception as e:
+        print(f"  [FAIL] Test 13: State tracker integration - {e}")
         all_passed = False
     
     return all_passed

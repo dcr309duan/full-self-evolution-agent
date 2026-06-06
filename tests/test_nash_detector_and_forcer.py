@@ -462,5 +462,214 @@ class TestIntegration(unittest.TestCase):
             self.assertGreater(change.expected_improvement, 0.0)
 
 
+class TestEquilibriumDetection(unittest.TestCase):
+    """Test 1: Detection of equilibrium state when no single change improves system."""
+
+    def test_equilibrium_no_single_improvement(self):
+        """Test that equilibrium is detected when no single module change improves the system."""
+        detector = NashDetector()
+        
+        # Create a state where all modules are at maximum scores
+        mock_modules = {
+            "mod1": {"param": 10},
+            "mod2": {"param": 20},
+            "mod3": {"param": 30},
+        }
+        mock_scores = {
+            "mod1": 1.0,
+            "mod2": 1.0,
+            "mod3": 1.0,
+        }
+        
+        result = detector.detect(mock_modules, mock_scores)
+        self.assertTrue(result.is_nash)
+        for module_id in mock_scores:
+            self.assertAlmostEqual(result.best_responses[module_id], 0.0)
+
+    def test_equilibrium_with_varied_scores(self):
+        """Test equilibrium detection with varied but optimal scores."""
+        detector = NashDetector()
+        
+        # Create a state where each module's score is optimal given its parameters
+        mock_modules = {
+            "mod1": {"param": 10},
+            "mod2": {"param": 20},
+        }
+        mock_scores = {
+            "mod1": 0.95,
+            "mod2": 0.90,
+        }
+        
+        result = detector.detect(mock_modules, mock_scores)
+        self.assertTrue(result.is_nash)
+
+    def test_non_equilibrium_single_improvement_possible(self):
+        """Test that non-equilibrium is detected when a single module can improve."""
+        detector = NashDetector()
+        
+        # Create a state where one module can improve
+        mock_modules = {
+            "mod1": {"param": 5},
+            "mod2": {"param": 20},
+        }
+        mock_scores = {
+            "mod1": 0.5,
+            "mod2": 0.95,
+        }
+        
+        result = detector.detect(mock_modules, mock_scores)
+        self.assertFalse(result.is_nash)
+        self.assertIn("mod1", result.best_responses)
+        self.assertGreater(result.best_responses["mod1"], 0.0)
+
+
+class TestMultiModuleChangeGeneration(unittest.TestCase):
+    """Test 2: Generation of multi-module change proposals."""
+
+    def test_multi_module_changes_generated(self):
+        """Test that multi-module changes are generated when needed."""
+        forcer = MultiModuleForcer()
+        
+        # Create a state where multi-module changes could help
+        mock_modules = {
+            "mod1": {"param": 5},
+            "mod2": {"param": 10},
+            "mod3": {"param": 15},
+        }
+        mock_scores = {
+            "mod1": 0.5,
+            "mod2": 0.6,
+            "mod3": 0.7,
+        }
+        
+        changes = forcer.generate_changes(mock_modules, mock_scores)
+        self.assertGreater(len(changes), 0)
+        
+        # Check that at least some changes affect multiple modules
+        multi_module_changes = [c for c in changes if len(c.module_changes) > 1]
+        self.assertGreater(len(multi_module_changes), 0)
+
+    def test_multi_module_changes_have_positive_improvement(self):
+        """Test that multi-module changes have positive expected improvement."""
+        forcer = MultiModuleForcer()
+        
+        mock_modules = {
+            "mod1": {"param": 5},
+            "mod2": {"param": 10},
+        }
+        mock_scores = {
+            "mod1": 0.5,
+            "mod2": 0.6,
+        }
+        
+        changes = forcer.generate_changes(mock_modules, mock_scores)
+        multi_module_changes = [c for c in changes if len(c.module_changes) > 1]
+        
+        for change in multi_module_changes:
+            self.assertGreater(change.expected_improvement, 0.0)
+
+    def test_multi_module_changes_include_all_modules(self):
+        """Test that multi-module changes can include all modules."""
+        forcer = MultiModuleForcer()
+        
+        mock_modules = {
+            "mod1": {"param": 5},
+            "mod2": {"param": 10},
+            "mod3": {"param": 15},
+        }
+        mock_scores = {
+            "mod1": 0.5,
+            "mod2": 0.6,
+            "mod3": 0.7,
+        }
+        
+        changes = forcer.generate_changes(mock_modules, mock_scores)
+        all_modules_changes = [c for c in changes if len(c.module_changes) == 3]
+        self.assertGreater(len(all_modules_changes), 0)
+
+
+class TestEscapeLocalOptima(unittest.TestCase):
+    """Test 3: Verification that proposed changes escape local optima."""
+
+    def test_changes_escape_local_optimum(self):
+        """Test that coordinated changes can escape a local optimum."""
+        detector = NashDetector()
+        forcer = MultiModuleForcer()
+        
+        # Create a state that is a local optimum (no single change improves)
+        mock_modules = {
+            "mod1": {"param": 8},
+            "mod2": {"param": 18},
+        }
+        mock_scores = {
+            "mod1": 0.8,
+            "mod2": 0.8,
+        }
+        
+        # Verify it's a local optimum (Nash equilibrium)
+        result = detector.detect(mock_modules, mock_scores)
+        self.assertTrue(result.is_nash)
+        
+        # Generate coordinated changes that could escape the local optimum
+        changes = forcer.generate_changes(mock_modules, mock_scores)
+        
+        # Some changes should have positive expected improvement (escaping local optimum)
+        positive_changes = [c for c in changes if c.expected_improvement > 0.0]
+        self.assertGreater(len(positive_changes), 0)
+
+    def test_global_optimum_no_escape_needed(self):
+        """Test that no escape is needed from a global optimum."""
+        detector = NashDetector()
+        forcer = MultiModuleForcer()
+        
+        # Create a global optimum state
+        mock_modules = {
+            "mod1": {"param": 10},
+            "mod2": {"param": 20},
+        }
+        mock_scores = {
+            "mod1": 1.0,
+            "mod2": 1.0,
+        }
+        
+        # Verify it's at equilibrium
+        result = detector.detect(mock_modules, mock_scores)
+        self.assertTrue(result.is_nash)
+        
+        # Generate changes - all should have zero expected improvement
+        changes = forcer.generate_changes(mock_modules, mock_scores)
+        for change in changes:
+            self.assertAlmostEqual(change.expected_improvement, 0.0, places=5)
+
+    def test_escape_from_shallow_local_optimum(self):
+        """Test escape from a shallow local optimum."""
+        detector = NashDetector()
+        forcer = MultiModuleForcer()
+        
+        # Create a shallow local optimum
+        mock_modules = {
+            "mod1": {"param": 6},
+            "mod2": {"param": 16},
+        }
+        mock_scores = {
+            "mod1": 0.6,
+            "mod2": 0.6,
+        }
+        
+        # Verify it's a local optimum
+        result = detector.detect(mock_modules, mock_scores)
+        self.assertTrue(result.is_nash)
+        
+        # Generate coordinated changes
+        changes = forcer.generate_changes(mock_modules, mock_scores)
+        
+        # Find changes that affect both modules (coordinated escape)
+        coordinated_escapes = [
+            c for c in changes 
+            if len(c.module_changes) > 1 and c.expected_improvement > 0.0
+        ]
+        self.assertGreater(len(coordinated_escapes), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

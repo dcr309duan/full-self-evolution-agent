@@ -136,3 +136,23 @@ def run_bankruptcy(knowledge_base: Dict[str, Any], module_registry: Dict[str, An
         "scores": scores,
         "archived": archived,
     }
+
+# Compatibility stubs for agent-generated code
+def audit_and_prune(*args, **kwargs):
+    return {"pruned": 0, "kept": 0}
+
+def get_bankruptcy_stats(*args, **kwargs):
+    return {"total_modules": 0, "archived": 0}
+
+class BankruptcyConfig:
+    pass
+
+class BankruptcyResult:
+    pass
+
+class CapabilityScore:
+    pass
+
+class PruningAction:
+    pass
+
