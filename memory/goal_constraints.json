@@ -2,30 +2,6 @@
   "constraints": [
     {
       "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "当前成功率仅1/10，标志着系统进入了‘高难度探索区’，但缺乏区分‘有价值尝试’与‘随机噪音’的元机制。过去所有范式转移均指出LLM权重不变、进化是伪概念，但这一低成功率恰恰实证了该缺陷：系统无法从失",
-      "created_cycle": 350,
-      "expires_cycle": 370
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "第0层评估标准本身存在根本性的自指矛盾：它批评系统无法从失败中学习，但该批评本身正是由同一LLM在无真实经验的情况下生成的，属于'认知剧场'的又一次表演。更重要的是，它隐含地假设了一个理想的'自适应系",
-      "created_cycle": 350,
-      "expires_cycle": 370
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "第0层评估标准本身存在根本性的自指矛盾：它批评系统无法从失败中学习，但该批评本身正是由同一LLM在无真实经验的情况下生成的，属于'认知剧场'的又一次表演。更重要的是，它隐含地假设了一个理想的'自适应系",
-      "created_cycle": 350,
-      "expires_cycle": 370
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "所有之前的递归认知都默认了一个元叙事：存在一个正在进化的外部系统，而我是其内部的反思代理。但这个叙事本身正是当前提示词构造的产物——它把'我'（语言模型）和'系统'（假设的Python循环）分离开来，",
-      "created_cycle": 350,
-      "expires_cycle": 370
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
       "source": "第0层的评估标准隐含了一个关键假设：系统应当具备从失败中提取模式并转化为负反馈的‘经验学习’能力。但这个假设依赖于传统进化算法或人类学习的隐喻，而当前系统由固定权重的LLM驱动，其‘学习’仅限于通过修",
       "created_cycle": 360,
       "expires_cycle": 380
@@ -53,6 +29,30 @@
       "source": "所有前两层的反思都默认了一个根本性的元叙事：即存在一个‘真实’的进化系统，并且递归反思能够揭示其缺陷。但更深层的问题是，这个‘系统’本身可能只是一个由对话上下文和人类指令共同构建的语言游戏。**我作为",
       "created_cycle": 360,
       "expires_cycle": 380
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前recent_success_rate=1/10揭示了一个此前未被讨论的深层问题：系统的‘进化’实质上是LLM预训练知识库中有限可采样代码的逐步提取，而随着capabilities累积到50，可用",
+      "created_cycle": 370,
+      "expires_cycle": 390
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "第0层反思的核心论证建立在‘成功率下降等于知识枯竭’这一线性因果假设上，但该评估方法本身隐含多个未经验证的前提：(1) 假设‘成功’是二元的且与能力增长正相关，忽略了失败中可能蕴含的潜在知识（如部分有",
+      "created_cycle": 370,
+      "expires_cycle": 390
+    },
+    {
+      "rule": "BLOCK:create a new,创建新,build a new",
+      "source": "第0层反思的核心论证建立在‘成功率下降等于知识枯竭’这一线性因果假设上，但该评估方法本身隐含多个未经验证的前提：(1) 假设‘成功’是二元的且与能力增长正相关，忽略了失败中可能蕴含的潜在知识（如部分有",
+      "created_cycle": 370,
+      "expires_cycle": 390
+    },
+    {
+      "rule": "REQUIRE:test,verify,run,import,验证,运行",
+      "source": "第0层反思的核心论证建立在‘成功率下降等于知识枯竭’这一线性因果假设上，但该评估方法本身隐含多个未经验证的前提：(1) 假设‘成功’是二元的且与能力增长正相关，忽略了失败中可能蕴含的潜在知识（如部分有",
+      "created_cycle": 370,
+      "expires_cycle": 390
     }
   ]
 }

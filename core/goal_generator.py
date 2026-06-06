@@ -33,7 +33,7 @@ class Goal:
                     # 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
                     # 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
                     # 'adapt_to_pressure', 'nash_equilibrium_meta', 'coordinated_multi_module_change',
-                    # 'ecological_pressure', or 'multi_module_change'
+                    # 'ecological_pressure', 'multi_module_change', or 'COORDINATED_MULTI_MODULE'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -96,6 +96,11 @@ nash_coordination_bonus: float = 0.2  # Bonus score for coordinated multi-module
 single_module_penalty: float = 0.3  # Penalty applied to single-module goals when Nash equilibrium is active
 nash_coordination_min_modules: int = 2  # Minimum number of modules for a goal to be considered coordinated
 
+# COORDINATED_MULTI_MODULE goal tracking
+coordinated_multi_module_active: bool = False  # Whether a COORDINATED_MULTI_MODULE goal is active
+coordinated_multi_module_modules: List[str] = []  # Modules involved in the active COORDINATED_MULTI_MODULE goal
+coordinated_multi_module_description: str = ""  # Description of the active COORDINATED_MULTI_MODULE goal
+
 
 def add_external_goal(goal: Goal) -> bool:
     """Add an external goal to the goal queue after validation.
@@ -133,7 +138,8 @@ def add_external_goal(goal: Goal) -> bool:
         'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
         'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
         'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure',
-        'coordinated_multi_module_change', 'ecological_pressure', 'multi_module_change'
+        'coordinated_multi_module_change', 'ecological_pressure', 'multi_module_change',
+        'COORDINATED_MULTI_MODULE'
     ]
     if goal.goal_type not in valid_goal_types:
         logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
@@ -162,13 +168,13 @@ def _is_coordinated_goal(goal: Goal) -> bool:
         return len(modules) >= nash_coordination_min_modules
     
     # Check tags for coordinated change indicators
-    coordinated_tags = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "multi_module", "multi_module_change"]
+    coordinated_tags = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "multi_module", "multi_module_change", "COORDINATED_MULTI_MODULE"]
     for tag in goal.tags:
         if tag in coordinated_tags:
             return True
     
     # Check goal type for coordinated types
-    coordinated_types = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "nash_equilibrium_meta", "multi_module_change"]
+    coordinated_types = ["coordinated_multi_module_change", "nash_escape", "coordinated_mutation", "nash_equilibrium_meta", "multi_module_change", "COORDINATED_MULTI_MODULE"]
     if goal.goal_type in coordinated_types:
         return True
     
@@ -767,6 +773,103 @@ def archive_goal_with_lesson(goal: Goal, lesson: str) -> None:
     logger.info("Archived goal '%s' with lesson: %s", goal.description, lesson)
 
 
+def generate_coordinated_multi_module_goal(modules: List[str], description: str) -> Goal:
+    """Generate a COORDINATED_MULTI_MODULE goal that the NashDetector can request.
+
+    When this goal is active, the mutation system should generate changes across
+    multiple modules simultaneously rather than one at a time. This goal type
+    is designed to be requested by the NashDetector to break Nash equilibria
+    by forcing coordinated mutations across stuck modules.
+
+    Args:
+        modules: List of module names that need to be changed simultaneously.
+        description: Description of the coordinated change needed.
+
+    Returns:
+        A Goal object with type 'COORDINATED_MULTI_MODULE' that specifies the
+        coordinated changes needed across multiple modules.
+    """
+    if not modules or len(modules) < 2:
+        logger.warning(
+            "generate_coordinated_multi_module_goal called with %d modules, need at least 2",
+            len(modules) if modules else 0
+        )
+        return None
+
+    if not description or not description.strip():
+        logger.warning("generate_coordinated_multi_module_goal called with empty description")
+        return None
+
+    modules_str = ", ".join(modules)
+    full_description = (
+        f"COORDINATED_MULTI_MODULE: {description}. "
+        f"Requires simultaneous changes to modules [{modules_str}] to break Nash equilibrium. "
+        f"All {len(modules)} modules must be modified together to escape local optima."
+    )
+
+    goal = Goal(
+        description=full_description,
+        priority=GoalPriority.CRITICAL,
+        module=",".join(modules),  # Use comma-separated module names
+        goal_type="COORDINATED_MULTI_MODULE",
+        source="fitness",
+        tags=["COORDINATED_MULTI_MODULE", "multi_module", "nash_escape", "coordinated_change"]
+    )
+
+    # Add individual module tags for tracking
+    for module in modules:
+        goal.tags.append(f"module:{module}")
+
+    # Register the goal in the coordinated change candidates for tracking
+    coordinated_change_candidates[full_description] = modules
+
+    # Set the global tracking variables for COORDINATED_MULTI_MODULE
+    global coordinated_multi_module_active, coordinated_multi_module_modules, coordinated_multi_module_description
+    coordinated_multi_module_active = True
+    coordinated_multi_module_modules = modules
+    coordinated_multi_module_description = full_description
+
+    logger.info(
+        "Generated COORDINATED_MULTI_MODULE goal for %d modules: %s",
+        len(modules),
+        modules_str
+    )
+
+    return goal
+
+
+def is_coordinated_multi_module_active() -> bool:
+    """Check if a COORDINATED_MULTI_MODULE goal is currently active.
+
+    Returns:
+        True if a COORDINATED_MULTI_MODULE goal is active, False otherwise.
+    """
+    return coordinated_multi_module_active
+
+
+def get_coordinated_multi_module_modules() -> List[str]:
+    """Get the list of modules involved in the active COORDINATED_MULTI_MODULE goal.
+
+    Returns:
+        List of module names involved in the active COORDINATED_MULTI_MODULE goal,
+        or an empty list if no such goal is active.
+    """
+    return coordinated_multi_module_modules
+
+
+def clear_coordinated_multi_module_goal() -> None:
+    """Clear the active COORDINATED_MULTI_MODULE goal.
+
+    This should be called when the coordinated multi-module mutation has been
+    completed or the goal is no longer relevant.
+    """
+    global coordinated_multi_module_active, coordinated_multi_module_modules, coordinated_multi_module_description
+    coordinated_multi_module_active = False
+    coordinated_multi_module_modules = []
+    coordinated_multi_module_description = ""
+    logger.info("Cleared active COORDINATED_MULTI_MODULE goal")
+
+
 def generate_goals(
     metrics_list: List[SimulationMetrics],
     accuracy_threshold: float = 0.8,
@@ -794,125 +897,10 @@ def generate_goals(
     global environmental_pressure_active, environmental_pressure_description
     global nash_equilibrium_detected, nash_equilibrium_modules, nash_equilibrium_analysis
     global external_goal_queue, coordinated_change_candidates
+    global coordinated_multi_module_active, coordinated_multi_module_modules, coordinated_multi_module_description
     
     # Run prioritization before generating new goals
     high_impact_pending = prioritize_pending_goals()
     if high_impact_pending:
         logger.info("Found %d high-impact pending goals, returning them instead of generating new ones", len(high_impact_pending))
-        return high_impact_pending
-
-    goals: List[Goal] = []
-
-    # Check health_dashboard before generating new goals
-    if health_dashboard:
-        lockdown_active = health_dashboard.get("lockdown_active", False)
-        if lockdown_active:
-            # If lockdown active, generate only 'stabilization' goals
-            logger.info("Goal generator in stabilization mode due to lockdown")
-            for metrics in metrics_list:
-                if metrics.accuracy < current_accuracy_threshold:
-                    goal = Goal(
-                        description=f"Fix failing module {metrics.module}",
-                        priority=GoalPriority.CRITICAL,
-                        module=metrics.module,
-                        goal_type="stabilization",
-                        source="fitness",
-                        tags=["stabilization", "lockdown"]
-                    )
-                    goals.append(goal)
-                    logger.debug(
-                        "Generated stabilization goal for %s (accuracy=%.2f, threshold=%.2f)",
-                        metrics.module, metrics.accuracy, current_accuracy_threshold
-                    )
-                if metrics.fs_abstraction_retry_rate > retry_rate_threshold:
-                    goal = Goal(
-                        description=f"Reduce error rate in {metrics.module}",
-                        priority=GoalPriority.HIGH,
-                        module=metrics.module,
-                        goal_type="stabilization",
-                        source="fitness",
-                        tags=["stabilization", "lockdown", "error_rate"]
-                    )
-                    goals.append(goal)
-                    logger.debug(
-                        "Generated stabilization goal for %s (retry rate=%.2f, threshold=%.2f)",
-                        metrics.module, metrics.fs_abstraction_retry_rate, retry_rate_threshold
-                    )
-                if metrics.failure_cluster:
-                    goal = Goal(
-                        description=f"Fix persistent failure cluster in {metrics.module}",
-                        priority=GoalPriority.CRITICAL,
-                        module=metrics.module,
-                        goal_type="stabilization",
-                        source="fitness",
-                        tags=["stabilization", "lockdown", "failure_cluster"]
-                    )
-                    goals.append(goal)
-                    logger.info(
-                        "Generated stabilization goal for %s (failure cluster detected)",
-                        metrics.module
-                    )
-            return goals
-
-    # First, check knowledge base for fitness scores and generate challenge goals
-    challenge_goals = _generate_challenge_goals_from_knowledge_base()
-    goals.extend(challenge_goals)
-
-    # Add curiosity goals if provided
-    if curiosity_goals:
-        for goal in curiosity_goals:
-            goal.source = "curiosity"
-            goal.tags.append("curiosity")
-        goals.extend(curiosity_goals)
-
-    # Check if environmental pressure is active and generate adapt_to_pressure goal
-    if environmental_pressure_active and environmental_pressure_description:
-        adapt_goal = generate_adapt_to_pressure_goal(environmental_pressure_description)
-        if adapt_goal:
-            goals.append(adapt_goal)
-            logger.info(
-                "Generated adapt_to_pressure goal for pressure: %s",
-                environmental_pressure_description
-            )
-
-    # Check if Nash equilibrium is detected and generate appropriate goals
-    if nash_equilibrium_detected and nash_equilibrium_modules:
-        # Generate Nash escape goal to actively seek to break out of local optima
-        nash_escape_goal = generate_nash_escape_goal(
-            nash_equilibrium_modules,
-            nash_equilibrium_analysis
-        )
-        if nash_escape_goal:
-            goals.append(nash_escape_goal)
-            logger.info(
-                "Generated Nash escape goal for modules %s to break equilibrium",
-                nash_equilibrium_modules
-            )
-        
-        # Also generate the meta-goal for higher-level strategy
-        nash_meta_goal = generate_nash_equilibrium_meta_goal(
-            nash_equilibrium_modules,
-            nash_equilibrium_analysis
-        )
-        if nash_meta_goal:
-            goals.append(nash_meta_goal)
-            logger.info(
-                "Generated Nash equilibrium meta-goal for modules %s",
-                nash_equilibrium_modules
-            )
-        
-        # Generate coordinated mutation goal as well
-        coordinated_mutation_goal = generate_coordinated_mutation_goal(
-            nash_equilibrium_modules,
-            nash_equilibrium_analysis
-        )
-        if coordinated_mutation_goal:
-            goals.append(coordinated_mutation_goal)
-            logger.info(
-                "Generated coordinated mutation goal for modules %s",
-                nash_equilibrium_modules
-            )
-        
-        # Generate coordinated multi-module change goal if there are 3+ modules
-        if len(nash_equilibrium_modules) >= 3:
-            coordinated_multi_module_goal = generate_coordinated_multi_module
+        return high_

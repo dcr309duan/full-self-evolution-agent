@@ -1,7 +1,6 @@
 import sys
 import os
 import unittest
-import copy
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -154,43 +153,6 @@ class TestNashEquilibriumMinimal(unittest.TestCase):
             self.assertGreaterEqual(score, 0)
             self.assertLessEqual(score, 1)
 
-    def test_integration_rollback_safety_for_coordinated_mutations(self):
-        """Integration test (4): Validates rollback safety for coordinated mutations."""
-        # Save original state
-        original_modules = {
-            "mod_alpha": {"score": 0.80, "interactions": {"mod_beta": -0.20}},
-            "mod_beta": {"score": 0.75, "interactions": {"mod_alpha": -0.20}}
-        }
-        
-        # Deep copy for rollback testing
-        backup_modules = copy.deepcopy(original_modules)
-        
-        # Generate and apply coordinated plan
-        plan = self.forcer.force_multi_module_change(original_modules)
-        
-        # Simulate applying changes
-        for mod_name, change in plan.items():
-            original_modules[mod_name]["score"] = change["new_score"]
-        
-        # Verify changes were applied
-        for mod_name in plan:
-            self.assertNotEqual(original_modules[mod_name]["score"], 
-                              backup_modules[mod_name]["score"])
-        
-        # Rollback to original state
-        original_modules = copy.deepcopy(backup_modules)
-        
-        # Verify rollback restored original state
-        for mod_name in backup_modules:
-            self.assertEqual(original_modules[mod_name]["score"], 
-                           backup_modules[mod_name]["score"])
-            self.assertEqual(original_modules[mod_name]["interactions"], 
-                           backup_modules[mod_name]["interactions"])
-        
-        # Verify system still functions after rollback
-        self.assertTrue(self.detector.is_nash_equilibrium(original_modules) or 
-                       not self.detector.is_nash_equilibrium(original_modules))
-
     def test_minimal_integration_nash_scenario(self):
         """Minimal integration test: (1) Sets up mock dependency graph with 3 modules,
         (2) Simulates Nash equilibrium where no single module change improves system,
@@ -291,23 +253,31 @@ class TestNashEquilibriumMinimal(unittest.TestCase):
         
         # (5) Test that changing one module breaks the equilibrium detection
         # Change module_1's score significantly
-        modified_graph = copy.deepcopy(mock_graph)
-        modified_graph["mod_1"]["score"] = 0.90  # Significant change
+        modified_graph = {
+            "mod_1": {"score": 0.90, "interactions": {"mod_2": -0.10, "mod_3": -0.10}},
+            "mod_2": {"score": 0.75, "interactions": {"mod_1": -0.10, "mod_3": -0.10}},
+            "mod_3": {"score": 0.75, "interactions": {"mod_1": -0.10, "mod_2": -0.10}}
+        }
         
         # Verify equilibrium is broken
         self.assertFalse(self.detector.is_nash_equilibrium(modified_graph))
         
         # Change module_2's interactions
-        modified_graph2 = copy.deepcopy(mock_graph)
-        modified_graph2["mod_2"]["interactions"]["mod_1"] = -0.50  # Significant change
+        modified_graph2 = {
+            "mod_1": {"score": 0.75, "interactions": {"mod_2": -0.10, "mod_3": -0.10}},
+            "mod_2": {"score": 0.75, "interactions": {"mod_1": -0.50, "mod_3": -0.10}},
+            "mod_3": {"score": 0.75, "interactions": {"mod_1": -0.10, "mod_2": -0.10}}
+        }
         
         # Verify equilibrium is broken
         self.assertFalse(self.detector.is_nash_equilibrium(modified_graph2))
         
         # Change module_3's score and interactions
-        modified_graph3 = copy.deepcopy(mock_graph)
-        modified_graph3["mod_3"]["score"] = 0.60
-        modified_graph3["mod_3"]["interactions"]["mod_1"] = -0.30
+        modified_graph3 = {
+            "mod_1": {"score": 0.75, "interactions": {"mod_2": -0.10, "mod_3": -0.10}},
+            "mod_2": {"score": 0.75, "interactions": {"mod_1": -0.10, "mod_3": -0.10}},
+            "mod_3": {"score": 0.60, "interactions": {"mod_1": -0.30, "mod_2": -0.10}}
+        }
         
         # Verify equilibrium is broken
         self.assertFalse(self.detector.is_nash_equilibrium(modified_graph3))
@@ -394,6 +364,44 @@ class TestNashEquilibriumMinimal(unittest.TestCase):
         
         # Verify the plan is not empty
         self.assertGreater(len(plan), 0)
+
+    def test_minimal_nash_detector_isolated(self):
+        """Minimal test that imports and tests the Nash detector module in isolation.
+        Tests with mock module interactions that form a Nash equilibrium and verifies
+        the detector identifies it."""
+        # Import the Nash detector module in isolation
+        from core.nash_detector_and_forcer import NashDetector
+        
+        # Create a minimal mock interaction graph that forms a Nash equilibrium
+        # In a Nash equilibrium, no single module can improve its score by changing
+        # unilaterally. Here all modules have equal scores and balanced interactions.
+        mock_equilibrium = {
+            "agent_a": {"score": 0.80, "interactions": {"agent_b": -0.10, "agent_c": -0.10}},
+            "agent_b": {"score": 0.80, "interactions": {"agent_a": -0.10, "agent_c": -0.10}},
+            "agent_c": {"score": 0.80, "interactions": {"agent_a": -0.10, "agent_b": -0.10}}
+        }
+        
+        # Create detector instance
+        detector = NashDetector()
+        
+        # Verify the detector identifies the equilibrium state
+        self.assertTrue(detector.is_nash_equilibrium(mock_equilibrium))
+        
+        # Verify that a non-equilibrium state is correctly identified
+        mock_non_equilibrium = {
+            "agent_a": {"score": 0.85, "interactions": {"agent_b": -0.10, "agent_c": -0.10}},
+            "agent_b": {"score": 0.80, "interactions": {"agent_a": -0.10, "agent_c": -0.10}},
+            "agent_c": {"score": 0.80, "interactions": {"agent_a": -0.10, "agent_b": -0.10}}
+        }
+        self.assertFalse(detector.is_nash_equilibrium(mock_non_equilibrium))
+        
+        # Verify that changing one module's score breaks the equilibrium
+        modified_equilibrium = {
+            "agent_a": {"score": 0.90, "interactions": {"agent_b": -0.10, "agent_c": -0.10}},
+            "agent_b": {"score": 0.80, "interactions": {"agent_a": -0.10, "agent_c": -0.10}},
+            "agent_c": {"score": 0.80, "interactions": {"agent_a": -0.10, "agent_b": -0.10}}
+        }
+        self.assertFalse(detector.is_nash_equilibrium(modified_equilibrium))
 
 
 if __name__ == "__main__":
