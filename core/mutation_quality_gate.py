@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 import importlib.util
+import json
 
 
 @dataclass
@@ -15,25 +16,32 @@ class QualityGateResult:
     errors: List[Dict[str, Any]] = field(default_factory=list)
     retry_count: int = 0
     feedback_prompt: str = ""
+    high_risk: bool = False
+    requires_review: bool = False
+    feature_vectors: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class MutationQualityGate:
     """
-    Three-stage quality gate for mutation patches:
+    Four-stage quality gate for mutation patches:
     1. Syntax check via ast.parse()
     2. Static analysis (mypy preferred, fallback to pyflakes/py_compile)
     3. Minimal integration smoke test (import patched module)
+    4. Test history check (queries test registry for existing tests)
     Retry logic: up to 3 attempts per stage, collects error details for LLM feedback.
     """
 
     MAX_RETRIES = 3
 
-    def __init__(self, project_root: str = "."):
+    def __init__(self, project_root: str = ".", test_registry_path: str = "test_registry.json"):
         self.project_root = Path(project_root).resolve()
+        self.test_registry_path = Path(test_registry_path)
         self.errors: List[Dict[str, Any]] = []
+        self.feature_vectors: List[Dict[str, Any]] = []
 
     def _reset_errors(self) -> None:
         self.errors = []
+        self.feature_vectors = []
 
     def _classify_error(self, stage: str, message: str, detail: str = "") -> str:
         """Classify an error into a category for structured feedback."""
@@ -53,10 +61,76 @@ class MutationQualityGate:
         if "RuntimeError" in message or "Exception" in message or "Error" in message:
             return "runtime"
         
+        # Check for test history errors
+        if stage == "test_history_check":
+            return "test_history"
+        
         # Default to 'other'
         return "other"
 
-    def _record_error(self, stage: str, attempt: int, message: str, detail: str = "", line: Optional[int] = None) -> None:
+    def _extract_complexity(self, code: str) -> int:
+        """Extract cyclomatic complexity from code."""
+        try:
+            tree = ast.parse(code)
+            complexity = 1  # Base complexity
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.If, ast.While, ast.For, ast.ExceptHandler, ast.With)):
+                    complexity += 1
+                elif isinstance(node, ast.BoolOp):
+                    complexity += len(node.values) - 1
+                elif isinstance(node, ast.Try):
+                    complexity += len(node.handlers)
+            return complexity
+        except SyntaxError:
+            return 0
+
+    def _extract_import_count(self, code: str) -> int:
+        """Extract number of imports from code."""
+        try:
+            tree = ast.parse(code)
+            count = 0
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    count += 1
+            return count
+        except SyntaxError:
+            return 0
+
+    def _extract_file_count(self, code: str) -> int:
+        """Extract number of files referenced in imports."""
+        try:
+            tree = ast.parse(code)
+            files = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        files.add(alias.name.split('.')[0])
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        files.add(node.module.split('.')[0])
+            return len(files)
+        except SyntaxError:
+            return 0
+
+    def _build_feature_vector(self, stage: str, attempt: int, message: str, detail: str = "", 
+                             code: str = "", line: Optional[int] = None) -> Dict[str, Any]:
+        """Build a structured feature vector for a failure."""
+        vector = {
+            "stage": stage,
+            "attempt": attempt,
+            "message": message,
+            "detail": detail,
+            "category": self._classify_error(stage, message, detail),
+            "complexity": self._extract_complexity(code) if code else 0,
+            "import_count": self._extract_import_count(code) if code else 0,
+            "file_count": self._extract_file_count(code) if code else 0,
+        }
+        if line is not None:
+            vector["line"] = line
+        return vector
+
+    def _record_error(self, stage: str, attempt: int, message: str, detail: str = "", 
+                     line: Optional[int] = None, code: str = "") -> None:
         error_category = self._classify_error(stage, message, detail)
         error_entry = {
             "stage": stage,
@@ -68,6 +142,10 @@ class MutationQualityGate:
         if line is not None:
             error_entry["line"] = line
         self.errors.append(error_entry)
+        
+        # Build and store feature vector
+        feature_vector = self._build_feature_vector(stage, attempt, message, detail, code, line)
+        self.feature_vectors.append(feature_vector)
 
     def _format_feedback(self) -> str:
         """Format collected errors for LLM feedback."""
@@ -110,7 +188,7 @@ class MutationQualityGate:
             tree = ast.parse(mutation_code)
         except SyntaxError as e:
             line_no = e.lineno if e.lineno is not None else 0
-            self._record_error("pre_mutation_syntax", 1, f"Syntax error: {e.msg}", str(e), line=line_no)
+            self._record_error("pre_mutation_syntax", 1, f"Syntax error: {e.msg}", str(e), line=line_no, code=mutation_code)
             return False
 
         # Stage 2: Import resolution
@@ -121,14 +199,14 @@ class MutationQualityGate:
                     if not self._check_module_exists(module_name):
                         self._record_error("pre_mutation_import", 1, 
                                          f"Module '{module_name}' not found in project",
-                                         f"Import at line {node.lineno}")
+                                         f"Import at line {node.lineno}", code=mutation_code)
                         return False
             elif isinstance(node, ast.ImportFrom):
                 module_name = node.module if node.module else ""
                 if module_name and not self._check_module_exists(module_name):
                     self._record_error("pre_mutation_import", 1,
                                      f"Module '{module_name}' not found in project",
-                                     f"Import from at line {node.lineno}")
+                                     f"Import from at line {node.lineno}", code=mutation_code)
                     return False
 
         return True
@@ -177,7 +255,7 @@ class MutationQualityGate:
                 return True
             except SyntaxError as e:
                 line_no = e.lineno if e.lineno is not None else 0
-                self._record_error("syntax", attempt, f"Syntax error: {e.msg}", str(e), line=line_no)
+                self._record_error("syntax", attempt, f"Syntax error: {e.msg}", str(e), line=line_no, code=patch_code)
                 if attempt < self.MAX_RETRIES:
                     # Minor fix attempt: try to strip trailing whitespace issues
                     patch_code = patch_code.rstrip() + "\n"
@@ -292,12 +370,57 @@ class MutationQualityGate:
                     return False
         return False
 
+    def check_test_history(self, module_import_path: str) -> Tuple[bool, bool, bool]:
+        """
+        Stage 4: Test history check. Queries the test registry for existing tests related to the modules being mutated.
+        Returns a tuple of (passed, high_risk, requires_review).
+        - If a test exists and previously passed, skip regeneration (returns passed=True).
+        - If a test exists and previously failed, flag as high-risk and require manual review.
+        - If no test exists, continue normally.
+        """
+        if not self.test_registry_path.exists():
+            # No test registry, continue normally
+            return True, False, False
+
+        try:
+            with open(self.test_registry_path, 'r') as f:
+                registry = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            self._record_error("test_history_check", 1, f"Failed to read test registry: {e}", str(e))
+            return False, False, False
+
+        # Convert module import path to a module name for lookup
+        module_name = module_import_path.replace("/", ".").replace("\\", ".").rstrip(".py")
+        
+        # Look for tests related to this module
+        for entry in registry:
+            if entry.get("module_name") == module_name or entry.get("module_import_path") == module_import_path:
+                test_status = entry.get("status", "unknown")
+                if test_status == "passed":
+                    # Test exists and previously passed, skip regeneration
+                    return True, False, False
+                elif test_status == "failed":
+                    # Test exists and previously failed, flag as high-risk
+                    self._record_error("test_history_check", 1, 
+                                     f"Existing test for module '{module_name}' previously failed",
+                                     f"Test file: {entry.get('test_file_path', 'unknown')}, "
+                                     f"Test function: {entry.get('test_function_name', 'unknown')}")
+                    return False, True, True
+                else:
+                    # Unknown status, continue normally
+                    return True, False, False
+
+        # No existing test found, continue normally
+        return True, False, False
+
     def run_all_checks(self, patch_code: str, file_path: str, module_import_path: str) -> QualityGateResult:
         """
-        Run all three stages sequentially. Returns a QualityGateResult with detailed feedback.
+        Run all four stages sequentially. Returns a QualityGateResult with detailed feedback.
         """
         self._reset_errors()
         total_retries = 0
+        high_risk = False
+        requires_review = False
 
         # Stage 1
         if not self.check_syntax(patch_code):
@@ -306,7 +429,8 @@ class MutationQualityGate:
                 passed=False,
                 errors=list(self.errors),
                 retry_count=total_retries,
-                feedback_prompt=self._build_feedback_prompt()
+                feedback_prompt=self._build_feedback_prompt(),
+                feature_vectors=list(self.feature_vectors)
             )
 
         # Stage 2
@@ -316,7 +440,8 @@ class MutationQualityGate:
                 passed=False,
                 errors=list(self.errors),
                 retry_count=total_retries,
-                feedback_prompt=self._build_feedback_prompt()
+                feedback_prompt=self._build_feedback_prompt(),
+                feature_vectors=list(self.feature_vectors)
             )
 
         # Stage 3
@@ -326,12 +451,32 @@ class MutationQualityGate:
                 passed=False,
                 errors=list(self.errors),
                 retry_count=total_retries,
-                feedback_prompt=self._build_feedback_prompt()
+                feedback_prompt=self._build_feedback_prompt(),
+                feature_vectors=list(self.feature_vectors)
+            )
+
+        # Stage 4: Test history check
+        test_history_passed, test_history_high_risk, test_history_requires_review = self.check_test_history(module_import_path)
+        if not test_history_passed:
+            total_retries += sum(1 for e in self.errors if e["stage"] == "test_history_check")
+            high_risk = test_history_high_risk
+            requires_review = test_history_requires_review
+            return QualityGateResult(
+                passed=False,
+                errors=list(self.errors),
+                retry_count=total_retries,
+                feedback_prompt=self._build_feedback_prompt(),
+                high_risk=high_risk,
+                requires_review=requires_review,
+                feature_vectors=list(self.feature_vectors)
             )
 
         return QualityGateResult(
             passed=True,
             errors=[],
             retry_count=total_retries,
-            feedback_prompt="All quality checks passed."
+            feedback_prompt="All quality checks passed.",
+            high_risk=high_risk,
+            requires_review=requires_review,
+            feature_vectors=list(self.feature_vectors)
         )

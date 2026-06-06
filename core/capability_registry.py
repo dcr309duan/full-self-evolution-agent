@@ -2,6 +2,7 @@ from typing import Dict, Optional, Any, List
 import json
 from datetime import datetime
 from pathlib import Path
+import threading
 
 
 class CapabilityRegistry:
@@ -19,6 +20,7 @@ class CapabilityRegistry:
     def __init__(self, storage_path: Optional[str] = None):
         self._capabilities: Dict[str, Dict[str, Any]] = {}
         self._storage_path = Path(storage_path) if storage_path else None
+        self._lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
@@ -48,18 +50,19 @@ class CapabilityRegistry:
         Returns:
             True if registered successfully, False if already exists
         """
-        if name in self._capabilities:
-            return False
-        
-        self._capabilities[name] = {
-            "name": name,
-            "enabled": enabled,
-            "last_benchmarked": None,
-            "benchmark_score": None,
-            "age": 0.0
-        }
-        self._save()
-        return True
+        with self._lock:
+            if name in self._capabilities:
+                return False
+            
+            self._capabilities[name] = {
+                "name": name,
+                "enabled": enabled,
+                "last_benchmarked": None,
+                "benchmark_score": None,
+                "age": 0.0
+            }
+            self._save()
+            return True
 
     def enable(self, name: str) -> bool:
         """
@@ -71,12 +74,13 @@ class CapabilityRegistry:
         Returns:
             True if enabled, False if capability not found
         """
-        if name not in self._capabilities:
-            return False
-        
-        self._capabilities[name]["enabled"] = True
-        self._save()
-        return True
+        with self._lock:
+            if name not in self._capabilities:
+                return False
+            
+            self._capabilities[name]["enabled"] = True
+            self._save()
+            return True
 
     def disable(self, name: str) -> bool:
         """
@@ -88,12 +92,13 @@ class CapabilityRegistry:
         Returns:
             True if disabled, False if capability not found
         """
-        if name not in self._capabilities:
-            return False
-        
-        self._capabilities[name]["enabled"] = False
-        self._save()
-        return True
+        with self._lock:
+            if name not in self._capabilities:
+                return False
+            
+            self._capabilities[name]["enabled"] = False
+            self._save()
+            return True
 
     def is_enabled(self, name: str) -> Optional[bool]:
         """
@@ -105,9 +110,10 @@ class CapabilityRegistry:
         Returns:
             True if enabled, False if disabled, None if not found
         """
-        if name not in self._capabilities:
-            return None
-        return self._capabilities[name]["enabled"]
+        with self._lock:
+            if name not in self._capabilities:
+                return None
+            return self._capabilities[name]["enabled"]
 
     def get(self, name: str) -> Optional[Dict[str, Any]]:
         """
@@ -119,7 +125,8 @@ class CapabilityRegistry:
         Returns:
             Capability metadata dict or None if not found
         """
-        return self._capabilities.get(name)
+        with self._lock:
+            return self._capabilities.get(name)
 
     def get_all(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -128,7 +135,8 @@ class CapabilityRegistry:
         Returns:
             Dict of all capabilities with their metadata
         """
-        return dict(self._capabilities)
+        with self._lock:
+            return dict(self._capabilities)
 
     def get_enabled(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -137,10 +145,11 @@ class CapabilityRegistry:
         Returns:
             Dict of enabled capabilities with their metadata
         """
-        return {
-            name: meta for name, meta in self._capabilities.items()
-            if meta["enabled"]
-        }
+        with self._lock:
+            return {
+                name: meta for name, meta in self._capabilities.items()
+                if meta["enabled"]
+            }
 
     def get_disabled(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -149,10 +158,11 @@ class CapabilityRegistry:
         Returns:
             Dict of disabled capabilities with their metadata
         """
-        return {
-            name: meta for name, meta in self._capabilities.items()
-            if not meta["enabled"]
-        }
+        with self._lock:
+            return {
+                name: meta for name, meta in self._capabilities.items()
+                if not meta["enabled"]
+            }
 
     def set_benchmark_score(self, name: str, score: float) -> bool:
         """
@@ -165,13 +175,14 @@ class CapabilityRegistry:
         Returns:
             True if set, False if capability not found
         """
-        if name not in self._capabilities:
-            return False
-        
-        self._capabilities[name]["benchmark_score"] = score
-        self._capabilities[name]["last_benchmarked"] = datetime.now().isoformat()
-        self._save()
-        return True
+        with self._lock:
+            if name not in self._capabilities:
+                return False
+            
+            self._capabilities[name]["benchmark_score"] = score
+            self._capabilities[name]["last_benchmarked"] = datetime.now().isoformat()
+            self._save()
+            return True
 
     def get_benchmark_score(self, name: str) -> Optional[float]:
         """
@@ -183,10 +194,11 @@ class CapabilityRegistry:
         Returns:
             Benchmark score or None if not found/not benchmarked
         """
-        cap = self._capabilities.get(name)
-        if cap:
-            return cap.get("benchmark_score")
-        return None
+        with self._lock:
+            cap = self._capabilities.get(name)
+            if cap:
+                return cap.get("benchmark_score")
+            return None
 
     def has_been_benchmarked(self, name: str) -> bool:
         """
@@ -198,10 +210,11 @@ class CapabilityRegistry:
         Returns:
             True if benchmarked, False otherwise
         """
-        cap = self._capabilities.get(name)
-        if cap:
-            return cap.get("last_benchmarked") is not None
-        return False
+        with self._lock:
+            cap = self._capabilities.get(name)
+            if cap:
+                return cap.get("last_benchmarked") is not None
+            return False
 
     def get_benchmarked_capabilities(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -210,10 +223,11 @@ class CapabilityRegistry:
         Returns:
             Dict of benchmarked capabilities with their metadata
         """
-        return {
-            name: meta for name, meta in self._capabilities.items()
-            if meta["last_benchmarked"] is not None
-        }
+        with self._lock:
+            return {
+                name: meta for name, meta in self._capabilities.items()
+                if meta["last_benchmarked"] is not None
+            }
 
     def get_unbenchmarked_capabilities(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -222,10 +236,11 @@ class CapabilityRegistry:
         Returns:
             Dict of unbenchmarked capabilities with their metadata
         """
-        return {
-            name: meta for name, meta in self._capabilities.items()
-            if meta["last_benchmarked"] is None
-        }
+        with self._lock:
+            return {
+                name: meta for name, meta in self._capabilities.items()
+                if meta["last_benchmarked"] is None
+            }
 
     def update_age(self, name: str, age_days: float) -> bool:
         """
@@ -238,12 +253,13 @@ class CapabilityRegistry:
         Returns:
             True if updated, False if capability not found
         """
-        if name not in self._capabilities:
-            return False
-        
-        self._capabilities[name]["age"] = age_days
-        self._save()
-        return True
+        with self._lock:
+            if name not in self._capabilities:
+                return False
+            
+            self._capabilities[name]["age"] = age_days
+            self._save()
+            return True
 
     def remove(self, name: str) -> bool:
         """
@@ -255,21 +271,24 @@ class CapabilityRegistry:
         Returns:
             True if removed, False if not found
         """
-        if name not in self._capabilities:
-            return False
-        
-        del self._capabilities[name]
-        self._save()
-        return True
+        with self._lock:
+            if name not in self._capabilities:
+                return False
+            
+            del self._capabilities[name]
+            self._save()
+            return True
 
     def clear(self) -> None:
         """Remove all capabilities from the registry."""
-        self._capabilities.clear()
-        self._save()
+        with self._lock:
+            self._capabilities.clear()
+            self._save()
 
     def count(self) -> int:
         """Get the number of registered capabilities."""
-        return len(self._capabilities)
+        with self._lock:
+            return len(self._capabilities)
 
     def consolidate_duplicates(self, base_name: str, status: str = "enabled") -> int:
         """
@@ -286,44 +305,105 @@ class CapabilityRegistry:
         Returns:
             The number of duplicate entries removed.
         """
-        # Normalize base name for matching
-        base_lower = base_name.lower()
-        duplicates: List[str] = []
+        with self._lock:
+            base_lower = base_name.lower()
+            duplicates: List[str] = []
+            
+            for name in list(self._capabilities.keys()):
+                if name.lower().startswith(base_lower):
+                    duplicates.append(name)
+            
+            if not duplicates:
+                return 0
+            
+            removed_count = 0
+            for dup_name in duplicates:
+                del self._capabilities[dup_name]
+                removed_count += 1
+            
+            enabled = status.lower() == "enabled"
+            self._capabilities[base_name] = {
+                "name": base_name,
+                "enabled": enabled,
+                "last_benchmarked": None,
+                "benchmark_score": None,
+                "age": 0.0
+            }
+            
+            self._save()
+            return removed_count
+
+    def get_failure_count(self, capability_id: str) -> int:
+        """
+        Count consecutive failures for a capability from evolution.log.
         
-        # Find all entries that match the base name (case-insensitive)
-        for name in list(self._capabilities.keys()):
-            if name.lower().startswith(base_lower):
-                duplicates.append(name)
+        Args:
+            capability_id: The ID of the capability to check
+            
+        Returns:
+            Number of consecutive failures, or 0 if no failures found
+        """
+        with self._lock:
+            log_path = Path("evolution.log")
+            if not log_path.exists():
+                return 0
+            
+            consecutive_failures = 0
+            try:
+                with open(log_path, 'r') as f:
+                    lines = f.readlines()
+                
+                for line in reversed(lines):
+                    if capability_id in line:
+                        if "FAILURE" in line.upper() or "failure" in line.lower():
+                            consecutive_failures += 1
+                        else:
+                            break
+            except (IOError, OSError):
+                return 0
+            
+            return consecutive_failures
+
+    def archive_capability(self, capability_id: str) -> bool:
+        """
+        Move a capability out of the active registry into an archive.
         
-        if not duplicates:
-            return 0
-        
-        # Remove all duplicate entries
-        removed_count = 0
-        for dup_name in duplicates:
-            del self._capabilities[dup_name]
-            removed_count += 1
-        
-        # Register a single consolidated entry with proper status
-        enabled = status.lower() == "enabled"
-        self._capabilities[base_name] = {
-            "name": base_name,
-            "enabled": enabled,
-            "last_benchmarked": None,
-            "benchmark_score": None,
-            "age": 0.0
-        }
-        
-        self._save()
-        return removed_count
+        Args:
+            capability_id: The ID of the capability to archive
+            
+        Returns:
+            True if archived successfully, False if capability not found
+        """
+        with self._lock:
+            if capability_id not in self._capabilities:
+                return False
+            
+            archive_path = Path("archive")
+            archive_path.mkdir(parents=True, exist_ok=True)
+            
+            archive_file = archive_path / f"{capability_id}.json"
+            capability_data = self._capabilities[capability_id]
+            
+            try:
+                with open(archive_file, 'w') as f:
+                    json.dump(capability_data, f, indent=2)
+                
+                del self._capabilities[capability_id]
+                self._save()
+                return True
+            except (IOError, OSError):
+                return False
 
     def __contains__(self, name: str) -> bool:
         """Check if a capability exists in the registry."""
-        return name in self._capabilities
+        with self._lock:
+            return name in self._capabilities
 
     def __len__(self) -> int:
         """Get the number of registered capabilities."""
-        return len(self._capabilities)
+        with self._lock:
+            return len(self._capabilities)
 
     def __repr__(self) -> str:
-        return f"CapabilityRegistry({len(self._capabilities)} capabilities)"
+        with self._lock:
+            return f"CapabilityRegistry({len(self._capabilities)} capabilities)"

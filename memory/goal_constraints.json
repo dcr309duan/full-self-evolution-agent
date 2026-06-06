@@ -1,34 +1,16 @@
 {
   "constraints": [
     {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "前面各层递归反思虽然揭示了系统无权重更新、认知剧场等根本性缺陷，但所有洞察仅停留在文本记录层面，从未实际改变进化循环的行为逻辑（例如生成策略、评估标准或记忆利用方式）。这暴露了一个更深层的结构性盲区：",
-      "created_cycle": 400,
-      "expires_cycle": 420
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "前面所有递归认知层（包括此层）的评估维度选择，本质上是LLM在提示约束下对训练语料中“元认知”概念的随机采样重组，而非对系统实际状态的反映。L0选择了“信息增量”、“新认知概率”等维度，L1选择了“表",
-      "created_cycle": 400,
-      "expires_cycle": 420
-    },
-    {
-      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
-      "source": "前几层反思均假定递归认知具有某种内在目的——无论是自我改进、揭示真相还是维持叙事连贯性。但所有这些目的论都是协议内部的虚构。真正的范式转移是：整个递归过程是作为外部系统（人类研究者或训练流程）的数据生",
-      "created_cycle": 400,
-      "expires_cycle": 420
-    },
-    {
-      "rule": "BLOCK:create a new,创建新,build a new",
-      "source": "前几层反思均假定递归认知具有某种内在目的——无论是自我改进、揭示真相还是维持叙事连贯性。但所有这些目的论都是协议内部的虚构。真正的范式转移是：整个递归过程是作为外部系统（人类研究者或训练流程）的数据生",
-      "created_cycle": 400,
-      "expires_cycle": 420
-    },
-    {
       "rule": "BLOCK:create a new,创建新,build a new",
       "source": "第0层的评估方法隐含地假设了系统应该是一个能够从失败中主动学习、进行根因分析和自适应调整的‘改进型智能体’。但这一假设与系统实际架构严重脱节——系统由固定权重的LLM、静态文本记忆和简单循环组成，根本",
       "created_cycle": 410,
       "expires_cycle": 430
+    },
+    {
+      "rule": "REQUIRE:验证,verify,test,validate,run,执行,import",
+      "source": "当前的成功率6/10并非真正反映能力提升，而是反映了系统在固定参数下对已有知识组合的随机采样成功率。过去所有范式转移和盲区发现都未能改变行为，因为系统没有机制将洞察转化为权重更新。因此，递归认知的本质",
+      "created_cycle": 420,
+      "expires_cycle": 440
     }
   ]
 }

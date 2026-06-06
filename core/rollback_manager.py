@@ -5,6 +5,7 @@ wrappers for mutations, and provides rollback capabilities to restore files to t
 pre-mutation state on failure. Integrates with the failure pattern miner for diagnostics.
 Reports rollback events to health dashboard with cause tracking.
 Supports 'pre-mutation test failure' rollback type, storing failure pattern and test output.
+Now supports capability-level rollback via a capability-to-changes mapping.
 """
 
 import os
@@ -43,6 +44,7 @@ class TransactionEntry:
     rollback_type: Optional[str] = None  # e.g., "pre_mutation_test_failure"
     failure_pattern: Optional[str] = None  # Pattern that caused the failure
     test_output: Optional[str] = None  # Output from the failing test
+    capability_id: Optional[str] = None  # Associated capability ID for capability-level rollback
 
 
 class RollbackManager:
@@ -55,9 +57,11 @@ class RollbackManager:
         self._current_transaction_id: Optional[str] = None
         self._snapshots: List[FileSnapshot] = []
         self._rollback_frequency: Dict[str, int] = {}  # module -> rollback count
+        self._capability_changes: Dict[str, List[str]] = {}  # capability_id -> list of transaction_ids
         self._ensure_directories()
         self._load_transaction_log()
         self._load_rollback_frequency()
+        self._load_capability_changes()
 
     def _ensure_directories(self) -> None:
         """Ensure backup and log directories exist."""
@@ -106,6 +110,25 @@ class RollbackManager:
         except IOError as e:
             logger.error(f"Failed to save rollback frequency: {e}")
 
+    def _load_capability_changes(self) -> None:
+        """Load capability-to-changes mapping from disk."""
+        cap_file = self.backup_dir / "capability_changes.json"
+        if cap_file.exists():
+            try:
+                with open(cap_file, 'r') as f:
+                    self._capability_changes = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load capability changes: {e}")
+
+    def _save_capability_changes(self) -> None:
+        """Persist capability-to-changes mapping to disk."""
+        cap_file = self.backup_dir / "capability_changes.json"
+        try:
+            with open(cap_file, 'w') as f:
+                json.dump(self._capability_changes, f, indent=2)
+        except IOError as e:
+            logger.error(f"Failed to save capability changes: {e}")
+
     def _compute_file_hash(self, file_path: str) -> str:
         """Compute SHA-256 hash of a file."""
         hasher = hashlib.sha256()
@@ -145,17 +168,26 @@ class RollbackManager:
             logger.error(f"Failed to restore {snapshot.path}: {e}")
             return False
 
-    def begin_transaction(self, module_name: str, operation: str) -> str:
-        """Start a new atomic transaction."""
+    def begin_transaction(self, module_name: str, operation: str, capability_id: Optional[str] = None) -> str:
+        """Start a new atomic transaction, optionally associated with a capability."""
         transaction_id = f"{module_name}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
         entry = TransactionEntry(
             transaction_id=transaction_id,
             module_name=module_name,
-            operation=operation
+            operation=operation,
+            capability_id=capability_id
         )
         self.transaction_log[transaction_id] = entry
         self._current_transaction_id = transaction_id
         self._snapshots = []
+        
+        # If capability_id is provided, associate this transaction with it
+        if capability_id:
+            if capability_id not in self._capability_changes:
+                self._capability_changes[capability_id] = []
+            self._capability_changes[capability_id].append(transaction_id)
+            self._save_capability_changes()
+        
         logger.info(f"Transaction {transaction_id} started for {module_name}: {operation}")
         return transaction_id
 
@@ -250,6 +282,64 @@ class RollbackManager:
         
         return success
 
+    def rollback_capability(self, capability_id: str, reason: Optional[str] = None) -> bool:
+        """Rollback all file changes associated with a specific capability.
+        
+        Uses the capability-to-changes mapping to find all transactions associated
+        with the given capability and rolls them back in reverse order.
+        
+        Args:
+            capability_id: The ID of the capability to rollback.
+            reason: Optional reason for the rollback.
+            
+        Returns:
+            True if all associated transactions were rolled back successfully, False otherwise.
+        """
+        if capability_id not in self._capability_changes:
+            logger.warning(f"No changes found for capability {capability_id}")
+            return False
+        
+        transaction_ids = self._capability_changes[capability_id]
+        if not transaction_ids:
+            logger.info(f"No transactions to rollback for capability {capability_id}")
+            return True
+        
+        # Rollback in reverse order to maintain consistency
+        success = True
+        for tid in reversed(transaction_ids):
+            if tid in self.transaction_log:
+                entry = self.transaction_log[tid]
+                if entry.status == "committed":
+                    # Need to restore from backups since backups were cleaned on commit
+                    logger.warning(f"Transaction {tid} was already committed, cannot rollback cleanly")
+                    success = False
+                elif entry.status == "rolled_back":
+                    logger.info(f"Transaction {tid} already rolled back, skipping")
+                    continue
+                else:
+                    # Rollback the transaction
+                    rollback_success = self.rollback_transaction(
+                        transaction_id=tid,
+                        reason=reason or f"Capability-level rollback for {capability_id}",
+                        rollback_type="capability_rollback"
+                    )
+                    if not rollback_success:
+                        success = False
+                        logger.error(f"Failed to rollback transaction {tid} for capability {capability_id}")
+            else:
+                logger.warning(f"Transaction {tid} not found in log for capability {capability_id}")
+                success = False
+        
+        # Remove the capability from the mapping after rollback
+        if success:
+            del self._capability_changes[capability_id]
+            self._save_capability_changes()
+            logger.info(f"Successfully rolled back all changes for capability {capability_id}")
+        else:
+            logger.error(f"Partial rollback for capability {capability_id}, some transactions may remain")
+        
+        return success
+
     def _log_rollback(self, transaction_id: str, reason: Optional[str], snapshots: List[FileSnapshot],
                       rollback_type: Optional[str] = None, failure_pattern: Optional[str] = None,
                       test_output: Optional[str] = None) -> None:
@@ -310,6 +400,8 @@ class RollbackManager:
             cause = "unknown"
             if rollback_type == "pre_mutation_test_failure":
                 cause = "pre_mutation_test_failure"
+            elif rollback_type == "capability_rollback":
+                cause = "capability_rollback"
             elif reason:
                 if "conflict" in reason.lower():
                     cause = "conflict"
@@ -363,6 +455,7 @@ class RollbackManager:
         history = self.get_rollback_history()
         causes = {}
         pre_mutation_test_failures = 0
+        capability_rollbacks = 0
         for entry in history:
             cause = "unknown"
             rollback_type = entry.get("rollback_type")
@@ -370,6 +463,9 @@ class RollbackManager:
             if rollback_type == "pre_mutation_test_failure":
                 cause = "pre_mutation_test_failure"
                 pre_mutation_test_failures += 1
+            elif rollback_type == "capability_rollback":
+                cause = "capability_rollback"
+                capability_rollbacks += 1
             elif reason:
                 if "conflict" in reason.lower():
                     cause = "conflict"
@@ -398,6 +494,7 @@ class RollbackManager:
             "causes_breakdown": causes,
             "top_affected_modules": top_modules,
             "pre_mutation_test_failures": pre_mutation_test_failures,
+            "capability_rollbacks": capability_rollbacks,
             "last_updated": datetime.utcnow().isoformat()
         }
 
@@ -405,13 +502,15 @@ class RollbackManager:
     def mutation_context(self, module_name: str, operation: str, files: List[str],
                          rollback_type: Optional[str] = None,
                          failure_pattern: Optional[str] = None,
-                         test_output: Optional[str] = None):
+                         test_output: Optional[str] = None,
+                         capability_id: Optional[str] = None):
         """Context manager for safe file mutations with automatic rollback on failure.
         
         Supports extended rollback types like 'pre_mutation_test_failure' which stores
         the failure pattern and test output for later analysis.
+        Now supports capability_id to associate mutations with a specific capability.
         """
-        tid = self.begin_transaction(module_name, operation)
+        tid = self.begin_transaction(module_name, operation, capability_id=capability_id)
         try:
             # Take snapshots of all files that will be mutated
             for file_path in files:
@@ -459,6 +558,21 @@ class RollbackManager:
         """Get all pre-mutation test failure rollbacks, optionally filtered by module."""
         return self.get_rollback_history(module_name=module_name, rollback_type="pre_mutation_test_failure")
 
+    def get_capability_changes(self, capability_id: Optional[str] = None) -> Dict[str, List[str]]:
+        """Get the capability-to-changes mapping, optionally filtered by capability ID.
+        
+        Args:
+            capability_id: Optional capability ID to filter results.
+            
+        Returns:
+            Dictionary mapping capability IDs to lists of transaction IDs.
+        """
+        if capability_id:
+            if capability_id in self._capability_changes:
+                return {capability_id: self._capability_changes[capability_id]}
+            return {}
+        return dict(self._capability_changes)
+
     def cleanup_old_backups(self, max_age_days: int = 7) -> int:
         """Clean up backup files older than specified days."""
         cutoff = datetime.utcnow().timestamp() - (max_age_days * 86400)
@@ -490,13 +604,16 @@ def get_rollback_manager() -> RollbackManager:
 def safe_mutation(module_name: str, operation: str, files: List[str],
                    rollback_type: Optional[str] = None,
                    failure_pattern: Optional[str] = None,
-                   test_output: Optional[str] = None):
+                   test_output: Optional[str] = None,
+                   capability_id: Optional[str] = None):
     """Decorator/context manager for safe file mutations.
     
     Supports extended rollback types like 'pre_mutation_test_failure' which stores
     the failure pattern and test output for later analysis.
+    Now supports capability_id to associate mutations with a specific capability.
     """
     return get_rollback_manager().mutation_context(module_name, operation, files,
                                                     rollback_type=rollback_type,
                                                     failure_pattern=failure_pattern,
-                                                    test_output=test_output)
+                                                    test_output=test_output,
+                                                    capability_id=capability_id)
