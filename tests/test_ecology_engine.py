@@ -372,5 +372,12 @@ class TestEcologyEngineMinimal(unittest.TestCase):
             finally:
                 os.chdir(original_cwd)
 
+    def test_minimal_evolve_test_suite(self):
+        """Minimal test: import ecology_pressure_engine, call evolve_test_suite, assert path exists and is .py."""
+        import ecology_pressure_engine
+        result = ecology_pressure_engine.evolve_test_suite()
+        self.assertTrue(os.path.exists(result))
+        self.assertTrue(result.endswith('.py'))
+
 if __name__ == '__main__':
     unittest.main()

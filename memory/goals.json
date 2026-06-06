@@ -82,7 +82,8 @@
       "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
       "priority": 9,
       "status": "pending",
-      "created_at": 1780710300.305454
+      "created_at": 1780710300.305454,
+      "consecutive_failures": 1
     },
     {
       "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",

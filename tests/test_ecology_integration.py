@@ -290,3 +290,46 @@ def test_feedback():
         # Test the feedback mechanism
         result = feedback.provide_feedback(temp_test_dir)
         assert result is not None, "Feedback should be provided"
+
+    def test_bootstrap_ecology_creates_new_test_file(self, temp_test_dir):
+        """Integration test: (1) runs bootstrap_ecology, (2) verifies a new test file is created, (3) runs the new test, (4) validates the agent can adapt to the new pressure."""
+        # Step 1: Run bootstrap_ecology
+        engine = EcologyPressureEngine()
+        goal_generator = GoalGenerator()
+        
+        # Bootstrap the ecology process
+        bootstrap_result = engine.bootstrap_ecology(temp_test_dir)
+        assert bootstrap_result is not None, "bootstrap_ecology should return a result"
+        
+        # Step 2: Verify a new test file is created
+        test_files = list(Path(temp_test_dir).glob("test_*.py"))
+        original_test_files = [f for f in test_files if f.name != "test_sample.py"]
+        new_test_files = [f for f in original_test_files if f.name not in ["test_old.py", "test_feedback.py"]]
+        
+        # Check if any new test file was created by bootstrap_ecology
+        assert len(new_test_files) > 0, "bootstrap_ecology should create at least one new test file"
+        
+        # Step 3: Run the new test
+        for test_file in new_test_files:
+            result = pytest.main([str(test_file), "--tb=short", "-q"])
+            assert result == 0, f"New test file {test_file.name} should pass"
+        
+        # Step 4: Validate the agent can adapt to the new pressure
+        # Simulate the new pressure by checking if the test suite is stale
+        is_stale = goal_generator.detect_stale_test_suite(temp_test_dir)
+        
+        # If stale, generate new tests to adapt
+        if is_stale:
+            new_tests = goal_generator.generate_new_tests(temp_test_dir)
+            assert len(new_tests) > 0, "Should generate new tests to adapt to pressure"
+            
+            for test in new_tests:
+                test_file_path = Path(temp_test_dir) / test['file']
+                test_file_path.write_text(test['content'])
+                
+                result = pytest.main([str(test_file_path), "--tb=short", "-q"])
+                assert result == 0, f"Adaptation test {test['file']} should pass"
+        
+        # Verify the agent has adapted (test suite is no longer stale)
+        is_stale_after = goal_generator.detect_stale_test_suite(temp_test_dir)
+        assert not is_stale_after, "Agent should adapt to the new pressure"
