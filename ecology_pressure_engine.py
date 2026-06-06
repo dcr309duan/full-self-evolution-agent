@@ -568,6 +568,381 @@ def inject_test_into_existing_suite(
 
 
 # ---------------------------------------------------------------------------
+# New Method: generate_new_benchmark
+# ---------------------------------------------------------------------------
+
+def generate_new_benchmark(
+    output_dir: str = "tests",
+    coverage_gaps: Optional[Dict[str, List[str]]] = None,
+    num_edge_cases: int = 5,
+) -> Dict[str, Any]:
+    """
+    Create a new test file with randomized edge cases based on current coverage gaps.
+    Includes import validation before writing.
+
+    Args:
+        output_dir: Directory to write the new benchmark test file.
+        coverage_gaps: Optional dict mapping module names to lists of uncovered functions/classes.
+                       If None, scans the source directory to identify gaps.
+        num_edge_cases: Number of edge case tests to generate.
+
+    Returns:
+        Dict with results: {
+            "test_file_path": str,
+            "module_name": str,
+            "edge_cases_generated": int,
+            "import_valid": bool,
+            "validation_errors": List[str]
+        }
+    """
+    result = {
+        "test_file_path": "",
+        "module_name": "",
+        "edge_cases_generated": 0,
+        "import_valid": False,
+        "validation_errors": []
+    }
+
+    # Step 1: Identify coverage gaps if not provided
+    if coverage_gaps is None:
+        coverage_gaps = _identify_coverage_gaps()
+
+    if not coverage_gaps:
+        result["validation_errors"].append("No coverage gaps identified")
+        return result
+
+    # Step 2: Randomly select a module with coverage gaps
+    module_name = random.choice(list(coverage_gaps.keys()))
+    uncovered_items = coverage_gaps[module_name]
+    result["module_name"] = module_name
+
+    # Step 3: Generate randomized edge case tests
+    edge_case_tests = []
+    for i in range(num_edge_cases):
+        edge_case = _generate_random_edge_case(module_name, uncovered_items)
+        edge_case_tests.append(edge_case)
+
+    # Step 4: Build the test file content
+    test_code = _build_benchmark_test_file(module_name, edge_case_tests)
+
+    # Step 5: Validate imports before writing
+    import_valid, validation_errors = _validate_imports(test_code, module_name)
+    result["import_valid"] = import_valid
+    result["validation_errors"] = validation_errors
+
+    if not import_valid:
+        # Attempt to fix import issues
+        test_code = _fix_imports(test_code, module_name)
+        import_valid, validation_errors = _validate_imports(test_code, module_name)
+        result["import_valid"] = import_valid
+        result["validation_errors"] = validation_errors
+
+    # Step 6: Write the test file
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    test_file_name = f"benchmark_{module_name}_{random.randint(1000,9999)}.py"
+    test_file_path = output_path / test_file_name
+
+    try:
+        with open(test_file_path, "w") as f:
+            f.write(test_code)
+        result["test_file_path"] = str(test_file_path)
+        result["edge_cases_generated"] = len(edge_case_tests)
+    except OSError as e:
+        result["validation_errors"].append(f"Failed to write test file: {str(e)}")
+
+    # Log the benchmark generation
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "action": "generate_new_benchmark",
+        "module_name": module_name,
+        "test_file_path": result["test_file_path"],
+        "edge_cases_generated": result["edge_cases_generated"],
+        "import_valid": result["import_valid"]
+    }
+    _log_evolution_change(log_entry)
+
+    return result
+
+
+def _identify_coverage_gaps(source_dir: str = ".") -> Dict[str, List[str]]:
+    """
+    Identify coverage gaps by scanning source modules and comparing with existing tests.
+
+    Args:
+        source_dir: Directory containing source modules.
+
+    Returns:
+        Dict mapping module names to lists of uncovered functions/classes.
+    """
+    gaps = {}
+    source_modules = _find_source_modules(source_dir)
+    test_files = _scan_test_files()
+
+    for module_name, module_path in source_modules.items():
+        # Parse the module to find functions and classes
+        module_items = []
+        try:
+            with open(module_path, "r") as f:
+                tree = ast.parse(f.read(), filename=str(module_path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                    module_items.append(node.name)
+                elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                    module_items.append(node.name)
+        except (SyntaxError, FileNotFoundError):
+            continue
+
+        # Check which items are covered by existing tests
+        uncovered_items = []
+        for item in module_items:
+            covered = False
+            for test_file in test_files:
+                try:
+                    with open(test_file, "r") as f:
+                        test_content = f.read()
+                    if item in test_content:
+                        covered = True
+                        break
+                except (OSError, UnicodeDecodeError):
+                    continue
+            if not covered:
+                uncovered_items.append(item)
+
+        if uncovered_items:
+            gaps[module_name] = uncovered_items
+
+    return gaps
+
+
+def _generate_random_edge_case(module_name: str, uncovered_items: List[str]) -> str:
+    """
+    Generate a random edge case test for an uncovered item.
+
+    Args:
+        module_name: Name of the module being tested.
+        uncovered_items: List of uncovered functions/classes.
+
+    Returns:
+        String containing the edge case test code.
+    """
+    if not uncovered_items:
+        item = "some_function"
+    else:
+        item = random.choice(uncovered_items)
+
+    edge_case_types = [
+        "empty_input",
+        "large_input",
+        "negative_input",
+        "null_input",
+        "type_mismatch",
+        "boundary_value",
+        "special_characters",
+        "max_int",
+        "min_int",
+        "float_precision"
+    ]
+
+    edge_case_type = random.choice(edge_case_types)
+
+    test_templates = {
+        "empty_input": f"""
+    def test_{item}_empty_input(self):
+        \"\"\"Test {item} with empty input.\"\"\"
+        try:
+            result = {item}('')
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with empty input: {{e}}")
+""",
+        "large_input": f"""
+    def test_{item}_large_input(self):
+        \"\"\"Test {item} with large input.\"\"\"
+        large_input = 'x' * 100000
+        try:
+            result = {item}(large_input)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with large input: {{e}}")
+""",
+        "negative_input": f"""
+    def test_{item}_negative_input(self):
+        \"\"\"Test {item} with negative input.\"\"\"
+        try:
+            result = {item}(-1)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with negative input: {{e}}")
+""",
+        "null_input": f"""
+    def test_{item}_null_input(self):
+        \"\"\"Test {item} with None input.\"\"\"
+        try:
+            result = {item}(None)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with None input: {{e}}")
+""",
+        "type_mismatch": f"""
+    def test_{item}_type_mismatch(self):
+        \"\"\"Test {item} with incorrect type input.\"\"\"
+        try:
+            result = {item}("string_instead_of_int")
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with type mismatch: {{e}}")
+""",
+        "boundary_value": f"""
+    def test_{item}_boundary_value(self):
+        \"\"\"Test {item} with boundary value.\"\"\"
+        try:
+            result = {item}(0)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with boundary value: {{e}}")
+""",
+        "special_characters": f"""
+    def test_{item}_special_characters(self):
+        \"\"\"Test {item} with special characters.\"\"\"
+        special_input = '!@#$%^&*()_+-=[]{{}}|;:,.<>?'
+        try:
+            result = {item}(special_input)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with special characters: {{e}}")
+""",
+        "max_int": f"""
+    def test_{item}_max_int(self):
+        \"\"\"Test {item} with maximum integer value.\"\"\"
+        try:
+            result = {item}(sys.maxsize)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with max int: {{e}}")
+""",
+        "min_int": f"""
+    def test_{item}_min_int(self):
+        \"\"\"Test {item} with minimum integer value.\"\"\"
+        try:
+            result = {item}(-sys.maxsize - 1)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with min int: {{e}}")
+""",
+        "float_precision": f"""
+    def test_{item}_float_precision(self):
+        \"\"\"Test {item} with floating point precision edge case.\"\"\"
+        try:
+            result = {item}(0.1 + 0.2)
+            self.assertIsNotNone(result)
+        except Exception as e:
+            self.fail(f"{item} raised an exception with float precision: {{e}}")
+"""
+    }
+
+    return test_templates.get(edge_case_type, test_templates["empty_input"])
+
+
+def _build_benchmark_test_file(module_name: str, edge_case_tests: List[str]) -> str:
+    """
+    Build a complete benchmark test file from edge case tests.
+
+    Args:
+        module_name: Name of the module being tested.
+        edge_case_tests: List of edge case test code strings.
+
+    Returns:
+        String containing the complete test file content.
+    """
+    test_code = f"""import unittest
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from {module_name} import *
+
+
+class TestBenchmark_{module_name.capitalize()}(unittest.TestCase):
+    \"\"\"Benchmark tests for {module_name} module with randomized edge cases.\"\"\"
+
+    def setUp(self):
+        \"\"\"Set up test fixtures.\"\"\"
+        self.start_time = time.time()
+
+    def tearDown(self):
+        \"\"\"Tear down test fixtures and check performance.\"\"\"
+        elapsed = time.time() - self.start_time
+        self.assertLess(elapsed, 5.0, f"Test took too long: {{elapsed:.2f}}s")
+
+{''.join(edge_case_tests)}
+
+if __name__ == '__main__':
+    unittest.main()
+"""
+    return test_code
+
+
+def _validate_imports(test_code: str, module_name: str) -> Tuple[bool, List[str]]:
+    """
+    Validate that the imports in the test code are valid.
+
+    Args:
+        test_code: The test code to validate.
+        module_name: The name of the module being imported.
+
+    Returns:
+        Tuple of (is_valid, list_of_errors).
+    """
+    errors = []
+
+    # Check if the module exists
+    try:
+        __import__(module_name)
+    except ImportError:
+        errors.append(f"Module '{module_name}' could not be imported")
+        return False, errors
+
+    # Try to parse the test code
+    try:
+        ast.parse(test_code)
+    except SyntaxError as e:
+        errors.append(f"Syntax error in test code: {str(e)}")
+        return False, errors
+
+    # Try to compile the test code
+    try:
+        compile(test_code, "<test>", "exec")
+    except Exception as e:
+        errors.append(f"Compilation error: {str(e)}")
+        return False, errors
+
+    return True, errors
+
+
+def _fix_imports(test_code: str, module_name: str) -> str:
+    """
+    Attempt to fix import issues in the test code.
+
+    Args:
+        test_code: The test code to fix.
+        module_name: The name of the module being imported.
+
+    Returns:
+        Fixed test code string.
+    """
+    # Add sys.path manipulation to help find the module
+    fixed_code = test_code.replace(
+        f"from {module_name} import *",
+        f"""import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, '.')
+from {module_name} import *"""
+    )
+    return fixed_code
+
+
+# ---------------------------------------------------------------------------
 # New Method: introduce_environmental_pressure
 # ---------------------------------------------------------------------------
 
@@ -651,401 +1026,3 @@ def introduce_environmental_pressure(
         """Evaluate the extreme case pressure."""
         # Check if the test suite contains the extreme case test
         test_files = _scan_test_files(test_dir)
-        for test_file in test_files:
-            if pressure_name in test_file.name:
-                return 1.0
-        return 0.0
-
-    def generate_extreme_case_template() -> str:
-        """Generate a template for the extreme case test."""
-        return test_code
-
-    register_pressure(
-        name=pressure_name,
-        description=f"Requires extreme case test for module {module_name}",
-        severity=0.8,
-        evaluate=evaluate_extreme_case,
-        generate_template=generate_extreme_case_template,
-    )
-
-    # Log the pressure introduction
-    log_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "action": "introduce_environmental_pressure",
-        "selected_module": module_name,
-        "pressure_name": pressure_name,
-        "benchmark_results": benchmark_results,
-        "module_failures": module_failures
-    }
-    _log_evolution_change(log_entry)
-
-    return result
-
-
-def _generate_extreme_case_test(module_name: str, module_path: Path) -> str:
-    """
-    Generate a test for an extreme or edge case scenario for the given module.
-
-    Args:
-        module_name: Name of the module to test.
-        module_path: Path to the module file.
-
-    Returns:
-        String containing the test code.
-    """
-    # Parse the module to find functions and classes
-    functions = []
-    classes = []
-    try:
-        with open(module_path, "r") as f:
-            tree = ast.parse(f.read(), filename=str(module_path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
-                functions.append(node.name)
-            elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
-                classes.append(node.name)
-    except (SyntaxError, FileNotFoundError):
-        pass
-
-    # Generate extreme case test scenarios
-    test_scenarios = []
-    
-    # Add boundary value tests
-    if functions:
-        for func in functions[:3]:
-            test_scenarios.append(f"""
-    def test_{func}_extreme_large_input(self):
-        \"\"\"Test {func} with extremely large input.\"\"\"
-        large_input = 'x' * 100000
-        try:
-            result = {func}(large_input)
-            self.assertIsNotNone(result)
-        except Exception as e:
-            self.fail(f"{func} raised an exception with large input: {{e}}")
-
-    def test_{func}_extreme_small_input(self):
-        \"\"\"Test {func} with extremely small input.\"\"\"
-        small_input = ''
-        try:
-            result = {func}(small_input)
-            self.assertIsNotNone(result)
-        except Exception as e:
-            self.fail(f"{func} raised an exception with small input: {{e}}")
-
-    def test_{func}_extreme_negative_input(self):
-        \"\"\"Test {func} with negative input.\"\"\"
-        negative_input = -1
-        try:
-            result = {func}(negative_input)
-            self.assertIsNotNone(result)
-        except Exception as e:
-            self.fail(f"{func} raised an exception with negative input: {{e}}")
-""")
-
-    # Add null/None tests
-    test_scenarios.append("""
-    def test_null_input(self):
-        \"\"\"Test with None input.\"\"\"
-        try:
-            result = some_function(None)
-            self.assertIsNotNone(result)
-        except Exception as e:
-            self.fail(f"Function raised an exception with None input: {e}")
-""")
-
-    # Add type mismatch tests
-    test_scenarios.append("""
-    def test_type_mismatch(self):
-        \"\"\"Test with incorrect type input.\"\"\"
-        try:
-            result = some_function("string_instead_of_int")
-            self.assertIsNotNone(result)
-        except Exception as e:
-            self.fail(f"Function raised an exception with type mismatch: {e}")
-""")
-
-    # Combine all scenarios into a test class
-    test_code = f"""import unittest
-import time
-from {module_name} import *
-
-
-class TestExtremeCase_{module_name.capitalize()}(unittest.TestCase):
-    \"\"\"Extreme case tests for {module_name} module.\"\"\"
-
-    def setUp(self):
-        \"\"\"Set up test fixtures.\"\"\"
-        self.start_time = time.time()
-
-    def tearDown(self):
-        \"\"\"Tear down test fixtures and check performance.\"\"\"
-        elapsed = time.time() - self.start_time
-        self.assertLess(elapsed, 5.0, f"Test took too long: {{elapsed:.2f}}s")
-
-{''.join(test_scenarios)}
-
-if __name__ == '__main__':
-    unittest.main()
-"""
-    return test_code
-
-
-def _run_performance_benchmarks(module_name: str, module_path: Path, timeout: float) -> Dict[str, Any]:
-    """
-    Run performance benchmarks on the given module.
-
-    Args:
-        module_name: Name of the module to benchmark.
-        module_path: Path to the module file.
-        timeout: Timeout in seconds for each benchmark.
-
-    Returns:
-        Dict with benchmark results.
-    """
-    results = {
-        "module_name": module_name,
-        "timeout": timeout,
-        "benchmarks": []
-    }
-
-    # Parse the module to find functions
-    functions = []
-    try:
-        with open(module_path, "r") as f:
-            tree = ast.parse(f.read(), filename=str(module_path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
-                functions.append(node.name)
-    except (SyntaxError, FileNotFoundError):
-        return results
-
-    # Run benchmarks for each function
-    for func in functions[:5]:  # Limit to first 5 functions
-        benchmark = {
-            "function": func,
-            "status": "unknown",
-            "execution_time": None,
-            "error": None
-        }
-        try:
-            # Create a temporary benchmark script
-            benchmark_code = f"""
-import time
-import sys
-sys.path.insert(0, '.')
-from {module_name} import {func}
-
-start = time.time()
-try:
-    result = {func}()
-    elapsed = time.time() - start
-    print(f"SUCCESS:{{elapsed}}")
-except Exception as e:
-    print(f"ERROR:{{str(e)}}")
-"""
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-                f.write(benchmark_code)
-                temp_path = f.name
-
-            # Run the benchmark with timeout
-            result = subprocess.run(
-                [sys.executable, temp_path],
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
-
-            # Parse the output
-            output = result.stdout.strip()
-            if output.startswith("SUCCESS:"):
-                elapsed = float(output.split(":")[1])
-                benchmark["status"] = "success"
-                benchmark["execution_time"] = elapsed
-            elif output.startswith("ERROR:"):
-                benchmark["status"] = "error"
-                benchmark["error"] = output.split(":", 1)[1].strip()
-            else:
-                benchmark["status"] = "unknown"
-                benchmark["error"] = f"Unexpected output: {output}"
-
-            # Clean up
-            os.unlink(temp_path)
-
-        except subprocess.TimeoutExpired:
-            benchmark["status"] = "timeout"
-            benchmark["error"] = f"Execution exceeded {timeout}s timeout"
-        except Exception as e:
-            benchmark["status"] = "error"
-            benchmark["error"] = str(e)
-
-        results["benchmarks"].append(benchmark)
-
-    return results
-
-
-def _track_module_failures(module_name: str, test_code: str, test_dir: str) -> Dict[str, List[str]]:
-    """
-    Track which modules fail under which pressures.
-
-    Args:
-        module_name: Name of the module being tested.
-        test_code: The test code to run.
-        test_dir: Directory containing test files.
-
-    Returns:
-        Dict mapping module names to lists of failing pressures.
-    """
-    failures = {}
-
-    # Create a temporary test file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(test_code)
-        temp_path = f.name
-
-    try:
-        # Run the test
-        result = subprocess.run(
-            [sys.executable, "-m", "unittest", temp_path],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        # Check if the test failed
-        if result.returncode != 0:
-            failures[module_name] = ["extreme_case_test_failure"]
-        else:
-            failures[module_name] = []
-
-    except subprocess.TimeoutExpired:
-        failures[module_name] = ["test_timeout"]
-    except Exception as e:
-        failures[module_name] = [f"test_execution_error: {str(e)}"]
-    finally:
-        # Clean up
-        try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-
-    return failures
-
-
-# ---------------------------------------------------------------------------
-# Helper functions for evolve_test_suite
-# ---------------------------------------------------------------------------
-
-def _scan_test_files(test_dir: str = "tests") -> List[Path]:
-    """Scan the test directory for all Python test files."""
-    test_path = Path(test_dir)
-    if not test_path.exists():
-        return []
-    return list(test_path.rglob("test_*.py")) + list(test_path.rglob("*_test.py"))
-
-
-def _parse_imports(file_path: Path) -> set:
-    """Parse a Python file and extract all module imports."""
-    try:
-        with open(file_path, "r") as f:
-            tree = ast.parse(f.read(), filename=str(file_path))
-    except (SyntaxError, FileNotFoundError):
-        return set()
-    
-    imports = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.add(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                imports.add(node.module.split(".")[0])
-    return imports
-
-
-def _find_source_modules(source_dir: str = ".") -> Dict[str, Path]:
-    """Find all source modules in the project (excluding test files)."""
-    source_path = Path(source_dir)
-    modules = {}
-    for py_file in source_path.rglob("*.py"):
-        if "test" in py_file.name.lower():
-            continue
-        if "ecology_pressure_engine" in py_file.name:
-            continue
-        module_name = py_file.stem
-        if module_name.startswith("_"):
-            continue
-        modules[module_name] = py_file
-    return modules
-
-
-def _generate_test_stub(module_name: str, module_path: Path) -> str:
-    """Generate a minimal test stub for an uncovered module."""
-    functions = []
-    classes = []
-    try:
-        with open(module_path, "r") as f:
-            tree = ast.parse(f.read(), filename=str(module_path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
-                functions.append(node.name)
-            elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
-                classes.append(node.name)
-    except (SyntaxError, FileNotFoundError):
-        pass
-    
-    stub = f"""import unittest
-from {module_name} import *
-
-
-class Test{module_name.capitalize()}(unittest.TestCase):
-    \"\"\"Test suite for {module_name} module.\"\"\"
-
-"""
-    if functions:
-        for func in functions[:5]:  # Limit to first 5 functions
-            stub += f"""    def test_{func}(self):
-        \"\"\"Test {func} function.\"\"\"
-        # TODO: Implement test for {func}
-        self.assertTrue(True)
-
-"""
-    if classes:
-        for cls in classes[:3]:  # Limit to first 3 classes
-            stub += f"""    def test_{cls.lower()}_creation(self):
-        \"\"\"Test {cls} class instantiation.\"\"\"
-        # TODO: Implement test for {cls}
-        self.assertTrue(True)
-
-"""
-    stub += """
-if __name__ == '__main__':
-    unittest.main()
-"""
-    return stub
-
-
-def _validate_test_stub(stub_code: str, module_name: str) -> bool:
-    """Validate a test stub by running it in isolation."""
-    try:
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, dir=".") as f:
-            f.write(stub_code)
-            temp_path = f.name
-        
-        # Run the test in isolation
-        result = subprocess.run(
-            [sys.executable, "-m", "unittest", temp_path],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        # Clean up
-        os.unlink(temp_path)
-        
-        # Check if tests passed (or at least ran without import errors)
-        return result.returncode == 0 or "FAILED" not in result.stderr
-    except (subprocess.TimeoutExpired, OSError):
-        return False
-
-

@@ -288,3 +288,188 @@ class CoordinatedMutationPlanner:
             ))
 
         return coordinated_mutations
+
+    def create_coordinated_mutation_plan(
+        self,
+        modules_to_modify: List[str],
+        equilibrium_state: Dict[str, Any]
+    ) -> Optional[Plan]:
+        """
+        Create a coordinated mutation plan that changes all modules in a consistent way.
+        Validates that combined changes are non-conflicting and produces a rollback plan.
+        """
+        if not modules_to_modify or len(modules_to_modify) < 2:
+            return None
+
+        self.build_dependency_graph(equilibrium_state)
+
+        # Validate that modules exist in registry
+        for module in modules_to_modify:
+            if module not in self.module_registry:
+                return None
+
+        # Check for conflicts in dependency graph
+        if not self._validate_non_conflicting(modules_to_modify):
+            return None
+
+        mutations = []
+        rollback_plan = []
+        expected_gain = 0.0
+
+        # Generate consistent mutations across all modules
+        base_function_name = f"_coordinated_{datetime.datetime.now().strftime('%H%M%S')}"
+
+        for i, module in enumerate(modules_to_modify):
+            if i == 0:
+                # First module gets a new function
+                mutation = Mutation(
+                    module_name=module,
+                    mutation_type='new_function',
+                    payload={
+                        'function_name': base_function_name,
+                        'function_body': f'return {i}',
+                        'export': True
+                    },
+                    rollback_payload={
+                        'function_name': base_function_name,
+                        'action': 'remove'
+                    }
+                )
+                rollback_plan.append({
+                    'module': module,
+                    'action': 'remove_function',
+                    'function_name': base_function_name
+                })
+            elif i == 1:
+                # Second module calls the first module's function
+                mutation = Mutation(
+                    module_name=module,
+                    mutation_type='new_call',
+                    payload={
+                        'target_module': modules_to_modify[0],
+                        'function_name': base_function_name,
+                        'call_site': 'init'
+                    },
+                    rollback_payload={
+                        'target_module': modules_to_modify[0],
+                        'function_name': base_function_name,
+                        'action': 'remove_call'
+                    }
+                )
+                rollback_plan.append({
+                    'module': module,
+                    'action': 'remove_call',
+                    'target_module': modules_to_modify[0],
+                    'function_name': base_function_name
+                })
+            else:
+                # Additional modules get parameter modifications
+                mutation = Mutation(
+                    module_name=module,
+                    mutation_type='modify_parameter',
+                    payload={
+                        'parameter_name': f'coordinated_param_{i}',
+                        'new_value': i * 0.1
+                    },
+                    rollback_payload={
+                        'parameter_name': f'coordinated_param_{i}',
+                        'old_value': 0.0
+                    }
+                )
+                rollback_plan.append({
+                    'module': module,
+                    'action': 'restore_parameter',
+                    'parameter_name': f'coordinated_param_{i}'
+                })
+
+            mutations.append(mutation)
+
+        expected_gain = self._estimate_fitness_gain(modules_to_modify, equilibrium_state)
+
+        return Plan(
+            modules_to_change=modules_to_modify,
+            mutations=mutations,
+            expected_fitness_gain=expected_gain,
+            rollback_plan=rollback_plan
+        )
+
+    def _validate_non_conflicting(self, modules: List[str]) -> bool:
+        """
+        Validate that the combined changes across modules are non-conflicting.
+        Checks for circular dependencies and overlapping modifications.
+        """
+        # Check for circular dependencies
+        for module in modules:
+            visited = set()
+            stack = [module]
+            while stack:
+                current = stack.pop()
+                if current in visited:
+                    return False
+                visited.add(current)
+                deps = self.dependency_graph.get(current, [])
+                for dep in deps:
+                    if dep in modules and dep not in visited:
+                        stack.append(dep)
+
+        # Check that no module is both a donor and receiver in conflicting ways
+        for i, mod1 in enumerate(modules):
+            for j, mod2 in enumerate(modules):
+                if i != j:
+                    deps1 = self.dependency_graph.get(mod1, [])
+                    deps2 = self.dependency_graph.get(mod2, [])
+                    if mod2 in deps1 and mod1 in deps2:
+                        return False
+
+        return True
+
+    def generate_rollback_plan(self, plan: Plan) -> List[Dict[str, Any]]:
+        """
+        Generate a comprehensive rollback plan for the coordinated mutation.
+        Returns ordered list of rollback actions.
+        """
+        rollback_actions = []
+
+        # Reverse the order of mutations for safe rollback
+        for mutation in reversed(plan.mutations):
+            rollback_action = {
+                'module': mutation.module_name,
+                'action': 'rollback',
+                'mutation_type': mutation.mutation_type,
+                'rollback_payload': mutation.rollback_payload
+            }
+            rollback_actions.append(rollback_action)
+
+        return rollback_actions
+
+    def plan_with_validation(
+        self,
+        modules_to_modify: List[str],
+        equilibrium_state: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Full workflow: create plan, validate, generate rollback, return as dict.
+        """
+        plan = self.create_coordinated_mutation_plan(modules_to_modify, equilibrium_state)
+        if plan is None:
+            return None
+
+        # Generate comprehensive rollback plan
+        plan.rollback_plan = self.generate_rollback_plan(plan)
+
+        return {
+            'timestamp': datetime.datetime.now().isoformat(),
+            'modules_to_change': plan.modules_to_change,
+            'mutations': [
+                {
+                    'module_name': m.module_name,
+                    'mutation_type': m.mutation_type,
+                    'payload': m.payload,
+                    'rollback_payload': m.rollback_payload
+                }
+                for m in plan.mutations
+            ],
+            'expected_fitness_gain': plan.expected_fitness_gain,
+            'rollback_plan': plan.rollback_plan,
+            'validation_status': 'validated'
+        }

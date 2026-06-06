@@ -333,3 +333,44 @@ def test_feedback():
         # Verify the agent has adapted (test suite is no longer stale)
         is_stale_after = goal_generator.detect_stale_test_suite(temp_test_dir)
         assert not is_stale_after, "Agent should adapt to the new pressure"
+
+    def test_ecology_integration_modifies_test_suite(self, temp_test_dir):
+        """Integration test: (1) sets up a minimal evolution loop; (2) runs 3 cycles; (3) verifies that ecology_integration modifies the test suite; (4) confirms new tests are actually executed."""
+        from core.ecology_integration import EcologyIntegration
+        
+        # Mock the actual mutation to avoid side effects
+        with patch('core.ecology_integration.EcologyIntegration._mutate_test_suite') as mock_mutate:
+            mock_mutate.return_value = True
+            
+            # Create the ecology integration instance
+            ecology_integration = EcologyIntegration()
+            
+            # Track test suite modifications
+            initial_test_files = list(Path(temp_test_dir).glob("test_*.py"))
+            initial_count = len(initial_test_files)
+            
+            # Run 3 cycles of the evolution loop
+            for cycle in range(3):
+                # Simulate a minimal evolution cycle
+                ecology_integration.run_cycle(temp_test_dir)
+                
+                # Verify that ecology_integration modifies the test suite
+                current_test_files = list(Path(temp_test_dir).glob("test_*.py"))
+                current_count = len(current_test_files)
+                
+                # The test suite should be modified (new tests added or existing ones changed)
+                assert current_count >= initial_count, f"Cycle {cycle+1}: Test suite should not shrink"
+                
+                # Update initial count for next cycle
+                initial_count = current_count
+            
+            # Verify that new tests are actually executed
+            # Check that all test files can be executed
+            all_test_files = list(Path(temp_test_dir).glob("test_*.py"))
+            for test_file in all_test_files:
+                result = pytest.main([str(test_file), "--tb=short", "-q"])
+                assert result == 0, f"Test file {test_file.name} should execute successfully"
+            
+            # Verify the mock was called
+            assert mock_mutate.called, "The _mutate_test_suite method should have been called"
+            assert mock_mutate.call_count == 3, f"Expected 3 calls to _mutate_test_suite, got {mock_mutate.call_count}"

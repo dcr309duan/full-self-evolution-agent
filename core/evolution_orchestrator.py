@@ -807,6 +807,28 @@ class EvolutionOrchestrator:
         except Exception as e:
             logger.exception("Error during fitness landscape mutation: %s", e)
 
+    def _log_equilibrium_event(self, equilibrium_detected: bool, forced_changes: Optional[List[Dict[str, Any]]] = None):
+        """Log equilibrium detection events and forced changes.
+
+        Args:
+            equilibrium_detected: Whether equilibrium was detected.
+            forced_changes: List of forced change plans, if any.
+        """
+        log_entry = {
+            "timestamp": time.time(),
+            "cycle": self.cycle_count,
+            "equilibrium_detected": equilibrium_detected,
+            "forced_changes": forced_changes or [],
+            "subsystem_scores": dict(self.subsystem_scores)
+        }
+        
+        try:
+            with open("equilibrium_log.json", 'a') as f:
+                f.write(json.dumps(log_entry) + '\n')
+            logger.debug("Equilibrium event logged to equilibrium_log.json")
+        except Exception as e:
+            logger.error("Failed to log equilibrium event: %s", e)
+
     def _run_evolution_cycle(self):
         """Run a single evolution cycle: generate goal, mutate modules, test, detect equilibrium, force multi-module change."""
         logger.info("Starting evolution cycle %d", self.cycle_count)
@@ -834,22 +856,3 @@ class EvolutionOrchestrator:
         # Step 4: Test the mutation
         tests_passed = self.run_tests(subsystem_name)
         
-        # Step 5: Evaluate success
-        success = self.evaluate_success(subsystem_name, tests_passed)
-        
-        # Step 6: Update scores and log
-        old_scores = dict(self.subsystem_scores)
-        self.update_scores_and_log(subsystem_name, success)
-        new_scores = dict(self.subsystem_scores)
-        
-        # Step 7: Log evolution cycle
-        self._log_evolution_cycle(subsystem_name, strategy, success, old_scores, new_scores)
-        
-        # Step 8: Parse reflection and update strategy
-        self._parse_reflection_and_update_strategy(subsystem_name, success)
-        
-        # Step 9: Detect Nash equilibrium
-        equilibrium_detected = self.nash_detector_and_forcer.detect_equilibrium(self.subsystem_scores)
-        if equilibrium_detected:
-            logger.info("Nash equilibrium detected, forcing multi-module change")
-            #

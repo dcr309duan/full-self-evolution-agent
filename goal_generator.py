@@ -707,6 +707,7 @@ class GoalGenerator:
         self.known_capabilities: List[str] = []  # Track known capabilities for ECOLOGY_NOVEL_TEST
         self.ecology_metrics: Dict[str, Any] = {}  # Store ecology metrics for pressure generation
         self.created_test_files: List[str] = []  # Track newly created test files for ECOLOGY goals
+        self.cycle_count: int = 0  # Track number of cycles for periodic ecology goal generation
         self.logger = logging.getLogger(__name__)
         
         # Core files list for priority scoring
@@ -767,6 +768,8 @@ class GoalGenerator:
         Main entry point: parse reflection and update goal pipeline.
         Returns a summary of changes made.
         """
+        self.cycle_count += 1  # Increment cycle counter
+        
         parsed = self.parser.parse(reflection_text)
         self._update_assessment(parsed.get("current_assessment", {}))
         self._prioritize_goals(parsed.get("key_gaps", []))
@@ -794,62 +797,98 @@ class GoalGenerator:
         # Generate ECOLOGY goals that reference newly created test files
         self._generate_ecology_goals_for_new_tests(reflection_text)
         
+        # Generate ecology goal every 10 cycles
+        self.generate_ecology_goal()
+        
         summary = self._generate_summary(parsed)
         self._record_feedback(parsed, summary)
         return summary
 
-    def _generate_ecology_novel_test_goals(self, reflection_text: str) -> None:
+    def generate_ecology_goal(self) -> None:
         """
-        Generate ECOLOGY_NOVEL_TEST goals that create tests for capabilities the agent doesn't yet have.
-        This ensures the agent is constantly pushed toward novel functionality rather than optimizing for existing tests.
+        Generate an ecology goal every 10 cycles to introduce a specific type of environmental pressure
+        not yet present. This creates goals like 'Add a test that simulates network partition' or
+        'Add a benchmark for cold-start performance'.
+        """
+        if self.cycle_count % 10 != 0:
+            return
         
-        Args:
-            reflection_text: The reflection text to analyze for capability gaps
-        """
-        # Detect capabilities mentioned in the reflection text
-        capability_patterns = [
-            r'\bcapability\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
-            r'\bability\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
-            r'\bfunctionality\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
-            r'\bfeature\s+(?:to\s+)?(\w+(?:\s+\w+)*)\b',
-            r'\bnew\s+(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b',
-            r'\bmissing\s+(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b',
-            r'\bnovel\s+(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b'
+        # Define possible environmental pressure types
+        pressure_types = [
+            "network partition",
+            "cold-start performance",
+            "high latency",
+            "resource exhaustion",
+            "concurrent access",
+            "data corruption",
+            "timeout scenarios",
+            "rate limiting",
+            "load balancing",
+            "failover recovery",
+            "memory pressure",
+            "disk I/O bottleneck",
+            "CPU throttling",
+            "network bandwidth limitation",
+            "service degradation",
+            "partial system failure",
+            "configuration drift",
+            "security breach simulation",
+            "data inconsistency",
+            "version mismatch"
         ]
         
-        detected_capabilities = []
-        for pattern in capability_patterns:
-            matches = re.findall(pattern, reflection_text, re.IGNORECASE)
-            detected_capabilities.extend(matches)
+        # Filter out pressure types that might already be covered
+        # Check existing goals and test files for coverage
+        existing_pressures = set()
+        for goal in self.goals:
+            for pressure in pressure_types:
+                if pressure.lower() in goal.description.lower():
+                    existing_pressures.add(pressure)
         
-        # Also check for explicit mentions of "test" and "capability" together
-        test_capability_pattern = r'\btest\s+(?:for\s+)?(\w+(?:\s+\w+)*)\s+(?:capability|ability|functionality|feature)\b'
-        test_capability_matches = re.findall(test_capability_pattern, reflection_text, re.IGNORECASE)
-        detected_capabilities.extend(test_capability_matches)
+        # Also check created test files
+        for test_file in self.created_test_files:
+            for pressure in pressure_types:
+                if pressure.lower() in test_file.lower():
+                    existing_pressures.add(pressure)
         
-        # Filter out capabilities that are already known
-        new_capabilities = [cap for cap in detected_capabilities if cap.lower() not in [k.lower() for k in self.known_capabilities]]
+        # Select a pressure type not yet present
+        available_pressures = [p for p in pressure_types if p not in existing_pressures]
         
-        if not new_capabilities:
-            # If no specific capabilities detected, generate a generic novel test goal
-            generic_novel_goal = Goal(
-                description="Create a test that validates a capability the agent doesn't yet possess, forcing novel functionality development",
-                priority=2,
-                source="ecology_novel_test",
-                last_selected=datetime.now(),
-                rationale="ECOLOGY_NOVEL_TEST: Generate test for unknown capability to push toward novel functionality"
-            )
-            
-            # Perform feasibility check if enabled
-            if self.feasibility_check:
-                feasibility_result = self.feasibility_estimator.estimate(generic_novel_goal.description, self.current_assessment)
-                if feasibility_result == FeasibilityResult.BLOCK:
-                    self.logger.info(f"Feasibility check blocked ECOLOGY_NOVEL_TEST goal: '{generic_novel_goal.description}'")
-                    self.blocked_goals.append({
-                        "description": generic_novel_goal.description,
-                        "reason": "Feasibility check blocked ECOLOGY_NOVEL_TEST goal",
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    return
-                elif feasibility_result == FeasibilityResult.ADJUST_COMPLEXITY:
-                    generic_novel
+        if not available_pressures:
+            # If all pressure types are covered, pick a random one to reinforce
+            selected_pressure = random.choice(pressure_types)
+            self.logger.info("All ecology pressure types already present, reinforcing existing type")
+        else:
+            selected_pressure = random.choice(available_pressures)
+        
+        # Generate goal description based on pressure type
+        goal_templates = [
+            f"Add a test that simulates {selected_pressure}",
+            f"Add a benchmark for {selected_pressure}",
+            f"Create a stress test for {selected_pressure} scenarios",
+            f"Implement a test harness for {selected_pressure}",
+            f"Add a performance test measuring {selected_pressure} impact"
+        ]
+        
+        goal_description = random.choice(goal_templates)
+        
+        # Create the ecology goal
+        ecology_goal = Goal(
+            description=goal_description,
+            priority=2,  # Medium-high priority
+            source="ecology_goal",
+            last_selected=datetime.now(),
+            rationale=f"ECOLOGY_GOAL: Introduce environmental pressure '{selected_pressure}' to improve system resilience"
+        )
+        
+        # Perform feasibility check if enabled
+        if self.feasibility_check:
+            feasibility_result = self.feasibility_estimator.estimate(ecology_goal.description, self.current_assessment)
+            if feasibility_result == FeasibilityResult.BLOCK:
+                self.logger.info(f"Feasibility check blocked ecology goal: '{ecology_goal.description}'")
+                self.blocked_goals.append({
+                    "description": ecology_goal.description,
+                    "reason": "Feasibility check blocked ecology goal",
+                    "timestamp": datetime.now().isoformat()
+                })
+               

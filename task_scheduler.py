@@ -400,3 +400,5 @@ if __name__ == "__main__":
     finally:
         scheduler.stop()
         print("Scheduler stopped")
+# Compatibility alias for agent-generated code
+TaskScheduler = Scheduler
