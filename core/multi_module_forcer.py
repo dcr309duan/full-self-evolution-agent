@@ -1,12 +1,12 @@
 """
 Multi-Module Forcer: Escapes local optima by coordinating mutations across 3+ modules.
-Imports from nash_detector_and_forcer for equilibrium detection and forcing.
+Imports from nash_detector for equilibrium detection and forcing.
 """
 
 import itertools
 import random
 from typing import Dict, List, Tuple, Any, Optional, Set
-from core.nash_detector_and_forcer import NashEquilibriumDetectorAndForcer
+from core.nash_detector import NashDetector
 
 
 class MultiModuleForcer:
@@ -15,8 +15,8 @@ class MultiModuleForcer:
     to escape local optima by changing multiple modules simultaneously.
     """
 
-    def __init__(self, detector: Optional[NashEquilibriumDetectorAndForcer] = None):
-        self.detector = detector or NashEquilibriumDetectorAndForcer()
+    def __init__(self, detector: Optional[NashDetector] = None):
+        self.detector = detector or NashDetector()
         self.mutation_history: List[Dict[str, Any]] = []
         self.multi_mutation_success: Dict[str, bool] = {}  # Track multi-module success
         self.module_success_rates: Dict[str, float] = {}  # Track historical success rates per module
@@ -604,8 +604,8 @@ class MultiModuleOrchestrator:
     multi-module mutations, with conflict resolution and rollback mechanisms.
     """
 
-    def __init__(self, detector: Optional[NashEquilibriumDetectorAndForcer] = None):
-        self.detector = detector or NashEquilibriumDetectorAndForcer()
+    def __init__(self, detector: Optional[NashDetector] = None):
+        self.detector = detector or NashDetector()
         self.forcer = MultiModuleForcer(self.detector)
         self.execution_history: List[Dict[str, Any]] = []
         self.snapshot_stack: List[Dict[str, Any]] = []
@@ -833,7 +833,7 @@ class MultiModuleOrchestrator:
 
 
 def analyze_and_force_coordination(
-    detector: Optional[NashEquilibriumDetectorAndForcer] = None,
+    detector: Optional[NashDetector] = None,
     max_plans: int = 3,
 ) -> Dict[str, Any]:
     """
@@ -871,7 +871,7 @@ def analyze_and_force_coordination(
 
 def generate_coordinated_multi_module_mutations(
     equilibrium_state: Dict[str, Any],
-    detector: Optional[NashEquilibriumDetectorAndForcer] = None
+    detector: Optional[NashDetector] = None
 ) -> List[Dict[str, Any]]:
     """
     Generates coordinated multi-module mutations based on the equilibrium state.
@@ -879,7 +879,7 @@ def generate_coordinated_multi_module_mutations(
     
     Args:
         equilibrium_state: The current equilibrium state from the detector.
-        detector: Optional NashEquilibriumDetectorAndForcer instance.
+        detector: Optional NashDetector instance.
         
     Returns:
         A list of coordinated mutation plans.
@@ -890,7 +890,7 @@ def generate_coordinated_multi_module_mutations(
 
 def execute_multi_module_mutation_with_rollback(
     plan: Dict[str, Any],
-    detector: Optional[NashEquilibriumDetectorAndForcer] = None
+    detector: Optional[NashDetector] = None
 ) -> Dict[str, Any]:
     """
     Executes a multi-module mutation with rollback safety.
@@ -898,7 +898,7 @@ def execute_multi_module_mutation_with_rollback(
     
     Args:
         plan: The coordinated mutation plan to execute.
-        detector: Optional NashEquilibriumDetectorAndForcer instance.
+        detector: Optional NashDetector instance.
         
     Returns:
         A result dictionary with execution details and rollback status.
@@ -909,7 +909,7 @@ def execute_multi_module_mutation_with_rollback(
 
 def integrate_with_orchestrator_cycle(
     equilibrium_state: Dict[str, Any],
-    detector: Optional[NashEquilibriumDetectorAndForcer] = None,
+    detector: Optional[NashDetector] = None,
     max_mutations: int = 3
 ) -> Dict[str, Any]:
     """
@@ -919,7 +919,7 @@ def integrate_with_orchestrator_cycle(
     
     Args:
         equilibrium_state: The current equilibrium state from the detector.
-        detector: Optional NashEquilibriumDetectorAndForcer instance.
+        detector: Optional NashDetector instance.
         max_mutations: Maximum number of mutations to execute in this cycle.
         
     Returns:
@@ -960,7 +960,7 @@ def integrate_with_orchestrator_cycle(
 
 
 def check_and_force_coordinated_mutation(
-    detector: Optional[NashEquilibriumDetectorAndForcer] = None
+    detector: Optional[NashDetector] = None
 ) -> Dict[str, Any]:
     """
     Checks if the system is in a Nash equilibrium and forces a coordinated mutation
@@ -971,10 +971,22 @@ def check_and_force_coordinated_mutation(
     (4) verifies the system escapes the equilibrium.
     
     Args:
-        detector: Optional NashEquilibriumDetectorAndForcer instance.
+        detector: Optional NashDetector instance.
         
     Returns:
         A result dictionary with the outcome of the coordinated mutation attempt.
     """
     forcer = MultiModuleForcer(detector)
-    orchestrator = MultiModuleOrchestrator
+    orchestrator = MultiModuleOrchestrator(detector)
+    
+    # Step 1: Check for equilibrium
+    equilibrium_result = detector.detect_equilibrium()
+    
+    if not equilibrium_result.get("equilibrium_detected", False):
+        return {
+            "success": False,
+            "error": "No equilibrium detected",
+            "mutations_executed": 0
+        }
+    
+    # Step

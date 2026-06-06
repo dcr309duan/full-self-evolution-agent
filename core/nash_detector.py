@@ -225,7 +225,7 @@ class NashEquilibriumDetector:
                 print(f"Warning: Could not remove state file {self.state_file}: {e}")
 
 
-def is_at_nash():
+def detect_nash():
     """
     Detect if the system is at Nash equilibrium.
     
@@ -343,9 +343,9 @@ def run_test_mode():
     assert "module_y" in detector2.module_names, "module_y should be loaded"
     print("  PASSED")
     
-    print("\nTest 8: Test is_at_nash() function")
-    is_nash, state = is_at_nash()
-    print(f"  is_at_nash() returned: ({is_nash}, {state})")
+    print("\nTest 8: Test detect_nash() function")
+    is_nash, state = detect_nash()
+    print(f"  detect_nash() returned: ({is_nash}, {state})")
     assert isinstance(is_nash, bool), "Should return bool"
     assert isinstance(state, dict), "Should return dict"
     assert 'nash' in state, "State should contain 'nash'"

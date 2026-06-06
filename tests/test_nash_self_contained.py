@@ -155,12 +155,44 @@ class TestNashSelfContained:
         if condition:
             self.errors.append(f"AssertionError: {message}")
 
+    def test_detect_equilibrium_no_data(self):
+        """Test that detect_equilibrium returns False with no data."""
+        result = self.detector.is_nash_equilibrium()
+        self._assert_false(result, "detect_equilibrium should return False with no data")
+
+    def test_detect_equilibrium_with_synthetic_data(self):
+        """Test that detect_equilibrium returns True when fed synthetic equilibrium data."""
+        # Feed synthetic equilibrium data: all modules have 100% success rate for 3 cycles
+        for _ in range(3):
+            self._simulate_stable_cycle(1.0)
+        result = self.detector.is_nash_equilibrium()
+        self._assert_true(result, "detect_equilibrium should return True with synthetic equilibrium data")
+
+    def test_force_multi_module_change_returns_valid_plan(self):
+        """Test that force_multi_module_change returns a valid multi-module plan."""
+        # First establish equilibrium
+        for _ in range(3):
+            self._simulate_stable_cycle(1.0)
+        
+        # Generate forced changes
+        changes = self.forcer.generate_forced_changes(self.module_names)
+        
+        # Verify it's a valid multi-module plan
+        self._assert_isinstance(changes, dict, "force_multi_module_change should return a dict")
+        self._assert_equal(len(changes), self.num_modules, "Plan should have changes for all modules")
+        for module_name, change in changes.items():
+            self._assert_isinstance(change, str, f"Change for {module_name} should be a string")
+            self._assert_true(len(change) > 0, f"Change for {module_name} should not be empty")
+
     def run_all_tests(self):
         """Run all test methods and report results."""
         test_methods = [
             self.test_nash_detection_with_two_modules,
             self.test_coordinated_multi_module_changes,
-            self.test_single_module_change_does_not_improve_at_equilibrium
+            self.test_single_module_change_does_not_improve_at_equilibrium,
+            self.test_detect_equilibrium_no_data,
+            self.test_detect_equilibrium_with_synthetic_data,
+            self.test_force_multi_module_change_returns_valid_plan
         ]
         
         for test_method in test_methods:
