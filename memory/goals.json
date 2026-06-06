@@ -6,7 +6,7 @@
       "priority": 10,
       "status": "pending",
       "created_at": 1780721743.3650455,
-      "consecutive_failures": 1
+      "consecutive_failures": 2
     },
     {
       "description": "Implement a 'failure-aware mutation selector' that logs each mutation attempt with its error type (import, syntax, integration) and feature vector (complexity, import count, file count), then uses a lightweight classifier (e.g., logistic regression or decision tree trained on last 50 failures) to predict success probability before executing a mutation. Mutations below a configurable threshold (e.g., 0.3) are automatically rejected and replaced with a simpler alternative. This directly addresses the 40-60% failure rate and the persistent import/syntax errors on [GAME_THEORY] and [ECOLOGY] patterns.",

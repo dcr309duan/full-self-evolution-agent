@@ -1,24 +1,214 @@
 import ast
 import sys
+import os
 import importlib.util
 from typing import List, Dict, Any, Tuple, Optional
 
-# Import the new robust implementation
-from core.pre_mutation_guard import PreMutationGuard
 
 class PreMutationValidator:
     """
     Validates proposed mutations before they are applied to the codebase.
-    This is now a thin wrapper around PreMutationGuard for backward compatibility.
+    Provides clean implementation with syntax validation, import resolution,
+    and structured error reporting.
     """
 
     def __init__(self):
-        self.validation_errors: List[str] = []
-        self._guard = PreMutationGuard()
+        self.validation_errors: List[Dict[str, Any]] = []
+
+    def validate_mutation_proposal(self, code_string: str, target_file: str) -> Dict[str, Any]:
+        """
+        Validate a mutation proposal (code string + target file).
+        
+        Args:
+            code_string: The proposed new code as a string
+            target_file: The file path where the code will be applied
+            
+        Returns:
+            Dict with 'valid' (bool), 'errors' (list of dicts with 'error_type', 'file', 'line', 'message')
+        """
+        self.validation_errors = []
+        
+        # Step 1: Syntax validation using ast.parse()
+        syntax_valid, syntax_errors = self._validate_syntax(code_string, target_file)
+        if not syntax_valid:
+            return {
+                'valid': False,
+                'errors': syntax_errors
+            }
+        
+        # Step 2: Parse the AST for import analysis
+        try:
+            tree = ast.parse(code_string)
+        except SyntaxError as e:
+            return {
+                'valid': False,
+                'errors': [{
+                    'error_type': 'syntax_error',
+                    'file': target_file,
+                    'line': e.lineno or 0,
+                    'message': str(e)
+                }]
+            }
+        
+        # Step 3: Resolve imports and check module availability
+        import_errors = self._validate_imports(tree, target_file)
+        if import_errors:
+            return {
+                'valid': False,
+                'errors': import_errors
+            }
+        
+        # Step 4: Check required standard modules
+        module_errors = self._check_required_modules(tree)
+        if module_errors:
+            return {
+                'valid': False,
+                'errors': module_errors
+            }
+        
+        return {
+            'valid': True,
+            'errors': []
+        }
+
+    def _validate_syntax(self, code_string: str, target_file: str) -> Tuple[bool, List[Dict[str, Any]]]:
+        """
+        Validate Python syntax using ast.parse().
+        
+        Returns:
+            Tuple of (is_valid, list of error dicts)
+        """
+        errors = []
+        try:
+            ast.parse(code_string)
+            return True, errors
+        except SyntaxError as e:
+            errors.append({
+                'error_type': 'syntax_error',
+                'file': target_file,
+                'line': e.lineno or 0,
+                'message': f"Syntax error: {e.msg}"
+            })
+            return False, errors
+
+    def _validate_imports(self, tree: ast.AST, target_file: str) -> List[Dict[str, Any]]:
+        """
+        Validate all import statements in the AST against the filesystem.
+        
+        Args:
+            tree: The parsed AST
+            target_file: The file path for error reporting
+            
+        Returns:
+            List of error dicts for invalid imports
+        """
+        errors = []
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if not self._resolve_import(alias.name):
+                        errors.append({
+                            'error_type': 'import_error',
+                            'file': target_file,
+                            'line': node.lineno,
+                            'message': f"Cannot resolve import '{alias.name}'"
+                        })
+            
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    if not self._resolve_import(node.module):
+                        errors.append({
+                            'error_type': 'import_error',
+                            'file': target_file,
+                            'line': node.lineno,
+                            'message': f"Cannot resolve import '{node.module}'"
+                        })
+        
+        return errors
+
+    def _resolve_import(self, module_name: str) -> bool:
+        """
+        Resolve an import statement against the current filesystem.
+        
+        Uses sys.path and os.path.exists to check if the module can be found.
+        Also checks for built-in modules and standard library modules.
+        
+        Args:
+            module_name: The module name to resolve
+            
+        Returns:
+            True if the module can be resolved, False otherwise
+        """
+        # Check if it's a built-in or standard library module
+        if module_name in sys.builtin_module_names:
+            return True
+        
+        # Check using importlib.util.find_spec for installed packages
+        spec = importlib.util.find_spec(module_name)
+        if spec is not None:
+            return True
+        
+        # Check against sys.path for local modules
+        for path in sys.path:
+            # Check for module as a file
+            module_path = os.path.join(path, module_name.replace('.', os.sep) + '.py')
+            if os.path.exists(module_path):
+                return True
+            
+            # Check for module as a package (directory with __init__.py)
+            package_path = os.path.join(path, module_name.replace('.', os.sep))
+            init_path = os.path.join(package_path, '__init__.py')
+            if os.path.exists(init_path):
+                return True
+        
+        return False
+
+    def _check_required_modules(self, tree: ast.AST) -> List[Dict[str, Any]]:
+        """
+        Check that required modules (numpy, random, etc.) are available.
+        
+        Args:
+            tree: The parsed AST
+            
+        Returns:
+            List of error dicts for missing required modules
+        """
+        errors = []
+        required_modules = {'numpy', 'random', 'math', 'os', 'sys', 'json', 'collections', 'itertools', 'functools'}
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    base_module = alias.name.split('.')[0]
+                    if base_module in required_modules:
+                        spec = importlib.util.find_spec(base_module)
+                        if spec is None:
+                            errors.append({
+                                'error_type': 'module_not_found',
+                                'file': '',
+                                'line': node.lineno,
+                                'message': f"Required module '{base_module}' is not available"
+                            })
+            
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    base_module = node.module.split('.')[0]
+                    if base_module in required_modules:
+                        spec = importlib.util.find_spec(base_module)
+                        if spec is None:
+                            errors.append({
+                                'error_type': 'module_not_found',
+                                'file': '',
+                                'line': node.lineno,
+                                'message': f"Required module '{base_module}' is not available"
+                            })
+        
+        return errors
 
     def validate_mutation(self, mutation: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Validate a proposed mutation.
+        Validate a proposed mutation (backward compatibility method).
         
         Args:
             mutation: Dict with keys 'files' (list of file paths) and 'changes' (dict mapping file path to new code)
@@ -28,61 +218,41 @@ class PreMutationValidator:
         """
         self.validation_errors = []
         
-        # Delegate to PreMutationGuard
-        guard_result = self._guard.validate_mutation(mutation)
+        files = mutation.get('files', [])
+        changes = mutation.get('changes', {})
         
-        # Convert guard result to legacy format if needed
-        if guard_result.get('passed'):
-            return {
-                'passed': True,
-                'errors': [],
-                'warnings': []
-            }
-        else:
-            self.validation_errors = guard_result.get('errors', [])
+        if not files or not changes:
             return {
                 'passed': False,
-                'errors': self.validation_errors,
-                'warnings': guard_result.get('warnings', []),
+                'errors': ['No files or changes provided'],
+                'warnings': []
+            }
+        
+        all_errors = []
+        for file_path in files:
+            code_string = changes.get(file_path, '')
+            if not code_string:
+                all_errors.append(f"No code provided for {file_path}")
+                continue
+            
+            result = self.validate_mutation_proposal(code_string, file_path)
+            if not result['valid']:
+                for error in result['errors']:
+                    all_errors.append(f"{error['file']}:{error['line']} - {error['message']}")
+        
+        if all_errors:
+            return {
+                'passed': False,
+                'errors': all_errors,
+                'warnings': [],
                 'fallback_mutation': self._generate_fallback(mutation)
             }
-
-    def _check_import_consistency(self, parsed_files: Dict[str, ast.AST]) -> List[Dict[str, Any]]:
-        """
-        Check that imports across files are consistent.
-        Returns list of error messages, empty if all good.
-        """
-        errors = []
-        all_imports = {}  # file -> set of imported module names
-
-        for file_path, tree in parsed_files.items():
-            imports = set()
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imports.add(alias.name)
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        imports.add(node.module)
-            all_imports[file_path] = imports
-
-        # Check for conflicting imports (same name from different modules)
-        import_sources = {}  # name -> set of files that import it
-        for file_path, imports in all_imports.items():
-            for imp in imports:
-                if imp not in import_sources:
-                    import_sources[imp] = set()
-                import_sources[imp].add(file_path)
-
-        # This is a simplified check; real cross-module consistency would be more complex
-        # For now, we just flag if the same module is imported in multiple files with different aliases
-        # (basic sanity check)
-        for imp, files_using in import_sources.items():
-            if len(files_using) > 1:
-                # Check if any file re-imports with different alias (basic check)
-                pass  # Placeholder for more advanced checks
-
-        return errors
+        
+        return {
+            'passed': True,
+            'errors': [],
+            'warnings': []
+        }
 
     def _generate_fallback(self, original_mutation: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -105,20 +275,6 @@ class PreMutationValidator:
             'files': [target_file],
             'changes': {target_file: fallback_code}
         }
-
-    def validate_mutation_proposal(self, code_string: str, target_file: str) -> Dict[str, Any]:
-        """
-        Validate a mutation proposal (code string + target file).
-        
-        Args:
-            code_string: The proposed new code as a string
-            target_file: The file path where the code will be applied
-            
-        Returns:
-            Dict with 'passed' (bool), 'errors' (list of dicts with 'type', 'line', 'message'), 'warnings' (list)
-        """
-        # Delegate to PreMutationGuard
-        return self._guard.validate_mutation_proposal(code_string, target_file)
 
 
 def validate_mutation(mutation: Dict[str, Any]) -> Dict[str, Any]:

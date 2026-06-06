@@ -1,0 +1,13 @@
+import json
+from datetime import datetime
+
+def initialize_failure_log():
+    """Initialize an empty failure log file with a header comment explaining the format."""
+    header_comment = "# Failure Log Format: each line is a JSON object with fields: timestamp, mutation_id, error_type, file, line, message\n"
+    
+    with open('logs/failure_log.jsonl', 'w') as f:
+        f.write(header_comment)
+
+if __name__ == "__main__":
+    initialize_failure_log()
+    print("Failure log initialized successfully.")

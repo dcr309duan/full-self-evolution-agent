@@ -1,7 +1,7 @@
 {
-  "cycle_count": 432,
-  "current_generation": 139,
-  "last_evolution_time": 1780722163.9087853,
+  "cycle_count": 433,
+  "current_generation": 140,
+  "last_evolution_time": 1780722350.7905488,
   "capabilities": [
     "Create an end-to-end integration test for the minimal core evolution loop (goal_generator → mutation",
     "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change impr",
@@ -55,12 +55,6 @@
     "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or g"
   ],
   "history": [
-    {
-      "cycle": 332,
-      "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
-      "success": false,
-      "timestamp": 1780700012.1401527
-    },
     {
       "cycle": 333,
       "goal": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
@@ -654,6 +648,12 @@
       "goal": "Introduce a 'meta-cognition timeout' mechanism: after 3 consecutive cycles of purely reflective or goal-generation actions (no successful code mutation), the system automatically triggers a 'radical mutation' that randomly selects one of the novel ideas (e.g., ecosystem simulation, symbolic regression on failures) and generates a minimal but executable implementation, bypassing the usual mutation pipeline. This forces a break from self-referential stagnation and tests high-risk, high-reward ideas that could unlock architectural self-modification.",
       "success": true,
       "timestamp": 1780722313.8462658
+    },
+    {
+      "cycle": 433,
+      "goal": "Implement a 'pre-mutation validation guard' that, before generating any code change, checks the target file(s) for syntax validity, resolves all import paths against the current filesystem, and verifies that required modules (e.g., numpy, random) are available. If validation fails, the mutation is aborted and a structured error record (error type, file, line) is appended to a failure log. This directly reduces the ~40% failure rate from syntax/import errors and provides a clean error signature for future learning.",
+      "success": false,
+      "timestamp": 1780722444.3729541
     }
   ],
   "status": "evolving"
