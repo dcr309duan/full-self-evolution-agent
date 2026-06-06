@@ -403,6 +403,133 @@ class TestNashEquilibriumMinimal(unittest.TestCase):
         }
         self.assertFalse(detector.is_nash_equilibrium(modified_equilibrium))
 
+    def test_minimal_integration_nash_detector_and_forcer(self):
+        """Minimal integration test that: (1) Imports the nash_detector_and_forcer module directly (no relative imports),
+        (2) Creates mock module states with known equilibrium, (3) Verifies detection works,
+        (4) Tests multi-module forcing produces valid coordinated changes."""
+        # (1) Import the nash_detector_and_forcer module directly
+        from core.nash_detector_and_forcer import NashDetector, MultiModuleForcer
+        
+        # (2) Create mock module states with known equilibrium
+        # All modules have equal scores and balanced negative interactions
+        mock_equilibrium = {
+            "module_1": {"score": 0.80, "interactions": {"module_2": -0.10, "module_3": -0.10}},
+            "module_2": {"score": 0.80, "interactions": {"module_1": -0.10, "module_3": -0.10}},
+            "module_3": {"score": 0.80, "interactions": {"module_1": -0.10, "module_2": -0.10}}
+        }
+        
+        # Create detector and forcer instances
+        detector = NashDetector()
+        forcer = MultiModuleForcer()
+        
+        # (3) Verify detection works
+        self.assertTrue(detector.is_nash_equilibrium(mock_equilibrium))
+        
+        # Verify non-equilibrium state is correctly identified
+        mock_non_equilibrium = {
+            "module_1": {"score": 0.85, "interactions": {"module_2": -0.10, "module_3": -0.10}},
+            "module_2": {"score": 0.80, "interactions": {"module_1": -0.10, "module_3": -0.10}},
+            "module_3": {"score": 0.80, "interactions": {"module_1": -0.10, "module_2": -0.10}}
+        }
+        self.assertFalse(detector.is_nash_equilibrium(mock_non_equilibrium))
+        
+        # (4) Test multi-module forcing produces valid coordinated changes
+        plan = forcer.force_multi_module_change(mock_equilibrium)
+        
+        # Verify plan structure
+        self.assertIsInstance(plan, dict)
+        self.assertEqual(len(plan), 3)
+        
+        # Verify all modules are included
+        for mod_name in mock_equilibrium:
+            self.assertIn(mod_name, plan)
+        
+        # Verify each change is valid and coordinated
+        for mod_name, change in plan.items():
+            self.assertIn("module", change)
+            self.assertEqual(change["module"], mod_name)
+            self.assertIn("new_score", change)
+            self.assertIsInstance(change["new_score"], (int, float))
+            self.assertGreaterEqual(change["new_score"], 0)
+            self.assertLessEqual(change["new_score"], 1)
+        
+        # Verify changes are coordinated (scores should be close together)
+        scores = [plan[m]["new_score"] for m in mock_equilibrium]
+        score_range = max(scores) - min(scores)
+        self.assertLessEqual(score_range, 0.2)
+
+    def test_integration_coordinated_change_improves_system(self):
+        """Minimal integration test that: (1) creates a mock set of modules with known local optima,
+        (2) runs the Nash detector to confirm equilibrium, (3) triggers the multi-module forcer,
+        (4) verifies that the coordinated change improves the system score beyond what single-module changes could achieve."""
+        # (1) Create a mock set of modules with known local optima
+        # These modules are stuck in a local optimum where no single module change improves the system
+        mock_modules = {
+            "mod_a": {"score": 0.70, "interactions": {"mod_b": -0.20, "mod_c": -0.15}},
+            "mod_b": {"score": 0.70, "interactions": {"mod_a": -0.20, "mod_c": -0.15}},
+            "mod_c": {"score": 0.70, "interactions": {"mod_a": -0.15, "mod_b": -0.15}}
+        }
+        
+        # Calculate initial system score (average of all module scores)
+        initial_system_score = sum(m["score"] for m in mock_modules.values()) / len(mock_modules)
+        
+        # (2) Run the Nash detector to confirm equilibrium
+        self.assertTrue(self.detector.is_nash_equilibrium(mock_modules))
+        
+        # Verify that no single-module change can improve the system
+        for mod_name in mock_modules:
+            # Try increasing this module's score by 0.1
+            test_graph_increase = {k: dict(v) for k, v in mock_modules.items()}
+            test_graph_increase[mod_name]["score"] += 0.1
+            # This should break equilibrium (unilateral deviation)
+            self.assertFalse(self.detector.is_nash_equilibrium(test_graph_increase))
+            
+            # Try decreasing this module's score by 0.1
+            test_graph_decrease = {k: dict(v) for k, v in mock_modules.items()}
+            test_graph_decrease[mod_name]["score"] -= 0.1
+            # This should also break equilibrium
+            self.assertFalse(self.detector.is_nash_equilibrium(test_graph_decrease))
+        
+        # (3) Trigger the multi-module forcer
+        plan = self.forcer.force_multi_module_change(mock_modules)
+        
+        # Verify plan is valid
+        self.assertIsInstance(plan, dict)
+        self.assertEqual(len(plan), 3)
+        for mod_name in mock_modules:
+            self.assertIn(mod_name, plan)
+        
+        # Apply the coordinated changes
+        updated_modules = {k: dict(v) for k, v in mock_modules.items()}
+        for mod_name, change in plan.items():
+            updated_modules[mod_name]["score"] = change["new_score"]
+        
+        # Calculate new system score after coordinated change
+        new_system_score = sum(m["score"] for m in updated_modules.values()) / len(updated_modules)
+        
+        # (4) Verify that the coordinated change improves the system score
+        # beyond what single-module changes could achieve
+        self.assertGreater(new_system_score, initial_system_score)
+        
+        # Verify that the coordinated change achieves a higher score than any single-module change
+        best_single_module_score = initial_system_score
+        for mod_name in mock_modules:
+            # Try each single-module improvement
+            for delta in [0.05, 0.1, 0.15, 0.2]:
+                test_graph = {k: dict(v) for k, v in mock_modules.items()}
+                test_graph[mod_name]["score"] = min(1.0, test_graph[mod_name]["score"] + delta)
+                single_score = sum(m["score"] for m in test_graph.values()) / len(test_graph)
+                if single_score > best_single_module_score:
+                    best_single_module_score = single_score
+        
+        # The coordinated change should outperform the best single-module change
+        self.assertGreater(new_system_score, best_single_module_score)
+        
+        # Additionally, verify that the coordinated change maintains or improves equilibrium properties
+        # The new state should be closer to a global optimum
+        self.assertTrue(self.detector.is_nash_equilibrium(updated_modules) or 
+                        new_system_score > initial_system_score)
+
 
 if __name__ == "__main__":
     unittest.main()

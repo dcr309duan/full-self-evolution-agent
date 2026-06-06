@@ -9,6 +9,20 @@
       "consecutive_failures": 3
     },
     {
+      "description": "实现每日自动报告生成: 创建一个模块，每天自动汇总当日的进化状态(成功/失败目标、新能力、cycle数)并写入 reports/daily/ 目录。报告应包含: 1)当日完成的目标 2)失败分析 3)新发现的洞察 4)下一步计划。必须能实际运行并产出文件。",
+      "priority": 10,
+      "status": "pending",
+      "created_at": 1780709682.1905375,
+      "consecutive_failures": 1
+    },
+    {
+      "description": "实现音视频技术深度研究能力: 创建一个研究模块，能够从知识库和代码分析中深入研究一个音视频底层技术原理(如回声消除AEC、噪声抑制ANS、编解码器原理、RTP/RTCP协议栈等)，并将研究成果写入 reports/av-research/ 目录。报告需包含技术原理、算法细节和实际应用场景。",
+      "priority": 10,
+      "status": "pending",
+      "created_at": 1780709682.1948385,
+      "consecutive_failures": 1
+    },
+    {
       "description": "Create a 'dynamic prompt optimizer' that maintains a short-term memory of recent mutation failures (syntax errors, integration test failures) and appends a 'lessons learned' section to the prompt used for generating new mutations. This adapts the generative engine's behavior without changing weights, directly addressing the meta-insight about the fixed prior.",
       "priority": 9,
       "status": "pending",
@@ -105,6 +119,18 @@
       "status": "pending",
       "created_at": 1780706868.8566847,
       "consecutive_failures": 1
+    },
+    {
+      "description": "[ECOLOGY] The agent should not just adapt to its current test suite — it should modify its own test suite, create new benchmarks, and introduce environmental pressures that don't yet exist. Evolution of the fitness landscape itself.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780710249.1915345
+    },
+    {
+      "description": "[GAME_THEORY] Detect when module interactions reach a Nash equilibrium (no single module change improves the system). Then force coordinated multi-module changes that wouldn't be discovered by single-module optimization.",
+      "priority": 9,
+      "status": "pending",
+      "created_at": 1780710249.1994274
     },
     {
       "description": "Add a 'goal impact prioritizer' that scores each pending goal by its expected effect on the system's long-term fitness (measured as: (test pass rate * simplicity score) / (lines of code added + new dependencies)). Only allow mutations for goals with score > 0.7, and archive goals below 0.3 to prevent accumulation of never-addressed tasks.",

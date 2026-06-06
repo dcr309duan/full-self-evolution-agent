@@ -5,28 +5,7 @@
       "cron": "*/10 * * * *",
       "prompt": "Monitor the self-evolution agent at /root/full-self-evolution-agent. Do the following:\n\n1. Check if the process is still running: `ps aux | grep main.py | grep -v grep`\n2. Read the last 30 lines of /root/full-self-evolution-agent/logs/evolution.log to see recent activity\n3. Read /root/full-self-evolution-agent/memory/evolution_state.json to check cycle_count and current_generation\n4. If the process is NOT running, restart it with: `cd /root/full-self-evolution-agent && python3 main.py 1000 &` (run in background)\n5. If the process IS running but appears stalled (no new log entries in last 15 minutes), check for errors and report\n6. Report a brief status summary: current cycle, generation, last goal attempted, success/failure streak\n\nIf there are issues (process crashed, repeated failures, stagnation), take corrective action:\n- If crashed: restart and report\n- If stalled: check for lock file issues, clear lock if needed, restart\n- If repeated failures: read the knowledge base and suggest/generate new goals to break the cycle",
       "createdAt": 1780638043435,
-      "lastFiredAt": 1780655454443,
-      "recurring": true
-    },
-    {
-      "id": "ec5de36d",
-      "cron": "0 23 * * *",
-      "prompt": "Generate a daily report for the self-evolution agent at /root/full-self-evolution-agent. Do the following:\n\n1. Read the evolution log for today's entries: grep today's date from logs/evolution.log\n2. Read memory/evolution_state.json for current stats\n3. Summarize in a structured daily report covering:\n   - Cycles completed today (start cycle → end cycle)\n   - Generation advancement\n   - Goal success/failure ratio (especially after the import verification change)\n   - Notable events: paradigm shifts, import failures, goal reversions, constraint blocks\n   - Qualitative assessment: Is the agent adapting to the new pressure? Is it learning to write importable code?\n   - Any issues that need human attention\n\n4. Write the report to /root/full-self-evolution-agent/reports/daily/YYYY-MM-DD.md\n\nFormat as a concise Chinese daily report (日报) that can be quickly scanned. Keep it under 50 lines.",
-      "createdAt": 1780655495127,
-      "recurring": true
-    },
-    {
-      "id": "bfbc53ca",
-      "cron": "30 23 * * 0",
-      "prompt": "Generate a weekly report for the self-evolution agent at /root/full-self-evolution-agent. Do the following:\n\n1. Read all daily reports from /root/full-self-evolution-agent/reports/daily/ for this week\n2. Read evolution log for the full week's activity\n3. Read memory/knowledge_base.json for accumulated insights\n4. Produce a weekly summary (周报) covering:\n   - Total cycles this week, generation advancement\n   - Success rate trend (before vs after import verification surgery)\n   - Top 3 most impactful changes/events\n   - Agent behavioral patterns observed\n   - Whether meta-cognition constraints are influencing goal selection\n   - Key metrics: import failure rate, goal repetition rate, new vs existing module ratio\n   - Recommendations for next week's interventions\n   - Comparison with previous week if data exists\n\n5. Write to /root/full-self-evolution-agent/reports/weekly/YYYY-WXX.md\n\nFormat as a Chinese weekly report (周报), analytical and concise. Include data tables where helpful.",
-      "createdAt": 1780655505551,
-      "recurring": true
-    },
-    {
-      "id": "c04d2c43",
-      "cron": "0 9 * * *",
-      "prompt": "Conduct a deep technical research session on one audio/video technology topic. Each day should cover a DIFFERENT topic from this rotating list (pick based on current day-of-week and week number to avoid repeats):\n\nTopics pool (底层技术原理):\n- Monday: 音频编解码 (e.g., AAC/Opus codec internals, psychoacoustic model, MDCT transform, entropy coding)\n- Tuesday: 视频编解码 (e.g., H.264/H.265/AV1 internals, motion estimation, intra prediction, transform coding, rate control)\n- Wednesday: 音视频传输协议 (e.g., RTP/RTCP, WebRTC, SRT, QUIC for media, jitter buffer, congestion control)\n- Thursday: 音频处理算法 (e.g., AEC回声消除, ANS降噪, AGC增益控制, 3A算法, beamforming, spatial audio)\n- Friday: 视频处理与渲染 (e.g., GPU pipeline, color space conversion, HDR, tone mapping, super resolution, frame interpolation)\n- Saturday: 流媒体架构 (e.g., HLS/DASH, CDN, ABR算法, 低延迟直播, 转码架构, SFU/MCU)\n- Sunday: 音视频同步与质量 (e.g., lip sync, QoE metrics, VMAF/PESQ/POLQA, packet loss concealment, FEC/ARQ)\n\nFor today's topic:\n1. Research the fundamental principles using WebSearch — focus on the mathematical/algorithmic core, not surface-level overviews\n2. Find authoritative sources (papers, specs, engineering blogs from Google/Meta/Apple/Tencent)\n3. Write a deep technical report covering:\n   - 核心原理 (core principles with math/algorithms)\n   - 工程实现要点 (key implementation considerations)\n   - 性能与复杂度分析 (performance tradeoffs)\n   - 业界最新进展 (state of the art, 2024-2025)\n   - 开源实现参考 (reference implementations)\n4. Save to /root/full-self-evolution-agent/reports/av-research/YYYY-MM-DD-topic.md\n\nWrite in Chinese with English technical terms preserved. Aim for depth over breadth — the reader is an experienced engineer who wants to understand the WHY behind the technology, not just the WHAT.",
-      "createdAt": 1780655524101,
+      "lastFiredAt": 1780709423154,
       "recurring": true
     }
   ]

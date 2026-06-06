@@ -32,14 +32,14 @@ def log_cycle(cycle_num, message):
         f.write(f"[{timestamp}] Cycle {cycle_num}: {message}\n")
 
 
-def _validate_recent_files(cycle_num):
+def _validate_recent_files(cycle_num, since_time=None):
     """Verify recently created/modified .py files can actually be imported.
     
     Returns list of files that FAILED import. Empty list = all good.
-    This is real verification — not just syntax check, but actual import.
+    Only checks files modified after since_time (defaults to 120s ago).
     """
     import subprocess, glob
-    cutoff = time.time() - 120
+    cutoff = since_time if since_time is not None else (time.time() - 120)
     failed = []
     
     py_files = glob.glob(os.path.join(PROJECT_ROOT, "*.py")) + \
@@ -55,7 +55,8 @@ def _validate_recent_files(cycle_num):
             if basename.startswith("__"):
                 continue
             
-            module_name = basename[:-3]
+            rel_path = os.path.relpath(fpath, PROJECT_ROOT)
+            module_name = rel_path[:-3].replace(os.sep, ".")
             result = subprocess.run(
                 [sys.executable, "-c",
                  f"import sys; sys.path.insert(0, '{PROJECT_ROOT}'); import {module_name}"],
@@ -256,10 +257,11 @@ def evolution_cycle(state):
     
     if goal:
         log_cycle(cycle_num, f"Selected goal: {goal['description']}")
+        goal_start_time = time.time()
         result = execute_goal(goal, state)
         
         if result["success"]:
-            import_failures = _validate_recent_files(cycle_num)
+            import_failures = _validate_recent_files(cycle_num, since_time=goal_start_time)
             if import_failures:
                 result["success"] = False
                 fail_msg = f"Code generated but {len(import_failures)} file(s) failed import: {', '.join(import_failures[:3])}"

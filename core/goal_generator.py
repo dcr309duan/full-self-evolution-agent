@@ -33,7 +33,8 @@ class Goal:
                     # 'curiosity', 'infrastructure_hardening', 'cluster_resolution', 'meta_goal',
                     # 'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
                     # 'adapt_to_pressure', 'nash_equilibrium_meta', 'coordinated_multi_module_change',
-                    # 'ecological_pressure', 'multi_module_change', or 'COORDINATED_MULTI_MODULE'
+                    # 'ecological_pressure', 'multi_module_change', 'COORDINATED_MULTI_MODULE',
+                    # 'nash_equilibrium_detection', or 'AV_RESEARCH'
     source: str = "fitness"  # 'curiosity', 'fitness', 'reflection'
     archived: bool = False
     lesson: Optional[str] = None
@@ -101,6 +102,11 @@ coordinated_multi_module_active: bool = False  # Whether a COORDINATED_MULTI_MOD
 coordinated_multi_module_modules: List[str] = []  # Modules involved in the active COORDINATED_MULTI_MODULE goal
 coordinated_multi_module_description: str = ""  # Description of the active COORDINATED_MULTI_MODULE goal
 
+# AV_RESEARCH goal tracking
+av_research_active: bool = False  # Whether an AV_RESEARCH goal is active
+av_research_description: str = ""  # Description of the active AV_RESEARCH goal
+av_knowledge_gaps: Dict[str, List[str]] = {}  # Maps module names to lists of missing AV domain knowledge areas
+
 
 def add_external_goal(goal: Goal) -> bool:
     """Add an external goal to the goal queue after validation.
@@ -139,7 +145,7 @@ def add_external_goal(goal: Goal) -> bool:
         'ecological_evolution', 'ecological_gap', 'nash_escape', 'coordinated_mutation',
         'adapt_to_pressure', 'nash_equilibrium_meta', 'external_pressure',
         'coordinated_multi_module_change', 'ecological_pressure', 'multi_module_change',
-        'COORDINATED_MULTI_MODULE'
+        'COORDINATED_MULTI_MODULE', 'nash_equilibrium_detection', 'AV_RESEARCH'
     ]
     if goal.goal_type not in valid_goal_types:
         logger.error("add_external_goal: invalid goal_type '%s', must be one of %s",
@@ -870,37 +876,33 @@ def clear_coordinated_multi_module_goal() -> None:
     logger.info("Cleared active COORDINATED_MULTI_MODULE goal")
 
 
-def generate_goals(
-    metrics_list: List[SimulationMetrics],
-    accuracy_threshold: float = 0.8,
-    coverage_weight: float = 0.5,
-    curiosity_goals: Optional[List[Goal]] = None,
-    retry_rate_threshold: float = 0.3,
-    permission_failure_threshold: int = 5,
-    health_dashboard: Optional[Dict] = None
-) -> List[Goal]:
-    """Generate goals based on simulation metrics, knowledge base fitness scores, and curiosity engine input.
+def generate_nash_equilibrium_detection_goal(stuck_modules: List[str], nash_analysis: Dict) -> Goal:
+    """Generate a goal when Nash equilibrium is detected in the system.
+
+    This goal type is registered as 'nash_equilibrium_detection' and is triggered
+    when the Nash detector identifies that modules are stuck in a local optimum.
+    The goal includes the specific modules involved and the analysis details
+    to help break the equilibrium.
 
     Args:
-        metrics_list: List of simulation metrics for different modules.
-        accuracy_threshold: Threshold below which accuracy goals are generated.
-        coverage_weight: Weight for coverage in priority calculation (0-1).
-        curiosity_goals: Optional list of high-priority goals from the curiosity engine.
-        retry_rate_threshold: Threshold for fs_abstraction retry rate to trigger infrastructure hardening.
-        permission_failure_threshold: Number of permission failures to trigger infrastructure hardening.
-        health_dashboard: Optional dashboard containing system health status, including lockdown state.
+        stuck_modules: List of module names currently stuck in Nash equilibrium.
+        nash_analysis: Dictionary containing Nash equilibrium analysis details,
+            including fitness scores and interaction patterns.
 
     Returns:
-        List of generated goals, sorted by priority (highest first).
+        A Goal object with type 'nash_equilibrium_detection' that specifies the
+        detected equilibrium and the modules involved.
     """
-    global consecutive_successes, current_accuracy_threshold, previous_diversity, capability_coverage
-    global environmental_pressure_active, environmental_pressure_description
-    global nash_equilibrium_detected, nash_equilibrium_modules, nash_equilibrium_analysis
-    global external_goal_queue, coordinated_change_candidates
-    global coordinated_multi_module_active, coordinated_multi_module_modules, coordinated_multi_module_description
-    
-    # Run prioritization before generating new goals
-    high_impact_pending = prioritize_pending_goals()
-    if high_impact_pending:
-        logger.info("Found %d high-impact pending goals, returning them instead of generating new ones", len(high_impact_pending))
-        return high_
+    if not stuck_modules:
+        logger.warning("generate_nash_equilibrium_detection_goal called with empty stuck_modules list")
+        return None
+
+    modules_str = ", ".join(stuck_modules)
+    description = (
+        f"Nash equilibrium detected in modules [{modules_str}]. "
+        f"The system is stuck in a local optimum where no module can improve unilaterally. "
+        f"Coordinated multi-module changes are required to break the equilibrium. "
+        f"Analysis: {nash_analysis.get('description', 'No additional analysis available')}."
+    )
+
+   
